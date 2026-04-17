@@ -1,0 +1,2 @@
+# matplotlib は Lambda Layer (matplotlib_layer.zip) で提供するため記載不要
+# boto3 は Lambda 実行環境に同梱のため記載不要

@@ -1,0 +1,3 @@
+# 依存パッケージはLambda Layerで管理（build_layer.sh参照）
+# ローカル実行時は以下を pip install してください:
+# pip install matplotlib boto3

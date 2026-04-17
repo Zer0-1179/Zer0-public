@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AWS X Auto Poster - Lambda + EventBridge Scheduler (posts AWS tips to X twice daily)
+
+Resources:
+
+  # ── Lambda 実行ロール ────────────────────────────────
+  PosterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: aws-x-poster-role
+      Description: X自動投稿Bot用Lambda実行ロール（CloudWatchLogs書き込み・SSM読み書き・Bedrock呼び出し権限）
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+      Policies:
+        - PolicyName: xposter-history-write
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ssm:PutParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/xposter/posted-history"
+
+  # ── Lambda 関数 ─────────────────────────────────────
+  PosterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: aws-x-poster
+      Description: BedrockでAWS技術情報ツイートを生成し、毎朝9時・毎夜20時にXへ自動投稿するLambda関数
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt PosterRole.Arn
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          SSM_PREFIX: /xposter
+          DRY_RUN: "false"
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder"}
+
+  # ── EventBridge: 毎朝9時 JST (= UTC 0時) ───────────
+  MorningRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: aws-x-poster-morning
+      Description: 毎朝9時（JST）にURLなし・ひとこと感想系を投稿
+      ScheduleExpression: "cron(0 0 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Id: MorningTarget
+          Arn: !GetAtt PosterFunction.Arn
+
+  MorningPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PosterFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MorningRule.Arn
+
+  # ── EventBridge: 毎夜20時 JST (= UTC 11時) ──────────
+  EveningRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: aws-x-poster-evening
+      Description: 毎夜20時（JST）にURL付き・ニュース紹介系を投稿
+      ScheduleExpression: "cron(0 11 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Id: EveningTarget
+          Arn: !GetAtt PosterFunction.Arn
+
+  EveningPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PosterFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EveningRule.Arn
+
+Outputs:
+  LambdaFunctionName:
+    Value: !Ref PosterFunction
+  LambdaFunctionArn:
+    Value: !GetAtt PosterFunction.Arn
