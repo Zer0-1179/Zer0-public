@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Zenn Mid-level Article Auto-Generation System -
+  Generates AWS intermediate architecture articles via Bedrock (Claude Sonnet)
+  on the 1st and 15th of each month at 21:00 JST, with SES email notifications
+
+Parameters:
+  SenderEmail:
+    Type: String
+    Description: SESで送信に使うメールアドレス（事前にSESで検証済みのもの）
+  RecipientEmail:
+    Type: String
+    Description: 通知先メールアドレス
+  BedrockModelId:
+    Type: String
+    Default: jp.anthropic.claude-sonnet-4-6
+    Description: 使用するBedrockモデルID
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 900  # 15分（Lambda最大値、Bedrock記事生成に時間がかかるため）
+    MemorySize: 512
+    Environment:
+      Variables:
+        SES_SENDER_EMAIL: !Ref SenderEmail
+        SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        MATPLOTLIB_BACKEND: Agg
+
+Resources:
+  # Lambda実行ロール
+  MidArticleGeneratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "ZennMidArticleGeneratorRole-${AWS::Region}"
+      Description: Lambda execution role for Zenn Mid-level Article Bot (CloudWatch Logs, Bedrock, SES, S3, SSM)
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ZennMidArticleGeneratorPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Bedrockの呼び出し権限（基盤モデル＋クロスリージョン推論プロファイル）
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-sonnet-4-6"
+                  - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-sonnet-4-6"
+                  - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+              # Marketplace推論プロファイルのサブスクリプション確認権限
+              - Effect: Allow
+                Action:
+                  - aws-marketplace:ViewSubscriptions
+                  - aws-marketplace:Subscribe
+                Resource: "*"
+              # SESでのメール送信権限
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+              # S3への記事・画像保存権限
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: "arn:aws:s3:::zer0-dev-s3/zenn-mid-articles/*"
+              # SSM: 直近トピック履歴の読み書き（重複除外）
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mid-article-bot/*"
+
+  # Lambda関数
+  MidArticleGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ZennMidArticleGenerator
+      CodeUri: ./
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt MidArticleGeneratorRole.Arn
+      Layers:
+        - !Ref DiagramsLayer
+      Description: BedrockでAWS中級者向けZenn技術記事（複合アーキテクチャ構成図付き）を毎月1日・15日21時JSTに自動生成し、SESメールで通知するLambda関数
+      Events:
+        MonthlyScheduleDay1:
+          Type: Schedule
+          Properties:
+            Name: ZennMidArticleMonthly1st
+            Description: 毎月1日21時（JST）に中級記事を生成
+            # JST 21:00 = UTC 12:00、毎月1日
+            Schedule: cron(0 12 1 * ? *)
+            Enabled: true
+            RetryPolicy:
+              MaximumRetryAttempts: 0
+        MonthlyScheduleDay15:
+          Type: Schedule
+          Properties:
+            Name: ZennMidArticleMonthly15th
+            Description: 毎月15日21時（JST）に中級記事を生成
+            # JST 21:00 = UTC 12:00、毎月15日
+            Schedule: cron(0 12 15 * ? *)
+            Enabled: true
+            RetryPolicy:
+              MaximumRetryAttempts: 0
+      Tags:
+        Project: ZennMidArticleGenerator
+
+  # matplotlib Lambda Layer
+  DiagramsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: matplotlib-aws-icons-mid
+      Description: AWS中級アーキテクチャ図生成用Lambdaレイヤー（matplotlib + numpy + pillow）
+      ContentUri: ../matplotlib_layer.zip
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - x86_64
+
+  # CloudWatch Logsのロググループ（保持期間を設定）
+  MidArticleGeneratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/ZennMidArticleGenerator"
+      RetentionInDays: 14
+
+Outputs:
+  LambdaFunctionArn:
+    Description: Lambda関数のARN
+    Value: !GetAtt MidArticleGeneratorFunction.Arn
+  LambdaFunctionName:
+    Description: Lambda関数名
+    Value: !Ref MidArticleGeneratorFunction
+  EventBridgeRule1stName:
+    Description: EventBridgeルール名（毎月1日21時JST）
+    Value: ZennMidArticleMonthly1st
+  EventBridgeRule15thName:
+    Description: EventBridgeルール名（毎月15日21時JST）
+    Value: ZennMidArticleMonthly15th

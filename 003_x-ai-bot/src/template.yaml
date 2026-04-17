@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  X AI Bot - AI topic auto-posting bot for X (Twitter)
+  Lambda + EventBridge Scheduler + Bedrock (Claude Haiku) + SSM Parameter Store
+  - Daily 21:00 JST: random category post (1/day)
+  - Every Sunday 10:00 JST: Google Trends post
+
+# ---- Parameters ----
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model ID (Claude Haiku 4.5 recommended)
+
+  SsmPrefix:
+    Type: String
+    Default: /ai_bot
+    Description: SSM parameter prefix (e.g. /ai_bot)
+
+# ---- Resources ----
+Resources:
+
+  # Lambda execution role
+  XAiBotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: XAiBotLambdaRole
+      Description: Lambda execution role for X AI Bot (CloudWatch Logs write, Bedrock invoke, SSM read/write)
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: XAiBotPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Bedrock: invoke Claude model
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                  - !Sub arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0
+                  - !Sub arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+              # SSM: read X API credentials
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:ap-northeast-1:${AWS::AccountId}:parameter/ai_bot/*
+              # SSM: write posting history
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                Resource:
+                  - !Sub arn:aws:ssm:ap-northeast-1:${AWS::AccountId}:parameter/ai_bot/history/*
+
+  # Lambda function (code deployed separately via update-function-code)
+  XAiBotFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: XAiBot
+      Runtime: python3.12
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt XAiBotRole.Arn
+      Description: "BedrockでAI関連ツイートを生成しXへ自動投稿するBot（カテゴリ: Tips/副業/エンジニア転職/共感/質問/トレンド）"
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          SSM_PREFIX: !Ref SsmPrefix
+          DRY_RUN: "false"
+      Tags:
+        - Key: LastUpdated
+          Value: "2026-04-16"
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder - deploy.sh will update this"}
+
+  # CloudWatch log group
+  XAiBotLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/XAiBot
+      RetentionInDays: 1
+
+  # IAM role for EventBridge Scheduler
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: XAiBotSchedulerRole
+      Description: IAM role for EventBridge Scheduler to invoke XAiBot Lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt XAiBotFunction.Arn
+
+  # EventBridge: 21:00 JST (UTC 12:00)
+  EveningSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: XAiBot-Evening
+      Description: "毎日21:00 JSTにランダムカテゴリでAI関連ツイートを1件投稿"
+      ScheduleExpression: "cron(0 12 * * ? *)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt XAiBotFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"mode": "random"}'
+
+  # EventBridge: 日曜10:00 JST (UTC 日曜01:00)
+  WeeklyTrendSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: XAiBot-WeeklyTrend
+      Description: "毎週日曜10:00 JSTにGoogleトレンドを取得してAIトレンド投稿を1件生成"
+      ScheduleExpression: "cron(0 1 ? * SUN *)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt XAiBotFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"mode": "trend"}'
+
+# ---- Outputs ----
+Outputs:
+  LambdaFunctionArn:
+    Description: X AI Bot Lambda関数のARN
+    Value: !GetAtt XAiBotFunction.Arn
+
+  LambdaFunctionName:
+    Description: X AI Bot Lambda関数名
+    Value: !Ref XAiBotFunction
+
+  EveningScheduleName:
+    Description: 毎日投稿スケジュール名（毎日21:00 JST）
+    Value: !Ref EveningSchedule
+
+  WeeklyTrendScheduleName:
+    Description: 週次トレンド投稿スケジュール名（毎週日曜10:00 JST）
+    Value: !Ref WeeklyTrendSchedule

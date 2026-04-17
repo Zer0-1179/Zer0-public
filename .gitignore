@@ -1,0 +1,21 @@
+# Secrets / Personal info
+*apikey*
+*secret*
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+layer/
+.aws-sam/
+
+# Build artifacts
+dist/
+output/
+article/
+
+# OS
+.DS_Store
+Thumbs.db
