@@ -13,7 +13,7 @@ export const ui = {
     'nav.articles': 'ブログ',
     'nav.contact': 'お問い合わせ',
 
-    'hero.title': 'Cloud Engineer',
+    'hero.title': 'クラウドエンジニア',
     'hero.name': 'Zer0_Infra',
     'hero.tagline': 'コスト最適化と自動化を両立する、AWS × 生成AIエンジニア',
     'hero.sub': 'AWS認定10資格 ／ 金融機関向けAWS基盤構築 ／ サーバーレス自動化システム開発',
