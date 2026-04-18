@@ -1,0 +1,51 @@
+---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+const otherLang = lang === 'ja' ? 'en' : 'ja';
+
+// 現在のパスの言語プレフィックスを切り替える
+const currentPath = Astro.url.pathname;
+const otherLangPath = currentPath.replace(`/${lang}/`, `/${otherLang}/`).replace(`/${lang}`, `/${otherLang}`);
+
+const navItems = [
+  { key: 'nav.home' as const, href: `/${lang}/` },
+  { key: 'nav.about' as const, href: `/${lang}/about/` },
+  { key: 'nav.projects' as const, href: `/${lang}/projects/` },
+  { key: 'nav.articles' as const, href: `/${lang}/articles/` },
+  { key: 'nav.contact' as const, href: `/${lang}/contact/` },
+];
+---
+
+<header class="fixed top-0 left-0 right-0 z-50 bg-navy-950/95 backdrop-blur border-b border-navy-700/50">
+  <nav class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+    <!-- ロゴ -->
+    <a href={`/${lang}/`} class="flex items-center gap-2 group">
+      <span class="text-accent font-bold text-xl font-mono tracking-tight">Zer0_Infra</span>
+    </a>
+
+    <!-- ナビゲーション -->
+    <div class="hidden md:flex items-center gap-1">
+      {navItems.map(({ key, href }) => (
+        <a
+          href={href}
+          class="px-4 py-2 text-sm text-slate-300 hover:text-accent hover:bg-navy-800 rounded transition-colors"
+        >
+          {t(key)}
+        </a>
+      ))}
+    </div>
+
+    <!-- 言語切替 -->
+    <a
+      href={otherLangPath}
+      class="px-3 py-1.5 text-xs border border-navy-600 text-slate-400 hover:border-accent hover:text-accent rounded transition-colors"
+    >
+      {otherLang === 'en' ? 'EN' : 'JA'}
+    </a>
+  </nav>
+</header>
+
+<!-- ヘッダー分の余白 -->
+<div class="h-16"></div>

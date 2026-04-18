@@ -1,0 +1,48 @@
+---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+import type { Project } from '../data/projects';
+
+interface Props {
+  project: Project;
+}
+
+const { project } = Astro.props;
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+const name = lang === 'ja' ? project.nameJa : project.nameEn;
+const desc = lang === 'ja' ? project.descJa : project.descEn;
+---
+
+<article class="group bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden hover:border-accent/40 transition-all duration-200 flex flex-col">
+
+  <!-- 構成図プレビュー -->
+  <div class="bg-slate-100 overflow-hidden h-44 flex items-center justify-center">
+    <img
+      src={project.architecture}
+      alt={`${name} アーキテクチャ図`}
+      class="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+      loading="lazy"
+    />
+  </div>
+
+  <!-- 情報 -->
+  <div class="p-5 flex flex-col flex-1">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-xl">{project.emoji}</span>
+      <span class="text-xs font-mono text-slate-500 bg-navy-700/80 px-2 py-0.5 rounded">{project.number}</span>
+      {project.tags.slice(0, 2).map((tag) => (
+        <span class="px-2 py-0.5 bg-accent/10 text-accent text-xs rounded border border-accent/20">{tag}</span>
+      ))}
+    </div>
+
+    <h3 class="text-sm font-bold text-white mb-1.5 group-hover:text-accent transition-colors">{name}</h3>
+    <p class="text-slate-400 text-xs leading-relaxed mb-3 flex-1">{desc}</p>
+
+    <a
+      href={`/${lang}/projects/${project.slug}/`}
+      class="text-xs text-accent hover:text-accent-light transition-colors flex items-center gap-1 self-end"
+    >
+      {t('project.detail')} →
+    </a>
+  </div>
+</article>

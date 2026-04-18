@@ -1,0 +1,19 @@
+---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+import { socialLinks } from '../data/links';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+---
+
+<footer class="border-t border-navy-700/50 mt-24">
+  <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-4">
+    <span class="text-sm text-slate-500">{t('footer.copy')}</span>
+    <div class="flex items-center gap-6">
+      <a href={socialLinks.github} target="_blank" rel="noopener" class="text-slate-500 hover:text-accent text-sm transition-colors">GitHub</a>
+      <a href={socialLinks.x} target="_blank" rel="noopener" class="text-slate-500 hover:text-accent text-sm transition-colors">X</a>
+      <a href={socialLinks.zenn} target="_blank" rel="noopener" class="text-slate-500 hover:text-accent text-sm transition-colors">Zenn</a>
+      <a href={socialLinks.note} target="_blank" rel="noopener" class="text-slate-500 hover:text-accent text-sm transition-colors">note</a>
+    </div>
+  </div>
+</footer>

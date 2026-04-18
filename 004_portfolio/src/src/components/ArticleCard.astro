@@ -1,0 +1,25 @@
+---
+interface Props {
+  title: string;
+  link: string;
+  date: string;
+  source: 'zenn' | 'note';
+}
+
+const { title, link, date, source } = Astro.props;
+const formattedDate = new Date(date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
+---
+
+<article class="group flex gap-4 py-4 border-b border-navy-700/40 last:border-0 hover:bg-navy-800/30 -mx-4 px-4 rounded transition-colors">
+  <div class="flex-shrink-0 mt-1">
+    <span class={`px-2 py-0.5 text-xs rounded font-medium ${source === 'zenn' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
+      {source === 'zenn' ? 'Zenn' : 'note'}
+    </span>
+  </div>
+  <div class="flex-1 min-w-0">
+    <a href={link} target="_blank" rel="noopener" class="text-slate-200 text-sm font-medium group-hover:text-accent transition-colors line-clamp-2 leading-relaxed">
+      {title}
+    </a>
+    <time class="text-slate-500 text-xs mt-1 block">{formattedDate}</time>
+  </div>
+</article>

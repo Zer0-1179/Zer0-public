@@ -1,0 +1,193 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { useTranslations } from '../../i18n/utils';
+import { socialLinks } from '../../data/links';
+
+const t = useTranslations('en');
+
+const skills = [
+  { category: 'Cloud (AWS)', items: ['Lambda', 'Bedrock', 'CloudFront', 'S3', 'ECS/ECR', 'RDS/Aurora', 'ElastiCache', 'ALB/NLB', 'VPC', 'IAM', 'EventBridge', 'CloudWatch', 'CloudFormation', 'SAM', 'SSM', 'SES', 'SNS', 'EFS'] },
+  { category: 'Language', items: ['Python', 'TypeScript', 'Bash'] },
+  { category: 'OS / DB', items: ['Linux (RHEL)', 'Windows Server', 'Oracle', 'PostgreSQL', 'MSSQL Server'] },
+  { category: 'Middleware / Tools', items: ['Docker', 'Tomcat', 'VMware', 'FortiGate', 'HULFT', 'OpenLiberty', 'Astro', 'Tailwind CSS', 'Git'] },
+];
+
+const awsCerts = [
+  { name: 'Solutions Architect Professional', abbr: 'SAP', year: '2021' },
+  { name: 'DevOps Engineer Professional', abbr: 'DOP', year: '2024' },
+  { name: 'Solutions Architect Associate', abbr: 'SAA', year: '2021' },
+  { name: 'SysOps Administrator Associate', abbr: 'SOA', year: '2022' },
+  { name: 'Developer Associate', abbr: 'DVA', year: '2022' },
+  { name: 'Data Engineer Associate', abbr: 'DEA', year: '2021' },
+  { name: 'ML Engineer Associate', abbr: 'MLA', year: '2025' },
+  { name: 'Security Specialty', abbr: 'SCS', year: '2024' },
+  { name: 'AI Practitioner', abbr: 'AIF', year: '2025' },
+  { name: 'Cloud Practitioner', abbr: 'CLF', year: '2021' },
+];
+
+const otherCerts = [
+  { name: 'LPIC-3 Enterprise Virtualization & HA', year: '2022' },
+  { name: 'LPIC Level 2 (201・202)', year: '2022' },
+  { name: 'LPIC Level 1 (101・102)', year: '2021' },
+  { name: 'CCNA', year: '2023' },
+  { name: 'ITIL Foundation', year: '2021' },
+  { name: 'Oracle Bronze DBA', year: '2021' },
+  { name: 'HULFT Basic Engineer', year: '2025' },
+];
+
+const career = [
+  {
+    period: '2024.11 — Present',
+    title: 'Major Financial Institution — System Integration & Mobile App Feature Addition',
+    desc: 'Leading 2 AWS projects in parallel. Full lifecycle from requirements to testing. Implemented IaC with CloudFormation, monitoring design with CloudWatch/EventBridge/Lambda. Technical support for PL and client communication.',
+    tags: ['EC2', 'RDS/Aurora', 'ALB/NLB', 'CloudFormation', 'CloudWatch', 'EventBridge', 'Lambda', 'HULFT', 'OpenLiberty'],
+  },
+  {
+    period: '2023.08 — 2024.08',
+    title: 'Major Financial Institution — Customer-Facing Website Infrastructure',
+    desc: 'Built high-availability web infrastructure with ECS + Auto Scaling. IaC with CloudFormation for repeatable multi-environment deployments. Delivered monitoring design, release runbooks, and operational documentation.',
+    tags: ['ECS/ECR', 'RDS/Aurora', 'ElastiCache', 'CloudFront', 'ALB/NLB', 'CloudFormation', 'Docker', 'Tomcat'],
+  },
+  {
+    period: '2023.04 — 2023.07',
+    title: 'Internal AWS Infrastructure Operations',
+    desc: 'Cost monitoring and monthly reporting via Cost Explorer. Provisioned VPC/EC2/S3/IAM with AWS CLI.',
+    tags: ['VPC', 'EC2', 'S3', 'IAM', 'CloudFormation', 'AWS CLI'],
+  },
+  {
+    period: '2022.10 — 2022.11',
+    title: 'Internal System Design & Build',
+    desc: 'Designed and built a test environment for FortiGate version upgrade. Created AWS architecture diagrams in draw.io and presented to stakeholders.',
+    tags: ['FortiGate', 'Linux', 'draw.io'],
+  },
+  {
+    period: '2021.09 — 2022.09',
+    title: 'Data Center Network Operations & Monitoring (Telecom Carrier)',
+    desc: 'Physical server and network operations. Configuration changes, fault isolation, and first-level incident response. Fixed asset management and contractor coordination.',
+    tags: ['Linux', 'VMware'],
+  },
+  {
+    period: '2021.05 — 2021.07',
+    title: 'Oracle Database Build & Operations',
+    desc: 'Installed Oracle 19c, built CDB/PDB environments, and validated 12c→19c migration using RAT. Initial setup on RHEL 8.2.',
+    tags: ['Oracle 19c', 'RHEL 8.2', 'RAT'],
+  },
+];
+---
+
+<BaseLayout title="About">
+  <div class="max-w-4xl mx-auto px-6 py-20">
+    <div class="mb-14">
+      <h1 class="text-4xl font-bold text-white mb-2">{t('about.title')}</h1>
+      <div class="w-12 h-0.5 bg-accent"></div>
+    </div>
+
+    <!-- Profile -->
+    <section class="mb-16">
+      <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.profile')}</h2>
+      <div class="flex flex-col md:flex-row gap-8 items-start">
+        <div class="flex-shrink-0 w-20 h-20 rounded-full bg-navy-700 border-2 border-accent/40 flex items-center justify-center text-3xl">
+          ⚡
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-white mb-1">Zer0_Infra</h3>
+          <p class="text-accent text-sm mb-3">Cloud Engineer / Infrastructure Engineer</p>
+          <p class="text-slate-300 leading-relaxed mb-4">{t('about.profile.text')}</p>
+          <div class="flex gap-3">
+            <a href={socialLinks.github} target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/60 hover:bg-slate-600/60 text-slate-200 text-xs rounded border border-slate-600/50 transition-colors">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              GitHub
+            </a>
+            <a href={socialLinks.x} target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/60 hover:bg-slate-600/60 text-slate-200 text-xs rounded border border-slate-600/50 transition-colors">
+              X @Zer0_Infra
+            </a>
+            <a href={socialLinks.credly} target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-900/30 hover:bg-orange-800/40 text-orange-300 text-xs rounded border border-orange-700/40 transition-colors">
+              🏅 Credly
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Skills -->
+    <section class="mb-16">
+      <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.skills')}</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        {skills.map(({ category, items }) => (
+          <div class="bg-navy-800/40 border border-navy-700/50 rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs uppercase tracking-wider mb-3">{category}</h3>
+            <div class="flex flex-wrap gap-2">
+              {items.map((item) => (
+                <span class="px-3 py-1 bg-navy-700/60 text-slate-200 text-sm rounded border border-navy-600/50">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Certifications -->
+    <section class="mb-16">
+      <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.certifications')}</h2>
+      <div class="mb-5">
+        <a href="https://www.credly.com/users/zer0_infra" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-2 px-4 py-2 bg-navy-800/40 border border-accent/40 rounded-lg text-accent text-sm hover:border-accent hover:bg-navy-700/40 transition-colors">
+          <span>🏅</span>
+          <span>View badges on Credly</span>
+          <span class="text-slate-500 text-xs">↗</span>
+        </a>
+      </div>
+      <div class="mb-6">
+        <h3 class="text-slate-400 text-xs uppercase tracking-wider mb-4">AWS Certifications — 10</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {awsCerts.map(({ name, abbr, year }) => (
+            <div class="bg-navy-800/40 border border-accent/30 rounded-lg p-3 text-center hover:border-accent/60 transition-colors">
+              <div class="text-accent font-bold text-sm mb-1">{abbr}</div>
+              <div class="text-slate-300 text-xs leading-tight mb-1">{name}</div>
+              <div class="text-slate-500 text-xs">{year}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h3 class="text-slate-400 text-xs uppercase tracking-wider mb-4">Other Certifications</h3>
+        <div class="grid md:grid-cols-2 gap-3">
+          {otherCerts.map(({ name, year }) => (
+            <div class="flex items-center justify-between bg-navy-800/40 border border-navy-700/50 rounded-lg px-4 py-3">
+              <span class="text-slate-200 text-sm">{name}</span>
+              <span class="text-slate-500 text-xs ml-2 flex-shrink-0">{year}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Career -->
+    <section>
+      <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.career')}</h2>
+      <div class="relative">
+        <div class="absolute left-4 top-0 bottom-0 w-px bg-navy-700/60"></div>
+        <div class="space-y-8">
+          {career.map(({ period, title, desc, tags }) => (
+            <div class="relative pl-12">
+              <div class="absolute left-3 top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-navy-900 -translate-x-1/2"></div>
+              <div class="text-accent text-xs mb-1">{period}</div>
+              <h3 class="text-white font-semibold mb-2">{title}</h3>
+              <p class="text-slate-400 text-sm leading-relaxed mb-3">{desc}</p>
+              <div class="flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                  <span class="px-2 py-0.5 bg-navy-700/60 text-slate-300 text-xs rounded border border-navy-600/50">{tag}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  </div>
+</BaseLayout>

@@ -1,0 +1,91 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { useTranslations } from '../../i18n/utils';
+import { socialLinks } from '../../data/links';
+
+const t = useTranslations('ja');
+
+type Article = { title: string; link: string; date: string; source: 'zenn' | 'note' };
+
+const parseRss = (xml: string, source: 'zenn' | 'note'): Article[] => {
+  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+  return items.slice(0, 10).map((m) => {
+    const title = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1]
+      ?? m[1].match(/<title>(.*?)<\/title>/)?.[1] ?? '';
+    const link = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? '';
+    const date = m[1].match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? new Date().toISOString();
+    return { title, link, date, source };
+  });
+};
+
+let zennArticles: Article[] = [];
+let noteArticles: Article[] = [];
+
+try {
+  const [zennRes, noteRes] = await Promise.allSettled([
+    fetch('https://zenn.dev/zer0_infra/feed'),
+    fetch('https://note.com/zer0_infra/rss'),
+  ]);
+  if (zennRes.status === 'fulfilled' && zennRes.value.ok) {
+    zennArticles = parseRss(await zennRes.value.text(), 'zenn');
+  }
+  if (noteRes.status === 'fulfilled' && noteRes.value.ok) {
+    noteArticles = parseRss(await noteRes.value.text(), 'note');
+  }
+} catch {}
+---
+
+<BaseLayout title={t('articles.title')}>
+  <div class="max-w-4xl mx-auto px-6 py-20">
+    <div class="mb-14">
+      <h1 class="text-4xl font-bold text-white mb-2">{t('articles.title')}</h1>
+      <div class="w-12 h-0.5 bg-accent mb-4"></div>
+      <p class="text-slate-400">{t('articles.sub')}</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8">
+      <!-- Zenn -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-white font-semibold flex items-center gap-2">
+            <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded">Zenn</span>
+            {t('articles.zenn')}
+          </h2>
+          <a href={socialLinks.zenn} target="_blank" rel="noopener" class="text-accent text-xs hover:text-accent-light transition-colors">
+            Zennで見る →
+          </a>
+        </div>
+        {zennArticles.length > 0
+          ? (
+            <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">
+              {zennArticles.map((a) => <ArticleCard {...a} />)}
+            </div>
+          )
+          : <p class="text-slate-500 text-sm">記事を取得できませんでした</p>
+        }
+      </div>
+
+      <!-- note -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-white font-semibold flex items-center gap-2">
+            <span class="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">note</span>
+            {t('articles.note')}
+          </h2>
+          <a href={socialLinks.note} target="_blank" rel="noopener" class="text-accent text-xs hover:text-accent-light transition-colors">
+            noteで見る →
+          </a>
+        </div>
+        {noteArticles.length > 0
+          ? (
+            <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">
+              {noteArticles.map((a) => <ArticleCard {...a} />)}
+            </div>
+          )
+          : <p class="text-slate-500 text-sm">記事を取得できませんでした</p>
+        }
+      </div>
+    </div>
+  </div>
+</BaseLayout>
