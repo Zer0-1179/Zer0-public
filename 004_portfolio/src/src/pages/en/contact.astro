@@ -34,13 +34,5 @@ const contactItems = [
         ))}
       </div>
     </section>
-    <section class="border-t border-navy-700/40 pt-12">
-      <h2 class="text-white font-semibold mb-2">{t('contact.qr')}</h2>
-      <p class="text-slate-400 text-sm mb-6">{t('contact.qr.sub')}</p>
-      <div class="inline-block bg-white p-4 rounded-lg">
-        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(siteUrl + '/en/')}`} alt="QR Code" width="160" height="160" class="block" />
-      </div>
-      <p class="text-slate-500 text-xs mt-3">{siteUrl}/en/</p>
-    </section>
   </div>
 </BaseLayout>

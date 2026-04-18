@@ -2,7 +2,6 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { useTranslations } from '../../i18n/utils';
 import { socialLinks } from '../../data/links';
-import AvatarPicker from '../../components/AvatarPicker.astro';
 
 const t = useTranslations('en');
 
@@ -87,7 +86,9 @@ const career = [
     <section class="mb-16">
       <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.profile')}</h2>
       <div class="flex flex-col md:flex-row gap-8 items-start">
-        <AvatarPicker alt="Zer0_Infra Profile" />
+        <div class="flex-shrink-0 w-20 h-20 rounded-full border-2 border-accent/60 overflow-hidden shadow-lg shadow-accent/10">
+          <img src="/images/profile.jpg" alt="Zer0_Infra Profile" class="w-full h-full object-cover object-center" />
+        </div>
         <div>
           <h3 class="text-xl font-bold text-white mb-1">Zer0_Infra</h3>
           <p class="text-accent text-sm mb-3">Cloud Engineer / Infrastructure Engineer</p>
