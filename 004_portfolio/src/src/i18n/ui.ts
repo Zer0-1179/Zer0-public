@@ -15,7 +15,7 @@ export const ui = {
 
     'hero.title': 'Cloud Engineer',
     'hero.name': 'Zer0_Infra',
-    'hero.tagline': 'AWS × 生成AIで、インフラを自動化する',
+    'hero.tagline': 'コスト最適化と自動化を両立する、AWS × 生成AIエンジニア',
     'hero.sub': 'AWS認定10資格 ／ 金融機関向けAWS基盤構築 ／ サーバーレス自動化システム開発',
     'hero.cta.projects': '実績を見る',
     'hero.cta.contact': 'お問い合わせ',
@@ -38,7 +38,7 @@ export const ui = {
     'about.skills': 'スキル・技術スタック',
     'about.career': '職務経歴',
     'about.certifications': '資格・認定',
-    'about.profile.text': 'AWSを中心としたクラウドインフラの設計・構築・運用を行うエンジニア。要件定義から本番リリースまでの一貫した経験を持ち、IaCと生成AIを活用した業務自動化に取り組んでいる。',
+    'about.profile.text': 'インフラエンジニア歴5年、うちAWS専門3年。AWSを中心としたクラウドインフラの設計・構築・運用を行うエンジニア。要件定義から本番リリースまでの一貫した経験を持ち、IaCと生成AIを活用した業務自動化に取り組んでいる。',
 
     'projects.title': '実績',
     'projects.sub': 'AWSとAIを活用した自動化システム',
@@ -65,7 +65,7 @@ export const ui = {
 
     'hero.title': 'Cloud Engineer',
     'hero.name': 'Zer0_Infra',
-    'hero.tagline': 'Automating workflows with AWS × Generative AI',
+    'hero.tagline': 'AWS × Generative AI Engineer — Cost Optimization Meets Automation',
     'hero.sub': 'Serverless architecture, IaC, and Amazon Bedrock for system design & development',
     'hero.cta.projects': 'View Projects',
     'hero.cta.contact': 'Contact',
@@ -88,7 +88,7 @@ export const ui = {
     'about.skills': 'Skills & Tech Stack',
     'about.career': 'Career',
     'about.certifications': 'Certifications',
-    'about.profile.text': 'Cloud engineer specializing in AWS infrastructure design, implementation, and operations. Experienced across the full lifecycle from requirements to production. Focused on IaC and AI-driven automation.',
+    'about.profile.text': '5 years in infrastructure engineering, 3 years specialized in AWS. Cloud engineer focused on AWS infrastructure design, implementation, and operations. Full-lifecycle experience from requirements to production, with a focus on IaC and AI-driven automation.',
 
     'projects.title': 'Projects',
     'projects.sub': 'Automation systems powered by AWS and AI',
