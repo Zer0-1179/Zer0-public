@@ -1,0 +1,52 @@
+---
+interface Props {
+  defaultSrc?: string;
+  alt?: string;
+}
+const { defaultSrc = '/images/profile.jpg', alt = 'Profile' } = Astro.props;
+---
+
+<div class="avatar-wrapper flex-shrink-0 relative group w-20 h-20 cursor-pointer" title="クリックして画像を変更">
+  <div class="w-20 h-20 rounded-full border-2 border-accent/60 overflow-hidden shadow-lg shadow-accent/10">
+    <img
+      id="avatar-img"
+      src={defaultSrc}
+      alt={alt}
+      class="w-full h-full object-cover object-center"
+    />
+  </div>
+  <!-- ホバー時の変更ボタン -->
+  <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+  </div>
+  <input id="avatar-input" type="file" accept="image/png,image/jpeg,image/jpg,image/webp" class="hidden" />
+</div>
+
+<script>
+  const STORAGE_KEY = 'portfolio_avatar';
+
+  const wrapper = document.querySelector('.avatar-wrapper') as HTMLElement;
+  const img = document.getElementById('avatar-img') as HTMLImageElement;
+  const input = document.getElementById('avatar-input') as HTMLInputElement;
+
+  // localStorageから復元
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) img.src = saved;
+
+  wrapper.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      img.src = dataUrl;
+      localStorage.setItem(STORAGE_KEY, dataUrl);
+    };
+    reader.readAsDataURL(file);
+  });
+</script>
