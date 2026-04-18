@@ -8,7 +8,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: aws-x-poster-role
-      Description: X自動投稿Bot用Lambda実行ロール（CloudWatchLogs書き込み・SSM読み書き・Bedrock呼び出し権限）
+      Description: Lambda execution role for X auto-poster (CloudWatch Logs, SSM, Bedrock)
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
