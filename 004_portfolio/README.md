@@ -171,6 +171,9 @@ bash deploy.sh
 5. Lambda 環境変数を更新（`SITE_URL`）
 6. `dist/client/_astro/` を S3 に同期（長期キャッシュヘッダー付き）
 7. CloudFront キャッシュを全パス無効化
+8. GitHub自動同期（`sync_to_public.sh`）— 機密スキャン → Zer0-public へ push
+
+> `set -e` により、いずれかのステップが失敗した場合は以降の処理は実行されない。
 
 ### DRY RUN（設定確認のみ）
 
