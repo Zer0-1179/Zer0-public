@@ -5,12 +5,12 @@ import express from 'express';
 const app = express();
 app.disable('x-powered-by');
 app.use((req, res, next) => {
-  const originalSend = res.send.bind(res);
-  res.send = (body) => {
-    if (res.get('Content-Type')?.startsWith('text/plain') && typeof body === 'string' && body.trimStart().startsWith('<')) {
-      res.set('Content-Type', 'text/html; charset=utf-8');
+  const origSetHeader = res.setHeader;
+  res.setHeader = function(name, value) {
+    if (name.toLowerCase() === 'content-type' && String(value).startsWith('text/plain')) {
+      value = 'text/html; charset=utf-8';
     }
-    return originalSend(body);
+    return origSetHeader.call(this, name, value);
   };
   next();
 });
