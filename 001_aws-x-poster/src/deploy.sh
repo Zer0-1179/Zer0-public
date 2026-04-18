@@ -1,16 +1,18 @@
 #!/bin/bash
-# deploy.sh - ビルド → SSMにシークレット登録 → Lambda デプロイ
+# deploy.sh - ビルド → Lambda デプロイ → GitHub同期
 #
 # 使い方:
-#   初回セットアップ:  ./deploy.sh
-#   コードのみ更新:    ./deploy.sh --code-only
-#   DRY RUNテスト:     ./deploy.sh --test
+#   コードのみ更新（デフォルト）: ./deploy.sh
+#   初回フルデプロイ:              ./deploy.sh --full
+#   DRY RUNテスト:                 ./deploy.sh --test
 
-set -e
+set -euo pipefail
 
 FUNCTION_NAME="aws-x-poster"
 STACK_NAME="aws-x-poster-stack"
 REGION="${AWS_DEFAULT_REGION:-ap-northeast-1}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYNC_SCRIPT="/root/Zer0/sync_to_public.sh"
 MODE="${1:-}"
 
 echo "=== AWS X Auto Poster デプロイ ==="
@@ -48,17 +50,54 @@ if [ "$MODE" = "--test" ]; then
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# コードのみ更新（--code-only）
+# 初回フルデプロイ（--full）
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if [ "$MODE" = "--code-only" ]; then
-    echo "[1/2] Lambda ZIPを作成..."
+if [ "$MODE" = "--full" ]; then
+    # ── 1. SSM Parameter Store にシークレットを登録 ──────
+    echo "[1/4] SSM にシークレットを登録..."
+
+    read -p "X API Key:         " X_API_KEY
+    read -p "X API Secret:      " X_API_SECRET
+    read -p "X Access Token:    " X_ACCESS_TOKEN
+    read -p "X Access Secret:   " X_ACCESS_SECRET
+
+    for NAME_VAL in \
+        "x-api-key:$X_API_KEY" \
+        "x-api-secret:$X_API_SECRET" \
+        "x-access-token:$X_ACCESS_TOKEN" \
+        "x-access-secret:$X_ACCESS_SECRET"
+    do
+        PARAM_NAME="${NAME_VAL%%:*}"
+        PARAM_VAL="${NAME_VAL#*:}"
+        aws ssm put-parameter \
+            --name "/xposter/${PARAM_NAME}" \
+            --value "${PARAM_VAL}" \
+            --type SecureString \
+            --overwrite \
+            --region "$REGION"
+        echo "  ✓ /xposter/${PARAM_NAME}"
+    done
+
+    # ── 2. Lambda ZIP を作成 ──────────────────────────
+    echo "[2/4] Lambda ZIPを作成..."
+    cd "$SCRIPT_DIR"
     rm -rf .lambda_build && mkdir .lambda_build
     pip install requests requests-oauthlib -t .lambda_build/ -q
     cp lambda_function.py .lambda_build/
     cd .lambda_build && zip -r ../lambda.zip . -q && cd ..
     echo "  ✓ lambda.zip 作成完了 ($(du -sh lambda.zip | cut -f1))"
 
-    echo "[2/2] Lambda 関数コードを更新..."
+    # ── 3. CloudFormation スタックをデプロイ ──────────────
+    echo "[3/4] CloudFormation スタックをデプロイ..."
+    aws cloudformation deploy \
+        --template-file cloudformation.yaml \
+        --stack-name "$STACK_NAME" \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --region "$REGION"
+    echo "  ✓ スタック デプロイ完了"
+
+    # ── 4. Lambda コードを更新 ────────────────────────────
+    echo "[4/4] Lambda 関数コードを更新..."
     aws lambda update-function-code \
         --function-name "$FUNCTION_NAME" \
         --zip-file fileb://lambda.zip \
@@ -67,60 +106,31 @@ if [ "$MODE" = "--code-only" ]; then
         --output table
 
     rm -rf .lambda_build lambda.zip
+
     echo ""
-    echo "=== コード更新完了 ==="
+    echo "=== フルデプロイ完了 ==="
     echo "DRY RUNテスト: ./deploy.sh --test"
+
+    # ── GitHub 同期 ───────────────────────────────────
+    echo ""
+    echo "[Sync] GitHub へ同期..."
+    bash "$SYNC_SCRIPT"
     exit 0
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 初回フルデプロイ
+# コードのみ更新（デフォルト）
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cd "$SCRIPT_DIR"
 
-# ── 1. SSM Parameter Store にシークレットを登録 ──────
-echo "[1/4] SSM にシークレットを登録..."
-
-read -p "X API Key:         " X_API_KEY
-read -p "X API Secret:      " X_API_SECRET
-read -p "X Access Token:    " X_ACCESS_TOKEN
-read -p "X Access Secret:   " X_ACCESS_SECRET
-
-for NAME_VAL in \
-    "x-api-key:$X_API_KEY" \
-    "x-api-secret:$X_API_SECRET" \
-    "x-access-token:$X_ACCESS_TOKEN" \
-    "x-access-secret:$X_ACCESS_SECRET"
-do
-    PARAM_NAME="${NAME_VAL%%:*}"
-    PARAM_VAL="${NAME_VAL#*:}"
-    aws ssm put-parameter \
-        --name "/xposter/${PARAM_NAME}" \
-        --value "${PARAM_VAL}" \
-        --type SecureString \
-        --overwrite \
-        --region "$REGION"
-    echo "  ✓ /xposter/${PARAM_NAME}"
-done
-
-# ── 2. 依存パッケージをLambda用にパッケージング ────────
-echo "[2/4] Lambda ZIPを作成..."
+echo "[1/2] Lambda ZIPを作成..."
 rm -rf .lambda_build && mkdir .lambda_build
 pip install requests requests-oauthlib -t .lambda_build/ -q
 cp lambda_function.py .lambda_build/
 cd .lambda_build && zip -r ../lambda.zip . -q && cd ..
 echo "  ✓ lambda.zip 作成完了 ($(du -sh lambda.zip | cut -f1))"
 
-# ── 3. CloudFormation スタックをデプロイ ──────────────
-echo "[3/4] CloudFormation スタックをデプロイ..."
-aws cloudformation deploy \
-    --template-file cloudformation.yaml \
-    --stack-name "$STACK_NAME" \
-    --capabilities CAPABILITY_NAMED_IAM \
-    --region "$REGION"
-echo "  ✓ スタック デプロイ完了"
-
-# ── 4. Lambda コードを更新 ────────────────────────────
-echo "[4/4] Lambda 関数コードを更新..."
+echo "[2/2] Lambda 関数コードを更新..."
 aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
     --zip-file fileb://lambda.zip \
@@ -131,5 +141,10 @@ aws lambda update-function-code \
 rm -rf .lambda_build lambda.zip
 
 echo ""
-echo "=== デプロイ完了 ==="
+echo "=== コード更新完了 ==="
 echo "DRY RUNテスト: ./deploy.sh --test"
+
+# ── GitHub 同期 ───────────────────────────────────
+echo ""
+echo "[Sync] GitHub へ同期..."
+bash "$SYNC_SCRIPT"
