@@ -116,7 +116,7 @@ Lambda (ZennMidArticleGenerator)
 
 - AWS CLI 設定済み（`aws configure`）
 - SAM CLI インストール済み（`sam --version`）
-- Python 3.12
+- Python 3.14
 - `diagrams` パッケージインストール済み（`pip install diagrams`）
 - SESでメールアドレス検証済み
 

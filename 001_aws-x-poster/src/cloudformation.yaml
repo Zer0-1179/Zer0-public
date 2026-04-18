@@ -35,7 +35,7 @@ Resources:
     Properties:
       FunctionName: aws-x-poster
       Description: BedrockでAWS技術情報ツイートを生成し、毎朝9時・毎夜20時にXへ自動投稿するLambda関数
-      Runtime: python3.12
+      Runtime: python3.14
       Handler: lambda_function.lambda_handler
       Role: !GetAtt PosterRole.Arn
       Timeout: 120

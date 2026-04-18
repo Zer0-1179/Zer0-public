@@ -1,22 +1,28 @@
-# Zer0-public
+# ~/Zer0/ — プロジェクト管理ルート
 
-AWS × 生成AIを活用したサーバーレス自動化システムの公開リポジトリ。
+## フォルダ構成
 
-## Projects
+```text
+~/Zer0/
+├── README.md                      # このファイル
+├── 001_aws-x-poster/              # AWSニュース自動投稿ボット（@Zer0_Infra）
+├── 002_Zenn_Auto_Article_Bot/     # Zenn初級者向け技術記事自動生成ボット（毎週木曜）
+├── 003_X_AI_Bot/                  # AI活用術 X自動投稿ボット
+├── 004_portfolio/                 # Astro SSR ポートフォリオサイト
+└── 005_Zenn_Mid_Article_Bot/      # Zenn中級者向け技術記事自動生成ボット（毎月2回）
+```
 
-| # | プロジェクト | 概要 | 技術スタック |
-|---|---|---|---|
-| 001 | [AWSニュース自動投稿Bot](./001_aws-x-poster/) | AWS最新記事をBedrockで変換してXに毎日2回自動投稿 | Lambda / Bedrock / EventBridge / X API |
-| 002 | [Zenn初級記事自動生成Bot](./002_zenn-article-bot/) | AWS初学者向け記事とアーキテクチャ図を毎週自動生成 | Lambda / Bedrock / S3 / SES / SAM |
-| 003 | [AI活用術自動投稿Bot](./003_x-ai-bot/) | AI活用コンテンツを6カテゴリでローテーション投稿 | Lambda / Bedrock / EventBridge / X API |
-| 005 | [Zenn中級記事自動生成Bot](./005_zenn-mid-article-bot/) | AWS中級者向け複合アーキテクチャ記事を毎月2回生成 | Lambda / Bedrock / S3 / SES / SAM |
+## 運用ルール
 
-## Portfolio
+- アプリ・ツール・ボットを作るたびに、このディレクトリ直下に連番フォルダ（001〜999）を追加する
+- 各フォルダの内部構成は、そのフォルダ内の README.md で管理する
 
-👉 https://du7bbiecctrzb.cloudfront.net/ja/
+## プロジェクト一覧
 
-## Author
-
-- X: [@Zer0_Infra](https://x.com/Zer0_Infra)
-- Zenn: [zer0_infra](https://zenn.dev/zer0_infra)
-- Credly: [zer0_infra](https://www.credly.com/users/zer0_infra)
+| フォルダ名                  | 内容                                                               | ステータス               |
+| --------------------------- | ------------------------------------------------------------------ | ------------------------ |
+| `001_aws-x-poster`          | AWSニュースをRSSで取得しBedrockで加工してX投稿（朝・夜2回/日）     | 稼働中                   |
+| `002_Zenn_Auto_Article_Bot` | 毎週木曜21時にBedrockでAWS初心者向けZenn技術記事を自動生成・S3保存 | 稼働中                   |
+| `003_X_AI_Bot`              | AI活用術ジャンルのXアカウントを1日2回自動投稿（21時＋日曜10時）    | 稼働中                   |
+| `004_portfolio`             | Astro SSR ポートフォリオサイト（AWS未デプロイ）                    | 実装完了（デプロイ待ち） |
+| `005_Zenn_Mid_Article_Bot`  | 毎月1日・15日21時にAWS中級者向けZenn技術記事を自動生成・S3保存     | 稼働中                   |
