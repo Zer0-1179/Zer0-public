@@ -153,6 +153,9 @@ Resources:
             Override: true
         CustomHeadersConfig:
           Items:
+            - Header: Content-Type
+              Value: "text/html; charset=utf-8"
+              Override: true
             - Header: Permissions-Policy
               Value: "camera=(), microphone=(), geolocation=()"
               Override: true
