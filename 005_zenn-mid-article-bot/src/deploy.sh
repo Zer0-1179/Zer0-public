@@ -68,12 +68,40 @@ sam deploy \
 
 # デプロイ結果の確認
 echo ""
-echo "[4/4] デプロイ結果を確認中..."
+echo "[4/5] デプロイ結果を確認中..."
 aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --query "Stacks[0].Outputs" \
   --output table
+
+# S3クリーンアップ: 全スタックが参照しているキー以外を削除
+echo ""
+echo "[5/5] S3クリーンアップ中..."
+STACKS_USING_BUCKET=("zenn-article-generator" "zenn-mid-article-generator")
+KEEP_KEYS=()
+for s in "${STACKS_USING_BUCKET[@]}"; do
+  keys=$(aws cloudformation get-template --stack-name "$s" \
+    --query "TemplateBody" --output json 2>/dev/null \
+    | grep -o '"[a-f0-9]\{32\}"' | tr -d '"' || true)
+  for k in $keys; do
+    KEEP_KEYS+=("$k")
+  done
+done
+
+DELETED=0
+while IFS= read -r key; do
+  keep=false
+  for k in "${KEEP_KEYS[@]}"; do
+    [[ "$key" == "$k" ]] && keep=true && break
+  done
+  if [ "$keep" = false ]; then
+    aws s3 rm "s3://${SAM_BUCKET}/${key}" --region "${REGION}" > /dev/null
+    echo "  削除: ${key}"
+    DELETED=$((DELETED + 1))
+  fi
+done < <(aws s3 ls "s3://${SAM_BUCKET}/" --region "${REGION}" | awk '{print $NF}')
+echo "  ✓ ${DELETED}件削除完了"
 
 echo ""
 echo "=============================="
