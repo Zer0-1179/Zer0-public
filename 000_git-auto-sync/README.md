@@ -32,6 +32,8 @@
 
 ## 使い方
 
+各プロジェクトの `deploy.sh` 実行時に自動で呼び出される。手動実行も可能。
+
 ```bash
 cd /root/Zer0
 bash sync_to_public.sh
@@ -39,12 +41,30 @@ bash sync_to_public.sh
 
 変更がない場合は自動的にスキップされる。
 
+## 自動実行トリガー
+
+| トリガー | スクリプト |
+|---|---|
+| ポートフォリオデプロイ | `004_portfolio/deploy.sh` |
+| Zenn初級Botデプロイ | `002_Zenn_Auto_Article_Bot/src/deploy.sh` |
+| Zenn中級Botデプロイ | `005_Zenn_Mid_Article_Bot/src/deploy.sh` |
+
+## 機密情報スキャン
+
+rsync 後・push 前に公開先ディレクトリをスキャンし、機密情報が含まれていた場合は push を中止する。
+
+| 検出パターン | 対象 |
+|---|---|
+| AWSアカウントID | ハードコードされたアカウントID |
+| AWSアクセスキー | `AKIA` から始まるキー |
+| 秘密鍵 | PEM形式の秘密鍵 |
+
 ## 除外ファイル一覧
 
 | パターン | 理由 |
 |---|---|
-| `*apikey*` | APIキー等の機密ファイル |
-| `.env` | 環境変数（RSS URLなど） |
+| `*apikey*`, `*secret*`, `*token*` | 機密ファイル |
+| `.env` | 環境変数 |
 | `システム仕様書.md` | 詳細仕様（公開不要） |
 | `.git/` | Gitメタデータ |
 | `node_modules/` | 依存パッケージ（巨大） |
