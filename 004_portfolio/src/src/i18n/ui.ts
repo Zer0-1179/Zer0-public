@@ -34,7 +34,7 @@ export const ui = {
     'project.detail': '詳細を見る',
 
     'about.title': 'プロフィール',
-    'about.profile': 'プロフィール',
+    'about.profile': '自己紹介',
     'about.skills': 'スキル・技術スタック',
     'about.career': '職務経歴',
     'about.certifications': '資格・認定',
@@ -51,6 +51,7 @@ export const ui = {
 
     'contact.title': 'お問い合わせ',
     'contact.sub': '各種SNS・プラットフォームでつながりましょう',
+    'contact.inquiry': '副業・業務委託のご相談は X の DM からどうぞ。',
     'contact.qr': '名刺用QRコード',
     'contact.qr.sub': 'このポートフォリオサイトへのリンク',
 
@@ -84,7 +85,7 @@ export const ui = {
     'project.detail': 'View Details',
 
     'about.title': 'About',
-    'about.profile': 'Profile',
+    'about.profile': 'About Me',
     'about.skills': 'Skills & Tech Stack',
     'about.career': 'Career',
     'about.certifications': 'Certifications',
@@ -101,6 +102,7 @@ export const ui = {
 
     'contact.title': 'Contact',
     'contact.sub': 'Connect with me on social platforms',
+    'contact.inquiry': 'For freelance / contract inquiries, feel free to DM me on X.',
     'contact.qr': 'QR Code for Business Card',
     'contact.qr.sub': 'Link to this portfolio site',
 
