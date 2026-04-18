@@ -5,7 +5,6 @@ const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
 const otherLang = lang === 'ja' ? 'en' : 'ja';
 
-// 現在のパスの言語プレフィックスを切り替える
 const currentPath = Astro.url.pathname;
 const otherLangPath = currentPath.replace(`/${lang}/`, `/${otherLang}/`).replace(`/${lang}`, `/${otherLang}`);
 
@@ -25,7 +24,7 @@ const navItems = [
       <span class="text-accent font-bold text-xl font-mono tracking-tight">Zer0_Infra</span>
     </a>
 
-    <!-- ナビゲーション -->
+    <!-- PC ナビゲーション -->
     <div class="hidden md:flex items-center gap-1">
       {navItems.map(({ key, href }) => (
         <a
@@ -37,15 +36,80 @@ const navItems = [
       ))}
     </div>
 
-    <!-- 言語切替 -->
-    <a
-      href={otherLangPath}
-      class="px-3 py-1.5 text-xs border border-navy-600 text-slate-400 hover:border-accent hover:text-accent rounded transition-colors"
-    >
-      {otherLang === 'en' ? 'EN' : 'JA'}
-    </a>
+    <!-- 右側: 言語切替 + ハンバーガー -->
+    <div class="flex items-center gap-3">
+      <a
+        href={otherLangPath}
+        class="px-3 py-1.5 text-xs border border-navy-600 text-slate-400 hover:border-accent hover:text-accent rounded transition-colors"
+      >
+        {otherLang === 'en' ? 'EN' : 'JA'}
+      </a>
+
+      <!-- ハンバーガーボタン（モバイルのみ） -->
+      <button
+        id="menu-btn"
+        class="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5"
+        aria-label="メニューを開く"
+        aria-expanded="false"
+      >
+        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200"></span>
+        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200"></span>
+        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200"></span>
+      </button>
+    </div>
   </nav>
+
+  <!-- モバイルメニュー -->
+  <div
+    id="mobile-menu"
+    class="md:hidden hidden border-t border-navy-700/50 bg-navy-950/98"
+  >
+    <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col gap-1">
+      {navItems.map(({ key, href }) => (
+        <a
+          href={href}
+          class="px-4 py-3 text-sm text-slate-300 hover:text-accent hover:bg-navy-800 rounded transition-colors"
+        >
+          {t(key)}
+        </a>
+      ))}
+    </div>
+  </div>
 </header>
 
 <!-- ヘッダー分の余白 -->
 <div class="h-16"></div>
+
+<script>
+  const btn = document.getElementById('menu-btn')!;
+  const menu = document.getElementById('mobile-menu')!;
+  const lines = btn.querySelectorAll('.hamburger-line');
+
+  btn.addEventListener('click', () => {
+    const isOpen = !menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', isOpen);
+    btn.setAttribute('aria-expanded', String(!isOpen));
+
+    // × ← → ≡ アニメーション
+    if (!isOpen) {
+      (lines[0] as HTMLElement).style.transform = 'translateY(8px) rotate(45deg)';
+      (lines[1] as HTMLElement).style.opacity = '0';
+      (lines[2] as HTMLElement).style.transform = 'translateY(-8px) rotate(-45deg)';
+    } else {
+      (lines[0] as HTMLElement).style.transform = '';
+      (lines[1] as HTMLElement).style.opacity = '';
+      (lines[2] as HTMLElement).style.transform = '';
+    }
+  });
+
+  // メニュー内リンクをタップしたら閉じる
+  menu.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      menu.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+      (lines[0] as HTMLElement).style.transform = '';
+      (lines[1] as HTMLElement).style.opacity = '';
+      (lines[2] as HTMLElement).style.transform = '';
+    });
+  });
+</script>
