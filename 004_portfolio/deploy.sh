@@ -20,7 +20,7 @@ SRC_DIR="${SCRIPT_DIR}/src"
 echo "=== ポートフォリオサイト デプロイ ==="
 
 # ── [0/5] CloudFormation OutputsからAWSリソース情報を取得 ────────
-echo "[0/5] AWSリソース情報を取得中..."
+echo "[0/6] AWSリソース情報を取得中..."
 
 BUCKET_NAME=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
@@ -66,7 +66,7 @@ fi
 
 # ── [1/5] Astroビルド ─────────────────────────────────────────────
 echo ""
-echo "[1/5] Astroビルド中..."
+echo "[1/6] Astroビルド中..."
 cd "$SRC_DIR"
 export SITE_URL
 npm run build
@@ -74,7 +74,7 @@ echo "  ✓ ビルド完了"
 
 # ── [2/5] Lambda zip 作成 & S3アップロード ───────────────────────
 echo ""
-echo "[2/5] Lambda パッケージ作成中..."
+echo "[2/6] Lambda パッケージ作成中..."
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -102,7 +102,7 @@ echo "  ✓ S3 アップロード完了"
 
 # ── [3/5] Lambda コード更新 & 環境変数更新 ──────────────────────
 echo ""
-echo "[3/5] Lambda 更新中..."
+echo "[3/6] Lambda 更新中..."
 aws lambda update-function-code \
   --function-name "$LAMBDA_FUNCTION_NAME" \
   --s3-bucket "$BUCKET_NAME" \
@@ -128,7 +128,7 @@ echo "  ✓ Lambda 更新完了"
 
 # ── [4/5] S3 静的アセット同期 ───────────────────────────────────
 echo ""
-echo "[4/5] 静的アセット同期中..."
+echo "[4/6] 静的アセット同期中..."
 cd "$SCRIPT_DIR"
 # _astro/ はコンテンツハッシュ付きなので長期キャッシュ
 aws s3 sync "${SRC_DIR}/dist/client/_astro/" "s3://${BUCKET_NAME}/_astro/" \
@@ -145,7 +145,7 @@ echo "  ✓ S3 同期完了"
 
 # ── [5/5] CloudFrontキャッシュ無効化 ────────────────────────────
 echo ""
-echo "[5/5] CloudFrontキャッシュを無効化中..."
+echo "[5/6] CloudFrontキャッシュを無効化中..."
 INVALIDATION_ID=$(aws cloudfront create-invalidation \
   --distribution-id "$DISTRIBUTION_ID" \
   --paths "/*" \
@@ -157,6 +157,41 @@ echo ""
 echo "=== デプロイ完了 ==="
 echo "サイトURL: ${SITE_URL}"
 echo "※ キャッシュ反映まで約1〜2分かかります"
+
+# ── [6/6] 疎通確認 ──────────────────────────────────────────────
+echo ""
+echo "[6/6] 疎通確認..."
+
+PAGES=(
+  "/ja/" "/ja/about/" "/ja/projects/" "/ja/articles/" "/ja/contact/"
+  "/en/" "/en/about/" "/en/projects/" "/en/articles/" "/en/contact/"
+)
+ALL_OK=true
+for PAGE in "${PAGES[@]}"; do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${SITE_URL}${PAGE}")
+  if [ "$STATUS" != "200" ]; then
+    echo "  ❌ $PAGE → $STATUS"
+    ALL_OK=false
+  else
+    echo "  ✅ $PAGE → 200"
+  fi
+done
+
+echo ""
+echo "  セキュリティヘッダー確認..."
+REQUIRED_HEADERS=("x-content-type-options" "x-frame-options" "strict-transport-security")
+for H in "${REQUIRED_HEADERS[@]}"; do
+  VAL=$(curl -sI "${SITE_URL}/ja/" | grep -i "^${H}:")
+  if [ -z "$VAL" ]; then
+    echo "  ❌ $H 未設定"
+    ALL_OK=false
+  else
+    echo "  ✅ $H: $VAL"
+  fi
+done
+
+echo ""
+$ALL_OK && echo "=== 全チェック OK ===" || { echo "⚠️ 一部チェックに問題あり"; exit 1; }
 
 # GitHubへ自動同期
 echo ""
