@@ -129,6 +129,34 @@ Resources:
       StageName: "$default"
       AutoDeploy: true
 
+  # ── CloudFront レスポンスヘッダーポリシー ─────────────────────
+  PortfolioResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: Zer0-portfolio-security-headers
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'"
+            Override: true
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Value: "camera=(), microphone=(), geolocation=()"
+              Override: true
+
   # ── CloudFront ディストリビューション ─────────────────────────
   PortfolioDistribution:
     Type: AWS::CloudFront::Distribution
@@ -161,6 +189,7 @@ Resources:
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
           # AWS マネージドポリシー: AllViewerExceptHostHeader
           OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          ResponseHeadersPolicyId: !Ref PortfolioResponseHeadersPolicy
           AllowedMethods:
             - GET
             - HEAD
