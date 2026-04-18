@@ -27,5 +27,5 @@
 | `001_aws-x-poster`          | AWSニュースをRSSで取得しBedrockで加工してX投稿（朝・夜2回/日）     | 稼働中                   |
 | `002_Zenn_Auto_Article_Bot` | 毎週木曜21時にBedrockでAWS初心者向けZenn技術記事を自動生成・S3保存 | 稼働中                   |
 | `003_X_AI_Bot`              | AI活用術ジャンルのXアカウントを1日2回自動投稿（21時＋日曜10時）    | 稼働中                   |
-| `004_portfolio`             | Astro SSR ポートフォリオサイト（CloudFront + Lambda + S3）         | 実装完了（デプロイ待ち） |
+| `004_portfolio`             | Astro SSR ポートフォリオサイト（CloudFront + Lambda + S3）         | 稼働中                   |
 | `005_Zenn_Mid_Article_Bot`  | 毎月1日・15日21時にAWS中級者向けZenn技術記事を自動生成・S3保存     | 稼働中                   |
