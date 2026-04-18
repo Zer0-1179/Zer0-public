@@ -107,6 +107,9 @@ echo ""
 echo "=============================="
 echo "デプロイ完了！"
 echo "=============================="
+
+# GitHubへ自動同期
+bash /root/Zer0/sync_to_public.sh
 echo ""
 echo "次のステップ:"
 echo ""

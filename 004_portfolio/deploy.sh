@@ -157,3 +157,7 @@ echo ""
 echo "=== デプロイ完了 ==="
 echo "サイトURL: ${SITE_URL}"
 echo "※ キャッシュ反映まで約1〜2分かかります"
+
+# GitHubへ自動同期
+echo ""
+bash /root/Zer0/sync_to_public.sh
