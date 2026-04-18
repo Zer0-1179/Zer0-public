@@ -58,7 +58,7 @@ CloudFront (E33SJ6UEA95L47)
 | `/ja/projects`・`/en/projects`               | プロジェクト一覧（5件）                         |
 | `/ja/projects/[slug]`・`/en/projects/[slug]` | プロジェクト詳細                                |
 | `/ja/articles`・`/en/articles`               | 最新記事（Zenn・note RSS取得）                  |
-| `/ja/contact`・`/en/contact`                 | SNSリンク・名刺用QRコード                       |
+| `/ja/contact`・`/en/contact`                 | 依頼テキスト・SNSリンク・名刺用QRコード         |
 
 ---
 
@@ -171,7 +171,8 @@ bash deploy.sh
 5. Lambda 環境変数を更新（`SITE_URL`）
 6. `dist/client/_astro/` を S3 に同期（長期キャッシュヘッダー付き）
 7. CloudFront キャッシュを全パス無効化
-8. GitHub自動同期（`sync_to_public.sh`）— 機密スキャン → Zer0-public へ push
+8. **疎通確認**: ja/en 全10ページ HTTP 200 + セキュリティヘッダー3件を自動チェック（失敗時は中断）
+9. GitHub自動同期（`sync_to_public.sh`）— 機密スキャン → Zer0-public へ push
 
 > `set -e` により、いずれかのステップが失敗した場合は以降の処理は実行されない。
 
