@@ -43,6 +43,8 @@ bash sync_to_public.sh
 
 ## 自動実行トリガー
 
+各スクリプトは `set -e` / `set -euo pipefail` を設定しているため、**デプロイが失敗した場合はsyncは実行されない**。
+
 | トリガー | スクリプト |
 |---|---|
 | ポートフォリオデプロイ | `004_portfolio/deploy.sh` |
