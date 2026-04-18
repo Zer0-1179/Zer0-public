@@ -19,7 +19,7 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: python3.12
+    Runtime: python3.14
     Timeout: 900  # 15分（Lambda最大値、Bedrock記事生成に時間がかかるため）
     MemorySize: 512
     Environment:
@@ -127,7 +127,7 @@ Resources:
       Description: AWS中級アーキテクチャ図生成用Lambdaレイヤー（matplotlib + numpy + pillow）
       ContentUri: ../matplotlib_layer.zip
       CompatibleRuntimes:
-        - python3.12
+        - python3.14
       CompatibleArchitectures:
         - x86_64
 

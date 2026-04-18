@@ -68,7 +68,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: XAiBot
-      Runtime: python3.12
+      Runtime: python3.14
       Timeout: 60
       MemorySize: 128
       Handler: lambda_function.lambda_handler
