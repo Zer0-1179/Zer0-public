@@ -86,12 +86,12 @@ const navItems = [
   const lines = btn.querySelectorAll('.hamburger-line');
 
   btn.addEventListener('click', () => {
-    const isOpen = !menu.classList.contains('hidden');
-    menu.classList.toggle('hidden', isOpen);
-    btn.setAttribute('aria-expanded', String(!isOpen));
+    const opening = menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', !opening);
+    btn.setAttribute('aria-expanded', String(opening));
 
-    // × ← → ≡ アニメーション
-    if (!isOpen) {
+    // ≡ → × アニメーション
+    if (opening) {
       (lines[0] as HTMLElement).style.transform = 'translateY(8px) rotate(45deg)';
       (lines[1] as HTMLElement).style.opacity = '0';
       (lines[2] as HTMLElement).style.transform = 'translateY(-8px) rotate(-45deg)';
