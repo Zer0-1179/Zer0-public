@@ -1,0 +1,57 @@
+---
+import '../styles/global.css';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const { title, description, ogImage } = Astro.props;
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+const siteUrl = 'https://du7bbiecctrzb.cloudfront.net';
+const ogTitle = `${title} | Zer0_Infra`;
+const defaultDesc = lang === 'ja'
+  ? 'Zer0_Infra - AWS認定10資格を持つクラウドエンジニアのポートフォリオ。金融機関向けAWS基盤構築・サーバーレス自動化システム開発の実績。'
+  : 'Zer0_Infra - Cloud Engineer Portfolio. AWS certified (10 certs), financial institution AWS infrastructure, serverless automation.';
+const metaDesc = description ?? defaultDesc;
+const ogImageUrl = ogImage ? `${siteUrl}${ogImage}` : `${siteUrl}/images/004_architecture.png`;
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={metaDesc} />
+    <!-- OGP -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={ogTitle} />
+    <meta property="og:description" content={metaDesc} />
+    <meta property="og:url" content={`${siteUrl}${Astro.url.pathname}`} />
+    <meta property="og:site_name" content="Zer0_Infra Portfolio" />
+    <meta property="og:image" content={ogImageUrl} />
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Zer0_Infra" />
+    <meta name="twitter:title" content={ogTitle} />
+    <meta name="twitter:description" content={metaDesc} />
+    <meta name="twitter:image" content={ogImageUrl} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet" />
+    <title>{title} | Zer0_Infra</title>
+  </head>
+  <body class="bg-navy-900 text-slate-100 font-sans antialiased">
+    <Nav />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

@@ -1,0 +1,65 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { projects } from '../../../data/projects';
+import { useTranslations } from '../../../i18n/utils';
+
+const t = useTranslations('en');
+---
+
+<BaseLayout title={t('projects.title')}>
+  <div class="max-w-6xl mx-auto px-6 py-20">
+    <div class="mb-14">
+      <h1 class="text-4xl font-bold text-white mb-2">{t('projects.title')}</h1>
+      <div class="w-12 h-0.5 bg-accent mb-4"></div>
+      <p class="text-slate-400">{t('projects.sub')}</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      {projects.map((p) => {
+        const name = p.nameEn;
+        const desc = p.descEn;
+        return (
+          <article class="group bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden hover:border-accent/40 transition-all duration-200 flex flex-col">
+
+            <!-- Architecture Preview -->
+            <div class="bg-slate-100 border-b border-navy-700/50 overflow-hidden h-52 flex items-center justify-center">
+              <img
+                src={p.architecture}
+                alt={`${name} architecture diagram`}
+                class="w-full h-full object-contain p-3 group-hover:scale-105 transition-transform duration-300"
+                loading="lazy"
+              />
+            </div>
+
+            <!-- Project Info -->
+            <div class="p-5 flex flex-col flex-1">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-xl">{p.emoji}</span>
+                <span class="text-xs font-mono text-slate-500 bg-navy-700/80 px-2 py-0.5 rounded">{p.number}</span>
+                {p.tags.slice(0, 2).map((tag) => (
+                  <span class="px-2 py-0.5 bg-accent/10 text-accent text-xs rounded border border-accent/20">{tag}</span>
+                ))}
+              </div>
+
+              <h2 class="text-base font-bold text-white mb-2 group-hover:text-accent transition-colors">{name}</h2>
+              <p class="text-slate-400 text-sm leading-relaxed mb-4 flex-1">{desc}</p>
+
+              <div class="flex flex-wrap gap-1.5 mb-4">
+                {p.services.map((svc) => (
+                  <span class="px-2 py-0.5 bg-navy-700/60 text-slate-400 text-xs rounded">{svc}</span>
+                ))}
+              </div>
+
+              <a
+                href={`/en/projects/${p.slug}/`}
+                class="text-xs text-accent hover:text-accent-light transition-colors flex items-center gap-1 self-end"
+              >
+                {t('project.detail')} →
+              </a>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  </div>
+</BaseLayout>

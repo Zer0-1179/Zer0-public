@@ -1,0 +1,46 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { useTranslations } from '../../i18n/utils';
+import { socialLinks, siteUrl } from '../../data/links';
+
+const t = useTranslations('en');
+const contactItems = [
+  { name: 'GitHub', handle: 'Zer0-1179', url: socialLinks.github, desc: 'OSS projects & source code', color: 'border-slate-600 hover:border-slate-300', badge: 'bg-slate-700 text-slate-200' },
+  { name: 'X (Twitter)', handle: '@Zer0_Infra', url: socialLinks.x, desc: 'Daily AWS & AI tips', color: 'border-slate-600 hover:border-slate-400', badge: 'bg-slate-700 text-slate-300' },
+  { name: 'Zenn', handle: 'zer0_infra', url: socialLinks.zenn, desc: 'AWS technical articles', color: 'border-blue-700/50 hover:border-blue-500', badge: 'bg-blue-900/50 text-blue-400' },
+  { name: 'note', handle: 'zer0_infra', url: socialLinks.note, desc: 'Engineering life & side projects', color: 'border-green-700/50 hover:border-green-500', badge: 'bg-green-900/50 text-green-400' },
+  { name: 'Credly', handle: 'zer0_infra', url: socialLinks.credly, desc: 'AWS certifications (10 badges)', color: 'border-orange-700/50 hover:border-orange-500', badge: 'bg-orange-900/50 text-orange-400' },
+];
+---
+
+<BaseLayout title={t('contact.title')}>
+  <div class="max-w-3xl mx-auto px-6 py-20">
+    <div class="mb-14">
+      <h1 class="text-4xl font-bold text-white mb-2">{t('contact.title')}</h1>
+      <div class="w-12 h-0.5 bg-accent mb-4"></div>
+      <p class="text-slate-400">{t('contact.sub')}</p>
+    </div>
+    <section class="mb-16">
+      <div class="grid gap-4">
+        {contactItems.map(({ name, handle, url, desc, color, badge }) => (
+          <a href={url} target="_blank" rel="noopener" class={`flex items-center gap-4 p-5 bg-navy-800/40 border rounded-lg transition-colors group ${color}`}>
+            <div class={`px-3 py-1 rounded text-sm font-medium flex-shrink-0 ${badge}`}>{name}</div>
+            <div class="flex-1">
+              <div class="text-white font-medium group-hover:text-accent transition-colors">{handle}</div>
+              <div class="text-slate-400 text-sm">{desc}</div>
+            </div>
+            <span class="text-slate-600 group-hover:text-accent transition-colors text-lg">→</span>
+          </a>
+        ))}
+      </div>
+    </section>
+    <section class="border-t border-navy-700/40 pt-12">
+      <h2 class="text-white font-semibold mb-2">{t('contact.qr')}</h2>
+      <p class="text-slate-400 text-sm mb-6">{t('contact.qr.sub')}</p>
+      <div class="inline-block bg-white p-4 rounded-lg">
+        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(siteUrl + '/en/')}`} alt="QR Code" width="160" height="160" class="block" />
+      </div>
+      <p class="text-slate-500 text-xs mt-3">{siteUrl}/en/</p>
+    </section>
+  </div>
+</BaseLayout>

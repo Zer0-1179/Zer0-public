@@ -1,0 +1,22 @@
+{
+  "name": "portfolio",
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/node": "^10.0.5",
+    "@tailwindcss/vite": "^4.2.2",
+    "astro": "^6.1.7",
+    "express": "^5.2.1",
+    "serverless-http": "^4.0.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.3"
+  }
+}

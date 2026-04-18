@@ -1,0 +1,244 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Zer0-portfolio - Lambda SSR + API Gateway + S3 + CloudFront
+
+Resources:
+
+  # ── S3 バケット（静的アセット用） ─────────────────────────────
+  PortfolioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: zer0-portfolio-s3
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: Zer0-portfolio
+        - Key: Version
+          Value: v1.0
+
+  # ── CloudFront Origin Access Control (OAC) ────────────────────
+  PortfolioOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "Zer0-portfolio-oac-${AWS::AccountId}"
+        Description: Portfolio site OAC
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # ── S3 バケットポリシー（CloudFront OACからのみGetObject許可）──
+  PortfolioBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PortfolioBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontOAC
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${PortfolioBucket}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub
+                  - "arn:aws:cloudfront::${AWS::AccountId}:distribution/${DistId}"
+                  - DistId: !Ref PortfolioDistribution
+
+  # ── Lambda 実行ロール ──────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-portfolio-lambda-role-${AWS::AccountId}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # ── Lambda 関数（Astro SSR） ───────────────────────────────────
+  PortfolioLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: Zer0-portfolio-ssr
+      Runtime: nodejs24.x
+      Handler: lambda.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 256
+      Timeout: 30
+      # 初回は placeholder（deploy.sh が S3 経由で更新する）
+      Code:
+        ZipFile: |
+          export const handler = async () => ({
+            statusCode: 200,
+            body: 'deploying...'
+          });
+      Tags:
+        - Key: Project
+          Value: Zer0-portfolio
+
+  # ── Lambda 呼び出し許可（API Gateway から）────────────────────
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt PortfolioLambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PortfolioApi}/*/*"
+
+  # ── API Gateway HTTP API ───────────────────────────────────────
+  PortfolioApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: Zer0-portfolio-api
+      ProtocolType: HTTP
+
+  # ── Lambda インテグレーション ──────────────────────────────────
+  PortfolioIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PortfolioApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt PortfolioLambdaFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  # ── キャッチオールルート ───────────────────────────────────────
+  PortfolioRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PortfolioApi
+      RouteKey: "$default"
+      Target: !Sub "integrations/${PortfolioIntegration}"
+
+  # ── デフォルトステージ（自動デプロイ）────────────────────────
+  PortfolioStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref PortfolioApi
+      StageName: "$default"
+      AutoDeploy: true
+
+  # ── CloudFront ディストリビューション ─────────────────────────
+  PortfolioDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Zer0-portfolio SSR site
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_200
+        Origins:
+          # API Gateway オリジン（SSR）
+          - Id: ApiGatewayOrigin
+            DomainName: !Sub "${PortfolioApi}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+          # S3 オリジン（静的アセット）
+          - Id: S3Origin
+            DomainName: !GetAtt PortfolioBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt PortfolioOAC.Id
+            S3OriginConfig: {}
+        # デフォルト: API Gateway SSR（キャッシュ無効、全ヘッダー転送）
+        DefaultCacheBehavior:
+          TargetOriginId: ApiGatewayOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          # AWS マネージドポリシー: CachingDisabled
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          # AWS マネージドポリシー: AllViewerExceptHostHeader
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - POST
+            - PATCH
+            - DELETE
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+        # 静的ファイル: S3から配信
+        CacheBehaviors:
+          - PathPattern: /_astro/*
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+          - PathPattern: /images/*
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+          - PathPattern: /favicon.svg
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+      Tags:
+        - Key: Project
+          Value: Zer0-portfolio
+
+Outputs:
+  BucketName:
+    Description: S3 bucket name
+    Value: !Ref PortfolioBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-BucketName"
+
+  DistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref PortfolioDistribution
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionId"
+
+  CloudFrontUrl:
+    Description: Site URL
+    Value: !Sub "https://${PortfolioDistribution.DomainName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudFrontUrl"
+
+  LambdaFunctionName:
+    Description: Lambda function name
+    Value: !Ref PortfolioLambdaFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
+
+  ApiGatewayUrl:
+    Description: API Gateway URL
+    Value: !Sub "https://${PortfolioApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayUrl"

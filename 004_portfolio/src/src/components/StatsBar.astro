@@ -1,0 +1,29 @@
+---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+
+// 001番Botの自動投稿開始日から経過日数を計算
+const startDate = new Date('2024-03-26');
+const today = new Date();
+const diffDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+const stats = [
+  { value: '5', label: t('stats.projects') },
+  { value: '10', label: t('stats.aws') },
+  { value: `${diffDays}+`, label: t('stats.autopost') },
+  { value: '~$0', label: t('stats.cost') },
+];
+---
+
+<section class="border-y border-navy-700/50 bg-navy-800/30">
+  <div class="max-w-6xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8">
+    {stats.map(({ value, label }) => (
+      <div class="text-center">
+        <div class="text-3xl md:text-4xl font-bold text-accent mb-1">{value}</div>
+        <div class="text-slate-400 text-sm">{label}</div>
+      </div>
+    ))}
+  </div>
+</section>

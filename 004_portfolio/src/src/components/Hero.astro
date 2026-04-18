@@ -1,0 +1,52 @@
+---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+---
+
+<section class="relative py-28 md:py-40 overflow-hidden">
+  <!-- 背景グリッド -->
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#1e3a5f18_1px,transparent_1px),linear-gradient(to_bottom,#1e3a5f18_1px,transparent_1px)] bg-[size:64px_64px]"></div>
+  <!-- グラデーション -->
+  <div class="absolute inset-0 bg-gradient-to-b from-navy-950 via-navy-900 to-navy-900"></div>
+
+  <div class="relative max-w-6xl mx-auto px-6">
+    <div class="max-w-3xl">
+      <!-- バッジ -->
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 mb-6 bg-accent/10 border border-accent/30 rounded-full">
+        <span class="w-1.5 h-1.5 bg-accent rounded-full animate-pulse"></span>
+        <span class="text-accent text-xs font-medium tracking-wider uppercase">{t('hero.title')}</span>
+      </div>
+
+      <!-- 名前 -->
+      <h1 class="text-5xl md:text-7xl font-bold text-white mb-4 tracking-tight">
+        {t('hero.name')}
+      </h1>
+
+      <!-- キャッチコピー -->
+      <p class="text-xl md:text-2xl text-accent font-medium mb-4">
+        {t('hero.tagline')}
+      </p>
+      <p class="text-slate-400 text-base md:text-lg mb-10 max-w-xl leading-relaxed">
+        {t('hero.sub')}
+      </p>
+
+      <!-- CTA -->
+      <div class="flex flex-wrap gap-4">
+        <a
+          href={`/${lang}/projects/`}
+          class="px-6 py-3 bg-accent text-navy-950 font-semibold rounded hover:bg-accent-light transition-colors text-sm"
+        >
+          {t('hero.cta.projects')}
+        </a>
+        <a
+          href={`/${lang}/contact/`}
+          class="px-6 py-3 border border-navy-600 text-slate-300 font-semibold rounded hover:border-accent hover:text-accent transition-colors text-sm"
+        >
+          {t('hero.cta.contact')}
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
