@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Zenn Article Auto-Generation System -
-  Generates AWS beginner articles via Bedrock (Claude Sonnet) every Thursday 21:00 JST
+  Generates AWS beginner articles via Bedrock (Claude Haiku) every Thursday 21:00 JST
   and sends email notifications via SES
 
 Parameters:
@@ -21,7 +21,7 @@ Globals:
   Function:
     Runtime: python3.14
     Timeout: 900  # 15分（Lambda最大値、Bedrock記事生成に時間がかかるため）
-    MemorySize: 512
+    MemorySize: 256
     Environment:
       Variables:
         SES_SENDER_EMAIL: !Ref SenderEmail
