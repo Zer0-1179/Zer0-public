@@ -30,6 +30,13 @@ Globals:
         MATPLOTLIB_BACKEND: Agg
 
 Resources:
+  # Lambda実行失敗イベントの保存先DLQ
+  MidArticleGeneratorDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ZennMidArticleGenerator-DLQ
+      MessageRetentionPeriod: 1209600  # 14日
+
   # Lambda実行ロール
   MidArticleGeneratorRole:
     Type: AWS::IAM::Role
@@ -83,6 +90,10 @@ Resources:
                   - ssm:GetParameter
                   - ssm:PutParameter
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mid-article-bot/*"
+              # Lambda実行失敗時にDLQへ書き込む権限
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt MidArticleGeneratorDLQ.Arn
 
   # Lambda関数
   MidArticleGeneratorFunction:
@@ -95,6 +106,9 @@ Resources:
       Layers:
         - !Ref DiagramsLayer
       Description: BedrockでAWS中級者向けZenn技術記事（複合アーキテクチャ構成図付き）を毎月1日・15日21時JSTに自動生成し、SESメールで通知するLambda関数
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt MidArticleGeneratorDLQ.Arn
       Events:
         MonthlyScheduleDay1:
           Type: Schedule
@@ -105,7 +119,7 @@ Resources:
             Schedule: cron(0 12 1 * ? *)
             Enabled: true
             RetryPolicy:
-              MaximumRetryAttempts: 0
+              MaximumRetryAttempts: 1
         MonthlyScheduleDay15:
           Type: Schedule
           Properties:
@@ -115,7 +129,7 @@ Resources:
             Schedule: cron(0 12 15 * ? *)
             Enabled: true
             RetryPolicy:
-              MaximumRetryAttempts: 0
+              MaximumRetryAttempts: 1
       Tags:
         Project: ZennMidArticleGenerator
 
@@ -151,3 +165,6 @@ Outputs:
   EventBridgeRule15thName:
     Description: EventBridgeルール名（毎月15日21時JST）
     Value: ZennMidArticleMonthly15th
+  DLQArn:
+    Description: Lambda実行失敗イベント保存先DLQのARN
+    Value: !GetAtt MidArticleGeneratorDLQ.Arn
