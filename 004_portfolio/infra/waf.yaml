@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: WAF WebACL for Zer0-portfolio CloudFront (deploy in us-east-1)
+
+Resources:
+
+  PortfolioWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: Zer0-portfolio-waf
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      Rules:
+        # Known malicious IP addresses
+        - Name: IPReputationRule
+          Priority: 0
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: IPReputationRule
+
+        # OWASP Top 10 (SQLi, XSS, command injection, etc.)
+        - Name: CommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSet
+
+        # Rate limit: block IPs exceeding 1000 req / 5 min
+        - Name: RateLimit
+          Priority: 2
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 1000
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimit
+
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: Zer0PortfolioWAF
+      Tags:
+        - Key: Project
+          Value: Zer0-portfolio
+
+Outputs:
+  WebACLArn:
+    Description: WAF WebACL ARN
+    Value: !GetAtt PortfolioWebACL.Arn
+    Export:
+      Name: Zer0-portfolio-waf-WebACLArn

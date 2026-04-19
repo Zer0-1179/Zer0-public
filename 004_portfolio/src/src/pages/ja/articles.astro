@@ -13,7 +13,8 @@ const parseRss = (xml: string, source: 'zenn' | 'note'): Article[] => {
   return items.slice(0, 10).map((m) => {
     const title = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1]
       ?? m[1].match(/<title>(.*?)<\/title>/)?.[1] ?? '';
-    const link = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? '';
+    const rawLink = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? '';
+    const link = rawLink.startsWith('https://') || rawLink.startsWith('http://') ? rawLink : '';
     const date = m[1].match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? new Date().toISOString();
     return { title, link, date, source };
   });
@@ -52,7 +53,7 @@ try {
             <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded">Zenn</span>
             {t('articles.zenn')}
           </h2>
-          <a href={socialLinks.zenn} target="_blank" rel="noopener" class="text-accent text-xs hover:text-accent-light transition-colors">
+          <a href={socialLinks.zenn} target="_blank" rel="noopener noreferrer" class="text-accent text-xs hover:text-accent-light transition-colors">
             Zennで見る →
           </a>
         </div>
@@ -73,7 +74,7 @@ try {
             <span class="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">note</span>
             {t('articles.note')}
           </h2>
-          <a href={socialLinks.note} target="_blank" rel="noopener" class="text-accent text-xs hover:text-accent-light transition-colors">
+          <a href={socialLinks.note} target="_blank" rel="noopener noreferrer" class="text-accent text-xs hover:text-accent-light transition-colors">
             noteで見る →
           </a>
         </div>
