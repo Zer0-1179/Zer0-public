@@ -77,7 +77,6 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       MemorySize: 256
       Timeout: 30
-      ReservedConcurrentExecutions: 10
       # 初回は placeholder（deploy.sh が S3 経由で更新する）
       Code:
         ZipFile: |
