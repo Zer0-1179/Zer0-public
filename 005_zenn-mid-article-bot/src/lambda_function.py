@@ -754,7 +754,14 @@ def send_email_notification(
 
 # ─── Lambda ハンドラ ──────────────────────────────────────────────────────────
 
+HAIKU_MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
+
 def lambda_handler(event, context):
+    global BEDROCK_MODEL_ID
+    if event.get("test_mode"):
+        BEDROCK_MODEL_ID = HAIKU_MODEL_ID
+        print(f"[TEST MODE] モデルをHaikuに切り替えました: {HAIKU_MODEL_ID}")
+
     now       = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     today     = now.strftime("%Y-%m-%d")
