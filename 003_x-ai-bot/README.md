@@ -76,6 +76,14 @@ bash deploy.sh
 ### Step 4: 動作テスト
 
 ```bash
+# テストスクリプトで実行（DRY_RUN=true に自動切替・終了後に自動復元）
+bash ~/Zer0/003_X_AI_Bot/test_invoke.sh          # ランダムカテゴリ
+bash ~/Zer0/003_X_AI_Bot/test_invoke.sh trend    # トレンドモード
+```
+
+または手動で：
+
+```bash
 # DRY RUN モードに切替
 aws lambda update-function-configuration \
   --function-name XAiBot \
