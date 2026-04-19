@@ -1,11 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Zer0-portfolio - Lambda SSR + API Gateway + S3 + CloudFront
 
-Parameters:
-  WebAclArn:
-    Type: String
-    Description: WAF WebACL ARN from Zer0-portfolio-waf stack (us-east-1)
-
 Resources:
 
   # ── S3 バケット（静的アセット用） ─────────────────────────────
@@ -176,7 +171,6 @@ Resources:
       DistributionConfig:
         Enabled: true
         Comment: Zer0-portfolio SSR site
-        WebACLId: !Ref WebAclArn
         HttpVersion: http2and3
         IPV6Enabled: true
         PriceClass: PriceClass_200
