@@ -92,7 +92,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/XAiBot
-      RetentionInDays: 1
+      RetentionInDays: 14
 
   # IAM role for EventBridge Scheduler
   SchedulerRole:

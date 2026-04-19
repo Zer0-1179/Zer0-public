@@ -1098,7 +1098,10 @@ def invoke_bedrock(prompt: str) -> str:
         contentType="application/json",
         accept="application/json",
     )
-    return json.loads(resp["body"].read())["content"][0]["text"].strip()
+    result = json.loads(resp["body"].read())
+    usage = result.get("usage", {})
+    print(f"[Bedrock] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
+    return result["content"][0]["text"].strip()
 
 
 # ─────────────────────────────────────────────────────

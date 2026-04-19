@@ -466,6 +466,8 @@ architectureとusecaseが交互になるように選ぶと良いですが、純�
 
     result   = json.loads(response["body"].read())
     topic_id = result["content"][0]["text"].strip().lower()
+    usage = result.get("usage", {})
+    print(f"[Bedrock/topic] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
 
     for topic in available:
         if topic["id"] == topic_id:
@@ -500,6 +502,8 @@ def generate_article(topic: dict, today: str) -> str:
 
     result = json.loads(response["body"].read())
     text = result["content"][0]["text"]
+    usage = result.get("usage", {})
+    print(f"[Bedrock/article] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
 
     # Bedrock が記事冒頭に YAML frontmatter を付けることがあるため除去する
     if text.lstrip().startswith("---"):
