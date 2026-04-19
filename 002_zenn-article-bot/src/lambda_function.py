@@ -26,7 +26,7 @@ _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 # Environment variables
 SES_SENDER_EMAIL    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT_EMAIL = os.environ["SES_RECIPIENT_EMAIL"]
-BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-sonnet-4-6")
+BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 OUTPUT_DIR = os.environ.get(
     "OUTPUT_DIR",
     "/tmp/zenn_articles" if _IS_LAMBDA
