@@ -11,7 +11,8 @@ const parseRss = (xml: string, source: 'zenn' | 'note'): Article[] => {
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
   return items.slice(0, 10).map((m) => {
     const title = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ?? m[1].match(/<title>(.*?)<\/title>/)?.[1] ?? '';
-    const link = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? '';
+    const rawLink = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? '';
+    const link = rawLink.startsWith('https://') || rawLink.startsWith('http://') ? rawLink : '';
     const date = m[1].match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? new Date().toISOString();
     return { title, link, date, source };
   });
@@ -43,7 +44,7 @@ try {
             <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded">Zenn</span>
             {t('articles.zenn')}
           </h2>
-          <a href={socialLinks.zenn} target="_blank" rel="noopener" class="text-accent text-xs hover:text-accent-light transition-colors">Profile →</a>
+          <a href={socialLinks.zenn} target="_blank" rel="noopener noreferrer" class="text-accent text-xs hover:text-accent-light transition-colors">Profile →</a>
         </div>
         {zennArticles.length > 0
           ? <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">{zennArticles.map((a) => <ArticleCard {...a} />)}</div>
@@ -56,7 +57,7 @@ try {
             <span class="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">note</span>
             {t('articles.note')}
           </h2>
-          <a href={socialLinks.note} target="_blank" rel="noopener" class="text-accent text-xs hover:text-accent-light transition-colors">Profile →</a>
+          <a href={socialLinks.note} target="_blank" rel="noopener noreferrer" class="text-accent text-xs hover:text-accent-light transition-colors">Profile →</a>
         </div>
         {noteArticles.length > 0
           ? <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">{noteArticles.map((a) => <ArticleCard {...a} />)}</div>

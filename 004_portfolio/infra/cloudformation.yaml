@@ -1,6 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Zer0-portfolio - Lambda SSR + API Gateway + S3 + CloudFront
 
+Parameters:
+  WebAclArn:
+    Type: String
+    Description: WAF WebACL ARN from Zer0-portfolio-waf stack (us-east-1)
+
 Resources:
 
   # ── S3 バケット（静的アセット用） ─────────────────────────────
@@ -77,6 +82,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       MemorySize: 256
       Timeout: 30
+      ReservedConcurrentExecutions: 10
       # 初回は placeholder（deploy.sh が S3 経由で更新する）
       Code:
         ZipFile: |
@@ -128,6 +134,9 @@ Resources:
       ApiId: !Ref PortfolioApi
       StageName: "$default"
       AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
 
   # ── CloudFront レスポンスヘッダーポリシー ─────────────────────
   PortfolioResponseHeadersPolicy:
@@ -149,7 +158,7 @@ Resources:
             ReferrerPolicy: strict-origin-when-cross-origin
             Override: true
           ContentSecurityPolicy:
-            ContentSecurityPolicy: "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'"
+            ContentSecurityPolicy: "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'"
             Override: true
         CustomHeadersConfig:
           Items:
@@ -167,6 +176,7 @@ Resources:
       DistributionConfig:
         Enabled: true
         Comment: Zer0-portfolio SSR site
+        WebACLId: !Ref WebAclArn
         HttpVersion: http2and3
         IPV6Enabled: true
         PriceClass: PriceClass_200
