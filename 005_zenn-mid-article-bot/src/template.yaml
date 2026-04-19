@@ -28,6 +28,7 @@ Globals:
         SES_RECIPIENT_EMAIL: !Ref RecipientEmail
         BEDROCK_MODEL_ID: !Ref BedrockModelId
         MATPLOTLIB_BACKEND: Agg
+        S3_BUCKET: zer0-dev-s3
 
 Resources:
   # Lambda実行失敗イベントの保存先DLQ
