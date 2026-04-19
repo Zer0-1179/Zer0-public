@@ -30,6 +30,13 @@ Globals:
         MATPLOTLIB_BACKEND: Agg
 
 Resources:
+  # Lambda実行失敗イベントの保存先DLQ
+  ArticleGeneratorDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ZennArticleGenerator-DLQ
+      MessageRetentionPeriod: 1209600  # 14日
+
   # Lambda実行ロール
   ArticleGeneratorRole:
     Type: AWS::IAM::Role
@@ -83,6 +90,10 @@ Resources:
                   - ssm:GetParameter
                   - ssm:PutParameter
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/note-article-bot/*"
+              # Lambda実行失敗時にDLQへ書き込む権限
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ArticleGeneratorDLQ.Arn
 
   # Lambda関数
   ArticleGeneratorFunction:
@@ -95,6 +106,9 @@ Resources:
       Layers:
         - !Ref DiagramsLayer
       Description: BedrockでAWS初心者向けZenn技術記事（アーキテクチャ図付き）を毎週木曜21時JSTに自動生成し、SESメールで通知するLambda関数
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt ArticleGeneratorDLQ.Arn
       Events:
         WeeklySchedule:
           Type: Schedule
@@ -105,7 +119,7 @@ Resources:
             Schedule: cron(0 12 ? * THU *)
             Enabled: true
             RetryPolicy:
-              MaximumRetryAttempts: 0
+              MaximumRetryAttempts: 1
       Tags:
         Project: ZennArticleGenerator
 
@@ -138,3 +152,6 @@ Outputs:
   EventBridgeRuleName:
     Description: EventBridgeルール名（毎週木曜21時JST）
     Value: ZennArticleWeeklyTrigger
+  DLQArn:
+    Description: Lambda実行失敗イベント保存先DLQのARN
+    Value: !GetAtt ArticleGeneratorDLQ.Arn
