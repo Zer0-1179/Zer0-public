@@ -7,7 +7,7 @@ const t = useTranslations('ja');
 
 const skills = [
   { category: 'クラウド (AWS)', items: ['Lambda', 'Bedrock', 'CloudFront', 'S3', 'ECS/ECR', 'RDS/Aurora', 'ElastiCache', 'ALB/NLB', 'VPC', 'IAM', 'EventBridge', 'CloudWatch', 'CloudFormation', 'SAM', 'SSM', 'SES', 'SNS', 'EFS'] },
-  { category: '言語', items: ['Python', 'TypeScript', 'Bash', 'YAML', 'SQL'] },
+  { category: '言語', items: ['Python', 'TypeScript', 'Bash'] },
   { category: 'OS / DB', items: ['Linux (RHEL)', 'Windows Server', 'Oracle', 'PostgreSQL', 'MSSQL Server'] },
   { category: 'ミドルウェア / ツール', items: ['Docker', 'Tomcat', 'VMware', 'FortiGate', 'HULFT', 'OpenLiberty', 'Astro', 'Tailwind CSS', 'Git'] },
 ];
@@ -115,7 +115,7 @@ const career = [
     <!-- スキル -->
     <section class="mb-16">
       <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.skills')}</h2>
-      <div class="grid md:grid-cols-2 gap-6 items-start">
+      <div class="grid md:grid-cols-2 gap-6">
         {skills.map(({ category, items }) => (
           <div class="bg-navy-800/40 border border-navy-700/50 rounded-lg p-5">
             <h3 class="text-slate-400 text-xs uppercase tracking-wider mb-3">{category}</h3>
