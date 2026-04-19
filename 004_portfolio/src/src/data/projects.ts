@@ -72,7 +72,7 @@ export const projects: Project[] = [
     tags: ['SAM', 'Bedrock', 'S3', 'SES', 'matplotlib'],
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'SAM'],
     emoji: '📝',
-    featured: false,
+    featured: true,
   },
   {
     slug: 'x-ai-bot',
@@ -128,7 +128,7 @@ export const projects: Project[] = [
     tags: ['Astro', 'SSR', 'CloudFront', 'Lambda'],
     services: ['Lambda', 'API Gateway', 'CloudFront', 'S3', 'CloudFormation'],
     emoji: '🌐',
-    featured: false,
+    featured: true,
   },
   {
     slug: 'zenn-mid-article-bot',
