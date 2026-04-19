@@ -36,9 +36,9 @@ Lambda（aws-x-poster）
 
 ## 投稿スタイル
 
-| 時間帯       | スタイル                    | URL                | 投稿タイプ                                                         |
-| ------------ | --------------------------- | ------------------ | ------------------------------------------------------------------ |
-| 朝 9:00 JST  | ひとこと感想系・100文字以内 | なし（リーチ重視） | `news_reaction` / `aws_tips` / `aws_question`                      |
+| 時間帯       | スタイル                    | URL                | 投稿タイプ                                                                |
+| ------------ | --------------------------- | ------------------ | ------------------------------------------------------------------------- |
+| 朝 9:00 JST  | ひとこと感想系・100文字以内 | なし（リーチ重視） | `news_reaction` / `aws_tips` / `aws_question`                             |
 | 夜 20:00 JST | ニュース紹介系・160文字以内 | あり（ソース明示） | `news_intro` / `aws_failure` / `news_comparison` / `classmethod_reaction` |
 
 - 投稿タイプはSSMに記録した直近6件の使用履歴をもとに、未使用タイプからランダム選択
@@ -93,10 +93,10 @@ aws events enable-rule  --name aws-x-poster-evening --region ap-northeast-1
 
 ## トラブルシューティング
 
-| エラー                                      | 原因                                    | 対処                                                       |
-| ------------------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
-| `ValidationException: model ID invalid`     | Bedrockのモデルプレフィックスが違う     | 日本向けは `jp.` プレフィックスを使用                      |
-| `402 Payment Required`                      | X APIクレジット不足                     | developer.x.com でクレジットをチャージ（最低$5）           |
-| `403 Forbidden`                             | コードに不要な残骸が混在している        | `bash deploy.sh --code-only` でゼロからビルドし直す        |
-| `AccessDeniedException: reserved parameter` | SSMパラメータ名が `/aws` で始まっている | `/xposter/` など別のプレフィックスを使う                   |
-| `AccessDeniedException` on PutParameter     | IAMロールにSSM書き込み権限がない        | `xposter-history-write` インラインポリシーをロールに追加   |
+| エラー                                      | 原因                                    | 対処                                                     |
+| ------------------------------------------- | --------------------------------------- | -------------------------------------------------------- |
+| `ValidationException: model ID invalid`     | Bedrockのモデルプレフィックスが違う     | 日本向けは `jp.` プレフィックスを使用                    |
+| `402 Payment Required`                      | X APIクレジット不足                     | developer.x.com でクレジットをチャージ（最低$5）         |
+| `403 Forbidden`                             | コードに不要な残骸が混在している        | `bash deploy.sh --code-only` でゼロからビルドし直す      |
+| `AccessDeniedException: reserved parameter` | SSMパラメータ名が `/aws` で始まっている | `/xposter/` など別のプレフィックスを使う                 |
+| `AccessDeniedException` on PutParameter     | IAMロールにSSM書き込み権限がない        | `xposter-history-write` インラインポリシーをロールに追加 |
