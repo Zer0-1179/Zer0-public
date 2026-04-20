@@ -40,11 +40,24 @@ LAMBDA_FUNCTION_NAME=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='LambdaFunctionName'].OutputValue" \
   --output text 2>/dev/null || echo "")
 
-SITE_URL=$(aws cloudformation describe-stacks \
+CUSTOM_DOMAIN_URL=$(aws cloudformation describe-stacks \
+  --stack-name "$STACK_NAME" \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='CustomDomainUrl'].OutputValue" \
+  --output text 2>/dev/null || echo "")
+
+CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --region "$REGION" \
   --query "Stacks[0].Outputs[?OutputKey=='CloudFrontUrl'].OutputValue" \
   --output text 2>/dev/null || echo "")
+
+# カスタムドメインが設定されていればそちらを優先
+if [ -n "$CUSTOM_DOMAIN_URL" ] && [ "$CUSTOM_DOMAIN_URL" != "N/A (CertificateArn not provided)" ]; then
+  SITE_URL="$CUSTOM_DOMAIN_URL"
+else
+  SITE_URL="$CLOUDFRONT_URL"
+fi
 
 if [ -z "$BUCKET_NAME" ] || [ -z "$DISTRIBUTION_ID" ] || [ -z "$LAMBDA_FUNCTION_NAME" ]; then
   echo "エラー: CloudFormationスタック '$STACK_NAME' が見つかりません。"
