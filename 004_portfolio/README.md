@@ -59,6 +59,7 @@ CloudFront (E33SJ6UEA95L47)
 | `/ja/projects/[slug]`・`/en/projects/[slug]` | プロジェクト詳細                                |
 | `/ja/articles`・`/en/articles`               | 最新記事（Zenn・note RSS取得）                  |
 | `/ja/contact`・`/en/contact`                 | 依頼テキスト・SNSリンク・名刺用QRコード         |
+| 任意のパス（404）                            | 404ページ（日英自動判定、HTTP 404 返却）         |
 
 ---
 
@@ -79,8 +80,7 @@ CloudFront (E33SJ6UEA95L47)
     ├── lambda.mjs           # LambdaエントリーポイントI
     ├── .env                 # 環境変数（NOTE_RSS_URL・SITE_URL）
     ├── public/
-    │   ├── favicon.svg
-    │   └── 404.html
+    │   └── favicon.svg
     └── src/
         ├── components/      # 共通コンポーネント
         │   ├── Nav.astro
@@ -93,6 +93,7 @@ CloudFront (E33SJ6UEA95L47)
         │   └── BaseLayout.astro
         ├── pages/
         │   ├── index.astro          # /ja/ へリダイレクト
+        │   ├── 404.astro            # 404ページ（日英判定・HTTP 404）
         │   ├── ja/                  # 日本語ページ群
         │   │   ├── index.astro
         │   │   ├── about.astro
