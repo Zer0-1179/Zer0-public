@@ -179,9 +179,17 @@ PAGES=(
   "/ja/" "/ja/about/" "/ja/projects/" "/ja/articles/" "/ja/contact/"
   "/en/" "/en/about/" "/en/projects/" "/en/articles/" "/en/contact/"
 )
+# カスタムドメインの場合はCloudFront IPに直接解決してSSLエラーを回避
+CF_RESOLVE=""
+CF_IP=$(curl -s "https://dns.google/resolve?name=du7bbiecctrzb.cloudfront.net&type=A" | grep -o '"data":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [[ "$SITE_URL" != *"cloudfront.net"* ]] && [ -n "$CF_IP" ]; then
+  HOSTNAME=$(echo "$SITE_URL" | sed 's|https://||' | cut -d/ -f1)
+  CF_RESOLVE="--resolve ${HOSTNAME}:443:${CF_IP}"
+fi
+
 ALL_OK=true
 for PAGE in "${PAGES[@]}"; do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${SITE_URL}${PAGE}")
+  STATUS=$(curl -s $CF_RESOLVE -o /dev/null -w "%{http_code}" "${SITE_URL}${PAGE}")
   if [ "$STATUS" != "200" ]; then
     echo "  ❌ $PAGE → $STATUS"
     ALL_OK=false
@@ -191,7 +199,7 @@ for PAGE in "${PAGES[@]}"; do
 done
 
 # 404ページ確認（存在しないパスが正しく404を返すこと）
-STATUS_404=$(curl -s -o /dev/null -w "%{http_code}" "${SITE_URL}/ja/not-found-check/")
+STATUS_404=$(curl -s $CF_RESOLVE -o /dev/null -w "%{http_code}" "${SITE_URL}/ja/not-found-check/")
 if [ "$STATUS_404" != "404" ]; then
   echo "  ❌ /ja/not-found-check/ → $STATUS_404 (expected 404)"
   ALL_OK=false
@@ -203,7 +211,7 @@ echo ""
 echo "  セキュリティヘッダー確認..."
 REQUIRED_HEADERS=("x-content-type-options" "x-frame-options" "strict-transport-security")
 for H in "${REQUIRED_HEADERS[@]}"; do
-  VAL=$(curl -sI "${SITE_URL}/ja/" | grep -i "^${H}:")
+  VAL=$(curl -sI $CF_RESOLVE "${SITE_URL}/ja/" | grep -i "^${H}:")
   if [ -z "$VAL" ]; then
     echo "  ❌ $H 未設定"
     ALL_OK=false
