@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Zer0-portfolio - ACM certificate for www.zer0-infra.com (must deploy in us-east-1)
+
+Resources:
+
+  PortfolioCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: www.zer0-infra.com
+      ValidationMethod: DNS
+
+Outputs:
+  CertificateArn:
+    Description: ACM certificate ARN for CloudFront
+    Value: !Ref PortfolioCertificate
+    Export:
+      Name: Zer0-portfolio-cert-CertificateArn

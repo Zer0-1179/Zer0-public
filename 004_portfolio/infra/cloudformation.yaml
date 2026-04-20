@@ -1,6 +1,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Zer0-portfolio - Lambda SSR + API Gateway + S3 + CloudFront
 
+Parameters:
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN from us-east-1 (Zer0-portfolio-cert stack output)
+    Default: ""
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
+
 Resources:
 
   # ── S3 バケット（静的アセット用） ─────────────────────────────
@@ -173,6 +182,16 @@ Resources:
         HttpVersion: http2and3
         IPV6Enabled: true
         PriceClass: PriceClass_200
+        Aliases: !If
+          - HasCertificate
+          - [www.zer0-infra.com]
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasCertificate
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
         Origins:
           # API Gateway オリジン（SSR）
           - Id: ApiGatewayOrigin
@@ -265,6 +284,15 @@ Outputs:
     Value: !Sub "https://${PortfolioDistribution.DomainName}"
     Export:
       Name: !Sub "${AWS::StackName}-CloudFrontUrl"
+
+  CustomDomainUrl:
+    Description: Custom domain URL (requires DNS CNAME to CloudFront)
+    Value: !If
+      - HasCertificate
+      - "https://www.zer0-infra.com"
+      - "N/A (CertificateArn not provided)"
+    Export:
+      Name: !Sub "${AWS::StackName}-CustomDomainUrl"
 
   LambdaFunctionName:
     Description: Lambda function name
