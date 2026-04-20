@@ -232,7 +232,8 @@ def save_url_history(used_urls: list, new_url: str):
             entries = [{"url": u, "posted_at": datetime.now(JST).isoformat()} for u in entries]
     except ssm_client.exceptions.ParameterNotFound:
         entries = []
-    except Exception:
+    except Exception as e:
+        print(f"[History] URL履歴読み込みエラー: {e}")
         entries = []
 
     entries.append({"url": new_url, "posted_at": datetime.now(JST).isoformat()})
