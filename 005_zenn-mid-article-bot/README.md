@@ -217,6 +217,15 @@ published: false → true に変更して公開
 
 ---
 
+## ユニットテスト
+
+```bash
+cd ~/Zer0/005_Zenn_Mid_Article_Bot/src
+python3 -m pytest tests/ -v
+```
+
+テスト内容（5件）: プロンプトformat / SSM読み込み（空・有・不正JSON） / test_mode時のHaiku切替
+
 ## Lambda手動実行（テスト）
 
 ```bash
