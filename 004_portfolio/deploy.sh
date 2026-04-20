@@ -177,6 +177,15 @@ for PAGE in "${PAGES[@]}"; do
   fi
 done
 
+# 404ページ確認（存在しないパスが正しく404を返すこと）
+STATUS_404=$(curl -s -o /dev/null -w "%{http_code}" "${SITE_URL}/ja/not-found-check/")
+if [ "$STATUS_404" != "404" ]; then
+  echo "  ❌ /ja/not-found-check/ → $STATUS_404 (expected 404)"
+  ALL_OK=false
+else
+  echo "  ✅ /ja/not-found-check/ → 404"
+fi
+
 echo ""
 echo "  セキュリティヘッダー確認..."
 REQUIRED_HEADERS=("x-content-type-options" "x-frame-options" "strict-transport-security")
