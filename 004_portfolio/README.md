@@ -2,7 +2,7 @@
 
 AWS Lambda + API Gateway + CloudFront + S3 で構築した、Astro SSR 動的ポートフォリオサイト。日英2言語対応。
 
-**サイトURL**: https://du7bbiecctrzb.cloudfront.net/ja/
+**サイトURL**: https://www.zer0-infra.com/ja/
 
 ---
 
@@ -71,7 +71,8 @@ CloudFront (E33SJ6UEA95L47)
 ├── deploy.sh                # アプリデプロイスクリプト（通常使用）
 ├── lambda-deployment.zip    # デプロイ用zipキャッシュ（自動生成）
 ├── infra/
-│   ├── cloudformation.yaml  # インフラ定義（S3/Lambda/API GW/CloudFront）
+│   ├── cloudformation.yaml  # インフラ定義（S3/Lambda/API GW/CloudFront/カスタムドメイン）
+│   ├── certificate.yaml     # ACM証明書（us-east-1、CloudFront用）
 │   └── deploy-infra.sh      # インフラ構築スクリプト（初回のみ）
 └── src/
     ├── astro.config.mjs     # Astro設定（SSR・i18n・Tailwind）
@@ -122,7 +123,9 @@ CloudFront (E33SJ6UEA95L47)
 | Lambda関数                       | `Zer0-portfolio-ssr`（Node.js 24.x, 256MB, 30s）     |
 | API Gateway                      | `Zer0-portfolio-api`（HTTP API, `$default`ステージ） |
 | CloudFrontディストリビューション | `E33SJ6UEA95L47`                                     |
+| カスタムドメイン                 | `https://www.zer0-infra.com`                         |
 | CloudFrontドメイン               | `https://du7bbiecctrzb.cloudfront.net`               |
+| ACM証明書スタック                | `Zer0-portfolio-cert`（us-east-1）                   |
 | IAMロール                        | `Zer0-portfolio-lambda-role-{AccountId}`             |
 | リージョン                       | `ap-northeast-1`（東京）                             |
 
@@ -133,7 +136,7 @@ CloudFront (E33SJ6UEA95L47)
 ### `src/.env`
 
 ```env
-SITE_URL=https://du7bbiecctrzb.cloudfront.net
+SITE_URL=https://www.zer0-infra.com
 NOTE_RSS_URL=https://note.com/zer0_infra/rss
 ```
 
@@ -141,7 +144,7 @@ NOTE_RSS_URL=https://note.com/zer0_infra/rss
 
 | 変数名     | 値                                     |
 | ---------- | -------------------------------------- |
-| `SITE_URL` | `https://du7bbiecctrzb.cloudfront.net` |
+| `SITE_URL` | `https://www.zer0-infra.com` |
 
 ---
 
@@ -154,7 +157,11 @@ cd /root/Zer0/004_portfolio/infra
 bash deploy-infra.sh
 ```
 
-実行後、出力された `CloudFrontUrl` を `src/.env` の `SITE_URL` に設定する。
+内部で以下を自動実行：
+
+1. ACM証明書スタック（`Zer0-portfolio-cert`）を us-east-1 にデプロイ
+2. メインスタック（`Zer0-portfolio`）を ap-northeast-1 にデプロイ（証明書ARNを渡す）
+3. CloudFront は `www.zer0-infra.com` エイリアスと ACM 証明書で構成される
 
 ### デプロイ（コード更新時）
 
