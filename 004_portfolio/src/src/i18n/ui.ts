@@ -20,9 +20,10 @@ export const ui = {
     'hero.cta.projects': '実績を見る',
     'hero.cta.contact': 'お問い合わせ',
 
-    'stats.projects': '個人開発プロジェクト',
     'stats.aws': 'AWS認定資格',
-    'stats.autopost': '使用AWSサービス',
+    'stats.projects': '個人開発プロジェクト',
+    'stats.aws-services': '使用AWSサービス',
+    'stats.autopost': '日連続自動投稿',
     'stats.cost': '全プロジェクト月額コスト',
 
     'section.projects': '開発実績',
@@ -71,9 +72,10 @@ export const ui = {
     'hero.cta.projects': 'View Projects',
     'hero.cta.contact': 'Contact',
 
+    'stats.aws': 'AWS Certifications',
     'stats.projects': 'Projects',
-    'stats.aws': 'AWS Services',
-    'stats.autopost': 'AWS Services Used',
+    'stats.aws-services': 'AWS Services Used',
+    'stats.autopost': 'Days Auto-Post',
     'stats.cost': 'All Projects / Month',
 
     'section.projects': 'Projects',
