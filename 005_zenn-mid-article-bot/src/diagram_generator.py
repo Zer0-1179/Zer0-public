@@ -14,7 +14,7 @@ from matplotlib.patches import FancyBboxPatch
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _ICON_DIR = os.path.join(_SCRIPT_DIR, 'aws_icons')
-_OFFICIAL_ICON_DIR = os.path.join(_SCRIPT_DIR, '..', '..', '..', 'images', 'AWS-icon')
+_OFFICIAL_ICON_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'images', 'AWS-icon')
 
 _SVC = 'Architecture-Service-Icons_07312025'
 _GRP = 'Architecture-Group-Icons_07312025'
