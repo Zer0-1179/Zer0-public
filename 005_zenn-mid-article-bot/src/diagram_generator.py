@@ -38,6 +38,7 @@ _OFFICIAL_ICON_MAP: dict[str, str] = {
     'public_subnet':  f'{_GRP}/Public-subnet_32.png',
     'private_subnet': f'{_GRP}/Private-subnet_32.png',
     'aws_cloud':      f'{_GRP}/AWS-Cloud_32.png',
+    'aws_cloud_logo': f'{_GRP}/AWS-Cloud-logo_32.png',
 }
 
 
