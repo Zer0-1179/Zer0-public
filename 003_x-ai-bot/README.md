@@ -4,6 +4,8 @@ AI活用術・会社員あるある系コンテンツをXに1日1回自動投稿
 
 ## アーキテクチャ
 
+![アーキテクチャ図](./images/003_architecture.png)
+
 ```
 EventBridge Scheduler（21:00 JST 毎日 + 日曜 10:00 JST）
     ↓
