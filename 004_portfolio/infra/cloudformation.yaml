@@ -97,6 +97,17 @@ Resources:
         - Key: Project
           Value: Zer0-portfolio
 
+  # ── Lambda ロググループ ────────────────────────────────────────
+  PortfolioLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${PortfolioLambdaFunction}"
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: Zer0-portfolio
+
   # ── Lambda 呼び出し許可（API Gateway から）────────────────────
   LambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
