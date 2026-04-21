@@ -15,6 +15,7 @@ export type Project = {
   services: string[];
   emoji: string;
   featured: boolean;
+  monthlyCost: string;
 };
 
 export const projects: Project[] = [
@@ -45,6 +46,7 @@ export const projects: Project[] = [
     services: ['Lambda', 'Amazon Bedrock', 'EventBridge', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '🤖',
     featured: true,
+    monthlyCost: '~$1.2',
   },
   {
     slug: 'zenn-article-bot',
@@ -73,6 +75,7 @@ export const projects: Project[] = [
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'SAM'],
     emoji: '📝',
     featured: true,
+    monthlyCost: '~$0.16',
   },
   {
     slug: 'x-ai-bot',
@@ -101,6 +104,7 @@ export const projects: Project[] = [
     services: ['Lambda', 'Amazon Bedrock', 'EventBridge Scheduler', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '💡',
     featured: true,
+    monthlyCost: '~$0.38',
   },
   {
     slug: 'portfolio',
@@ -129,6 +133,7 @@ export const projects: Project[] = [
     services: ['Lambda', 'API Gateway', 'CloudFront', 'S3', 'CloudFormation'],
     emoji: '🌐',
     featured: true,
+    monthlyCost: '$0',
   },
   {
     slug: 'zenn-mid-article-bot',
@@ -157,6 +162,7 @@ export const projects: Project[] = [
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'SAM'],
     emoji: '🏗️',
     featured: true,
+    monthlyCost: '~$2.8',
   },
 ];
 

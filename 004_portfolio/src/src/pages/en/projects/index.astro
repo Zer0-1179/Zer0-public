@@ -14,6 +14,39 @@ const t = useTranslations('en');
       <p class="text-slate-400">{t('projects.sub')}</p>
     </div>
 
+    <!-- Monthly Operating Cost -->
+    <div class="mb-14 bg-navy-800/40 border border-navy-700/50 rounded-xl p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Monthly Operating Cost</h2>
+      <p class="text-slate-400 text-xs mb-5">This site runs within the AWS free tier at $0. Total across all featured projects is ~$4.5/month.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-navy-700/60">
+              <th class="text-left text-slate-400 font-medium pb-2 pr-6">Project</th>
+              <th class="text-right text-slate-400 font-medium pb-2">Monthly Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((p) => (
+              <tr class="border-b border-navy-700/30 last:border-0">
+                <td class="py-2 pr-6 text-slate-300">
+                  <span class="font-mono text-slate-500 text-xs mr-2">{p.number}</span>{p.nameEn}
+                  {p.slug === 'portfolio' && <span class="ml-2 text-xs text-accent">(this site)</span>}
+                </td>
+                <td class={`py-2 text-right font-mono font-semibold ${p.monthlyCost === '$0' ? 'text-accent' : 'text-slate-200'}`}>
+                  {p.monthlyCost}
+                </td>
+              </tr>
+            ))}
+            <tr class="border-t-2 border-navy-600">
+              <td class="pt-3 pr-6 text-slate-300 font-semibold">Total</td>
+              <td class="pt-3 text-right font-mono font-bold text-white">~$4.5</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="grid md:grid-cols-2 gap-6">
       {projects.map((p) => {
         const name = p.nameEn;
