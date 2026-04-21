@@ -59,7 +59,7 @@ CloudFront (E33SJ6UEA95L47)
 | `/ja/projects/[slug]`・`/en/projects/[slug]` | プロジェクト詳細                                |
 | `/ja/articles`・`/en/articles`               | 最新記事（Zenn・note RSS取得）                  |
 | `/ja/contact`・`/en/contact`                 | 依頼テキスト・SNSリンク・名刺用QRコード         |
-| 任意のパス（404）                            | 404ページ（日英自動判定、HTTP 404 返却）         |
+| 任意のパス（404）                            | 404ページ（日英自動判定、HTTP 404 返却）        |
 
 ---
 
@@ -142,8 +142,8 @@ NOTE_RSS_URL=https://note.com/zer0_infra/rss
 
 ### Lambda環境変数（deploy.shが自動設定）
 
-| 変数名     | 値                                     |
-| ---------- | -------------------------------------- |
+| 変数名     | 値                           |
+| ---------- | ---------------------------- |
 | `SITE_URL` | `https://www.zer0-infra.com` |
 
 ---
