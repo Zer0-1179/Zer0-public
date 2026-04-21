@@ -22,7 +22,7 @@ export const ui = {
 
     'stats.projects': '個人開発プロジェクト',
     'stats.aws': 'AWS認定資格',
-    'stats.autopost': '日連続自動投稿',
+    'stats.autopost': '使用AWSサービス',
     'stats.cost': '全プロジェクト月額コスト',
 
     'section.projects': '開発実績',
@@ -73,7 +73,7 @@ export const ui = {
 
     'stats.projects': 'Projects',
     'stats.aws': 'AWS Services',
-    'stats.autopost': 'Days Auto-Post',
+    'stats.autopost': 'AWS Services Used',
     'stats.cost': 'All Projects / Month',
 
     'section.projects': 'Projects',
