@@ -233,23 +233,37 @@ def _draw_diagram(
     ax.set_facecolor('white')
     ax.set_title(title, fontsize=13, fontweight='bold', pad=10, color='#232F3E')
 
+    ICON_SZ = 0.45  # クラスターアイコンの一辺サイズ
     for cluster in (clusters or []):
+        has_icon = bool(cluster.get('icon'))
         rect = FancyBboxPatch(
             (cluster['x'], cluster['y']),
             cluster['w'], cluster['h'],
             boxstyle='round,pad=0.15',
             facecolor=cluster.get('color', '#EAF4FB'),
-            edgecolor='#8AAFCC',
-            linewidth=1.5,
-            linestyle='--',
+            edgecolor=cluster.get('edgecolor', '#8AAFCC'),
+            linewidth=cluster.get('linewidth', 2.0 if has_icon else 1.5),
+            linestyle=cluster.get('linestyle', '-' if has_icon else '--'),
             zorder=1,
         )
         ax.add_patch(rect)
+        icon_img = _load_icon(cluster['icon']) if has_icon else None
+        ix = cluster['x'] + 0.15
+        iy = cluster['y'] + cluster['h'] - ICON_SZ - 0.05
+        if icon_img is not None:
+            ax.imshow(
+                icon_img,
+                extent=[ix, ix + ICON_SZ, iy, iy + ICON_SZ],
+                aspect='auto', zorder=6, interpolation='bilinear',
+            )
+            tx = ix + ICON_SZ + 0.12
+        else:
+            tx = cluster['x'] + 0.2
+        ty = cluster['y'] + cluster['h'] - (ICON_SZ / 2) - 0.05 if has_icon else cluster['y'] + cluster['h']
         ax.text(
-            cluster['x'] + 0.2,
-            cluster['y'] + cluster['h'],
+            tx, ty,
             cluster['label'],
-            ha='left', va='bottom',
+            ha='left', va='center' if has_icon else 'bottom',
             fontsize=7.5, color='#4A7FA5', style='italic',
             zorder=6,
         )
