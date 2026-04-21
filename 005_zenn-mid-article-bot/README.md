@@ -21,6 +21,8 @@ AWS中級者向けZenn技術記事を毎月2回（1日・15日）自動生成す
 
 ## アーキテクチャ
 
+![アーキテクチャ図](./images/005_architecture.png)
+
 ```
 EventBridge (月2回: 1日・15日 21:00 JST)
     ↓

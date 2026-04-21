@@ -21,6 +21,8 @@ AWS Lambda + API Gateway + CloudFront + S3 で構築した、Astro SSR 動的ポ
 
 ## アーキテクチャ
 
+![アーキテクチャ図](./images/004_architecture.png)
+
 ```
 ユーザー
   ↓ HTTPS

@@ -18,6 +18,8 @@ AWSの最新ニュースをRSSで取得し、Bedrockで @Zer0_Infra の口調に
 
 ## システム構成
 
+![アーキテクチャ図](./images/001_architecture.png)
+
 ```
 EventBridge（朝9時 / 夜20時 JST）
   ↓
