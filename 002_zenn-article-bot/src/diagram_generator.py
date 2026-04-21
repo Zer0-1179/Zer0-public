@@ -12,9 +12,32 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.patches import FancyBboxPatch
 
-# アイコンディレクトリ（関数コードと同梱）
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _ICON_DIR = os.path.join(_SCRIPT_DIR, 'aws_icons')
+_OFFICIAL_ICON_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'images', 'AWS-icon')
+
+_SVC = 'Architecture-Service-Icons_07312025'
+_GRP = 'Architecture-Group-Icons_07312025'
+
+_OFFICIAL_ICON_MAP: dict[str, str] = {
+    'eventbridge': f'{_SVC}/Arch_App-Integration/64/Arch_Amazon-EventBridge_64.png',
+    'lambda':      f'{_SVC}/Arch_Compute/64/Arch_AWS-Lambda_64.png',
+    'bedrock':     f'{_SVC}/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock_64.png',
+    'ssm':         f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Systems-Manager_64.png',
+    'cloudwatch':  f'{_SVC}/Arch_Management-Governance/64/Arch_Amazon-CloudWatch_64.png',
+    'sqs':         f'{_SVC}/Arch_App-Integration/64/Arch_Amazon-Simple-Queue-Service_64.png',
+    's3':          f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
+    'ses':         f'{_SVC}/Arch_Business-Applications/64/Arch_Amazon-Simple-Email-Service_64.png',
+    'cloudfront':  f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
+    'acm':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
+    'api_gateway': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
+    'vpc':            f'{_GRP}/Virtual-private-cloud-VPC_32.png',
+    'region':         f'{_GRP}/Region_32.png',
+    'public_subnet':  f'{_GRP}/Public-subnet_32.png',
+    'private_subnet': f'{_GRP}/Private-subnet_32.png',
+    'aws_cloud':      f'{_GRP}/AWS-Cloud_32.png',
+    'aws_cloud_logo': f'{_GRP}/AWS-Cloud-logo_32.png',
+}
 
 # 日本語フォント設定
 def _setup_font():
@@ -49,6 +72,13 @@ _setup_font()
 def _load_icon(name: str):
     if not name:
         return None
+    if name in _OFFICIAL_ICON_MAP:
+        path = os.path.join(_OFFICIAL_ICON_DIR, _OFFICIAL_ICON_MAP[name])
+        if os.path.exists(path):
+            try:
+                return mpimg.imread(path)
+            except Exception:
+                pass
     path = os.path.join(_ICON_DIR, f'{name}.png')
     if os.path.exists(path):
         try:
@@ -103,26 +133,33 @@ def _draw_diagram(
     ax.set_facecolor('white')
     ax.set_title(title, fontsize=13, fontweight='bold', pad=10, color='#232F3E')
 
-    # クラスター（破線囲み枠）
+    ICON_SZ = 0.45
     for cluster in (clusters or []):
+        has_icon = bool(cluster.get('icon'))
         rect = FancyBboxPatch(
             (cluster['x'], cluster['y']),
             cluster['w'], cluster['h'],
             boxstyle='round,pad=0.15',
             facecolor=cluster.get('color', '#EAF4FB'),
-            edgecolor='#8AAFCC',
-            linewidth=1.5,
-            linestyle='--',
+            edgecolor=cluster.get('edgecolor', '#8AAFCC'),
+            linewidth=cluster.get('linewidth', 2.0 if has_icon else 1.5),
+            linestyle=cluster.get('linestyle', '-' if has_icon else '--'),
             zorder=1,
         )
         ax.add_patch(rect)
-        ax.text(
-            cluster['x'] + cluster['w'] / 2,
-            cluster['y'] + cluster['h'] - 0.1,
-            cluster['label'],
-            ha='center', va='top',
-            fontsize=8, color='#4A7FA5', style='italic',
-        )
+        icon_img = _load_icon(cluster['icon']) if has_icon else None
+        ix = cluster['x'] + 0.15
+        iy = cluster['y'] + cluster['h'] - ICON_SZ - 0.05
+        if icon_img is not None:
+            ax.imshow(icon_img, extent=[ix, ix + ICON_SZ, iy, iy + ICON_SZ],
+                      aspect='auto', zorder=6, interpolation='bilinear')
+            tx = ix + ICON_SZ + 0.12
+        else:
+            tx = cluster['x'] + 0.2
+        ty = cluster['y'] + cluster['h'] - (ICON_SZ / 2) - 0.05 if has_icon else cluster['y'] + cluster['h']
+        ax.text(tx, ty, cluster['label'], ha='left',
+                va='center' if has_icon else 'bottom',
+                fontsize=7.5, color='#4A7FA5', style='italic', zorder=6)
 
     node_map = {n['id']: n for n in nodes}
 
