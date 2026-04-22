@@ -49,13 +49,14 @@ const navItems = [
       <button
         id="menu-btn"
         type="button"
-        class="md:hidden flex flex-col justify-center items-center w-11 h-11 gap-1.5 cursor-pointer touch-manipulation"
+        class="md:hidden flex flex-col justify-center items-center w-11 h-11 gap-1.5 cursor-pointer touch-manipulation select-none"
         aria-label="メニューを開く"
         aria-expanded="false"
+        style="-webkit-tap-highlight-color: transparent;"
       >
-        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200"></span>
-        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200"></span>
-        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200"></span>
+        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200 pointer-events-none"></span>
+        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200 pointer-events-none"></span>
+        <span class="hamburger-line block w-5 h-0.5 bg-slate-300 transition-all duration-200 pointer-events-none"></span>
       </button>
     </div>
   </nav>
@@ -81,43 +82,43 @@ const navItems = [
 <!-- ヘッダー分の余白 -->
 <div class="h-16"></div>
 
-<script>
-  const btn = document.getElementById('menu-btn')!;
-  const menu = document.getElementById('mobile-menu')!;
-  const lines = btn.querySelectorAll('.hamburger-line');
+<script is:inline>
+  // iOS Safari: position:fixed 要素のタッチ反応しないバグの回避
+  document.addEventListener('touchstart', function() {}, { passive: true });
 
-  function toggleMenu() {
-    const opening = menu.classList.contains('hidden');
-    menu.classList.toggle('hidden', !opening);
-    btn.setAttribute('aria-expanded', String(opening));
+  (function () {
+    var btn = document.getElementById('menu-btn');
+    var menu = document.getElementById('mobile-menu');
+    if (!btn || !menu) return;
+    var lines = btn.querySelectorAll('.hamburger-line');
 
-    if (opening) {
-      (lines[0] as HTMLElement).style.transform = 'translateY(8px) rotate(45deg)';
-      (lines[1] as HTMLElement).style.opacity = '0';
-      (lines[2] as HTMLElement).style.transform = 'translateY(-8px) rotate(-45deg)';
-    } else {
-      (lines[0] as HTMLElement).style.transform = '';
-      (lines[1] as HTMLElement).style.opacity = '';
-      (lines[2] as HTMLElement).style.transform = '';
+    function toggleMenu() {
+      var opening = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !opening);
+      btn.setAttribute('aria-expanded', String(opening));
+      if (opening) {
+        lines[0].style.transform = 'translateY(8px) rotate(45deg)';
+        lines[1].style.opacity = '0';
+        lines[2].style.transform = 'translateY(-8px) rotate(-45deg)';
+      } else {
+        lines[0].style.transform = '';
+        lines[1].style.opacity = '';
+        lines[2].style.transform = '';
+      }
     }
-  }
 
-  function closeMenu() {
-    menu.classList.add('hidden');
-    btn.setAttribute('aria-expanded', 'false');
-    (lines[0] as HTMLElement).style.transform = '';
-    (lines[1] as HTMLElement).style.opacity = '';
-    (lines[2] as HTMLElement).style.transform = '';
-  }
+    function closeMenu() {
+      menu.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+      lines[0].style.transform = '';
+      lines[1].style.opacity = '';
+      lines[2].style.transform = '';
+    }
 
-  btn.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    toggleMenu();
-  }, { passive: false });
+    btn.addEventListener('click', toggleMenu);
 
-  btn.addEventListener('click', toggleMenu);
-
-  menu.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', closeMenu);
-  });
+    menu.querySelectorAll('a').forEach(function (a) {
+      a.addEventListener('click', closeMenu);
+    });
+  })();
 </script>
