@@ -82,43 +82,37 @@ const navItems = [
 <!-- ヘッダー分の余白 -->
 <div class="h-16"></div>
 
-<script is:inline>
-  // iOS Safari: position:fixed 要素のタッチ反応しないバグの回避
-  document.addEventListener('touchstart', function() {}, { passive: true });
+<script>
+  const btn = document.getElementById('menu-btn')!;
+  const menu = document.getElementById('mobile-menu')!;
+  const lines = btn.querySelectorAll('.hamburger-line');
 
-  (function () {
-    var btn = document.getElementById('menu-btn');
-    var menu = document.getElementById('mobile-menu');
-    if (!btn || !menu) return;
-    var lines = btn.querySelectorAll('.hamburger-line');
-
-    function toggleMenu() {
-      var opening = menu.classList.contains('hidden');
-      menu.classList.toggle('hidden', !opening);
-      btn.setAttribute('aria-expanded', String(opening));
-      if (opening) {
-        lines[0].style.transform = 'translateY(8px) rotate(45deg)';
-        lines[1].style.opacity = '0';
-        lines[2].style.transform = 'translateY(-8px) rotate(-45deg)';
-      } else {
-        lines[0].style.transform = '';
-        lines[1].style.opacity = '';
-        lines[2].style.transform = '';
-      }
+  function toggleMenu() {
+    const opening = menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', !opening);
+    btn.setAttribute('aria-expanded', String(opening));
+    if (opening) {
+      (lines[0] as HTMLElement).style.transform = 'translateY(8px) rotate(45deg)';
+      (lines[1] as HTMLElement).style.opacity = '0';
+      (lines[2] as HTMLElement).style.transform = 'translateY(-8px) rotate(-45deg)';
+    } else {
+      (lines[0] as HTMLElement).style.transform = '';
+      (lines[1] as HTMLElement).style.opacity = '';
+      (lines[2] as HTMLElement).style.transform = '';
     }
+  }
 
-    function closeMenu() {
-      menu.classList.add('hidden');
-      btn.setAttribute('aria-expanded', 'false');
-      lines[0].style.transform = '';
-      lines[1].style.opacity = '';
-      lines[2].style.transform = '';
-    }
+  function closeMenu() {
+    menu.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+    (lines[0] as HTMLElement).style.transform = '';
+    (lines[1] as HTMLElement).style.opacity = '';
+    (lines[2] as HTMLElement).style.transform = '';
+  }
 
-    btn.addEventListener('click', toggleMenu);
+  btn.addEventListener('click', toggleMenu);
 
-    menu.querySelectorAll('a').forEach(function (a) {
-      a.addEventListener('click', closeMenu);
-    });
-  })();
+  menu.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', closeMenu);
+  });
 </script>
