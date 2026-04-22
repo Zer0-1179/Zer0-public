@@ -48,7 +48,8 @@ const navItems = [
       <!-- ハンバーガーボタン（モバイルのみ） -->
       <button
         id="menu-btn"
-        class="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5"
+        type="button"
+        class="md:hidden flex flex-col justify-center items-center w-11 h-11 gap-1.5 cursor-pointer touch-manipulation"
         aria-label="メニューを開く"
         aria-expanded="false"
       >
@@ -85,12 +86,11 @@ const navItems = [
   const menu = document.getElementById('mobile-menu')!;
   const lines = btn.querySelectorAll('.hamburger-line');
 
-  btn.addEventListener('click', () => {
+  function toggleMenu() {
     const opening = menu.classList.contains('hidden');
     menu.classList.toggle('hidden', !opening);
     btn.setAttribute('aria-expanded', String(opening));
 
-    // ≡ → × アニメーション
     if (opening) {
       (lines[0] as HTMLElement).style.transform = 'translateY(8px) rotate(45deg)';
       (lines[1] as HTMLElement).style.opacity = '0';
@@ -100,16 +100,24 @@ const navItems = [
       (lines[1] as HTMLElement).style.opacity = '';
       (lines[2] as HTMLElement).style.transform = '';
     }
-  });
+  }
 
-  // メニュー内リンクをタップしたら閉じる
+  function closeMenu() {
+    menu.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+    (lines[0] as HTMLElement).style.transform = '';
+    (lines[1] as HTMLElement).style.opacity = '';
+    (lines[2] as HTMLElement).style.transform = '';
+  }
+
+  btn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    toggleMenu();
+  }, { passive: false });
+
+  btn.addEventListener('click', toggleMenu);
+
   menu.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', () => {
-      menu.classList.add('hidden');
-      btn.setAttribute('aria-expanded', 'false');
-      (lines[0] as HTMLElement).style.transform = '';
-      (lines[1] as HTMLElement).style.opacity = '';
-      (lines[2] as HTMLElement).style.transform = '';
-    });
+    a.addEventListener('click', closeMenu);
   });
 </script>
