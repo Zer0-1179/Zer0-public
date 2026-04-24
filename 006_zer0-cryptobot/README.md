@@ -34,13 +34,13 @@ EventBridge で 4 時間毎に起動し、テクニカル指標（200EMA + Super
 
 ## 取引仕様
 
-| 項目 | 内容 |
-|------|------|
-| 取引所 | bitbank（現物） |
-| 対象コイン | SOL / AVAX / ARB |
-| データソース | Binance API 4時間足（200本） |
-| 最大同時保有 | 2コイン |
-| 1ポジション投資額 | 3,000円 |
+| 項目              | 内容                         |
+| ----------------- | ---------------------------- |
+| 取引所            | bitbank（現物）              |
+| 対象コイン        | SOL / AVAX / ARB             |
+| データソース      | Binance API 4時間足（200本） |
+| 最大同時保有      | 2コイン                      |
+| 1ポジション投資額 | 3,000円                      |
 
 ## エントリー条件（全て満たす場合に発注）
 
@@ -51,34 +51,34 @@ EventBridge で 4 時間毎に起動し、テクニカル指標（200EMA + Super
 
 ## TP / SL
 
-| 注文 | 価格 | 数量 |
-|------|------|------|
-| TP1 指値 | 取得価格 + ATR×2 | 30% |
-| TP2 指値 | 取得価格 + ATR×4 | 70% |
-| 損切り指値 | 取得価格 − ATR×1.5 | 100% |
-| TP1約定後 | SL をブレイクイーブン（取得価格）へ更新 | — |
+| 注文       | 価格                                    | 数量 |
+| ---------- | --------------------------------------- | ---- |
+| TP1 指値   | 取得価格 + ATR×2                        | 30%  |
+| TP2 指値   | 取得価格 + ATR×4                        | 70%  |
+| 損切り指値 | 取得価格 − ATR×1.5                      | 100% |
+| TP1約定後  | SL をブレイクイーブン（取得価格）へ更新 | —    |
 
 ## バックテスト結果（直近2年・4時間足）
 
-| 指標 | 値 | 合格基準 |
-|------|----|---------|
-| 勝率 | 56.8% | ≥50% ✓ |
-| プロフィットファクター | 2.00 | ≥1.5 ✓ |
-| 最大ドローダウン | 14.3% | ≤30% ✓ |
-| 総トレード数 | 37回 | — |
+| 指標                   | 値    | 合格基準 |
+| ---------------------- | ----- | -------- |
+| 勝率                   | 56.8% | ≥50% ✓  |
+| プロフィットファクター | 2.00  | ≥1.5 ✓  |
+| 最大ドローダウン       | 14.3% | ≤30% ✓  |
+| 総トレード数           | 37回  | —        |
 
 ## AWSリソース
 
-| リソース | 名称 | 設定 |
-|---------|------|------|
-| Lambda | Zer0-CryptoBot-Analyzer | Python 3.14, 256MB, 120s |
-| Lambda | Zer0-CryptoBot-Executor | Python 3.14, 256MB, 300s |
-| EventBridge | Zer0-CryptoBot-Schedule | 4時間毎（UTC 0/4/8/12/16/20時） |
-| SSM | /Zer0/CryptoBot/bitbank/api_key | SecureString |
-| SSM | /Zer0/CryptoBot/bitbank/api_secret | SecureString |
-| SSM | /Zer0/CryptoBot/state | String（ポジション状態JSON） |
-| SES | — | 既存設定流用 |
-| CloudWatch | /aws/lambda/Zer0-CryptoBot-* | 保存期間 7日 |
+| リソース    | 名称                               | 設定                            |
+| ----------- | ---------------------------------- | ------------------------------- |
+| Lambda      | Zer0-CryptoBot-Analyzer            | Python 3.14, 256MB, 120s        |
+| Lambda      | Zer0-CryptoBot-Executor            | Python 3.14, 256MB, 300s        |
+| EventBridge | Zer0-CryptoBot-Schedule            | 4時間毎（UTC 0/4/8/12/16/20時） |
+| SSM         | /Zer0/CryptoBot/bitbank/api_key    | SecureString                    |
+| SSM         | /Zer0/CryptoBot/bitbank/api_secret | SecureString                    |
+| SSM         | /Zer0/CryptoBot/state              | String（ポジション状態JSON）    |
+| SES         | —                                  | 既存設定流用                    |
+| CloudWatch  | /aws/lambda/Zer0-CryptoBot-*       | 保存期間 7日                    |
 
 ## デプロイ手順
 
@@ -107,6 +107,38 @@ aws logs tail /aws/lambda/Zer0-CryptoBot-Executor --since 10m --region ap-northe
 
 # SSM ポジション状態確認
 aws ssm get-parameter --name "/Zer0/CryptoBot/state" --region ap-northeast-1
+```
+
+## 月額運用コスト
+
+| サービス       | 費用                                              |
+| -------------- | ------------------------------------------------- |
+| Lambda         | $0（無料枠内。月180回×60s×256MB ≒ 4,000 GB秒）   |
+| EventBridge    | $0（無料枠内）                                    |
+| SSM / SES      | $0                                                |
+| CloudWatch     | $0（7日保存、数MB/月）                            |
+| **AWS 合計**   | **$0/月**                                         |
+| bitbank 手数料 | 約10〜15円/月（0.12%×月1.5トレード×3,000円規模） |
+
+## 注意事項
+
+- **初期資金**: 最大2ポジション分として最低10,000円をbitbankに入金推奨。残高3,000円未満で新規発注停止。
+- **APIキー権限**: bitbankのAPIキーは「現物取引」「残高照会」のみ許可。**出金権限は付与しない**。
+- **確定申告**: 仮想通貨売却益は雑所得として課税対象。取引履歴はbitbankのマイページからCSVエクスポート可能。
+- **SSM state 破損時**: bitbankの未約定注文を手動キャンセル後、SSMのstateを`{"positions":{}}`にリセットする。
+- **バックテストの限界**: 過去2年データによる検証。将来の収益を保証しない。
+
+## 緊急停止
+
+```bash
+# EventBridgeスケジュールを無効化（Lambdaは削除しない）
+aws scheduler update-schedule \
+  --name Zer0-CryptoBot-Schedule \
+  --state DISABLED \
+  --schedule-expression "cron(0 */4 * * ? *)" \
+  --flexible-time-window '{"Mode": "OFF"}' \
+  --target "{\"Arn\": \"$(aws lambda get-function --function-name Zer0-CryptoBot-Analyzer --region ap-northeast-1 --query Configuration.FunctionArn --output text)\", \"RoleArn\": \"$(aws iam get-role --role-name Zer0-CryptoBot-SchedulerRole-ap-northeast-1 --query Role.Arn --output text)\"}" \
+  --region ap-northeast-1
 ```
 
 ## バックテスト実行
