@@ -35,7 +35,7 @@ Lambda (ZennMidArticleGenerator)
     ├─ Step 6: SSM にトピックを保存
     └─ Step 7: SES でメール通知
     ↓
-手動: download_article.sh → output/ → Zennに投稿
+手動: scripts/download_article.sh → output/ → Zennに投稿
 ```
 
 ---
@@ -75,8 +75,10 @@ Lambda (ZennMidArticleGenerator)
 ```
 005_Zenn_Mid_Article_Bot/
 ├── README.md
-├── build_layer.sh          # Lambda Layer（matplotlib）ビルド
-├── download_article.sh     # S3→ローカル記事取得スクリプト
+├── scripts/
+│   ├── build_layer.sh      # Lambda Layer（matplotlib）ビルド
+│   ├── download_article.sh # S3→ローカル記事取得スクリプト
+│   └── test_invoke.sh      # 手動テスト実行スクリプト
 ├── src/
 │   ├── lambda_function.py  # メインハンドラ（トピック選択・記事生成・図挿入・保存）
 │   ├── diagram_generator.py# アーキテクチャ図生成（16トピック×2枚 = 32パターン、AWS公式アイコン使用）
@@ -137,7 +139,7 @@ export SENDER_EMAIL="your-verified@example.com"
 export RECIPIENT_EMAIL="notify@example.com"
 
 # 4. デプロイ（Lambda Layer ビルド + SAM デプロイ）
-./deploy.sh
+cd src && ./deploy.sh
 ```
 
 ### ローカル動作確認
@@ -187,7 +189,7 @@ Step 7: メール通知を送信中...
     ↓
 メールを確認 → "次のアクション" の手順に従う
     ↓
-bash ~/Zer0/005_Zenn_Mid_Article_Bot/download_article.sh
+bash ~/Zer0/005_Zenn_Mid_Article_Bot/scripts/download_article.sh
     ↓
 output/NNN_YYYYMMDD_HHMMSS_TOPIC_ID/ に記事が保存される
     ↓

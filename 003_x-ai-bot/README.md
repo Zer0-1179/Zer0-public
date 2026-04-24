@@ -27,6 +27,8 @@ Lambda（XAiBot）
 003_X_AI_Bot/
 ├── README.md              # このファイル
 ├── システム仕様書.md        # 詳細仕様・コスト試算
+├── scripts/
+│   └── test_invoke.sh     # 手動テスト実行スクリプト
 └── src/
     ├── lambda_function.py # Lambda本体（投稿ロジック）
     ├── template.yaml      # CloudFormationテンプレート（IaC）
@@ -79,8 +81,8 @@ bash deploy.sh
 
 ```bash
 # テストスクリプトで実行（DRY_RUN=true に自動切替・終了後に自動復元）
-bash ~/Zer0/003_X_AI_Bot/test_invoke.sh          # ランダムカテゴリ
-bash ~/Zer0/003_X_AI_Bot/test_invoke.sh trend    # トレンドモード
+bash ~/Zer0/003_X_AI_Bot/scripts/test_invoke.sh          # ランダムカテゴリ
+bash ~/Zer0/003_X_AI_Bot/scripts/test_invoke.sh trend    # トレンドモード
 ```
 
 または手動で：
