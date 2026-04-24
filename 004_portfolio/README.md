@@ -2,7 +2,7 @@
 
 AWS Lambda + API Gateway + CloudFront + S3 で構築した、Astro SSR 動的ポートフォリオサイト。日英2言語対応。
 
-**サイトURL**: https://www.zer0-infra.com/ja/
+**サイトURL**: `https://www.zer0-infra.com/ja/`
 
 ---
 
