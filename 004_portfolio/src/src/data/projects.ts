@@ -171,8 +171,8 @@ export const projects: Project[] = [
     nameEn: 'Crypto Trading Bot',
     descJa: 'Binanceのシグナルを使いbitbankでSOL/AVAX/ADAを4時間毎に自動売買。トレーリングSLと動的サイジングで利益を追求するサーバーレスBot。',
     descEn: 'Serverless bot that trades SOL/AVAX/ADA on bitbank every 4 hours using Binance signals, trailing stop-loss, and dynamic position sizing.',
-    longDescJa: 'BTC 200EMAフィルター・Supertrend転換・Volume増加の3条件が重なったときだけエントリーする厳選シグナル方式。買い約定後はTP1（ATR×2）で30%を利確し、残り70%はトレーリングSL（最高値−ATR×1.5）で上昇についていきながら利益を最大化。ポジションサイズは残高に応じて自動計算し複利効果を実現。バックテスト: 勝率59.5% / PF1.68 / 最大DD3.6%。',
-    longDescEn: 'Entries only when BTC 200EMA filter, Supertrend green flip, and above-average volume all align. After fill, TP1 at ATR×2 takes 30%; remaining 70% rides a trailing stop (high − ATR×1.5) to maximize gains. Position size auto-scales with balance for compounding. Backtest: 59.5% win rate / PF 1.68 / max DD 3.6%.',
+    longDescJa: 'BTC 200EMAフィルター・Supertrend転換・Volume増加の3条件が重なったときだけエントリーする厳選シグナル方式。買い約定後はTP1（ATR×2）で30%を利確し、残り70%はトレーリングSL（最高値−ATR×1.5）で上昇についていきながら利益を最大化。ポジションサイズは残高に応じて自動計算し複利効果を実現。バックテスト: 勝率59.6% / PF1.74 / 最大DD3.4% / 資本成長+16.9%。',
+    longDescEn: 'Entries only when BTC 200EMA filter, Supertrend green flip, and above-average volume all align. After fill, TP1 at ATR×2 takes 30%; remaining 70% rides a trailing stop (high − ATR×1.5) to maximize gains. Position size auto-scales with balance for compounding. Backtest: 59.6% win rate / PF 1.74 / max DD 3.4% / +16.9% capital growth.',
     pointsJa: [
       'BTC 200EMA + Supertrend緑転換 + Volume増加の3条件AND判定で偽シグナルを大幅削減',
       'TP1約定後にトレーリングSLへ移行し、強いトレンドで固定TP2より大きな利益を確保',
