@@ -20,13 +20,16 @@ EventBridge で 4 時間毎に起動し、テクニカル指標（200EMA + Super
 │       └── requirements.txt
 ├── backtest/
 │   ├── backtest.py              # ローカルバックテスト（2年間）
-│   └── result.png               # バックテスト損益推移グラフ
+│   ├── result.png               # バックテスト損益推移グラフ
+│   └── requirements.txt        # バックテスト用ローカル依存
 ├── images/
 │   └── 006_architecture.png    # 全体構成図
-├── template.yaml               # SAM テンプレート
-├── deploy.sh                   # デプロイスクリプト
-├── setup_ssm.sh                # SSM パラメータ登録スクリプト
-└── requirements.txt            # バックテスト用ローカル依存
+├── scripts/
+│   ├── deploy.sh               # デプロイスクリプト
+│   └── setup_ssm.sh            # SSM パラメータ登録スクリプト
+├── README.md
+├── システム仕様書.md
+└── template.yaml               # SAM テンプレート
 ```
 
 ## 取引仕様
@@ -81,12 +84,12 @@ EventBridge で 4 時間毎に起動し、テクニカル指標（200EMA + Super
 
 ```bash
 # 1. SSM にAPIキーを登録（初回のみ）
-bash setup_ssm.sh
+bash scripts/setup_ssm.sh
 
 # 2. デプロイ
 export SENDER_EMAIL="your@email.com"
 export RECIPIENT_EMAIL="notify@email.com"
-bash deploy.sh
+bash scripts/deploy.sh
 ```
 
 ## 動作確認
@@ -109,7 +112,7 @@ aws ssm get-parameter --name "/Zer0/CryptoBot/state" --region ap-northeast-1
 ## バックテスト実行
 
 ```bash
-pip install pandas numpy matplotlib requests
+pip install -r backtest/requirements.txt
 python3 backtest/backtest.py
 # → コンソールに勝率/PF/DD/トレード数を表示
 # → backtest/result.png に損益推移グラフを保存
