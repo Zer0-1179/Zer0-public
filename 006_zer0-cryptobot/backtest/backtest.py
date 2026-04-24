@@ -32,8 +32,8 @@ YEARS       = 2
 MAX_CANDLES = YEARS * 365 * 6       # 4h足で1日6本 → 2年=4380本
 BINANCE_MAX = 1000                  # 1リクエストあたりの最大本数
 EMA_PERIOD  = 200
-ATR_PERIOD  = 10
-ST_MULT     = 3
+ATR_PERIOD  = 8
+ST_MULT     = 2.5
 VOL_PERIOD      = 20
 INITIAL_CAPITAL = 10000.0   # 初期資本（単位: 円換算の仮想値）
 POSITION_RATIO  = 0.90      # 使用率: 資本 × 90% を MAX_POSITIONS で均等割り
