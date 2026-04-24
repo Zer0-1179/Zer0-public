@@ -40,10 +40,10 @@ if ! aws s3 ls "s3://${SAM_BUCKET}" 2>/dev/null; then
 fi
 echo "  OK: ${SAM_BUCKET}"
 
-# SAM ビルド（各 CodeUri ディレクトリ内の requirements.txt から pip install）
+# SAM ビルド（template.yaml はルートにあるので scripts/ の親へ移動）
 echo ""
 echo "[2/4] SAMビルド中..."
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 sam build --region "${REGION}"
 
 # SAM デプロイ

@@ -9,7 +9,7 @@ set -euo pipefail
 REGION="ap-northeast-1"
 
 # Zer0-CryptoBot-APIKEY.txt からキーを読み込む（存在する場合）
-APIKEY_FILE="$(dirname "$0")/Zer0-CryptoBot-APIKEY.txt"
+APIKEY_FILE="$(dirname "$0")/../Zer0-CryptoBot-APIKEY.txt"
 
 if [ -f "$APIKEY_FILE" ]; then
   echo "Zer0-CryptoBot-APIKEY.txt からキーを読み込みます..."
