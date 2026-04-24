@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Zer0 CryptoBot - Automated SOL/AVAX/ARB spot trading bot
+  using Binance signals and bitbank execution (4h interval).
+
+Parameters:
+  SenderEmail:
+    Type: String
+    Description: SES verified sender email address
+  RecipientEmail:
+    Type: String
+    Description: Notification recipient email address
+
+Globals:
+  Function:
+    Runtime: python3.14
+    MemorySize: 256
+    Environment:
+      Variables:
+        SES_SENDER_EMAIL: !Ref SenderEmail
+        SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+
+Resources:
+
+  # ── IAM ロール: Analyzer ───────────────────────────────────────────────────
+  AnalyzerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-CryptoBot-AnalyzerRole-${AWS::Region}"
+      Description: Lambda execution role for Zer0-CryptoBot Analyzer
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: Zer0-CryptoBot-AnalyzerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # SSM: APIキーとstateの読み取り
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/*"
+              # SES: エラー通知
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource:
+                  - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+              # Lambda: Executor の非同期 invoke
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ExecutorFunction.Arn
+
+  # ── IAM ロール: Executor ───────────────────────────────────────────────────
+  ExecutorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-CryptoBot-ExecutorRole-${AWS::Region}"
+      Description: Lambda execution role for Zer0-CryptoBot Executor
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: Zer0-CryptoBot-ExecutorPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # SSM: APIキー（SecureString）とstate（読み書き）
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/*"
+              # SES: 売買通知・エラー通知
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource:
+                  - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+
+  # ── Lambda: Analyzer ──────────────────────────────────────────────────────
+  AnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Zer0-CryptoBot-Analyzer
+      CodeUri: lambda/analyzer/
+      Handler: lambda_function.lambda_handler
+      Timeout: 120
+      Role: !GetAtt AnalyzerRole.Arn
+      Description: "Zer0-CryptoBot: Binance指標分析・シグナル検出（4時間毎）"
+      Environment:
+        Variables:
+          EXECUTOR_FUNCTION_NAME: !Ref ExecutorFunction
+
+  # ── Lambda: Executor ──────────────────────────────────────────────────────
+  ExecutorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Zer0-CryptoBot-Executor
+      CodeUri: lambda/executor/
+      Handler: lambda_function.lambda_handler
+      Timeout: 300
+      Role: !GetAtt ExecutorRole.Arn
+      Description: "Zer0-CryptoBot: bitbank注文発注・ポジション管理"
+
+  # ── EventBridge Scheduler 用ロール ────────────────────────────────────────
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-CryptoBot-SchedulerRole-${AWS::Region}"
+      Description: EventBridge Scheduler role for Zer0-CryptoBot Analyzer
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: Zer0-CryptoBot-SchedulerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt AnalyzerFunction.Arn
+
+  # ── EventBridge Schedule: 4時間毎 ─────────────────────────────────────────
+  CryptoBotSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: Zer0-CryptoBot-Schedule
+      Description: "4時間毎にAnalyzerを起動してシグナルを判定する"
+      ScheduleExpression: "cron(0 */4 * * ? *)"   # 毎日 0/4/8/12/16/20 時（UTC）
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt AnalyzerFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: "{}"
+
+  # ── Lambda 実行許可（EventBridge Scheduler → Analyzer） ──────────────────
+  AnalyzerSchedulerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AnalyzerFunction
+      Action: lambda:InvokeFunction
+      Principal: scheduler.amazonaws.com
+      SourceArn: !GetAtt CryptoBotSchedule.Arn
+
+Outputs:
+  AnalyzerFunctionName:
+    Description: Analyzer Lambda function name
+    Value: !Ref AnalyzerFunction
+
+  AnalyzerFunctionArn:
+    Description: Analyzer Lambda function ARN
+    Value: !GetAtt AnalyzerFunction.Arn
+
+  ExecutorFunctionName:
+    Description: Executor Lambda function name
+    Value: !Ref ExecutorFunction
+
+  ExecutorFunctionArn:
+    Description: Executor Lambda function ARN
+    Value: !GetAtt ExecutorFunction.Arn
+
+  ScheduleName:
+    Description: EventBridge schedule name
+    Value: !Ref CryptoBotSchedule

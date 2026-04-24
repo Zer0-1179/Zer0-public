@@ -11,7 +11,8 @@
 ├── 002_Zenn_Auto_Article_Bot/     # Zenn初級者向け技術記事自動生成ボット（毎週木曜）
 ├── 003_X_AI_Bot/                  # AI活用術 X自動投稿ボット
 ├── 004_portfolio/                 # Astro SSR ポートフォリオサイト
-└── 005_Zenn_Mid_Article_Bot/      # Zenn中級者向け技術記事自動生成ボット（毎月2回）
+├── 005_Zenn_Mid_Article_Bot/      # Zenn中級者向け技術記事自動生成ボット（毎月2回）
+└── 006_Zer0_CryptoBot/           # 仮想通貨自動売買Bot（SOL/AVAX/ARB、4時間毎）
 ```
 
 ## 運用ルール
@@ -29,3 +30,4 @@
 | `003_X_AI_Bot`              | AI活用術ジャンルのXアカウントを1日2回自動投稿（21時＋日曜10時）    | 稼働中                   |
 | `004_portfolio`             | Astro SSR ポートフォリオサイト（CloudFront + Lambda + S3）         | 稼働中                   |
 | `005_Zenn_Mid_Article_Bot`  | 毎月1日・15日21時にAWS中級者向けZenn技術記事を自動生成・S3保存     | 稼働中                   |
+| `006_Zer0_CryptoBot`        | SOL/AVAX/ARBをBinanceシグナル+bitbank執行で4時間毎に自動売買        | 稼働中                   |
