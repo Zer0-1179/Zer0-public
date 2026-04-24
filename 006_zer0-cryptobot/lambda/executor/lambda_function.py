@@ -311,10 +311,28 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
 
                     if o_tp1.get("status") == "FULLY_FILLED":
                         log(f"{pair}: TP1 約定 → トレーリングSL 開始")
+
+                        # 旧SLをキャンセル。失敗した場合は既約定の可能性を確認
+                        sl_already_filled = False
                         try:
                             bb.cancel_order(pair, pos["sl_order_id"])
                         except Exception as ce:
                             log(f"{pair}: 旧SL キャンセル失敗: {ce}")
+                            try:
+                                sl_chk = bb.get_order(pair, pos["sl_order_id"])
+                                if sl_chk.get("status") == "FULLY_FILLED":
+                                    sl_already_filled = True
+                                    log(f"{pair}: 旧SL 既に約定 → TP1+SL両方確定 → 終了")
+                                    notify_sell(pair, "SL（TP1後）",
+                                                float(sl_chk["average_price"]),
+                                                pos["entry_price"],
+                                                float(sl_chk["executed_amount"]))
+                                    to_delete.append(pair)
+                            except Exception:
+                                pass
+
+                        if sl_already_filled:
+                            continue
 
                         entry        = pos["entry_price"]
                         trail_amount = pos["trail_amount"]
@@ -336,7 +354,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                             "trail_amount":      trail_amount,
                             "trail_sl_order_id": o_trail["order_id"],
                             "trail_sl_price":    trail_sl_price,
-                            "highest_price":     pos["tp1_price"],  # TP1価格から追跡開始
+                            "highest_price":     pos["tp1_price"],
                         }
                         notify_trail_started(pair, entry, pos["tp1_price"])
                         continue  # 同一ループで trailing 処理しない
