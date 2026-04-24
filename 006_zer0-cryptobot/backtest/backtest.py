@@ -1,10 +1,11 @@
 """
 006_Zer0_CryptoBot バックテスト
-対象: SOL/AVAX/ADA  データ: Binance 4時間足 直近2年分
-戦略: BTC200EMA上 + コイン200EMA上 + Supertrend緑転換 + Volume増加
-TP1: +ATR×2(30%) / 残り70%: TP1後トレーリングSL（最高値−ATR×1.5）
+対象: BTC/ETH/SOL  データ: Binance 4時間足 直近2年分
+戦略: BTC200EMAで市場方向判定 → ロング/ショート両方向
+  ロング: コイン200EMA上 + Supertrend緑転換 + Volume増加
+  ショート: コイン200EMA下 + Supertrend赤転換 + Volume増加
+TP1: ±ATR×2(30%) / 残り70%: TP1後トレーリングSL
 合格基準: 勝率50%以上 / PF1.5以上 / 最大DD30%以内
-v2変更: MAX_POSITIONS=3 / 固定TP2廃止→トレーリングSL / 動的ポジションサイズ
 """
 
 import time
@@ -22,9 +23,9 @@ from datetime import datetime, timezone
 
 # ── 設定 ──────────────────────────────────────────────
 COINS = {
-    "SOL":  "SOLUSDT",
-    "AVAX": "AVAXUSDT",
-    "ADA":  "ADAUSDT",
+    "BTC": "BTCUSDT",
+    "ETH": "ETHUSDT",
+    "SOL": "SOLUSDT",
 }
 BTC_SYMBOL  = "BTCUSDT"
 INTERVAL    = "4h"
@@ -155,26 +156,34 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["atr"]         = calc_atr(df, ATR_PERIOD)
     df["st_dir"]      = calc_supertrend(df, df["atr"], ST_MULT)
     df["vol_avg20"]   = df["volume"].rolling(VOL_PERIOD).mean()
-    # Supertrend が今バー緑転換（前バー赤 → 今バー緑）
     df["st_flip_green"] = (df["st_dir"] == 1) & (df["st_dir"].shift(1) == -1)
+    df["st_flip_red"]   = (df["st_dir"] == -1) & (df["st_dir"].shift(1) == 1)
     return df
 
 
 # ── バックテストシミュレーション ───────────────────────
 class Trade:
-    """1トレードの記録（TP1後トレーリングSL方式）"""
-    def __init__(self, coin, entry_time, entry, atr, invest):
+    """1トレードの記録（ロング/ショート対応、TP1後トレーリングSL方式）"""
+    def __init__(self, coin, entry_time, entry, atr, invest, direction="long"):
         self.coin        = coin
         self.entry_time  = entry_time
         self.entry       = entry
         self.atr         = atr
-        self.invest      = invest   # 動的投資額
-        self.tp1         = entry + atr * TP1_MULT
-        self.sl          = entry - atr * SL_MULT
+        self.invest      = invest
+        self.direction   = direction
+
+        if direction == "long":
+            self.tp1      = entry + atr * TP1_MULT
+            self.sl       = entry - atr * SL_MULT
+            self.trail_sl = entry - atr * SL_MULT
+        else:  # short
+            self.tp1      = entry - atr * TP1_MULT
+            self.sl       = entry + atr * SL_MULT
+            self.trail_sl = entry + atr * SL_MULT
 
         self.tp1_filled  = False
         self.tp1_pnl     = 0.0
-        self.trail_sl    = entry - atr * SL_MULT  # TP1前は初期SLと同値
+        # ロング: trail_high = 最高値追跡 / ショート: trail_high = 最安値追跡（変数名共用）
         self.trail_high  = entry
 
         self.pnl         = 0.0
@@ -191,44 +200,70 @@ class Trade:
         if self.closed:
             return
 
-        if not self.tp1_filled:
-            # TP1 チェック
-            if bar_high >= self.tp1:
-                self.tp1_pnl    = (self.tp1 - self.entry) * self.tp1_amount
-                self.tp1_filled = True
-                self.trail_sl   = self.entry   # BE からトレール開始
-                self.trail_high = bar_high     # TP1バーの高値から追跡
+        if self.direction == "long":
+            if not self.tp1_filled:
+                if bar_high >= self.tp1:
+                    self.tp1_pnl    = (self.tp1 - self.entry) * self.tp1_amount
+                    self.tp1_filled = True
+                    self.trail_sl   = self.entry   # BE からトレール開始
+                    self.trail_high = bar_high
 
-            # 初期SL チェック（TP1前のみ）
-            if not self.tp1_filled and bar_low <= self.sl:
-                self.pnl         = (self.sl - self.entry) * self.amount
-                self.exit_reason = "SL"
-                self.exit_time   = bar_time
-                self.closed      = True
-                return
+                if not self.tp1_filled and bar_low <= self.sl:
+                    self.pnl         = (self.sl - self.entry) * self.amount
+                    self.exit_reason = "SL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
+                    return
 
-        if self.tp1_filled:
-            # 最高値を更新してトレーリングSLを引き上げ
-            if bar_high > self.trail_high:
-                self.trail_high = bar_high
-            new_trail = self.trail_high - self.atr * TRAIL_MULT
-            new_trail = max(new_trail, self.entry)  # BE より下には下げない
-            if new_trail > self.trail_sl:
-                self.trail_sl = new_trail
+            if self.tp1_filled:
+                if bar_high > self.trail_high:
+                    self.trail_high = bar_high
+                new_trail = self.trail_high - self.atr * TRAIL_MULT
+                new_trail = max(new_trail, self.entry)  # BE より下には下げない
+                if new_trail > self.trail_sl:
+                    self.trail_sl = new_trail
 
-            # トレーリングSL チェック
-            if bar_low <= self.trail_sl:
-                self.pnl         = self.tp1_pnl + (self.trail_sl - self.entry) * self.trail_amount
-                self.exit_reason = "TRAIL"
-                self.exit_time   = bar_time
-                self.closed      = True
+                if bar_low <= self.trail_sl:
+                    self.pnl         = self.tp1_pnl + (self.trail_sl - self.entry) * self.trail_amount
+                    self.exit_reason = "TRAIL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
+
+        else:  # short
+            if not self.tp1_filled:
+                if bar_low <= self.tp1:
+                    self.tp1_pnl    = (self.entry - self.tp1) * self.tp1_amount
+                    self.tp1_filled = True
+                    self.trail_sl   = self.entry   # BE からトレール開始
+                    self.trail_high = bar_low      # 最安値追跡
+
+                if not self.tp1_filled and bar_high >= self.sl:
+                    self.pnl         = (self.entry - self.sl) * self.amount  # 負値
+                    self.exit_reason = "SL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
+                    return
+
+            if self.tp1_filled:
+                if bar_low < self.trail_high:
+                    self.trail_high = bar_low      # 最安値を更新
+                new_trail = self.trail_high + self.atr * TRAIL_MULT
+                new_trail = min(new_trail, self.entry)  # BE より上には上げない
+                if new_trail < self.trail_sl:
+                    self.trail_sl = new_trail      # SL を下方向に更新
+
+                if bar_high >= self.trail_sl:
+                    self.pnl         = self.tp1_pnl + (self.entry - self.trail_sl) * self.trail_amount
+                    self.exit_reason = "TRAIL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
 
 
 def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict) -> dict:
     """
     全コインを統合してシミュレーションを実行する。
-    1) 各コインのシグナルバーをリストアップ
-    2) 統合タイムラインを時系列順にスキャンし、TP/SL管理とエントリーを処理
+    BTCの200EMAで市場方向（ロング/ショート）を決定し、
+    各コインのシグナルを方向に応じて収集・実行する。
     """
     min_idx = EMA_PERIOD + VOL_PERIOD + 5
 
@@ -243,19 +278,33 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict) -> dict:
             row = df.iloc[i]
             ts  = row["open_time"]
 
-            # BTC フィルター
-            if ts not in btc_ema200 or btc_close.get(ts, 0) < btc_ema200[ts]:
+            # 市場方向の判定
+            if ts not in btc_ema200:
                 continue
-            # コイン条件
-            if row["close"] < row["ema200"]:
-                continue
-            if not row["st_flip_green"]:
-                continue
+            market_dir = "long" if btc_close.get(ts, 0) >= btc_ema200[ts] else "short"
+
+            # コイン条件（方向に応じて判定）
+            if market_dir == "long":
+                if row["close"] < row["ema200"]:
+                    continue
+                if not row["st_flip_green"]:
+                    continue
+            else:  # short
+                if row["close"] >= row["ema200"]:
+                    continue
+                if not row["st_flip_red"]:
+                    continue
+
             if pd.isna(row["vol_avg20"]) or row["volume"] <= row["vol_avg20"]:
                 continue
 
-            all_signals.append({"coin": coin, "ts": ts,
-                                 "close": row["close"], "atr": row["atr"]})
+            all_signals.append({
+                "coin":      coin,
+                "ts":        ts,
+                "close":     row["close"],
+                "atr":       row["atr"],
+                "direction": market_dir,
+            })
 
     # シグナルを時刻でソート・辞書化（ts → list[signal]）
     sig_by_ts: dict = {}
@@ -270,8 +319,6 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict) -> dict:
     # 統合タイムライン（全コインの全バー）
     all_ts = sorted(set(ts for df in coin_dfs.values() for ts in df["open_time"]))
 
-    # pool_nav = 実現PnL累積ベースのNAV（サイジング計算に使用）
-    # equity   = 実現PnLの系列（DDチェック・チャートに使用）
     pool_nav      = INITIAL_CAPITAL
     active_trades: list[Trade] = []
     completed:     list[Trade] = []
@@ -291,7 +338,7 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict) -> dict:
         for t in newly_closed:
             active_trades.remove(t)
             completed.append(t)
-            pool_nav += t.pnl   # 実現PnLだけNAVに反映
+            pool_nav += t.pnl
             equity.append(pool_nav - INITIAL_CAPITAL)
 
         # ── シグナルチェック ───────────────────────────────────────────────
@@ -304,21 +351,27 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict) -> dict:
             if pool_nav < MIN_INVEST:
                 break
 
-            # 現在NAVの POSITION_RATIO / MAX_POSITIONS を1ポジション投資額に
             invest = pool_nav * POSITION_RATIO / MAX_POSITIONS
             invest = max(invest, MIN_INVEST)
 
-            entry = sig["close"] * 0.99
-            t     = Trade(sig["coin"], ts, entry, sig["atr"], invest)
+            direction = sig["direction"]
+            entry = sig["close"] * 0.99 if direction == "long" else sig["close"] * 1.01
+            t = Trade(sig["coin"], ts, entry, sig["atr"], invest, direction)
             active_trades.append(t)
 
     # 残ポジションを最終バー終値で強制決済
     for t in active_trades:
         last_close = coin_dfs[t.coin].iloc[-1]["close"]
-        if not t.tp1_filled:
-            t.pnl = (last_close - t.entry) * t.amount
-        else:
-            t.pnl = t.tp1_pnl + (last_close - t.entry) * t.trail_amount
+        if t.direction == "long":
+            if not t.tp1_filled:
+                t.pnl = (last_close - t.entry) * t.amount
+            else:
+                t.pnl = t.tp1_pnl + (last_close - t.entry) * t.trail_amount
+        else:  # short
+            if not t.tp1_filled:
+                t.pnl = (t.entry - last_close) * t.amount
+            else:
+                t.pnl = t.tp1_pnl + (t.entry - last_close) * t.trail_amount
         t.exit_reason = "EOD"
         t.closed = True
         completed.append(t)
@@ -341,7 +394,7 @@ def calc_stats(trades: list, equity: list) -> dict:
     gross_los = abs(sum(t.pnl for t in loses))
     pf        = gross_win / gross_los if gross_los else float("inf")
 
-    # 最大ドローダウン（グローバルの INITIAL_CAPITAL を基準に計算）
+    # 最大ドローダウン
     eq_abs = [INITIAL_CAPITAL + v for v in equity]
     peak   = eq_abs[0]
     max_dd = 0.0
@@ -360,12 +413,22 @@ def calc_stats(trades: list, equity: list) -> dict:
         if not coin_trades:
             continue
         coin_wins = [t for t in coin_trades if t.pnl > 0]
+        long_trades  = [t for t in coin_trades if t.direction == "long"]
+        short_trades = [t for t in coin_trades if t.direction == "short"]
         coin_stats[coin] = {
             "total":    len(coin_trades),
             "wins":     len(coin_wins),
             "win_rate": len(coin_wins) / len(coin_trades) * 100 if coin_trades else 0,
             "pnl":      sum(t.pnl for t in coin_trades),
+            "long":     len(long_trades),
+            "short":    len(short_trades),
         }
+
+    # 方向別集計
+    long_trades  = [t for t in trades if t.direction == "long"]
+    short_trades = [t for t in trades if t.direction == "short"]
+    long_wins    = [t for t in long_trades  if t.pnl > 0]
+    short_wins   = [t for t in short_trades if t.pnl > 0]
 
     return {
         "total":     len(trades),
@@ -375,13 +438,17 @@ def calc_stats(trades: list, equity: list) -> dict:
         "max_dd":    max_dd,
         "total_pnl": sum(t.pnl for t in trades),
         "coin":      coin_stats,
+        "long_total":  len(long_trades),
+        "long_wr":     len(long_wins) / len(long_trades) * 100 if long_trades else 0,
+        "short_total": len(short_trades),
+        "short_wr":    len(short_wins) / len(short_trades) * 100 if short_trades else 0,
     }
 
 
 def print_stats(stats: dict):
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 55)
     print("  バックテスト結果")
-    print("=" * 50)
+    print("=" * 55)
     if stats.get("total", 0) == 0:
         print("  トレードなし")
         return
@@ -393,9 +460,14 @@ def print_stats(stats: dict):
     print(f"  総損益(USDT)          : {stats['total_pnl']:+.2f}")
     print()
 
+    print(f"  方向別内訳:")
+    print(f"    ロング : {stats['long_total']:3d}件  勝率:{stats['long_wr']:.1f}%")
+    print(f"    ショート: {stats['short_total']:3d}件  勝率:{stats['short_wr']:.1f}%")
+    print()
+
     print("  コイン別内訳:")
     for coin, cs in stats["coin"].items():
-        print(f"    {coin:5s} | トレード:{cs['total']:3d} | "
+        print(f"    {coin:5s} | 計:{cs['total']:3d}(L:{cs['long']:2d}/S:{cs['short']:2d}) | "
               f"勝率:{cs['win_rate']:5.1f}% | 損益:{cs['pnl']:+.2f} USDT")
 
     print()
@@ -409,7 +481,7 @@ def print_stats(stats: dict):
     print(f"    {ok_dd} 最大DD 30%以内 → {stats['max_dd']:.1f}%")
     print()
     print(f"  判定: {'【合格】' if passed else '【不合格】'}")
-    print("=" * 50)
+    print("=" * 55)
 
 
 def save_chart(equity: list, timestamps: list, path: str, final_pool: float):
@@ -437,27 +509,29 @@ def save_chart(equity: list, timestamps: list, path: str, final_pool: float):
 
 # ── メイン ────────────────────────────────────────────
 def main():
-    print("Zer0-CryptoBot バックテスト開始")
+    print("Zer0-CryptoBot バックテスト開始（ロング＋ショート版）")
     print(f"  期間: 直近 {YEARS} 年  足: {INTERVAL}  EMA:{EMA_PERIOD}  ATR:{ATR_PERIOD}  ST倍率:{ST_MULT}")
     print()
 
-    # BTC データ取得
-    print(f"[1/5] BTC データ取得中... ({BTC_SYMBOL})")
+    # BTC データ取得（フィルター兼トレード対象）
+    print(f"[1/4] BTC データ取得中... ({BTC_SYMBOL})")
     btc_raw = fetch_klines(BTC_SYMBOL)
     btc_df  = add_indicators(btc_raw)
     print(f"      取得: {len(btc_df)} 本  期間: {btc_df['open_time'].iloc[0]} ～ {btc_df['open_time'].iloc[-1]}")
 
-    # コインデータ取得
-    coin_dfs = {}
-    for idx, (coin, symbol) in enumerate(COINS.items(), start=2):
-        print(f"[{idx}/5] {coin} データ取得中... ({symbol})")
+    # コインデータ取得（BTCはbtc_dfを再利用）
+    coin_dfs = {"BTC": btc_df}
+    for idx, (coin, symbol) in enumerate(
+        [("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")], start=2
+    ):
+        print(f"[{idx}/4] {coin} データ取得中... ({symbol})")
         raw = fetch_klines(symbol)
         coin_dfs[coin] = add_indicators(raw)
         df = coin_dfs[coin]
         print(f"      取得: {len(df)} 本  期間: {df['open_time'].iloc[0]} ～ {df['open_time'].iloc[-1]}")
 
     # バックテスト実行
-    print("\n[5/5] バックテスト実行中...")
+    print("\n[4/4] バックテスト実行中...")
     result  = run_backtest(btc_df, coin_dfs)
     trades  = result["trades"]
     equity     = result["equity"]
