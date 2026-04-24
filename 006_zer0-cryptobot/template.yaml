@@ -147,19 +147,6 @@ Resources:
                 Resource:
                   - !GetAtt AnalyzerFunction.Arn
 
-  # ── CloudWatch Logs: 保存期間 7日 ────────────────────────────────────────
-  AnalyzerLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /aws/lambda/Zer0-CryptoBot-Analyzer
-      RetentionInDays: 7
-
-  ExecutorLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /aws/lambda/Zer0-CryptoBot-Executor
-      RetentionInDays: 7
-
   # ── EventBridge Schedule: 4時間毎 ─────────────────────────────────────────
   CryptoBotSchedule:
     Type: AWS::Scheduler::Schedule

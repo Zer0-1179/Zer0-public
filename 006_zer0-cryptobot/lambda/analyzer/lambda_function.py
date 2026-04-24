@@ -42,6 +42,13 @@ def log(msg: str):
 
 
 def send_error_email(subject: str, body: str):
+    html_body = (
+        '<!DOCTYPE html><html><head>'
+        '<meta charset="UTF-8">'
+        '</head><body style="font-family:sans-serif;font-size:14px;line-height:1.8;">'
+        + body.replace("\n", "<br>")
+        + "</body></html>"
+    )
     try:
         ses = boto3.client("ses", region_name=AWS_REGION)
         ses.send_email(
@@ -49,7 +56,10 @@ def send_error_email(subject: str, body: str):
             Destination={"ToAddresses": [SES_RECIPIENT]},
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body":    {"Text": {"Data": body,    "Charset": "UTF-8"}},
+                "Body": {
+                    "Text": {"Data": body,      "Charset": "UTF-8"},
+                    "Html": {"Data": html_body, "Charset": "UTF-8"},
+                },
             },
         )
     except Exception as e:
