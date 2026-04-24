@@ -37,7 +37,7 @@ EventBridge で 4 時間毎に起動し、テクニカル指標（200EMA + Super
 | 項目              | 内容                         |
 | ----------------- | ---------------------------- |
 | 取引所            | bitbank（現物）              |
-| 対象コイン        | SOL / AVAX / ARB             |
+| 対象コイン        | SOL / AVAX / ADA             |
 | データソース      | Binance API 4時間足（200本） |
 | 最大同時保有      | 2コイン                      |
 | 1ポジション投資額 | 3,000円                      |
@@ -62,10 +62,10 @@ EventBridge で 4 時間毎に起動し、テクニカル指標（200EMA + Super
 
 | 指標                   | 値    | 合格基準 |
 | ---------------------- | ----- | -------- |
-| 勝率                   | 56.8% | ≥50% ✓  |
-| プロフィットファクター | 2.00  | ≥1.5 ✓  |
-| 最大ドローダウン       | 14.3% | ≤30% ✓  |
-| 総トレード数           | 37回  | —        |
+| 勝率                   | 59.4% | ≥50% ✓  |
+| プロフィットファクター | 2.20  | ≥1.5 ✓  |
+| 最大ドローダウン       | 14.4% | ≤30% ✓  |
+| 総トレード数           | 32回  | —        |
 
 ## AWSリソース
 
@@ -75,7 +75,7 @@ EventBridge で 4 時間毎に起動し、テクニカル指標（200EMA + Super
 | Lambda      | Zer0-CryptoBot-Executor            | Python 3.14, 256MB, 300s        |
 | EventBridge | Zer0-CryptoBot-Schedule            | 4時間毎（UTC 0/4/8/12/16/20時） |
 | SSM         | /Zer0/CryptoBot/bitbank/api_key    | SecureString                    |
-| SSM         | /Zer0/CryptoBot/bitbank/api_secret | SecureString                    |
+| SSM         | /Zer0/CryptoBot/bitbank/api_secret | SecureString                     |
 | SSM         | /Zer0/CryptoBot/state              | String（ポジション状態JSON）    |
 | SES         | —                                  | 既存設定流用                    |
 | CloudWatch  | /aws/lambda/Zer0-CryptoBot-*       | 保存期間 7日                    |
