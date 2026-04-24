@@ -44,7 +44,7 @@ echo "  OK: ${SAM_BUCKET}"
 # Layer ビルド
 echo ""
 echo "[0/4] Lambda Layer をビルド中..."
-bash "$(dirname "$0")/../build_layer.sh"
+bash "$(dirname "$0")/../scripts/build_layer.sh"
 
 # SAMビルド
 echo ""

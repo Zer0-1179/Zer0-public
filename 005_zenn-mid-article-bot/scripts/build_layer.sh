@@ -7,12 +7,12 @@ set -euo pipefail
 # Amazon Linux 2023 (x86_64) 互換
 # ============================================================
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LAYER_DIR="${SCRIPT_DIR}/layer"
 PYTHON_DIR="${LAYER_DIR}/python"
 ZIP_PATH="${SCRIPT_DIR}/matplotlib_layer.zip"
 REGION="ap-northeast-1"
-LAYER_NAME="matplotlib-aws-icons"
+LAYER_NAME="matplotlib-aws-icons-mid"
 
 echo "=============================="
 echo "Lambda Layer ビルド開始"
@@ -37,18 +37,14 @@ echo "  インストール直後サイズ: $(du -sh "${PYTHON_DIR}" | cut -f1)"
 
 # ── [1.5/3] 不要ファイルを削除してサイズ削減 ─────────────────────────────────
 echo "[1.5/3] 不要ファイルを削除中..."
-# テスト・サンプルデータ・ドキュメント
 find "${PYTHON_DIR}" -type d -name "tests"       -exec rm -rf {} + 2>/dev/null || true
 find "${PYTHON_DIR}" -type d -name "test"        -exec rm -rf {} + 2>/dev/null || true
 find "${PYTHON_DIR}" -type d -name "sample_data" -exec rm -rf {} + 2>/dev/null || true
 find "${PYTHON_DIR}" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-# .pyc / .pyo コンパイル済みキャッシュ
 find "${PYTHON_DIR}" -name "*.pyc" -delete 2>/dev/null || true
 find "${PYTHON_DIR}" -name "*.pyo" -delete 2>/dev/null || true
-# distinfo / ライセンスファイル（ランタイム不要）
 find "${PYTHON_DIR}" -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
 find "${PYTHON_DIR}" -type d -name "*.egg-info"  -exec rm -rf {} + 2>/dev/null || true
-# matplotlibの重いサンプルデータ
 find "${PYTHON_DIR}" -name "*.ttf" ! -path "*/matplotlib/*" -delete 2>/dev/null || true
 
 echo "  削除後サイズ: $(du -sh "${PYTHON_DIR}" | cut -f1)"
@@ -63,7 +59,7 @@ echo "  サイズ: $(du -sh "${ZIP_PATH}" | cut -f1)"
 echo "[3/3] Lambda Layer をアップロード中..."
 LAYER_ARN=$(aws lambda publish-layer-version \
     --layer-name "${LAYER_NAME}" \
-    --description "matplotlib + numpy + pillow for AWS architecture diagrams" \
+    --description "matplotlib + numpy + pillow for AWS mid-level architecture diagrams" \
     --zip-file "fileb://${ZIP_PATH}" \
     --compatible-runtimes python3.14 \
     --compatible-architectures x86_64 \

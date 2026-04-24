@@ -14,7 +14,7 @@ set -e
 STACK_NAME="Zer0-portfolio"
 REGION="${AWS_DEFAULT_REGION:-ap-northeast-1}"
 MODE="${1:-}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_DIR="${SCRIPT_DIR}/src"
 
 echo "=== ポートフォリオサイト デプロイ ==="

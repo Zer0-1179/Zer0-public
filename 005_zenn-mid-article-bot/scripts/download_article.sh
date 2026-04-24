@@ -1,14 +1,14 @@
 #!/bin/bash
-# S3から最新のZenn記事をoutput/にダウンロードし、S3オブジェクトを削除する
+# S3から最新のZenn中級記事をoutput/にダウンロードし、S3オブジェクトを削除する
 
 set -e
 
 BUCKET="zer0-dev-s3"
-S3_PREFIX="zenn-articles"
-OUTPUT_DIR="$(cd "$(dirname "$0")" && pwd)/output"
+S3_PREFIX="zenn-mid-articles"
+OUTPUT_DIR="$(cd "$(dirname "$0")/.." && pwd)/output"
 REGION="ap-northeast-1"
 
-echo "=== Zenn記事ダウンロード ==="
+echo "=== Zenn中級記事ダウンロード ==="
 
 # S3に存在するフォルダ一覧を取得
 FOLDERS=$(aws s3api list-objects-v2 \
@@ -29,7 +29,7 @@ echo "$FOLDERS"
 echo ""
 
 for FOLDER in $FOLDERS; do
-  # フォルダ名（例: zenn-articles/20260331_210000_sqs/）からベース名を取得
+  # フォルダ名（例: zenn-mid-articles/20260501_210000_serverless_ec/）からベース名を取得
   BASENAME=$(echo "$FOLDER" | sed "s|${S3_PREFIX}/||" | tr -d '/')
 
   # 連番を付与（output/ 内の既存 NNN_* ディレクトリ数 + 1）
