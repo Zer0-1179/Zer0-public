@@ -1,8 +1,9 @@
 """
 Zer0-CryptoBot Executor Lambda
-Analyzer から invoke される。
-Phase A: 既存ポジションのメンテナンス（24h未約定キャンセル / TP1約定後SL更新）
-Phase B: 新規シグナルの注文発注
+Phase A: 既存ポジション管理（買い約定 / TP1後トレーリングSL / 24h未約定キャンセル）
+Phase B: 新規シグナルの指値発注（動的ポジションサイズ）
+
+v2変更: MAX_POSITIONS=3 / 固定TP2廃止→トレーリングSL / 残高×90%÷スロット数で動的サイジング
 """
 
 import os
@@ -18,8 +19,8 @@ import boto3
 from datetime import datetime, timezone
 
 # ── 定数 ──────────────────────────────────────────────────────────────────────
-INVEST_JPY      = 3000          # 1ポジション投資額（円）
-MAX_POSITIONS   = 2
+MIN_INVEST_JPY  = 1000          # 最小発注額（円）
+MAX_POSITIONS   = 3
 CANCEL_AFTER_S  = 86400         # 未約定注文キャンセルまでの秒数（24時間）
 BITBANK_PUB     = "https://public.bitbank.cc"
 BITBANK_REST    = "https://api.bitbank.cc/v1"
@@ -28,11 +29,11 @@ SSM_API_SECRET  = "/Zer0/CryptoBot/bitbank/api_secret"
 SSM_STATE       = "/Zer0/CryptoBot/state"
 
 # TP/SL 倍率
-TP1_MULT  = 2.0
-TP2_MULT  = 4.0
-SL_MULT   = 1.5
-TP1_RATIO = 0.3   # TP1 の数量割合
-TP2_RATIO = 0.7   # TP2 の数量割合
+TP1_MULT    = 2.0   # TP1 = entry + ATR × 2
+SL_MULT     = 1.5   # 初期SL = entry − ATR × 1.5
+TRAIL_MULT  = 1.5   # トレーリング幅 = 最高値 − ATR × 1.5
+TP1_RATIO   = 0.3   # TP1 の数量割合
+TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
 
 # コイン別精度（price小数桁数, amount小数桁数）
 PAIRS = {
@@ -52,15 +53,18 @@ def log(msg: str):
 
 
 def round_price(value: float, prec: int) -> str:
-    """bitbank API に渡す価格文字列（小数桁数を揃える）"""
     if prec == 0:
         return str(int(round(value, 0)))
     return f"{value:.{prec}f}"
 
 
 def round_amount(value: float, prec: int) -> str:
-    """bitbank API に渡す数量文字列"""
     return f"{value:.{prec}f}"
+
+
+def price_val(price_str: str) -> float:
+    """文字列価格を比較用 float に変換"""
+    return float(price_str)
 
 
 # ── SSM ───────────────────────────────────────────────────────────────────────
@@ -87,7 +91,6 @@ def save_state(state: dict):
 
 # ── SES ───────────────────────────────────────────────────────────────────────
 def send_email(subject: str, body: str):
-    # HTMLボディに <meta charset="UTF-8"> を付与することで文字化けを防ぐ
     html_body = (
         '<!DOCTYPE html><html><head>'
         '<meta charset="UTF-8">'
@@ -113,29 +116,50 @@ def send_email(subject: str, body: str):
         log(f"SES 送信失敗: {e}")
 
 
-def notify_buy_order(pair: str, price: float, amount: float):
-    total = price * amount
+def notify_buy_order(pair: str, price: float, amount: float, invest: float):
     subject = f"【Zer0-CryptoBot】買い注文発注 - {pair.upper()}"
     body = (
         f"コイン：{pair.upper()}\n"
         f"価格：{price:,.0f}円\n"
         f"数量：{amount}\n"
-        f"投資額：{total:,.0f}円\n"
+        f"投資額：{invest:,.0f}円\n"
         f"※ 24時間で未約定の場合はキャンセルします"
     )
     send_email(subject, body)
 
 
-def notify_buy_fill(pair: str, entry: float, amount: float, sl: float, tp1: float, tp2: float):
+def notify_buy_fill(pair: str, entry: float, amount: float, sl: float, tp1: float):
     subject = f"【Zer0-CryptoBot】買い執行 - {pair.upper()}"
     body = (
         f"コイン：{pair.upper()}\n"
         f"価格：{entry:,.4f}円\n"
         f"数量：{amount}\n"
         f"投資額：{entry * amount:,.0f}円\n"
-        f"損切り：{sl:,.4f}円\n"
-        f"TP1：{tp1:,.4f}円\n"
-        f"TP2：{tp2:,.4f}円"
+        f"損切り（初期SL）：{sl:,.4f}円\n"
+        f"TP1（30%）：{tp1:,.4f}円\n"
+        f"残り70%：TP1約定後にトレーリングSL（ATR×{TRAIL_MULT}）で管理"
+    )
+    send_email(subject, body)
+
+
+def notify_trail_started(pair: str, entry: float, tp1_price: float):
+    subject = f"【Zer0-CryptoBot】TP1約定・トレーリング開始 - {pair.upper()}"
+    body = (
+        f"コイン：{pair.upper()}\n"
+        f"TP1 約定（{tp1_price:,.4f}円）\n"
+        f"残り70%のトレーリングSLを開始しました。\n"
+        f"初期SL：{entry:,.4f}円（ブレイクイーブン）\n"
+        f"価格上昇に連れてSLが自動更新されます。"
+    )
+    send_email(subject, body)
+
+
+def notify_trail_updated(pair: str, new_trail: float):
+    subject = f"【Zer0-CryptoBot】トレーリングSL更新 - {pair.upper()}"
+    body = (
+        f"コイン：{pair.upper()}\n"
+        f"価格上昇によりトレーリングSLを更新しました。\n"
+        f"新SL：{new_trail:,.4f}円"
     )
     send_email(subject, body)
 
@@ -149,16 +173,6 @@ def notify_sell(pair: str, reason: str, price: float, entry: float, amount: floa
         f"種別：{reason}\n"
         f"売却価格：{price:,.4f}円\n"
         f"損益：{pnl:+,.0f}円（{pnl_pct:+.2f}%）"
-    )
-    send_email(subject, body)
-
-
-def notify_sl_updated(pair: str, new_sl: float):
-    subject = f"【Zer0-CryptoBot】SL更新（ブレイクイーブン） - {pair.upper()}"
-    body = (
-        f"コイン：{pair.upper()}\n"
-        f"TP1 約定 → 損切りをブレイクイーブンに更新しました。\n"
-        f"新SL：{new_sl:,.4f}円"
     )
     send_email(subject, body)
 
@@ -214,9 +228,6 @@ class BitbankClient:
     def get_order(self, pair: str, order_id: int) -> dict:
         return self._get("/user/spot/order", {"pair": pair, "order_id": order_id})["data"]
 
-    def get_active_orders(self, pair: str) -> list:
-        return self._get("/user/spot/active_orders", {"pair": pair})["data"]["orders"]
-
     def create_order(self, pair: str, amount: str, price: str, side: str) -> dict:
         body = {"pair": pair, "amount": amount, "price": price,
                 "side": side, "type": "limit"}
@@ -236,13 +247,9 @@ def get_bitbank_price(pair: str) -> float:
 
 # ── Phase A: 既存ポジション管理 ───────────────────────────────────────────────
 def maintain_positions(bb: BitbankClient, state: dict) -> dict:
-    """
-    既存ポジションを確認し、約定・24h未約定キャンセル・TP1後SL更新を処理する。
-    state を更新して返す。
-    """
     to_delete = []
 
-    for pair, pos in state["positions"].items():
+    for pair, pos in list(state["positions"].items()):
         cfg = PAIRS.get(pair, {"price_prec": 2, "amount_prec": 4})
 
         try:
@@ -252,100 +259,139 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                 status = order.get("status", "")
 
                 if status == "FULLY_FILLED":
-                    log(f"{pair}: 買い約定 → TP1/TP2/SL 発注")
+                    log(f"{pair}: 買い約定 → TP1/SL 発注")
                     entry     = float(order["average_price"])
                     amount    = float(order["executed_amount"])
                     atr_ratio = pos["atr_jpy"] / pos["entry_price_signal"]
                     atr_jpy   = atr_ratio * entry
 
-                    tp1_price  = entry + atr_jpy * TP1_MULT
-                    tp2_price  = entry + atr_jpy * TP2_MULT
-                    sl_price   = entry - atr_jpy * SL_MULT
-                    tp1_amount = round(amount * TP1_RATIO, cfg["amount_prec"])
-                    tp2_amount = round(amount * TP2_RATIO, cfg["amount_prec"])
+                    tp1_price    = entry + atr_jpy * TP1_MULT
+                    sl_price     = entry - atr_jpy * SL_MULT
+                    tp1_amount   = round(amount * TP1_RATIO,   cfg["amount_prec"])
+                    trail_amount = round(amount * TRAIL_RATIO, cfg["amount_prec"])
 
-                    # TP1/TP2/SL 発注
                     o_tp1 = bb.create_order(pair,
                                             round_amount(tp1_amount, cfg["amount_prec"]),
-                                            round_price(tp1_price, cfg["price_prec"]), "sell")
-                    o_tp2 = bb.create_order(pair,
-                                            round_amount(tp2_amount, cfg["amount_prec"]),
-                                            round_price(tp2_price, cfg["price_prec"]), "sell")
+                                            round_price(tp1_price,   cfg["price_prec"]), "sell")
                     o_sl  = bb.create_order(pair,
                                             round_amount(amount, cfg["amount_prec"]),
                                             round_price(sl_price, cfg["price_prec"]), "sell")
 
                     pos.update({
-                        "status":       "active",
-                        "entry_price":  entry,
-                        "total_amount": amount,
-                        "tp1_price":    tp1_price,
-                        "tp2_price":    tp2_price,
-                        "sl_price":     sl_price,
-                        "tp1_order_id": o_tp1["order_id"],
-                        "tp2_order_id": o_tp2["order_id"],
-                        "sl_order_id":  o_sl["order_id"],
-                        "tp1_filled":   False,
+                        "status":        "active",
+                        "entry_price":   entry,
+                        "total_amount":  amount,
+                        "atr_jpy":       atr_jpy,
+                        "tp1_price":     tp1_price,
+                        "tp1_amount":    tp1_amount,
+                        "trail_amount":  trail_amount,
+                        "sl_price":      sl_price,
+                        "tp1_order_id":  o_tp1["order_id"],
+                        "sl_order_id":   o_sl["order_id"],
+                        "tp1_filled":    False,
                     })
-                    notify_buy_fill(pair, entry, amount, sl_price, tp1_price, tp2_price)
+                    notify_buy_fill(pair, entry, amount, sl_price, tp1_price)
 
                 elif time.time() - pos["buy_timestamp"] > CANCEL_AFTER_S:
                     log(f"{pair}: 24時間未約定 → キャンセル")
                     try:
                         bb.cancel_order(pair, pos["buy_order_id"])
                     except Exception as ce:
-                        log(f"{pair}: キャンセル失敗（既にキャンセル済み？）: {ce}")
+                        log(f"{pair}: キャンセル失敗: {ce}")
                     to_delete.append(pair)
                     send_email(
                         f"【Zer0-CryptoBot】注文キャンセル - {pair.upper()}",
                         f"コイン：{pair.upper()}\n24時間未約定のため注文をキャンセルしました。",
                     )
 
-            # ── アクティブポジション: TP1/SL チェック ───────────────────
+            # ── アクティブ: TP1約定確認 → トレーリング移行 ───────────────
             elif pos["status"] == "active":
                 if not pos.get("tp1_filled"):
                     o_tp1 = bb.get_order(pair, pos["tp1_order_id"])
+
                     if o_tp1.get("status") == "FULLY_FILLED":
-                        log(f"{pair}: TP1 約定 → SL をブレイクイーブンに更新")
-                        # 既存 SL をキャンセルして entry 価格で再発注
+                        log(f"{pair}: TP1 約定 → トレーリングSL 開始")
                         try:
                             bb.cancel_order(pair, pos["sl_order_id"])
                         except Exception as ce:
-                            log(f"{pair}: SL キャンセル失敗: {ce}")
+                            log(f"{pair}: 旧SL キャンセル失敗: {ce}")
 
-                        entry  = pos["entry_price"]
-                        remain = round(pos["total_amount"] * TP2_RATIO, cfg["amount_prec"])
-                        o_sl_new = bb.create_order(
+                        entry        = pos["entry_price"]
+                        trail_amount = pos["trail_amount"]
+                        atr_jpy      = pos["atr_jpy"]
+
+                        # 初期トレーリングSL = entry（ブレイクイーブン）
+                        trail_sl_price = entry
+                        o_trail = bb.create_order(
                             pair,
-                            round_amount(remain, cfg["amount_prec"]),
-                            round_price(entry, cfg["price_prec"]),
+                            round_amount(trail_amount, cfg["amount_prec"]),
+                            round_price(trail_sl_price, cfg["price_prec"]),
                             "sell",
                         )
-                        pos["sl_order_id"]  = o_sl_new["order_id"]
-                        pos["sl_price"]     = entry
-                        pos["tp1_filled"]   = True
-                        notify_sl_updated(pair, entry)
+                        state["positions"][pair] = {
+                            "status":            "trailing",
+                            "entry_price":       entry,
+                            "atr_jpy":           atr_jpy,
+                            "tp1_price":         pos["tp1_price"],
+                            "trail_amount":      trail_amount,
+                            "trail_sl_order_id": o_trail["order_id"],
+                            "trail_sl_price":    trail_sl_price,
+                            "highest_price":     pos["tp1_price"],  # TP1価格から追跡開始
+                        }
+                        notify_trail_started(pair, entry, pos["tp1_price"])
+                        continue  # 同一ループで trailing 処理しない
 
-                # TP2 または SL 約定確認（ポジション終了判定）
-                if pos.get("tp1_filled"):
-                    o_tp2 = bb.get_order(pair, pos["tp2_order_id"])
-                    if o_tp2.get("status") == "FULLY_FILLED":
-                        log(f"{pair}: TP2 約定 → ポジション終了")
-                        notify_sell(pair, "TP2",
-                                    float(o_tp2["average_price"]),
+                    # TP1未約定時: 初期SL 約定確認
+                    o_sl = bb.get_order(pair, pos["sl_order_id"])
+                    if o_sl.get("status") == "FULLY_FILLED":
+                        log(f"{pair}: SL（損切り）約定 → 終了")
+                        notify_sell(pair, "損切り",
+                                    float(o_sl["average_price"]),
                                     pos["entry_price"],
-                                    float(o_tp2["executed_amount"]))
+                                    float(o_sl["executed_amount"]))
                         to_delete.append(pair)
 
-                o_sl = bb.get_order(pair, pos["sl_order_id"])
-                if o_sl.get("status") == "FULLY_FILLED" and pair not in to_delete:
-                    reason = "ブレイクイーブン" if pos.get("tp1_filled") else "損切り"
-                    log(f"{pair}: SL({reason}) 約定 → ポジション終了")
-                    notify_sell(pair, reason,
-                                float(o_sl["average_price"]),
-                                pos["entry_price"],
-                                float(o_sl["executed_amount"]))
+            # ── トレーリングSL 管理 ────────────────────────────────────────
+            elif pos["status"] == "trailing":
+                trail_order = bb.get_order(pair, pos["trail_sl_order_id"])
+
+                if trail_order.get("status") == "FULLY_FILLED":
+                    exit_p = float(trail_order["average_price"])
+                    exit_a = float(trail_order["executed_amount"])
+                    log(f"{pair}: トレーリングSL 約定 → 終了 exit={exit_p}")
+                    notify_sell(pair, "トレーリングSL", exit_p, pos["entry_price"], exit_a)
                     to_delete.append(pair)
+                else:
+                    # 価格上昇していればトレーリングSLを引き上げ
+                    try:
+                        current = get_bitbank_price(pair)
+                        if current > pos["highest_price"]:
+                            new_highest  = current
+                            new_trail_f  = new_highest - pos["atr_jpy"] * TRAIL_MULT
+                            # BEより下には引き下げない
+                            new_trail_f  = max(new_trail_f, pos["entry_price"])
+                            new_trail_str = round_price(new_trail_f, cfg["price_prec"])
+                            new_trail_val = price_val(new_trail_str)
+
+                            if new_trail_val > pos["trail_sl_price"]:
+                                log(f"{pair}: トレーリングSL更新 "
+                                    f"{pos['trail_sl_price']} → {new_trail_val}")
+                                try:
+                                    bb.cancel_order(pair, pos["trail_sl_order_id"])
+                                except Exception:
+                                    pass
+                                new_order = bb.create_order(
+                                    pair,
+                                    round_amount(pos["trail_amount"], cfg["amount_prec"]),
+                                    new_trail_str,
+                                    "sell",
+                                )
+                                pos["trail_sl_order_id"] = new_order["order_id"]
+                                pos["trail_sl_price"]    = new_trail_val
+                                pos["highest_price"]     = new_highest
+                                notify_trail_updated(pair, new_trail_val)
+                    except Exception as te:
+                        log(f"{pair}: トレーリング更新失敗: {te}")
 
         except Exception as e:
             log(f"{pair} メンテナンスエラー: {e}")
@@ -362,7 +408,6 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
 
 # ── Phase B: 新規シグナル注文 ─────────────────────────────────────────────────
 def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
-    """新規シグナルの指値注文を発注する"""
     active_count = len(state["positions"])
 
     for sig in signals:
@@ -382,37 +427,42 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
         cfg = PAIRS[pair]
 
         try:
-            # 残高確認
-            assets = bb.get_assets()
-            jpy    = float(assets.get("jpy", {}).get("free_amount", "0"))
-            if jpy < INVEST_JPY:
-                log(f"{pair}: JPY 残高不足 ({jpy:.0f} < {INVEST_JPY}) → スキップ")
+            # 残高確認 + 動的ポジションサイズ計算
+            assets   = bb.get_assets()
+            free_jpy = float(assets.get("jpy", {}).get("free_amount", "0"))
+
+            remaining_slots = MAX_POSITIONS - active_count
+            invest_jpy = math.floor(free_jpy / remaining_slots * 0.9) if remaining_slots > 0 else 0
+            invest_jpy = max(invest_jpy, MIN_INVEST_JPY)
+
+            if free_jpy < invest_jpy:
+                log(f"{pair}: JPY 残高不足 ({free_jpy:.0f} < {invest_jpy}) → スキップ")
                 continue
 
             # 現在価格を取得して指値を計算
             bb_price  = get_bitbank_price(pair)
             buy_price = bb_price * 0.99
-            amount    = INVEST_JPY / buy_price
+            amount    = invest_jpy / buy_price
 
             price_str  = round_price(buy_price, cfg["price_prec"])
             amount_str = round_amount(amount, cfg["amount_prec"])
 
-            log(f"{pair}: 買い指値発注 price={price_str} amount={amount_str}")
+            log(f"{pair}: 買い指値発注 price={price_str} amount={amount_str} invest={invest_jpy:.0f}円")
             order = bb.create_order(pair, amount_str, price_str, "buy")
 
             state["positions"][pair] = {
-                "status":              "buy_pending",
-                "buy_order_id":        order["order_id"],
-                "buy_timestamp":       time.time(),
-                "entry_price_signal":  sig["binance_price"],   # ATR比率計算用
-                "atr_jpy":             sig["atr"],             # Binance ATR（USDT）
-                "tp1_order_id":        None,
-                "tp2_order_id":        None,
-                "sl_order_id":         None,
-                "tp1_filled":          False,
+                "status":             "buy_pending",
+                "buy_order_id":       order["order_id"],
+                "buy_timestamp":      time.time(),
+                "entry_price_signal": sig["binance_price"],
+                "atr_jpy":            sig["atr"],
+                "invest_jpy":         invest_jpy,
+                "tp1_order_id":       None,
+                "sl_order_id":        None,
+                "tp1_filled":         False,
             }
             active_count += 1
-            notify_buy_order(pair, buy_price, amount)
+            notify_buy_order(pair, buy_price, amount, invest_jpy)
 
         except Exception as e:
             log(f"{pair} 注文エラー: {e}")
@@ -430,27 +480,22 @@ def lambda_handler(event, context):
     signals = event.get("signals", [])
 
     try:
-        # SSM からキー取得
-        api_key    = get_ssm(SSM_API_KEY, decrypt=True)
+        api_key    = get_ssm(SSM_API_KEY,    decrypt=True)
         api_secret = get_ssm(SSM_API_SECRET, decrypt=True)
         bb         = BitbankClient(api_key, api_secret)
 
-        # 状態読み込み
         state = load_state()
         log(f"現在のポジション: {list(state['positions'].keys())}")
 
-        # Phase A: メンテナンス
         log("Phase A: 既存ポジションメンテナンス")
         state = maintain_positions(bb, state)
 
-        # Phase B: 新規シグナル
         if signals:
             log(f"Phase B: 新規シグナル処理 ({len(signals)} 件)")
             state = place_new_orders(bb, state, signals)
         else:
             log("Phase B: シグナルなし → スキップ")
 
-        # 状態保存
         save_state(state)
         log("状態保存完了")
 
