@@ -1,0 +1,5 @@
+# バックテスト用（ローカル実行のみ、Lambda には不要）
+pandas
+numpy
+matplotlib
+requests
