@@ -20,8 +20,8 @@ BTC_SYMBOL     = "BTCUSDT"
 INTERVAL       = "4h"
 KLINES_LIMIT   = 200      # 200EMA 計算に必要な本数
 EMA_PERIOD     = 200
-ATR_PERIOD     = 10
-ST_MULT        = 3.0
+ATR_PERIOD     = 8
+ST_MULT        = 2.5
 VOL_PERIOD     = 20
 
 PAIRS = {
