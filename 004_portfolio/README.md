@@ -15,7 +15,7 @@ AWS Lambda + API Gateway + CloudFront + S3 で構築した、Astro SSR 動的ポ
 | ホスティング   | AWS Lambda + API Gateway HTTP API + CloudFront + S3   |
 | 月額コスト     | ほぼ $0（Lambda/CloudFront 無料枠内）                 |
 | IaC            | CloudFormation                                        |
-| デプロイ       | `bash deploy.sh`（ビルド→Lambda更新→S3同期→CF無効化） |
+| デプロイ       | `bash scripts/deploy.sh`（ビルド→Lambda更新→S3同期→CF無効化） |
 
 ---
 
@@ -70,8 +70,8 @@ CloudFront (E33SJ6UEA95L47)
 ```
 004_portfolio/
 ├── README.md
-├── deploy.sh                # アプリデプロイスクリプト（通常使用）
-├── lambda-deployment.zip    # デプロイ用zipキャッシュ（自動生成）
+├── scripts/
+│   └── deploy.sh            # アプリデプロイスクリプト（通常使用）
 ├── infra/
 │   ├── cloudformation.yaml  # インフラ定義（S3/Lambda/API GW/CloudFront/カスタムドメイン）
 │   ├── certificate.yaml     # ACM証明書（us-east-1、CloudFront用）
@@ -169,7 +169,7 @@ bash deploy-infra.sh
 
 ```bash
 cd /root/Zer0/004_portfolio
-bash deploy.sh
+bash scripts/deploy.sh
 ```
 
 内部で以下を自動実行：
@@ -189,7 +189,7 @@ bash deploy.sh
 ### DRY RUN（設定確認のみ）
 
 ```bash
-bash deploy.sh --dry-run
+bash scripts/deploy.sh --dry-run
 ```
 
 ---

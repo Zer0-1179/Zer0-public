@@ -9,8 +9,9 @@ SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの
 ```text
 002_Zenn_Auto_Article_Bot/
 ├── README.md              # このファイル
-├── build_layer.sh         # matplotlib Lambda Layer をビルド&アップロードするスクリプト
-├── download_article.sh    # S3からoutput/にダウンロードするスクリプト
+├── scripts/
+│   ├── build_layer.sh     # matplotlib Lambda Layer をビルド&アップロードするスクリプト
+│   └── download_article.sh# S3からoutput/にダウンロードするスクリプト
 ├── src/                   # 実装コード
 │   ├── aws_icons/         # AWS公式アイコンPNG（38枚、Lambda関数コードに同梱）
 │   └── ...
@@ -241,7 +242,7 @@ python3 lambda_function.py
 ## S3からの手動ダウンロード
 
 ```bash
-bash ~/Zer0/002_Zenn_Auto_Article_Bot/download_article.sh
+bash ~/Zer0/002_Zenn_Auto_Article_Bot/scripts/download_article.sh
 ```
 
 - S3の `zenn-articles/` 以下を全て `output/` にダウンロード
@@ -253,7 +254,7 @@ bash ~/Zer0/002_Zenn_Auto_Article_Bot/download_article.sh
 cd ~/Zer0/002_Zenn_Auto_Article_Bot
 
 # [1] matplotlibレイヤーをビルド&アップロード（初回またはrequirements.txt変更時のみ）
-bash build_layer.sh
+bash scripts/build_layer.sh
 
 # [2] SAMでLambdaをデプロイ
 cd src
