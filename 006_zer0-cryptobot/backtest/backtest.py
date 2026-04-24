@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 COINS = {
     "SOL":  "SOLUSDT",
     "AVAX": "AVAXUSDT",
-    "ARB":  "ARBUSDT",
+    "ADA":  "ADAUSDT",
 }
 BTC_SYMBOL  = "BTCUSDT"
 INTERVAL    = "4h"

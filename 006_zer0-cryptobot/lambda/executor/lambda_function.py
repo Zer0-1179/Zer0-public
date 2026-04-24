@@ -38,7 +38,7 @@ TP2_RATIO = 0.7   # TP2 の数量割合
 PAIRS = {
     "sol_jpy":  {"price_prec": 0, "amount_prec": 4},
     "avax_jpy": {"price_prec": 0, "amount_prec": 4},
-    "arb_jpy":  {"price_prec": 3, "amount_prec": 2},
+    "ada_jpy":  {"price_prec": 3, "amount_prec": 4},
 }
 
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
