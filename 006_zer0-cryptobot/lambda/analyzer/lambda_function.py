@@ -27,7 +27,7 @@ VOL_PERIOD     = 20
 PAIRS = {
     "sol_jpy":  {"binance": "SOLUSDT"},
     "avax_jpy": {"binance": "AVAXUSDT"},
-    "arb_jpy":  {"binance": "ARBUSDT"},
+    "ada_jpy":  {"binance": "ADAUSDT"},
 }
 
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
