@@ -380,6 +380,10 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
         ratio = float(raw)
     except Exception as e:
         log(f"証拠金維持率取得失敗 → スキップ: {e}")
+        send_email(
+            "【Zer0-CryptoBot】⚠️証拠金維持率取得失敗",
+            f"証拠金維持率の取得に失敗しました。手動で状況を確認してください。\nエラー: {e}",
+        )
         return True
 
     log(f"証拠金維持率: {ratio:.1f}%")
@@ -573,8 +577,9 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         f"{pos['trail_sl_price']} → {new_trail_val}")
                                     try:
                                         bb.cancel_order(pair, pos["trail_sl_order_id"])
-                                    except Exception:
-                                        pass
+                                    except Exception as ce:
+                                        log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
+                                        continue
                                     new_order = bb.create_order(
                                         pair,
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
@@ -600,8 +605,9 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         f"{pos['trail_sl_price']} → {new_trail_val}")
                                     try:
                                         bb.cancel_order(pair, pos["trail_sl_order_id"])
-                                    except Exception:
-                                        pass
+                                    except Exception as ce:
+                                        log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
+                                        continue
                                     new_order = bb.create_order(
                                         pair,
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
