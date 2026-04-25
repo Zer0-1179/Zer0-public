@@ -354,11 +354,26 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
 
 def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     """証拠金維持率を確認する。
+    - status が CALL/LOSSCUT: 緊急成行決済
+    - total_margin_balance_percentage が 120%以下: 緊急成行決済
     - 150%以下: 警告メール送信（処理継続）
-    - 120%以下: 全ポジション成行決済 + 緊急メール + stateリセット → False を返す
-    - 建玉なし / 取得失敗: スキップして True を返す"""
+    - 建玉なし(null) / 取得失敗: スキップして True を返す"""
     try:
         margin = bb.get_margin_status()
+
+        # status フィールドで危険状態を直接検出（percentage スケール不問）
+        status = margin.get("status", "NORMAL")
+        if status in ("CALL", "LOSSCUT", "DEBT"):
+            log(f"証拠金ステータス異常: {status} → 緊急成行決済を実行")
+            _emergency_close_all(bb, state)
+            state["positions"] = {}
+            send_email(
+                "【Zer0-CryptoBot】🚨緊急決済実行",
+                f"証拠金ステータス: {status}\n"
+                f"全ポジションを成行決済しました。速やかに状況を確認してください。",
+            )
+            return False
+
         raw = margin.get("total_margin_balance_percentage")
         if raw is None:
             return True  # 建玉なし → スキップ
