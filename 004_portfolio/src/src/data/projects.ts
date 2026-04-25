@@ -171,8 +171,8 @@ export const projects: Project[] = [
     nameEn: 'Crypto Trading Bot',
     descJa: 'Binanceのシグナルを使いbitbank信用取引でBTC/ETH/SOLをロング・ショート両方向に4時間毎自動売買。トレーリングSLと動的サイジングで利益を追求するサーバーレスBot。',
     descEn: 'Serverless bot that trades BTC/ETH/SOL on bitbank margin (long & short) every 4 hours using Binance signals, trailing stop-loss, and dynamic position sizing.',
-    longDescJa: 'BTC 200EMAで市場方向（ロング/ショート）を判定し、Supertrend転換・Volume増加と組み合わせた厳選シグナルのみエントリー。約定後はTP1（ATR×2）で30%を利確し、残り70%はトレーリングSLで追随。信用取引を活用しロング・ショート両方向で機会を最大化。バックテスト: 勝率60.9% / PF1.56 / 最大DD9.5% / 資本成長+36.5%。',
-    longDescEn: 'BTC 200EMA determines market direction (long/short); entries only when Supertrend flips and volume surges align. TP1 at ATR×2 takes 30%; remaining 70% rides a trailing stop. Margin trading enables both long and short entries, doubling opportunities. Backtest: 60.9% win rate / PF 1.56 / max DD 9.5% / +36.5% capital growth.',
+    longDescJa: 'BTC 200EMAで市場方向（ロング/ショート）を判定し、Supertrend転換・Volume増加と組み合わせた厳選シグナルのみエントリー。約定後はTP1（ATR×2）で30%を利確し、残り70%はトレーリングSLで追随。信用取引を活用しロング・ショート両方向で機会を最大化。バックテスト（5年）: 勝率61.9% / PF1.62 / 最大DD9.5% / 資本成長+190%（LUNA崩壊・FTX破綻含む）。',
+    longDescEn: 'BTC 200EMA determines market direction (long/short); entries only when Supertrend flips and volume surges align. TP1 at ATR×2 takes 30%; remaining 70% rides a trailing stop. Margin trading enables both long and short entries. 5-year backtest (incl. LUNA/FTX crash): 61.9% win rate / PF 1.62 / max DD 9.5% / +190% capital growth.',
     pointsJa: [
       'BTC 200EMAで市場方向を判定し、上昇相場はロング・下落相場はショートに自動切替',
       'Supertrend転換 + Volume増加の複合条件で偽シグナルを削減、月平均5.5回の厳選エントリー',
