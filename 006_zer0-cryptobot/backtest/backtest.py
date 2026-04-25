@@ -1,13 +1,19 @@
 """
 006_Zer0_CryptoBot バックテスト
-対象: BTC/ETH/SOL  データ: Binance 4時間足 直近2年分
+対象: BTC/ETH/SOL  データ: Binance 4時間足
 戦略: BTC200EMAで市場方向判定 → ロング/ショート両方向
   ロング: コイン200EMA上 + Supertrend緑転換 + Volume増加
   ショート: コイン200EMA下 + Supertrend赤転換 + Volume増加
 TP1: ±ATR×2(30%) / 残り70%: TP1後トレーリングSL
 合格基準: 勝率50%以上 / PF1.5以上 / 最大DD30%以内
+
+使い方:
+  python3 backtest.py              # デフォルト(YEARS=2)
+  python3 backtest.py --years 5    # 5年
+  python3 backtest.py --multi      # 2/3/4/5年を一括比較
 """
 
+import argparse
 import time
 import requests
 import pandas as pd
@@ -507,15 +513,52 @@ def save_chart(equity: list, timestamps: list, path: str, final_pool: float):
     print(f"\n  チャート保存: {path}")
 
 
+# ── シングル年バックテスト ─────────────────────────────
+def run_for_years(years: int) -> tuple:
+    """指定年数でデータ取得→バックテスト実行。(stats, equity, trades, label) を返す"""
+    candles = years * 365 * 6
+    print(f"\n{'='*55}")
+    print(f"  直近 {years} 年  ({candles} 本)")
+    print(f"{'='*55}")
+
+    btc_raw = fetch_klines(BTC_SYMBOL, total=candles)
+    btc_df  = add_indicators(btc_raw)
+    start   = btc_df['open_time'].iloc[0]
+    end     = btc_df['open_time'].iloc[-1]
+    print(f"  BTC  : {len(btc_df)} 本  {start} ～ {end}")
+
+    coin_dfs = {"BTC": btc_df}
+    for coin, symbol in [("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")]:
+        raw = fetch_klines(symbol, total=candles)
+        coin_dfs[coin] = add_indicators(raw)
+        df = coin_dfs[coin]
+        print(f"  {coin:5s}: {len(df)} 本  {df['open_time'].iloc[0]} ～ {df['open_time'].iloc[-1]}")
+
+    result = run_backtest(btc_df, coin_dfs)
+    stats  = calc_stats(result["trades"], result["equity"])
+    return stats, result["equity"], result["trades"], result["final_pool"], f"{years}年"
+
+
 # ── メイン ────────────────────────────────────────────
 def main():
-    print("Zer0-CryptoBot バックテスト開始（ロング＋ショート版）")
-    print(f"  期間: 直近 {YEARS} 年  足: {INTERVAL}  EMA:{EMA_PERIOD}  ATR:{ATR_PERIOD}  ST倍率:{ST_MULT}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--years", type=int, default=YEARS, help="バックテスト期間（年）")
+    parser.add_argument("--multi", action="store_true", help="2/3/4/5年を一括比較")
+    args = parser.parse_args()
+
+    if args.multi:
+        _run_multi()
+        return
+
+    years = args.years
+    print(f"Zer0-CryptoBot バックテスト開始（ロング＋ショート版）")
+    print(f"  期間: 直近 {years} 年  足: {INTERVAL}  EMA:{EMA_PERIOD}  ATR:{ATR_PERIOD}  ST倍率:{ST_MULT}")
     print()
 
+    candles = years * 365 * 6
     # BTC データ取得（フィルター兼トレード対象）
     print(f"[1/4] BTC データ取得中... ({BTC_SYMBOL})")
-    btc_raw = fetch_klines(BTC_SYMBOL)
+    btc_raw = fetch_klines(BTC_SYMBOL, total=candles)
     btc_df  = add_indicators(btc_raw)
     print(f"      取得: {len(btc_df)} 本  期間: {btc_df['open_time'].iloc[0]} ～ {btc_df['open_time'].iloc[-1]}")
 
@@ -525,7 +568,7 @@ def main():
         [("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")], start=2
     ):
         print(f"[{idx}/4] {coin} データ取得中... ({symbol})")
-        raw = fetch_klines(symbol)
+        raw = fetch_klines(symbol, total=candles)
         coin_dfs[coin] = add_indicators(raw)
         df = coin_dfs[coin]
         print(f"      取得: {len(df)} 本  期間: {df['open_time'].iloc[0]} ～ {df['open_time'].iloc[-1]}")
@@ -550,6 +593,84 @@ def main():
         save_chart(equity, timestamps, chart_path, final_pool)
     else:
         print("  トレードなし → チャート生成スキップ")
+
+
+def _run_multi():
+    """2/3/4/5年を一括実行して比較表と比較チャートを出力する"""
+    from matplotlib import font_manager as fm
+    fm.fontManager.addfont("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
+    import matplotlib
+    matplotlib.rcParams["font.family"] = "Noto Sans CJK JP"
+
+    year_list = [2, 3, 4, 5]
+    all_results = []
+
+    for yr in year_list:
+        stats, equity, trades, final_pool, label = run_for_years(yr)
+        print_stats(stats)
+        growth = (final_pool / INITIAL_CAPITAL - 1) * 100
+        monthly = len(trades) / (yr * 12) if yr > 0 else 0
+        all_results.append({
+            "label":      label,
+            "years":      yr,
+            "trades":     stats.get("total", 0),
+            "monthly":    monthly,
+            "win_rate":   stats.get("win_rate", 0),
+            "pf":         stats.get("pf", 0),
+            "max_dd":     stats.get("max_dd", 0),
+            "growth":     growth,
+            "final":      final_pool,
+            "equity":     equity,
+            "long_wr":    stats.get("long_wr", 0),
+            "short_wr":   stats.get("short_wr", 0),
+        })
+
+    # ── 比較サマリー表 ──────────────────────────────────
+    print("\n" + "=" * 75)
+    print("  マルチ年 比較サマリー")
+    print("=" * 75)
+    print(f"  {'期間':>5} | {'取引数':>5} | {'月平均':>5} | {'勝率':>7} | {'PF':>5} | {'最大DD':>7} | {'資本成長':>9} | 合否")
+    print(f"  {'-'*5}-+-{'-'*5}-+-{'-'*5}-+-{'-'*7}-+-{'-'*5}-+-{'-'*7}-+-{'-'*9}-+------")
+    for r in all_results:
+        ok = (r["win_rate"] >= 50 and r["pf"] >= 1.5 and r["max_dd"] <= 30)
+        mark = "✓" if ok else "✗"
+        print(f"  {r['label']:>5} | {r['trades']:>5} | {r['monthly']:>5.1f} | "
+              f"{r['win_rate']:>6.1f}% | {r['pf']:>5.2f} | {r['max_dd']:>6.1f}% | "
+              f"{r['growth']:>+8.1f}% | {mark}")
+    print("=" * 75)
+    print(f"  ロング/ショート勝率:")
+    for r in all_results:
+        print(f"    {r['label']}: L={r['long_wr']:.1f}%  S={r['short_wr']:.1f}%")
+
+    # ── 比較チャート ────────────────────────────────────
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    axes = axes.flatten()
+    colors = ["#3EA8FF", "#4CAF50", "#FF9800", "#E91E63"]
+
+    for i, r in enumerate(all_results):
+        ax = axes[i]
+        eq = r["equity"]
+        x  = list(range(len(eq)))
+        ok = (r["win_rate"] >= 50 and r["pf"] >= 1.5 and r["max_dd"] <= 30)
+        ax.plot(x, eq, linewidth=1.5, color=colors[i])
+        ax.axhline(0, color="#666", linewidth=0.8, linestyle="--")
+        ax.fill_between(x, eq, 0, where=[v >= 0 for v in eq], alpha=0.2, color=colors[i])
+        ax.fill_between(x, eq, 0, where=[v < 0 for v in eq], alpha=0.2, color="#FF6B6B")
+        verdict = "合格" if ok else "不合格"
+        ax.set_title(
+            f"直近{r['years']}年  勝率:{r['win_rate']:.1f}%  PF:{r['pf']:.2f}  "
+            f"DD:{r['max_dd']:.1f}%  成長:{r['growth']:+.1f}%  [{verdict}]",
+            fontsize=11,
+        )
+        ax.set_xlabel("トレード番号")
+        ax.set_ylabel("累積損益（円）")
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle("Zer0-CryptoBot マルチ年バックテスト比較", fontsize=14, fontweight="bold")
+    plt.tight_layout()
+    chart_path = "/root/Zer0/006_Zer0_CryptoBot/backtest/result_multi.png"
+    plt.savefig(chart_path, dpi=150)
+    print(f"\n  比較チャート保存: {chart_path}")
 
 
 if __name__ == "__main__":
