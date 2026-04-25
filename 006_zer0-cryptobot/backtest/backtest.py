@@ -515,7 +515,7 @@ def save_chart(equity: list, timestamps: list, path: str, final_pool: float):
 
 # ── シングル年バックテスト ─────────────────────────────
 def run_for_years(years: int) -> tuple:
-    """指定年数でデータ取得→バックテスト実行。(stats, equity, trades, label) を返す"""
+    """指定年数でデータ取得→バックテスト実行。(stats, equity, trades, final_pool, label, start, end) を返す"""
     candles = years * 365 * 6
     print(f"\n{'='*55}")
     print(f"  直近 {years} 年  ({candles} 本)")
@@ -536,7 +536,7 @@ def run_for_years(years: int) -> tuple:
 
     result = run_backtest(btc_df, coin_dfs)
     stats  = calc_stats(result["trades"], result["equity"])
-    return stats, result["equity"], result["trades"], result["final_pool"], f"{years}年"
+    return stats, result["equity"], result["trades"], result["final_pool"], f"{years}年", start, end
 
 
 # ── メイン ────────────────────────────────────────────
@@ -598,6 +598,7 @@ def main():
 def _run_multi():
     """2/3/4/5年を一括実行して比較表と比較チャートを出力する"""
     from matplotlib import font_manager as fm
+    from datetime import datetime, timezone
     fm.fontManager.addfont("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
     import matplotlib
     matplotlib.rcParams["font.family"] = "Noto Sans CJK JP"
@@ -606,7 +607,7 @@ def _run_multi():
     all_results = []
 
     for yr in year_list:
-        stats, equity, trades, final_pool, label = run_for_years(yr)
+        stats, equity, trades, final_pool, label, start, end = run_for_years(yr)
         print_stats(stats)
         growth = (final_pool / INITIAL_CAPITAL - 1) * 100
         monthly = len(trades) / (yr * 12) if yr > 0 else 0
@@ -623,6 +624,8 @@ def _run_multi():
             "equity":     equity,
             "long_wr":    stats.get("long_wr", 0),
             "short_wr":   stats.get("short_wr", 0),
+            "start":      start,
+            "end":        end,
         })
 
     # ── 比較サマリー表 ──────────────────────────────────
@@ -642,34 +645,107 @@ def _run_multi():
     for r in all_results:
         print(f"    {r['label']}: L={r['long_wr']:.1f}%  S={r['short_wr']:.1f}%")
 
-    # ── 比較チャート ────────────────────────────────────
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    # ── 比較チャート（刷新版）────────────────────────────
+    # 主要イベントの日付（UTC）
+    EVENTS = [
+        (datetime(2022,  5, 12, tzinfo=timezone.utc), "LUNA\n崩壊",   "#D32F2F"),
+        (datetime(2022, 11, 11, tzinfo=timezone.utc), "FTX\n破綻",    "#E65100"),
+        (datetime(2024,  4, 19, tzinfo=timezone.utc), "BTC\n半減期",  "#1565C0"),
+    ]
+
+    colors = ["#2196F3", "#4CAF50", "#FF9800", "#E91E63"]
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
     axes = axes.flatten()
-    colors = ["#3EA8FF", "#4CAF50", "#FF9800", "#E91E63"]
 
     for i, r in enumerate(all_results):
-        ax = axes[i]
-        eq = r["equity"]
-        x  = list(range(len(eq)))
-        ok = (r["win_rate"] >= 50 and r["pf"] >= 1.5 and r["max_dd"] <= 30)
-        ax.plot(x, eq, linewidth=1.5, color=colors[i])
-        ax.axhline(0, color="#666", linewidth=0.8, linestyle="--")
-        ax.fill_between(x, eq, 0, where=[v >= 0 for v in eq], alpha=0.2, color=colors[i])
-        ax.fill_between(x, eq, 0, where=[v < 0 for v in eq], alpha=0.2, color="#FF6B6B")
-        verdict = "合格" if ok else "不合格"
-        ax.set_title(
-            f"直近{r['years']}年  勝率:{r['win_rate']:.1f}%  PF:{r['pf']:.2f}  "
-            f"DD:{r['max_dd']:.1f}%  成長:{r['growth']:+.1f}%  [{verdict}]",
-            fontsize=11,
-        )
-        ax.set_xlabel("トレード番号")
-        ax.set_ylabel("累積損益（円）")
-        ax.grid(True, alpha=0.3)
+        ax    = axes[i]
+        eq    = r["equity"]
+        n     = len(eq)
+        x     = list(range(n))
+        ok    = (r["win_rate"] >= 50 and r["pf"] >= 1.5 and r["max_dd"] <= 30)
+        color = colors[i]
+        start_dt = pd.Timestamp(r["start"]).to_pydatetime().replace(tzinfo=timezone.utc)
+        end_dt   = pd.Timestamp(r["end"]).to_pydatetime().replace(tzinfo=timezone.utc)
+        total_sec = (end_dt - start_dt).total_seconds()
 
-    fig.suptitle("Zer0-CryptoBot マルチ年バックテスト比較", fontsize=14, fontweight="bold")
-    plt.tight_layout()
+        # ── ライン＆塗りつぶし ──
+        ax.plot(x, eq, linewidth=2.0, color=color, zorder=3)
+        ax.axhline(0, color="#888", linewidth=1.0, linestyle="--", zorder=2)
+        ax.fill_between(x, eq, 0, where=[v >= 0 for v in eq],
+                        alpha=0.25, color=color, zorder=1)
+        ax.fill_between(x, eq, 0, where=[v < 0 for v in eq],
+                        alpha=0.35, color="#F44336", zorder=1)
+
+        # ── 主要イベントの縦線 ──
+        for ev_dt, ev_label, ev_color in EVENTS:
+            if not (start_dt <= ev_dt <= end_dt):
+                continue
+            frac   = (ev_dt - start_dt).total_seconds() / total_sec
+            ev_x   = frac * (n - 1)
+            ax.axvline(ev_x, color=ev_color, linewidth=1.4,
+                       linestyle=":", alpha=0.9, zorder=4)
+            # axes座標系で位置を指定（データ範囲に依存しない）
+            ax.text(frac + 0.01, 0.05, ev_label,
+                    color=ev_color, fontsize=7.5,
+                    va="bottom", ha="left", zorder=5,
+                    transform=ax.transAxes,
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec=ev_color,
+                              alpha=0.85, linewidth=0.8))
+
+        # ── タイトル（実際の年月入り）──
+        s_str = start_dt.strftime("%Y年%m月")
+        e_str = end_dt.strftime("%Y年%m月")
+        verdict_str = "✅ 合格" if ok else "❌ 不合格"
+        ax.set_title(
+            f"直近{r['years']}年  （{s_str} 〜 {e_str}）   {verdict_str}",
+            fontsize=12, fontweight="bold", pad=10,
+        )
+
+        # ── 統計テキストボックス（左上）──
+        stats_text = (
+            f"取引数: {r['trades']}件（月平均 {r['monthly']:.1f}回）\n"
+            f"勝率:  {r['win_rate']:.1f}%"
+            f"  （L:{r['long_wr']:.1f}% / S:{r['short_wr']:.1f}%）\n"
+            f"PF:    {r['pf']:.2f}   最大DD: {r['max_dd']:.1f}%\n"
+            f"資本:  {INITIAL_CAPITAL:,.0f}円 → {r['final']:,.0f}円"
+            f"  （{r['growth']:+.1f}%）"
+        )
+        ax.text(0.02, 0.97, stats_text,
+                transform=ax.transAxes,
+                fontsize=9, va="top", ha="left",
+                bbox=dict(boxstyle="round,pad=0.5", fc="white",
+                          ec="#BDBDBD", alpha=0.92),
+                zorder=6)
+
+        # ── 軸ラベル ──
+        ax.set_xlabel("トレード回数", fontsize=9)
+        ax.set_ylabel("累積損益（円）", fontsize=9)
+        ax.yaxis.set_major_formatter(
+            matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:+,.0f}")
+        )
+        ax.grid(True, alpha=0.25, linestyle="--")
+        ax.set_xlim(0, n - 1)
+
+    # ── 凡例（イベント）──
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color="#D32F2F", lw=1.4, ls=":", label="LUNA崩壊（2022/05）"),
+        Line2D([0], [0], color="#E65100", lw=1.4, ls=":", label="FTX破綻（2022/11）"),
+        Line2D([0], [0], color="#1565C0", lw=1.4, ls=":", label="BTC半減期（2024/04）"),
+    ]
+    fig.legend(handles=legend_elements, loc="lower center",
+               ncol=3, fontsize=9, framealpha=0.9,
+               bbox_to_anchor=(0.5, 0.01))
+
+    fig.suptitle(
+        "Zer0-CryptoBot マルチ年バックテスト比較\n"
+        "戦略: BTC 200EMA方向フィルター ＋ Supertrend転換 ＋ Volume増加 / "
+        "TP1(ATR×2, 30%) ＋ トレーリングSL(ATR×1.5, 70%)",
+        fontsize=13, fontweight="bold", y=0.99,
+    )
+    plt.tight_layout(rect=[0, 0.06, 1, 0.97])
     chart_path = "/root/Zer0/006_Zer0_CryptoBot/backtest/result_multi.png"
-    plt.savefig(chart_path, dpi=150)
+    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
     print(f"\n  比較チャート保存: {chart_path}")
 
 
