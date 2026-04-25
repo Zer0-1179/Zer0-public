@@ -47,6 +47,11 @@ SES_RECIPIENT = os.environ["SES_RECIPIENT_EMAIL"]
 AWS_REGION    = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
 
 
+class OrderVerificationError(Exception):
+    """注文確認の再試行が全て失敗した場合に送出する。verify_order 内でメール送信済み。"""
+    pass
+
+
 # ── ユーティリティ ────────────────────────────────────────────────────────────
 def log(msg: str):
     print(f"[Executor] {msg}")
@@ -256,6 +261,10 @@ class BitbankClient:
             body["position_side"] = position_side
         return self._post("/user/spot/order", body)["data"]
 
+    def create_market_order(self, pair: str, amount: str, side: str) -> dict:
+        body = {"pair": pair, "amount": amount, "side": side, "type": "market"}
+        return self._post("/user/spot/order", body)["data"]
+
     def cancel_order(self, pair: str, order_id: int) -> dict:
         return self._post("/user/spot/cancel_order",
                           {"pair": pair, "order_id": order_id})["data"]
@@ -266,6 +275,25 @@ def get_bitbank_price(pair: str) -> float:
     with urllib.request.urlopen(url, timeout=10) as resp:
         data = json.loads(resp.read())
     return float(data["data"]["last"])
+
+
+def verify_order(bb: BitbankClient, pair: str, order_id: int, context: str = ""):
+    """発注後に注文存在を確認する。失敗時は最大3回リトライ（5秒待機）。
+    3回失敗した場合は緊急メールを送信して OrderVerificationError を送出する。"""
+    for attempt in range(1, 4):
+        try:
+            bb.get_order(pair, order_id)
+            return
+        except Exception as e:
+            log(f"{pair} 注文確認失敗({attempt}/3) [{context}]: {e}")
+            if attempt < 3:
+                time.sleep(5)
+    send_email(
+        "【Zer0-CryptoBot】🚨注文失敗",
+        f"コイン：{pair.upper()}\n種別：{context}\n"
+        f"注文ID {order_id} の確認に3回失敗しました。手動確認が必要です。",
+    )
+    raise OrderVerificationError(f"{pair} order {order_id} ({context}) unverifiable")
 
 
 def get_available_margin(bb: BitbankClient) -> float:
@@ -285,6 +313,81 @@ def get_available_margin(bb: BitbankClient) -> float:
             return float(assets.get("jpy", {}).get("free_amount", "0"))
         except Exception:
             return 0.0
+
+
+# ── 証拠金維持率監視 ──────────────────────────────────────────────────────────
+def _emergency_close_all(bb: BitbankClient, state: dict):
+    """全ポジションの未決済注文をキャンセルし、保有中のものを成行決済する。
+    個別の失敗は無視して全ペアを処理し続ける。"""
+    for pair, pos in state["positions"].items():
+        direction  = pos.get("direction", "long")
+        close_side = "sell" if direction == "long" else "buy"
+        status     = pos.get("status")
+        cfg        = PAIRS.get(pair, {"price_prec": 0, "amount_prec": 4})
+
+        # 未決済注文をすべてキャンセル
+        for key in ("buy_order_id", "tp1_order_id", "sl_order_id", "trail_sl_order_id"):
+            oid = pos.get(key)
+            if oid:
+                try:
+                    bb.cancel_order(pair, oid)
+                    log(f"{pair}: 緊急キャンセル {key}={oid}")
+                except Exception as ce:
+                    log(f"{pair}: キャンセル失敗 {key}={oid}: {ce}")
+
+        # 保有中のみ成行決済
+        if status == "active":
+            amount = pos.get("total_amount", 0)
+        elif status == "trailing":
+            amount = pos.get("trail_amount", 0)
+        else:
+            continue  # buy_pending はエントリー取り消しのみで決済不要
+
+        if amount > 0:
+            amount_str = round_amount(amount, cfg["amount_prec"])
+            try:
+                bb.create_market_order(pair, amount_str, close_side)
+                log(f"{pair}: 緊急成行決済 {close_side} {amount_str}")
+            except Exception as e:
+                log(f"{pair}: 緊急成行決済失敗: {e}")
+
+
+def check_margin_health(bb: BitbankClient, state: dict) -> bool:
+    """証拠金維持率を確認する。
+    - 150%以下: 警告メール送信（処理継続）
+    - 120%以下: 全ポジション成行決済 + 緊急メール + stateリセット → False を返す
+    - 建玉なし / 取得失敗: スキップして True を返す"""
+    try:
+        margin = bb.get_margin_status()
+        raw = margin.get("total_margin_balance_percentage")
+        if raw is None:
+            return True  # 建玉なし → スキップ
+        ratio = float(raw)
+    except Exception as e:
+        log(f"証拠金維持率取得失敗 → スキップ: {e}")
+        return True
+
+    log(f"証拠金維持率: {ratio:.1f}%")
+
+    if ratio <= 120:
+        log("証拠金維持率120%以下 → 緊急成行決済を実行")
+        _emergency_close_all(bb, state)
+        state["positions"] = {}
+        send_email(
+            "【Zer0-CryptoBot】🚨緊急決済実行",
+            f"証拠金維持率 {ratio:.1f}% が120%以下になったため、"
+            f"全ポジションを成行決済しました。\n速やかに状況を確認してください。",
+        )
+        return False
+
+    if ratio <= 150:
+        send_email(
+            "【Zer0-CryptoBot】⚠️証拠金警告",
+            f"証拠金維持率が {ratio:.1f}% に低下しています（警告水準: 150%以下）。\n"
+            f"ポジション状況を確認してください。",
+        )
+
+    return True
 
 
 # ── Phase A: 既存ポジション管理 ───────────────────────────────────────────────
@@ -324,10 +427,12 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                             round_amount(tp1_amount, cfg["amount_prec"]),
                                             round_price(tp1_price,   cfg["price_prec"]),
                                             close_side)
+                    verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
                     o_sl  = bb.create_order(pair,
                                             round_amount(amount, cfg["amount_prec"]),
                                             round_price(sl_price, cfg["price_prec"]),
                                             close_side)
+                    verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
 
                     pos.update({
                         "status":        "active",
@@ -397,6 +502,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                             round_price(trail_sl_price, cfg["price_prec"]),
                             close_side,
                         )
+                        verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
                         state["positions"][pair] = {
                             "status":            "trailing",
                             "direction":         direction,
@@ -460,6 +566,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         new_trail_str,
                                         "sell",
                                     )
+                                    verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
                                     pos["trail_sl_order_id"] = new_order["order_id"]
                                     pos["trail_sl_price"]    = new_trail_val
                                     pos["highest_price"]     = new_highest
@@ -486,6 +593,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         new_trail_str,
                                         "buy",
                                     )
+                                    verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
                                     pos["trail_sl_order_id"] = new_order["order_id"]
                                     pos["trail_sl_price"]    = new_trail_val
                                     pos["lowest_price"]      = new_lowest
@@ -494,6 +602,8 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                     except Exception as te:
                         log(f"{pair}: トレーリング更新失敗: {te}")
 
+        except OrderVerificationError:
+            pass  # verify_order 内でメール送信済み
         except Exception as e:
             log(f"{pair} メンテナンスエラー: {e}")
             send_email(
@@ -510,6 +620,8 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
 # ── Phase B: 新規シグナル注文 ─────────────────────────────────────────────────
 def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
     active_count = len(state["positions"])
+    long_count   = sum(1 for p in state["positions"].values() if p.get("direction") == "long")
+    short_count  = sum(1 for p in state["positions"].values() if p.get("direction") == "short")
 
     for sig in signals:
         pair = sig.get("pair")
@@ -526,6 +638,13 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
             continue
 
         direction  = sig.get("side", "long")
+
+        if direction == "long" and long_count >= 2:
+            log(f"{pair}: ロング上限({long_count}/2) → スキップ")
+            continue
+        if direction == "short" and short_count >= 2:
+            log(f"{pair}: ショート上限({short_count}/2) → スキップ")
+            continue
         cfg        = PAIRS[pair]
 
         try:
@@ -557,6 +676,7 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
             log(f"{pair}({direction}): 指値発注 price={price_str} amount={amount_str} invest={invest_jpy:.0f}円")
             order = bb.create_order(pair, amount_str, price_str, order_side,
                                     position_side=direction)
+            verify_order(bb, pair, order["order_id"], "エントリー注文")
 
             state["positions"][pair] = {
                 "status":             "buy_pending",
@@ -571,8 +691,14 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
                 "tp1_filled":         False,
             }
             active_count += 1
+            if direction == "long":
+                long_count += 1
+            else:
+                short_count += 1
             notify_entry_order(pair, direction, entry_price, amount, invest_jpy)
 
+        except OrderVerificationError:
+            pass  # verify_order 内でメール送信済み
         except Exception as e:
             log(f"{pair} 注文エラー: {e}")
             send_email(
@@ -595,6 +721,12 @@ def lambda_handler(event, context):
 
         state = load_state()
         log(f"現在のポジション: {list(state['positions'].keys())}")
+
+        log("証拠金維持率チェック")
+        if not check_margin_health(bb, state):
+            save_state(state)
+            log("緊急決済完了 → Phase A/B をスキップ")
+            return {"statusCode": 200, "body": json.dumps({"emergency_close": True})}
 
         log("Phase A: 既存ポジションメンテナンス")
         state = maintain_positions(bb, state)
