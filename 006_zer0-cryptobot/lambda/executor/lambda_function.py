@@ -697,7 +697,13 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
 
 
 # ── Phase B: 新規シグナル注文 ─────────────────────────────────────────────────
-def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
+def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict = {}) -> dict:
+    # テスト用フラグ（本番では使用しない）
+    # test_invest_jpy: 投資額を固定（例: 500）
+    # test_entry_above: True にすると現在価格+0.5%で発注し即時約定させる
+    test_invest_jpy  = event.get("test_invest_jpy")
+    test_entry_above = event.get("test_entry_above", False)
+
     active_count = len(state["positions"])
     long_count   = sum(1 for p in state["positions"].values() if p.get("direction") == "long")
     short_count  = sum(1 for p in state["positions"].values() if p.get("direction") == "short")
@@ -731,8 +737,12 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
             available = get_available_margin(bb, pair)
 
             remaining_slots = MAX_POSITIONS - active_count
-            invest_jpy = math.floor(available / remaining_slots * 0.9) if remaining_slots > 0 else 0
-            invest_jpy = max(invest_jpy, MIN_INVEST_JPY)
+            if test_invest_jpy:
+                invest_jpy = int(test_invest_jpy)
+                log(f"[TEST] 投資額を {invest_jpy}円 に固定")
+            else:
+                invest_jpy = math.floor(available / remaining_slots * 0.9) if remaining_slots > 0 else 0
+                invest_jpy = max(invest_jpy, MIN_INVEST_JPY)
 
             if available < invest_jpy:
                 log(f"{pair}: 残高不足 ({available:.0f} < {invest_jpy}) → スキップ")
@@ -741,11 +751,13 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
             # 現在価格を取得して指値を計算
             bb_price = get_bitbank_price(pair)
             if direction == "long":
-                entry_price = bb_price * 0.99    # ロング: 現在価格 -1% で買い指値
+                entry_price = bb_price * (1.005 if test_entry_above else 0.99)
                 order_side  = "buy"
             else:
-                entry_price = bb_price * 1.01    # ショート: 現在価格 +1% で売り指値
+                entry_price = bb_price * (0.995 if test_entry_above else 1.01)
                 order_side  = "sell"
+            if test_entry_above:
+                log(f"[TEST] 即時約定モード: price={round_price(entry_price, PAIRS[pair]['price_prec'])}")
 
             amount = invest_jpy / entry_price
 
@@ -813,7 +825,7 @@ def lambda_handler(event, context):
 
         if signals:
             log(f"Phase B: 新規シグナル処理 ({len(signals)} 件)")
-            state = place_new_orders(bb, state, signals)
+            state = place_new_orders(bb, state, signals, event)
         else:
             log("Phase B: シグナルなし → スキップ")
 
