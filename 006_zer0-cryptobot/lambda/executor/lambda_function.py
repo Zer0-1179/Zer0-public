@@ -287,18 +287,30 @@ class BitbankClient:
     def create_order(self, pair: str, amount: str, price: str, side: str,
                      position_side: str | None = None) -> dict:
         """
-        信用取引ポジション開設時は position_side="long" or "short" を指定。
-        ポジション決済（クローズ）時は position_side=None のまま。
+        信用取引は開設・決済ともに position_side が必須。
+          開設ロング : side="buy",  position_side="long"
+          決済ロング : side="sell", position_side="long"
+          開設ショート: side="sell", position_side="short"
+          決済ショート: side="buy",  position_side="short"
         """
         body = {"pair": pair, "amount": amount, "price": price,
                 "side": side, "type": "limit"}
         if position_side is not None:
             body["position_side"] = position_side
-        return self._post("/user/spot/order", body)["data"]
+        resp = self._post("/user/spot/order", body)
+        if resp.get("success") != 1:
+            raise Exception(f"create_order失敗 pair={pair} side={side} position_side={position_side}: code={resp.get('data', {}).get('code')}")
+        return resp["data"]
 
-    def create_market_order(self, pair: str, amount: str, side: str) -> dict:
+    def create_market_order(self, pair: str, amount: str, side: str,
+                            position_side: str | None = None) -> dict:
         body = {"pair": pair, "amount": amount, "side": side, "type": "market"}
-        return self._post("/user/spot/order", body)["data"]
+        if position_side is not None:
+            body["position_side"] = position_side
+        resp = self._post("/user/spot/order", body)
+        if resp.get("success") != 1:
+            raise Exception(f"create_market_order失敗 pair={pair}: code={resp.get('data', {}).get('code')}")
+        return resp["data"]
 
     def cancel_order(self, pair: str, order_id: int) -> dict:
         return self._post("/user/spot/cancel_order",
@@ -389,7 +401,7 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
         if amount > 0:
             amount_str = round_amount(amount, cfg["amount_prec"])
             try:
-                bb.create_market_order(pair, amount_str, close_side)
+                bb.create_market_order(pair, amount_str, close_side, position_side=direction)
                 log(f"{pair}: 緊急成行決済 {close_side} {amount_str}")
             except Exception as e:
                 log(f"{pair}: 緊急成行決済失敗: {e}")
@@ -485,16 +497,15 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                     tp1_amount   = round(amount * TP1_RATIO,   cfg["amount_prec"])
                     trail_amount = round(amount * TRAIL_RATIO, cfg["amount_prec"])
 
-                    # 決済注文は position_side 不要
                     o_tp1 = bb.create_order(pair,
                                             round_amount(tp1_amount, cfg["amount_prec"]),
                                             round_price(tp1_price,   cfg["price_prec"]),
-                                            close_side)
+                                            close_side, position_side=direction)
                     verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
                     o_sl  = bb.create_order(pair,
                                             round_amount(trail_amount, cfg["amount_prec"]),
                                             round_price(sl_price, cfg["price_prec"]),
-                                            close_side)
+                                            close_side, position_side=direction)
                     verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
 
                     pos.update({
@@ -565,7 +576,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                             pair,
                             round_amount(trail_amount, cfg["amount_prec"]),
                             round_price(trail_sl_price, cfg["price_prec"]),
-                            close_side,
+                            close_side, position_side=direction,
                         )
                         verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
                         state["positions"][pair] = {
@@ -642,7 +653,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         pair,
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
                                         new_trail_str,
-                                        "sell",
+                                        "sell", position_side="long",
                                     )
                                     verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
                                     pos["trail_sl_order_id"] = new_order["order_id"]
@@ -670,7 +681,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         pair,
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
                                         new_trail_str,
-                                        "buy",
+                                        "buy", position_side="short",
                                     )
                                     verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
                                     pos["trail_sl_order_id"] = new_order["order_id"]
