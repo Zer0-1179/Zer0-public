@@ -175,14 +175,19 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── バックテストシミュレーション ───────────────────────
 class Trade:
-    """1トレードの記録（ロング/ショート対応、TP1後トレーリングSL方式）"""
-    def __init__(self, coin, entry_time, entry, atr, invest, direction="long"):
+    """1トレードの記録（ロング/ショート対応）
+
+    strategy="old" : TP1ライン(ATR×2)で30%利確 + 残り70%トレーリングSL
+    strategy="new" : TP1ライン到達をトリガーにして全量トレーリングSL開始
+    """
+    def __init__(self, coin, entry_time, entry, atr, invest, direction="long", strategy="old"):
         self.coin        = coin
         self.entry_time  = entry_time
         self.entry       = entry
         self.atr         = atr
         self.invest      = invest
         self.direction   = direction
+        self.strategy    = strategy
 
         if direction == "long":
             self.tp1      = entry + atr * TP1_MULT
@@ -193,10 +198,9 @@ class Trade:
             self.sl       = entry + atr * SL_MULT
             self.trail_sl = entry + atr * SL_MULT
 
-        self.tp1_filled  = False
+        self.tp1_filled  = False   # old: TP1約定フラグ / new: TP1ライン到達フラグ
         self.tp1_pnl     = 0.0
-        # ロング: trail_high = 最高値追跡 / ショート: trail_high = 最安値追跡（変数名共用）
-        self.trail_high  = entry
+        self.trail_high  = entry   # ロング:最高値 / ショート:最安値 追跡
 
         self.pnl         = 0.0
         self.exit_time   = None
@@ -204,20 +208,26 @@ class Trade:
         self.closed      = False
 
         self.amount       = invest / entry
-        self.tp1_amount   = self.amount * 0.3
-        self.trail_amount = self.amount * 0.7
+        self.tp1_amount   = self.amount * 0.3   # old のみ使用
+        self.trail_amount = self.amount * 0.7   # old のみ使用
 
     def check_bar(self, bar_high, bar_low, bar_time):
         """1バーを処理。TP/SLヒット時に損益を計算してcloseする。"""
         if self.closed:
             return
+        if self.strategy == "new":
+            self._check_bar_new(bar_high, bar_low, bar_time)
+        else:
+            self._check_bar_old(bar_high, bar_low, bar_time)
 
+    def _check_bar_old(self, bar_high, bar_low, bar_time):
+        """旧戦略: TP1(30%利確) + トレーリングSL(70%)"""
         if self.direction == "long":
             if not self.tp1_filled:
                 if bar_high >= self.tp1:
                     self.tp1_pnl    = (self.tp1 - self.entry) * self.tp1_amount
                     self.tp1_filled = True
-                    self.trail_sl   = self.entry   # BE からトレール開始
+                    self.trail_sl   = self.entry
                     self.trail_high = bar_high
 
                 if not self.tp1_filled and bar_low <= self.sl:
@@ -231,26 +241,24 @@ class Trade:
                 if bar_high > self.trail_high:
                     self.trail_high = bar_high
                 new_trail = self.trail_high - self.atr * TRAIL_MULT
-                new_trail = max(new_trail, self.entry)  # BE より下には下げない
+                new_trail = max(new_trail, self.entry)
                 if new_trail > self.trail_sl:
                     self.trail_sl = new_trail
-
                 if bar_low <= self.trail_sl:
                     self.pnl         = self.tp1_pnl + (self.trail_sl - self.entry) * self.trail_amount
                     self.exit_reason = "TRAIL"
                     self.exit_time   = bar_time
                     self.closed      = True
-
         else:  # short
             if not self.tp1_filled:
                 if bar_low <= self.tp1:
                     self.tp1_pnl    = (self.entry - self.tp1) * self.tp1_amount
                     self.tp1_filled = True
-                    self.trail_sl   = self.entry   # BE からトレール開始
-                    self.trail_high = bar_low      # 最安値追跡
+                    self.trail_sl   = self.entry
+                    self.trail_high = bar_low
 
                 if not self.tp1_filled and bar_high >= self.sl:
-                    self.pnl         = (self.entry - self.sl) * self.amount  # 負値
+                    self.pnl         = (self.entry - self.sl) * self.amount
                     self.exit_reason = "SL"
                     self.exit_time   = bar_time
                     self.closed      = True
@@ -258,20 +266,72 @@ class Trade:
 
             if self.tp1_filled:
                 if bar_low < self.trail_high:
-                    self.trail_high = bar_low      # 最安値を更新
+                    self.trail_high = bar_low
                 new_trail = self.trail_high + self.atr * TRAIL_MULT
-                new_trail = min(new_trail, self.entry)  # BE より上には上げない
+                new_trail = min(new_trail, self.entry)
                 if new_trail < self.trail_sl:
-                    self.trail_sl = new_trail      # SL を下方向に更新
-
+                    self.trail_sl = new_trail
                 if bar_high >= self.trail_sl:
                     self.pnl         = self.tp1_pnl + (self.entry - self.trail_sl) * self.trail_amount
                     self.exit_reason = "TRAIL"
                     self.exit_time   = bar_time
                     self.closed      = True
 
+    def _check_bar_new(self, bar_high, bar_low, bar_time):
+        """新戦略: SL(100%) → TP1ライン到達でトレーリング開始（全量）"""
+        if self.direction == "long":
+            if not self.tp1_filled:
+                if bar_low <= self.sl:
+                    self.pnl         = (self.sl - self.entry) * self.amount
+                    self.exit_reason = "SL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
+                    return
+                if bar_high >= self.tp1:
+                    self.tp1_filled = True
+                    self.trail_sl   = self.entry   # ブレイクイーブンでトレール開始
+                    self.trail_high = bar_high
 
-def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict) -> dict:
+            if self.tp1_filled:
+                if bar_high > self.trail_high:
+                    self.trail_high = bar_high
+                new_trail = self.trail_high - self.atr * TRAIL_MULT
+                new_trail = max(new_trail, self.entry)
+                if new_trail > self.trail_sl:
+                    self.trail_sl = new_trail
+                if bar_low <= self.trail_sl:
+                    self.pnl         = (self.trail_sl - self.entry) * self.amount
+                    self.exit_reason = "TRAIL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
+        else:  # short
+            if not self.tp1_filled:
+                if bar_high >= self.sl:
+                    self.pnl         = (self.entry - self.sl) * self.amount
+                    self.exit_reason = "SL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
+                    return
+                if bar_low <= self.tp1:
+                    self.tp1_filled = True
+                    self.trail_sl   = self.entry
+                    self.trail_high = bar_low
+
+            if self.tp1_filled:
+                if bar_low < self.trail_high:
+                    self.trail_high = bar_low
+                new_trail = self.trail_high + self.atr * TRAIL_MULT
+                new_trail = min(new_trail, self.entry)
+                if new_trail < self.trail_sl:
+                    self.trail_sl = new_trail
+                if bar_high >= self.trail_sl:
+                    self.pnl         = (self.entry - self.trail_sl) * self.amount
+                    self.exit_reason = "TRAIL"
+                    self.exit_time   = bar_time
+                    self.closed      = True
+
+
+def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old") -> dict:
     """
     全コインを統合してシミュレーションを実行する。
     BTCの200EMAで市場方向（ロング/ショート）を決定し、
@@ -368,7 +428,7 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict) -> dict:
 
             direction = sig["direction"]
             entry = sig["close"] * 0.99 if direction == "long" else sig["close"] * 1.01
-            t = Trade(sig["coin"], ts, entry, sig["atr"], invest, direction)
+            t = Trade(sig["coin"], ts, entry, sig["atr"], invest, direction, strategy)
             active_trades.append(t)
 
     # 残ポジションを最終バー終値で強制決済
