@@ -4,13 +4,19 @@
 戦略: BTC200EMAで市場方向判定 → ロング/ショート両方向
   ロング: コイン200EMA上 + Supertrend緑転換 + Volume増加
   ショート: コイン200EMA下 + Supertrend赤転換 + Volume増加
-TP1: ±ATR×2(30%) / 残り70%: TP1後トレーリングSL
+
+戦略モード:
+  old: TP1ライン(ATR×2)で30%利確 + 残り70%トレーリングSL
+  new: TP1ライン到達でトレーリング開始トリガー（全量トレーリング）
+
 合格基準: 勝率50%以上 / PF1.5以上 / 最大DD30%以内
 
 使い方:
-  python3 backtest.py              # デフォルト(YEARS=2)
+  python3 backtest.py              # デフォルト(YEARS=2, old戦略)
   python3 backtest.py --years 5    # 5年
   python3 backtest.py --multi      # 2/3/4/5年を一括比較
+  python3 backtest.py --compare    # 旧戦略 vs 新戦略 比較
+  python3 backtest.py --compare --years 3  # 3年で比較
 """
 
 import argparse
