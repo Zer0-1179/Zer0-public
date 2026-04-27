@@ -434,16 +434,22 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old") ->
     # 残ポジションを最終バー終値で強制決済
     for t in active_trades:
         last_close = coin_dfs[t.coin].iloc[-1]["close"]
-        if t.direction == "long":
-            if not t.tp1_filled:
+        if t.strategy == "old":
+            if t.direction == "long":
+                if not t.tp1_filled:
+                    t.pnl = (last_close - t.entry) * t.amount
+                else:
+                    t.pnl = t.tp1_pnl + (last_close - t.entry) * t.trail_amount
+            else:
+                if not t.tp1_filled:
+                    t.pnl = (t.entry - last_close) * t.amount
+                else:
+                    t.pnl = t.tp1_pnl + (t.entry - last_close) * t.trail_amount
+        else:  # new
+            if t.direction == "long":
                 t.pnl = (last_close - t.entry) * t.amount
             else:
-                t.pnl = t.tp1_pnl + (last_close - t.entry) * t.trail_amount
-        else:  # short
-            if not t.tp1_filled:
                 t.pnl = (t.entry - last_close) * t.amount
-            else:
-                t.pnl = t.tp1_pnl + (t.entry - last_close) * t.trail_amount
         t.exit_reason = "EOD"
         t.closed = True
         completed.append(t)
@@ -580,11 +586,11 @@ def save_chart(equity: list, timestamps: list, path: str, final_pool: float):
 
 
 # ── シングル年バックテスト ─────────────────────────────
-def run_for_years(years: int) -> tuple:
+def run_for_years(years: int, strategy: str = "old") -> tuple:
     """指定年数でデータ取得→バックテスト実行。(stats, equity, trades, final_pool, label, start, end) を返す"""
     candles = years * 365 * 6
     print(f"\n{'='*55}")
-    print(f"  直近 {years} 年  ({candles} 本)")
+    print(f"  直近 {years} 年  ({candles} 本)  strategy={strategy}")
     print(f"{'='*55}")
 
     btc_raw = fetch_klines(BTC_SYMBOL, total=candles)
@@ -600,7 +606,7 @@ def run_for_years(years: int) -> tuple:
         df = coin_dfs[coin]
         print(f"  {coin:5s}: {len(df)} 本  {df['open_time'].iloc[0]} ～ {df['open_time'].iloc[-1]}")
 
-    result = run_backtest(btc_df, coin_dfs)
+    result = run_backtest(btc_df, coin_dfs, strategy)
     stats  = calc_stats(result["trades"], result["equity"])
     return stats, result["equity"], result["trades"], result["final_pool"], f"{years}年", start, end
 
