@@ -163,9 +163,9 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
         f"購入金額　：{position_jpy:,.0f}円（{amount} {coin}）\n"
         f"残り証拠金：{remaining_margin/2:,.0f}円\n"
         f"\n"
-        f"損切り　　：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
-        f"TP1（30%）：{tp1:,.0f}円（{tp1_pct:+.1f}%）\n"
-        f"残り70%：TP1約定後にトレーリングSL（ATR×{TRAIL_MULT}）で管理"
+        f"損切り（70%）：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
+        f"TP1　（30%）：{tp1:,.0f}円（{tp1_pct:+.1f}%）\n"
+        f"TP1約定後 → 残り70%をトレーリングSL（ATR×{TRAIL_MULT}）で管理"
     )
     send_email(subject, body)
 
@@ -492,7 +492,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                             close_side)
                     verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
                     o_sl  = bb.create_order(pair,
-                                            round_amount(amount, cfg["amount_prec"]),
+                                            round_amount(trail_amount, cfg["amount_prec"]),
                                             round_price(sl_price, cfg["price_prec"]),
                                             close_side)
                     verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
@@ -593,7 +593,11 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                     # TP1未約定時: 初期SL 約定確認
                     o_sl = bb.get_order(pair, pos["sl_order_id"])
                     if o_sl.get("status") == "FULLY_FILLED":
-                        log(f"{pair}({direction}): SL（損切り）約定 → 終了")
+                        log(f"{pair}({direction}): SL（損切り）約定 → TP1キャンセル → 終了")
+                        try:
+                            bb.cancel_order(pair, pos["tp1_order_id"])
+                        except Exception as ce:
+                            log(f"{pair}: TP1キャンセル失敗: {ce}")
                         remaining = get_available_margin(bb, pair)
                         notify_close(pair, direction, "損切り",
                                      float(o_sl["average_price"]),
