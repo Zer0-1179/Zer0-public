@@ -124,17 +124,20 @@ def _coin(pair: str) -> str:
     return pair.split("_")[0].upper()
 
 
-def notify_entry_order(pair: str, direction: str, price: float, amount: float, invest: float):
+def notify_entry_order(pair: str, direction: str, price: float, amount: float,
+                       invest: float, current_price: float, remaining: float):
     dir_str = "ロング（買い）" if direction == "long" else "ショート（売り）"
     coin = _coin(pair)
     subject = f"【CryptoBot】{dir_str}注文発注 - {coin}/JPY"
     body = (
         f"■ {coin}/JPY  {dir_str}\n"
         f"\n"
+        f"現在価格：{current_price:,.0f}円\n"
         f"指値　　：{price:,.0f}円\n"
         f"数量　　：{amount} {coin}\n"
-        f"建玉額　：{invest:,.0f}円\n"
+        f"購入金額：{invest:,.0f}円\n"
         f"証拠金　：{invest/2:,.0f}円（2倍レバレッジ）\n"
+        f"残り証拠金：{remaining/2:,.0f}円\n"
         f"\n"
         f"※ 24時間で未約定の場合は自動キャンセルします"
     )
@@ -142,7 +145,7 @@ def notify_entry_order(pair: str, direction: str, price: float, amount: float, i
 
 
 def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
-                      sl: float, tp1: float):
+                      sl: float, tp1: float, remaining_margin: float):
     dir_str = "ロング" if direction == "long" else "ショート"
     coin = _coin(pair)
     position_jpy = entry * amount
@@ -156,17 +159,19 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
     body = (
         f"■ {coin}/JPY  {dir_str}  約定\n"
         f"\n"
-        f"約定価格：{entry:,.0f}円\n"
-        f"数量　　：{amount} {coin}（建玉 {position_jpy:,.0f}円）\n"
+        f"現在価格　：{entry:,.0f}円\n"
+        f"購入金額　：{position_jpy:,.0f}円（{amount} {coin}）\n"
+        f"残り証拠金：{remaining_margin/2:,.0f}円\n"
         f"\n"
-        f"損切り　：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
+        f"損切り　　：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
         f"TP1（30%）：{tp1:,.0f}円（{tp1_pct:+.1f}%）\n"
         f"残り70%：TP1約定後にトレーリングSL（ATR×{TRAIL_MULT}）で管理"
     )
     send_email(subject, body)
 
 
-def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: float):
+def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: float,
+                         current_price: float, realized_pnl: float):
     dir_str = "ロング" if direction == "long" else "ショート"
     coin = _coin(pair)
     if direction == "long":
@@ -177,7 +182,9 @@ def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: flo
     body = (
         f"■ {coin}/JPY  {dir_str}  TP1約定\n"
         f"\n"
+        f"現在価格　　：{current_price:,.0f}円\n"
         f"TP1約定価格：{tp1_price:,.0f}円（{tp1_pct:+.1f}%）\n"
+        f"確定利益　　：{realized_pnl:+,.0f}円\n"
         f"現在SL　　　：{entry:,.0f}円（ブレイクイーブン）\n"
         f"\n"
         f"残り70%のトレーリングSLを開始しました。\n"
@@ -186,20 +193,21 @@ def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: flo
     send_email(subject, body)
 
 
-def notify_trail_updated(pair: str, direction: str, new_trail: float):
+def notify_trail_updated(pair: str, direction: str, new_trail: float, current_price: float):
     dir_str = "ロング" if direction == "long" else "ショート"
     coin = _coin(pair)
     subject = f"【CryptoBot】トレーリングSL更新 - {coin}/JPY"
     body = (
         f"■ {coin}/JPY  {dir_str}  トレーリングSL更新\n"
         f"\n"
-        f"新SL：{new_trail:,.0f}円"
+        f"現在価格：{current_price:,.0f}円\n"
+        f"新SL　　：{new_trail:,.0f}円"
     )
     send_email(subject, body)
 
 
 def notify_close(pair: str, direction: str, reason: str, price: float,
-                 entry: float, amount: float):
+                 entry: float, amount: float, remaining_margin: float):
     if direction == "long":
         pnl = (price - entry) * amount
         price_diff_pct = (price - entry) / entry * 100
@@ -212,10 +220,12 @@ def notify_close(pair: str, direction: str, reason: str, price: float,
     body = (
         f"■ {coin}/JPY  {dir_str}  クローズ（{reason}）\n"
         f"\n"
+        f"現在価格　：{price:,.0f}円\n"
         f"エントリー：{entry:,.0f}円\n"
-        f"クローズ　：{price:,.0f}円（{price_diff_pct:+.1f}%）\n"
-        f"数量　　　：{amount} {coin}\n"
-        f"損益　　　：{pnl:+,.0f}円"
+        f"変動　　　：{price_diff_pct:+.1f}%\n"
+        f"購入金額　：{entry * amount:,.0f}円（{amount} {coin}）\n"
+        f"損益　　　：{pnl:+,.0f}円\n"
+        f"残り証拠金：{remaining_margin/2:,.0f}円"
     )
     send_email(subject, body)
 
@@ -500,7 +510,8 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                         "sl_order_id":   o_sl["order_id"],
                         "tp1_filled":    False,
                     })
-                    notify_entry_fill(pair, direction, entry, amount, sl_price, tp1_price)
+                    remaining = get_available_margin(bb, pair)
+                    notify_entry_fill(pair, direction, entry, amount, sl_price, tp1_price, remaining)
 
                 elif time.time() - pos["buy_timestamp"] > CANCEL_AFTER_S:
                     log(f"{pair}({direction}): 24時間未約定 → キャンセル")
@@ -532,10 +543,12 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                 if sl_chk.get("status") == "FULLY_FILLED":
                                     sl_already_filled = True
                                     log(f"{pair}: 旧SL 既に約定 → TP1+SL両方確定 → 終了")
+                                    remaining = get_available_margin(bb, pair)
                                     notify_close(pair, direction, "SL（TP1後）",
                                                  float(sl_chk["average_price"]),
                                                  pos["entry_price"],
-                                                 float(sl_chk["executed_amount"]))
+                                                 float(sl_chk["executed_amount"]),
+                                                 remaining)
                                     to_delete.append(pair)
                             except Exception:
                                 pass
@@ -570,17 +583,26 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                             "highest_price": pos["tp1_price"] if direction == "long" else None,
                             "lowest_price":  pos["tp1_price"] if direction == "short" else None,
                         }
-                        notify_trail_started(pair, direction, entry, pos["tp1_price"])
+                        tp1_fill_price    = float(o_tp1["average_price"])
+                        tp1_filled_amount = float(o_tp1["executed_amount"])
+                        if direction == "long":
+                            realized_pnl = (tp1_fill_price - entry) * tp1_filled_amount
+                        else:
+                            realized_pnl = (entry - tp1_fill_price) * tp1_filled_amount
+                        notify_trail_started(pair, direction, entry, pos["tp1_price"],
+                                             tp1_fill_price, realized_pnl)
                         continue
 
                     # TP1未約定時: 初期SL 約定確認
                     o_sl = bb.get_order(pair, pos["sl_order_id"])
                     if o_sl.get("status") == "FULLY_FILLED":
                         log(f"{pair}({direction}): SL（損切り）約定 → 終了")
+                        remaining = get_available_margin(bb, pair)
                         notify_close(pair, direction, "損切り",
                                      float(o_sl["average_price"]),
                                      pos["entry_price"],
-                                     float(o_sl["executed_amount"]))
+                                     float(o_sl["executed_amount"]),
+                                     remaining)
                         to_delete.append(pair)
 
             # ── トレーリングSL 管理 ────────────────────────────────────────
@@ -591,8 +613,9 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                     exit_p = float(trail_order["average_price"])
                     exit_a = float(trail_order["executed_amount"])
                     log(f"{pair}({direction}): トレーリングSL 約定 → 終了 exit={exit_p}")
+                    remaining = get_available_margin(bb, pair)
                     notify_close(pair, direction, "トレーリングSL",
-                                 exit_p, pos["entry_price"], exit_a)
+                                 exit_p, pos["entry_price"], exit_a, remaining)
                     to_delete.append(pair)
                 else:
                     try:
@@ -624,7 +647,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                     pos["trail_sl_order_id"] = new_order["order_id"]
                                     pos["trail_sl_price"]    = new_trail_val
                                     pos["highest_price"]     = new_highest
-                                    notify_trail_updated(pair, direction, new_trail_val)
+                                    notify_trail_updated(pair, direction, new_trail_val, current)
 
                         else:  # short
                             if current < pos["lowest_price"]:
@@ -652,7 +675,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                     pos["trail_sl_order_id"] = new_order["order_id"]
                                     pos["trail_sl_price"]    = new_trail_val
                                     pos["lowest_price"]      = new_lowest
-                                    notify_trail_updated(pair, direction, new_trail_val)
+                                    notify_trail_updated(pair, direction, new_trail_val, current)
 
                     except Exception as te:
                         log(f"{pair}: トレーリング更新失敗: {te}")
@@ -750,7 +773,8 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
                 long_count += 1
             else:
                 short_count += 1
-            notify_entry_order(pair, direction, entry_price, amount, invest_jpy)
+            notify_entry_order(pair, direction, entry_price, amount, invest_jpy,
+                               bb_price, available - invest_jpy)
 
         except OrderVerificationError:
             pass  # verify_order 内でメール送信済み
