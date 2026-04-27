@@ -120,16 +120,23 @@ def send_email(subject: str, body: str):
         log(f"SES 送信失敗: {e}")
 
 
+def _coin(pair: str) -> str:
+    return pair.split("_")[0].upper()
+
+
 def notify_entry_order(pair: str, direction: str, price: float, amount: float, invest: float):
     dir_str = "ロング（買い）" if direction == "long" else "ショート（売り）"
-    subject = f"【Zer0-CryptoBot】{dir_str}注文発注 - {pair.upper()}"
+    coin = _coin(pair)
+    subject = f"【CryptoBot】{dir_str}注文発注 - {coin}/JPY"
     body = (
-        f"コイン：{pair.upper()}\n"
-        f"方向：{dir_str}\n"
-        f"価格：{price:,.0f}円\n"
-        f"数量：{amount}\n"
-        f"投資証拠金：{invest:,.0f}円\n"
-        f"※ 24時間で未約定の場合はキャンセルします"
+        f"■ {coin}/JPY  {dir_str}\n"
+        f"\n"
+        f"指値　　：{price:,.0f}円\n"
+        f"数量　　：{amount} {coin}\n"
+        f"建玉額　：{invest:,.0f}円\n"
+        f"証拠金　：{invest/2:,.0f}円（2倍レバレッジ）\n"
+        f"\n"
+        f"※ 24時間で未約定の場合は自動キャンセルします"
     )
     send_email(subject, body)
 
@@ -137,14 +144,23 @@ def notify_entry_order(pair: str, direction: str, price: float, amount: float, i
 def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
                       sl: float, tp1: float):
     dir_str = "ロング" if direction == "long" else "ショート"
-    subject = f"【Zer0-CryptoBot】{dir_str}約定 - {pair.upper()}"
+    coin = _coin(pair)
+    position_jpy = entry * amount
+    if direction == "long":
+        sl_pct  = (sl  - entry) / entry * 100
+        tp1_pct = (tp1 - entry) / entry * 100
+    else:
+        sl_pct  = (entry - sl)  / entry * 100
+        tp1_pct = (entry - tp1) / entry * 100
+    subject = f"【CryptoBot】{dir_str}約定 - {coin}/JPY"
     body = (
-        f"コイン：{pair.upper()}\n"
-        f"方向：{dir_str}\n"
-        f"約定価格：{entry:,.4f}円\n"
-        f"数量：{amount}\n"
-        f"損切り（初期SL）：{sl:,.4f}円\n"
-        f"TP1（30%）：{tp1:,.4f}円\n"
+        f"■ {coin}/JPY  {dir_str}  約定\n"
+        f"\n"
+        f"約定価格：{entry:,.0f}円\n"
+        f"数量　　：{amount} {coin}（建玉 {position_jpy:,.0f}円）\n"
+        f"\n"
+        f"損切り　：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
+        f"TP1（30%）：{tp1:,.0f}円（{tp1_pct:+.1f}%）\n"
         f"残り70%：TP1約定後にトレーリングSL（ATR×{TRAIL_MULT}）で管理"
     )
     send_email(subject, body)
@@ -152,26 +168,32 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
 
 def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: float):
     dir_str = "ロング" if direction == "long" else "ショート"
-    subject = f"【Zer0-CryptoBot】TP1約定・トレーリング開始 - {pair.upper()}"
+    coin = _coin(pair)
+    if direction == "long":
+        tp1_pct = (tp1_price - entry) / entry * 100
+    else:
+        tp1_pct = (entry - tp1_price) / entry * 100
+    subject = f"【CryptoBot】TP1約定・トレーリング開始 - {coin}/JPY"
     body = (
-        f"コイン：{pair.upper()}\n"
-        f"方向：{dir_str}\n"
-        f"TP1 約定（{tp1_price:,.4f}円）\n"
+        f"■ {coin}/JPY  {dir_str}  TP1約定\n"
+        f"\n"
+        f"TP1約定価格：{tp1_price:,.0f}円（{tp1_pct:+.1f}%）\n"
+        f"現在SL　　　：{entry:,.0f}円（ブレイクイーブン）\n"
+        f"\n"
         f"残り70%のトレーリングSLを開始しました。\n"
-        f"初期SL：{entry:,.4f}円（ブレイクイーブン）\n"
-        f"価格変動に連れてSLが自動更新されます。"
+        f"高値/安値更新ごとにSLが自動追従します（ATR×{TRAIL_MULT}）。"
     )
     send_email(subject, body)
 
 
 def notify_trail_updated(pair: str, direction: str, new_trail: float):
     dir_str = "ロング" if direction == "long" else "ショート"
-    subject = f"【Zer0-CryptoBot】トレーリングSL更新 - {pair.upper()}"
+    coin = _coin(pair)
+    subject = f"【CryptoBot】トレーリングSL更新 - {coin}/JPY"
     body = (
-        f"コイン：{pair.upper()}\n"
-        f"方向：{dir_str}\n"
-        f"トレーリングSLを更新しました。\n"
-        f"新SL：{new_trail:,.4f}円"
+        f"■ {coin}/JPY  {dir_str}  トレーリングSL更新\n"
+        f"\n"
+        f"新SL：{new_trail:,.0f}円"
     )
     send_email(subject, body)
 
@@ -180,17 +202,20 @@ def notify_close(pair: str, direction: str, reason: str, price: float,
                  entry: float, amount: float):
     if direction == "long":
         pnl = (price - entry) * amount
+        price_diff_pct = (price - entry) / entry * 100
     else:
         pnl = (entry - price) * amount
-    pnl_pct = pnl / (entry * amount) * 100
+        price_diff_pct = (entry - price) / entry * 100
     dir_str = "ロング" if direction == "long" else "ショート"
-    subject = f"【Zer0-CryptoBot】{dir_str}クローズ - {pair.upper()}"
+    coin = _coin(pair)
+    subject = f"【CryptoBot】{dir_str}クローズ - {coin}/JPY"
     body = (
-        f"コイン：{pair.upper()}\n"
-        f"方向：{dir_str}\n"
-        f"種別：{reason}\n"
-        f"クローズ価格：{price:,.4f}円\n"
-        f"損益：{pnl:+,.0f}円（{pnl_pct:+.2f}%）"
+        f"■ {coin}/JPY  {dir_str}  クローズ（{reason}）\n"
+        f"\n"
+        f"エントリー：{entry:,.0f}円\n"
+        f"クローズ　：{price:,.0f}円（{price_diff_pct:+.1f}%）\n"
+        f"数量　　　：{amount} {coin}\n"
+        f"損益　　　：{pnl:+,.0f}円"
     )
     send_email(subject, body)
 
