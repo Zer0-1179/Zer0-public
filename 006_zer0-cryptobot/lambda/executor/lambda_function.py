@@ -29,11 +29,9 @@ SSM_API_SECRET  = "/Zer0/CryptoBot/bitbank/api_secret"
 SSM_STATE       = "/Zer0/CryptoBot/state"
 
 # TP/SL 倍率
-TP1_MULT    = 2.0   # TP1 = entry ± ATR × 2
-SL_MULT     = 1.5   # 初期SL = entry ∓ ATR × 1.5
-TRAIL_MULT  = 1.5   # トレーリング幅 = 極値 ± ATR × 1.5
-TP1_RATIO   = 0.3   # TP1 の数量割合
-TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
+TP1_MULT   = 2.0   # トレーリング移行トリガー = entry ± ATR × 2
+SL_MULT    = 1.5   # 初期SL = entry ∓ ATR × 1.5
+TRAIL_MULT = 1.5   # トレーリング幅 = 極値 ± ATR × 1.5
 
 # コイン別精度（price小数桁数, amount小数桁数）
 PAIRS = {
@@ -159,13 +157,13 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
     body = (
         f"■ {coin}/JPY  {dir_str}  約定\n"
         f"\n"
-        f"現在価格　：{entry:,.0f}円\n"
-        f"購入金額　：{position_jpy:,.0f}円（{amount} {coin}）\n"
-        f"残り証拠金：{remaining_margin/2:,.0f}円\n"
+        f"現在価格　　　：{entry:,.0f}円\n"
+        f"購入金額　　　：{position_jpy:,.0f}円（{amount} {coin}）\n"
+        f"残り証拠金　　：{remaining_margin/2:,.0f}円\n"
         f"\n"
-        f"損切り　　：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
-        f"TP1（30%）：{tp1:,.0f}円（{tp1_pct:+.1f}%）\n"
-        f"残り70%：TP1約定後にトレーリングSL（ATR×{TRAIL_MULT}）で管理"
+        f"損切り（SL）　：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
+        f"トレーリング移行ライン：{tp1:,.0f}円（{tp1_pct:+.1f}%）\n"
+        f"  ↑ このラインに到達したらSLをキャンセルしてトレーリングSLに切り替え"
     )
     send_email(subject, body)
 
