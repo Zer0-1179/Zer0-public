@@ -169,23 +169,22 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
 
 
 def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: float,
-                         current_price: float, realized_pnl: float):
+                         current_price: float):
     dir_str = "ロング" if direction == "long" else "ショート"
     coin = _coin(pair)
     if direction == "long":
         tp1_pct = (tp1_price - entry) / entry * 100
     else:
         tp1_pct = (entry - tp1_price) / entry * 100
-    subject = f"【CryptoBot】TP1約定・トレーリング開始 - {coin}/JPY"
+    subject = f"【CryptoBot】トレーリングSL開始 - {coin}/JPY"
     body = (
-        f"■ {coin}/JPY  {dir_str}  TP1約定\n"
+        f"■ {coin}/JPY  {dir_str}  トレーリングSL開始\n"
         f"\n"
-        f"現在価格　　：{current_price:,.0f}円\n"
-        f"TP1約定価格：{tp1_price:,.0f}円（{tp1_pct:+.1f}%）\n"
-        f"確定利益　　：{realized_pnl:+,.0f}円\n"
-        f"現在SL　　　：{entry:,.0f}円（ブレイクイーブン）\n"
+        f"現在価格　　　　：{current_price:,.0f}円\n"
+        f"トレーリング移行ライン：{tp1_price:,.0f}円（{tp1_pct:+.1f}%）に到達\n"
+        f"現在SL　　　　　：{entry:,.0f}円（ブレイクイーブン）\n"
         f"\n"
-        f"残り70%のトレーリングSLを開始しました。\n"
+        f"全量のトレーリングSLを開始しました。\n"
         f"高値/安値更新ごとにSLが自動追従します（ATR×{TRAIL_MULT}）。"
     )
     send_email(subject, body)
