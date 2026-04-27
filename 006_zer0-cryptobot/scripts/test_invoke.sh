@@ -2,10 +2,15 @@
 # CryptoBot Executor テスト実行スクリプト
 #
 # 使い方:
-#   ./test_invoke.sh            # Step1: 空シグナルテスト（Phase A のみ）
-#   ./test_invoke.sh signal     # Step2: SOL ロング シグナル注入テスト
-#   ./test_invoke.sh state      # SSM state の確認
-#   ./test_invoke.sh clear      # SSM state のクリア
+#   ./test_invoke.sh              # Step1: 空シグナルテスト（Phase A のみ）
+#   ./test_invoke.sh signal       # Step2: SOL ロング シグナル注入テスト（約定しない値で）
+#   ./test_invoke.sh state        # SSM state の確認
+#   ./test_invoke.sh clear        # SSM state のクリア
+#
+# フルフローテスト（全フェーズ順番に実行）:
+#   ./test_invoke.sh fulltest     # Phase B: SOLロング 500円で即時約定注文
+#   ./test_invoke.sh phase_a      # Phase A: 既存ポジション管理を手動トリガー
+#                                 # （fulltest後: TP1/SL発注確認 → trailing確認 → close確認）
 
 set -euo pipefail
 
@@ -49,6 +54,77 @@ case "${MODE}" in
         --overwrite \
         --region "${REGION}"
     echo "クリア完了: {\"positions\":{}}"
+    ;;
+
+  fulltest)
+    echo "=== フルフローテスト Step1: SOL ロング 500円 即時約定 ==="
+    SOL_PRICE=$(curl -sf "https://public.bitbank.cc/sol_jpy/ticker" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['last'])")
+    ATR=$(python3 -c "print(round(float('${SOL_PRICE}') * 0.02, 0))")
+    echo "SOL現在価格: ${SOL_PRICE}円  ATR: ${ATR}円"
+    echo "投資額: 500円（テスト固定）/ 即時約定モード（現在価格+0.5%で発注）"
+    echo ""
+
+    PAYLOAD=$(python3 -c "
+import json
+payload = {
+    'test_invest_jpy': 500,
+    'test_entry_above': True,
+    'signals': [{
+        'pair': 'sol_jpy',
+        'side': 'long',
+        'binance_price': float('${SOL_PRICE}'),
+        'atr': float('${ATR}')
+    }]
+}
+print(json.dumps(payload))
+")
+    echo "Payload: ${PAYLOAD}"
+    echo ""
+
+    aws lambda invoke \
+        --function-name "${EXECUTOR}" \
+        --region "${REGION}" \
+        --invocation-type RequestResponse \
+        --payload "${PAYLOAD}" \
+        --cli-binary-format raw-in-base64-out \
+        "${OUTPUT_FILE}"
+
+    echo ""
+    echo "Lambda レスポンス:"
+    cat "${OUTPUT_FILE}" | python3 -m json.tool
+    echo ""
+    echo ">>> 次のステップ:"
+    echo "    1. SSM state確認: ./test_invoke.sh state"
+    echo "    2. 約定後: ./test_invoke.sh phase_a  → TP1+SL発注確認"
+    echo "    3. TP1かSL約定後: ./test_invoke.sh phase_a  → close確認"
+    ;;
+
+  phase_a)
+    echo "=== Phase A 手動トリガー（既存ポジション管理）==="
+    echo "現在のSSM state:"
+    aws ssm get-parameter \
+        --name "${SSM_STATE}" \
+        --region "${REGION}" \
+        --query "Parameter.Value" \
+        --output text 2>/dev/null | python3 -m json.tool || echo '{"positions":{}}'
+    echo ""
+
+    aws lambda invoke \
+        --function-name "${EXECUTOR}" \
+        --region "${REGION}" \
+        --invocation-type RequestResponse \
+        --payload '{"signals":[]}' \
+        --cli-binary-format raw-in-base64-out \
+        "${OUTPUT_FILE}"
+
+    echo ""
+    echo "Lambda レスポンス:"
+    cat "${OUTPUT_FILE}" | python3 -m json.tool
+    echo ""
+    echo "最新ログ確認（最大2分前まで）:"
+    aws logs tail "${LOG_GROUP}" \
+        --region "${REGION}" \
+        --since 2m
     ;;
 
   signal)
