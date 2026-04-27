@@ -296,15 +296,30 @@ def verify_order(bb: BitbankClient, pair: str, order_id: int, context: str = "")
     raise OrderVerificationError(f"{pair} order {order_id} ({context}) unverifiable")
 
 
-def get_available_margin(bb: BitbankClient) -> float:
-    """利用可能証拠金（JPY空き残高）を返す。取得失敗時は 0 を返す。"""
+def get_available_margin(bb: BitbankClient, pair: str | None = None) -> float:
+    """新規建て可能額（JPY）を返す。
+    available_balances[pair]["long"] は証拠金 × レバレッジ後の建玉可能額。"""
     try:
-        assets = bb.get_assets()
-        jpy_free = float(assets.get("jpy", {}).get("free_amount", "0"))
-        log(f"利用可能証拠金: {jpy_free:,.0f}円")
-        return jpy_free
+        margin = bb.get_margin_status()
+        balances = margin.get("available_balances", [])
+        if balances:
+            target = pair
+            value = None
+            for b in balances:
+                if target and b["pair"] == target:
+                    value = float(b.get("long", "0"))
+                    break
+            if value is None:
+                value = float(balances[0].get("long", "0"))
+            log(f"新規建て可能額({pair or balances[0]['pair']}): {value:,.0f}円")
+            return value
+        # フォールバック: total_margin_balance × 2（レバレッジ倍率）
+        total = float(margin.get("total_margin_balance", "0"))
+        value = total * 2
+        log(f"新規建て可能額（証拠金×2）: {value:,.0f}円")
+        return value
     except Exception as e:
-        log(f"JPY残高取得失敗: {e}")
+        log(f"新規建て可能額取得失敗: {e}")
         return 0.0
 
 
@@ -664,7 +679,7 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
 
         try:
             # 証拠金残高確認 + 動的ポジションサイズ計算
-            available = get_available_margin(bb)
+            available = get_available_margin(bb, pair)
 
             remaining_slots = MAX_POSITIONS - active_count
             invest_jpy = math.floor(available / remaining_slots * 0.9) if remaining_slots > 0 else 0
