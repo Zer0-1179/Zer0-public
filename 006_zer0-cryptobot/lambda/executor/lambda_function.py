@@ -584,13 +584,15 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                         atr_jpy      = pos["atr_jpy"]
 
                         trail_sl_price = entry
+                        trail_sl_str   = round_price(trail_sl_price, cfg["price_prec"])
                         o_trail = bb.create_order(
                             pair,
                             round_amount(trail_amount, cfg["amount_prec"]),
-                            round_price(trail_sl_price, cfg["price_prec"]),
+                            trail_sl_str,
                             close_side, position_side=direction,
+                            trigger_price=trail_sl_str,
                         )
-                        verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
+                        verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文（stop_limit）")
                         state["positions"][pair] = {
                             "status":            "trailing",
                             "direction":         direction,
@@ -643,7 +645,8 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
             elif pos["status"] == "trailing":
                 trail_order = bb.get_order(pair, pos["trail_sl_order_id"])
 
-                if trail_order.get("status") == "FULLY_FILLED":
+                trail_status = trail_order.get("status", "")
+                if trail_status == "FULLY_FILLED":
                     exit_p = float(trail_order["average_price"])
                     exit_a = float(trail_order["executed_amount"])
                     log(f"{pair}({direction}): トレーリングSL 約定 → 終了 exit={exit_p}")
@@ -676,6 +679,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
                                         new_trail_str,
                                         "sell", position_side="long",
+                                        trigger_price=new_trail_str,
                                     )
                                     verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
                                     pos["trail_sl_order_id"] = new_order["order_id"]
@@ -704,6 +708,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
                                         new_trail_str,
                                         "buy", position_side="short",
+                                        trigger_price=new_trail_str,
                                     )
                                     verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
                                     pos["trail_sl_order_id"] = new_order["order_id"]
