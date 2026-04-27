@@ -366,7 +366,7 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
         cfg        = PAIRS.get(pair, {"price_prec": 0, "amount_prec": 4})
 
         # 未決済注文をすべてキャンセル
-        for key in ("buy_order_id", "tp1_order_id", "sl_order_id", "trail_sl_order_id"):
+        for key in ("buy_order_id", "sl_order_id", "trail_sl_order_id"):
             oid = pos.get(key)
             if oid:
                 try:
@@ -379,7 +379,7 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
         if status == "active":
             amount = pos.get("total_amount", 0)
         elif status == "trailing":
-            amount = pos.get("trail_amount", 0)
+            amount = pos.get("total_amount", 0)
         else:
             continue  # buy_pending はエントリー取り消しのみで決済不要
 
@@ -466,7 +466,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                 status = order.get("status", "")
 
                 if status == "FULLY_FILLED":
-                    log(f"{pair}({direction}): エントリー約定 → TP1/SL 発注")
+                    log(f"{pair}({direction}): エントリー約定 → SL発注")
                     entry     = float(order["average_price"])
                     amount    = float(order["executed_amount"])
                     atr_ratio = pos["atr_jpy"] / pos["entry_price_signal"]
@@ -479,33 +479,21 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                         tp1_price = entry - atr_jpy * TP1_MULT
                         sl_price  = entry + atr_jpy * SL_MULT
 
-                    tp1_amount   = round(amount * TP1_RATIO,   cfg["amount_prec"])
-                    trail_amount = round(amount * TRAIL_RATIO, cfg["amount_prec"])
-
-                    # 決済注文は position_side 不要
-                    o_tp1 = bb.create_order(pair,
-                                            round_amount(tp1_amount, cfg["amount_prec"]),
-                                            round_price(tp1_price,   cfg["price_prec"]),
-                                            close_side)
-                    verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
-                    o_sl  = bb.create_order(pair,
-                                            round_amount(amount, cfg["amount_prec"]),
-                                            round_price(sl_price, cfg["price_prec"]),
-                                            close_side)
+                    # SLのみ発注（100%）。TP1ラインは価格比較トリガーとして使用
+                    o_sl = bb.create_order(pair,
+                                           round_amount(amount, cfg["amount_prec"]),
+                                           round_price(sl_price, cfg["price_prec"]),
+                                           close_side)
                     verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
 
                     pos.update({
-                        "status":        "active",
-                        "entry_price":   entry,
-                        "total_amount":  amount,
-                        "atr_jpy":       atr_jpy,
-                        "tp1_price":     tp1_price,
-                        "tp1_amount":    tp1_amount,
-                        "trail_amount":  trail_amount,
-                        "sl_price":      sl_price,
-                        "tp1_order_id":  o_tp1["order_id"],
-                        "sl_order_id":   o_sl["order_id"],
-                        "tp1_filled":    False,
+                        "status":       "active",
+                        "entry_price":  entry,
+                        "total_amount": amount,
+                        "atr_jpy":      atr_jpy,
+                        "tp1_price":    tp1_price,
+                        "sl_price":     sl_price,
+                        "sl_order_id":  o_sl["order_id"],
                     })
                     remaining = get_available_margin(bb, pair)
                     notify_entry_fill(pair, direction, entry, amount, sl_price, tp1_price, remaining)
@@ -522,85 +510,59 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                         f"コイン：{pair.upper()}\n方向：{direction}\n24時間未約定のため注文をキャンセルしました。",
                     )
 
-            # ── アクティブ: TP1約定確認 → トレーリング移行 ───────────────
+            # ── アクティブ: SL確認 → TP1ライン到達でトレーリング移行 ────
             elif pos["status"] == "active":
-                if not pos.get("tp1_filled"):
-                    o_tp1 = bb.get_order(pair, pos["tp1_order_id"])
-
-                    if o_tp1.get("status") == "FULLY_FILLED":
-                        log(f"{pair}({direction}): TP1 約定 → トレーリングSL 開始")
-
-                        sl_already_filled = False
-                        try:
-                            bb.cancel_order(pair, pos["sl_order_id"])
-                        except Exception as ce:
-                            log(f"{pair}: 旧SL キャンセル失敗: {ce}")
-                            try:
-                                sl_chk = bb.get_order(pair, pos["sl_order_id"])
-                                if sl_chk.get("status") == "FULLY_FILLED":
-                                    sl_already_filled = True
-                                    log(f"{pair}: 旧SL 既に約定 → TP1+SL両方確定 → 終了")
-                                    remaining = get_available_margin(bb, pair)
-                                    notify_close(pair, direction, "SL（TP1後）",
-                                                 float(sl_chk["average_price"]),
-                                                 pos["entry_price"],
-                                                 float(sl_chk["executed_amount"]),
-                                                 remaining)
-                                    to_delete.append(pair)
-                            except Exception:
-                                pass
-
-                        if sl_already_filled:
-                            continue
-
-                        entry        = pos["entry_price"]
-                        trail_amount = pos["trail_amount"]
-                        atr_jpy      = pos["atr_jpy"]
-
-                        # トレーリングSL初期値 = entry（ブレイクイーブン）
-                        trail_sl_price = entry
-                        o_trail = bb.create_order(
-                            pair,
-                            round_amount(trail_amount, cfg["amount_prec"]),
-                            round_price(trail_sl_price, cfg["price_prec"]),
-                            close_side,
+                # SL約定確認
+                o_sl = bb.get_order(pair, pos["sl_order_id"])
+                if o_sl.get("status") == "FULLY_FILLED":
+                    log(f"{pair}({direction}): SL（損切り）約定 → 終了")
+                    remaining = get_available_margin(bb, pair)
+                    notify_close(pair, direction, "損切り",
+                                 float(o_sl["average_price"]),
+                                 pos["entry_price"],
+                                 float(o_sl["executed_amount"]),
+                                 remaining)
+                    to_delete.append(pair)
+                else:
+                    # TP1ライン到達確認（現在価格との比較）
+                    try:
+                        current = get_bitbank_price(pair)
+                        entry   = pos["entry_price"]
+                        tp1_reached = (
+                            (direction == "long"  and current >= pos["tp1_price"]) or
+                            (direction == "short" and current <= pos["tp1_price"])
                         )
-                        verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
-                        state["positions"][pair] = {
-                            "status":            "trailing",
-                            "direction":         direction,
-                            "entry_price":       entry,
-                            "atr_jpy":           atr_jpy,
-                            "tp1_price":         pos["tp1_price"],
-                            "trail_amount":      trail_amount,
-                            "trail_sl_order_id": o_trail["order_id"],
-                            "trail_sl_price":    trail_sl_price,
-                            # ロング: highest_price で最高値追跡
-                            # ショート: lowest_price で最安値追跡
-                            "highest_price": pos["tp1_price"] if direction == "long" else None,
-                            "lowest_price":  pos["tp1_price"] if direction == "short" else None,
-                        }
-                        tp1_fill_price    = float(o_tp1["average_price"])
-                        tp1_filled_amount = float(o_tp1["executed_amount"])
-                        if direction == "long":
-                            realized_pnl = (tp1_fill_price - entry) * tp1_filled_amount
-                        else:
-                            realized_pnl = (entry - tp1_fill_price) * tp1_filled_amount
-                        notify_trail_started(pair, direction, entry, pos["tp1_price"],
-                                             tp1_fill_price, realized_pnl)
-                        continue
+                        if tp1_reached:
+                            log(f"{pair}({direction}): TP1ライン到達({current:.0f}) → SLキャンセル → トレーリングSL開始")
+                            try:
+                                bb.cancel_order(pair, pos["sl_order_id"])
+                            except Exception as ce:
+                                log(f"{pair}: SLキャンセル失敗（継続）: {ce}")
 
-                    # TP1未約定時: 初期SL 約定確認
-                    o_sl = bb.get_order(pair, pos["sl_order_id"])
-                    if o_sl.get("status") == "FULLY_FILLED":
-                        log(f"{pair}({direction}): SL（損切り）約定 → 終了")
-                        remaining = get_available_margin(bb, pair)
-                        notify_close(pair, direction, "損切り",
-                                     float(o_sl["average_price"]),
-                                     pos["entry_price"],
-                                     float(o_sl["executed_amount"]),
-                                     remaining)
-                        to_delete.append(pair)
+                            # トレーリングSL初期値 = entry（ブレイクイーブン）
+                            trail_sl_price = entry
+                            o_trail = bb.create_order(
+                                pair,
+                                round_amount(pos["total_amount"], cfg["amount_prec"]),
+                                round_price(trail_sl_price, cfg["price_prec"]),
+                                close_side,
+                            )
+                            verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
+                            state["positions"][pair] = {
+                                "status":            "trailing",
+                                "direction":         direction,
+                                "entry_price":       entry,
+                                "atr_jpy":           pos["atr_jpy"],
+                                "tp1_price":         pos["tp1_price"],
+                                "total_amount":      pos["total_amount"],
+                                "trail_sl_order_id": o_trail["order_id"],
+                                "trail_sl_price":    trail_sl_price,
+                                "highest_price": current if direction == "long" else None,
+                                "lowest_price":  current if direction == "short" else None,
+                            }
+                            notify_trail_started(pair, direction, entry, pos["tp1_price"], current)
+                    except Exception as te:
+                        log(f"{pair}: TP1ライン確認失敗: {te}")
 
             # ── トレーリングSL 管理 ────────────────────────────────────────
             elif pos["status"] == "trailing":
@@ -636,7 +598,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         continue
                                     new_order = bb.create_order(
                                         pair,
-                                        round_amount(pos["trail_amount"], cfg["amount_prec"]),
+                                        round_amount(pos["total_amount"], cfg["amount_prec"]),
                                         new_trail_str,
                                         "sell",
                                     )
@@ -664,7 +626,7 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                         continue
                                     new_order = bb.create_order(
                                         pair,
-                                        round_amount(pos["trail_amount"], cfg["amount_prec"]),
+                                        round_amount(pos["total_amount"], cfg["amount_prec"]),
                                         new_trail_str,
                                         "buy",
                                     )
@@ -761,9 +723,7 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list) -> dict:
                 "entry_price_signal": sig["binance_price"],
                 "atr_jpy":            sig["atr"],
                 "invest_jpy":         invest_jpy,
-                "tp1_order_id":       None,
                 "sl_order_id":        None,
-                "tp1_filled":         False,
             }
             active_count += 1
             if direction == "long":
