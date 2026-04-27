@@ -125,21 +125,25 @@ def _coin(pair: str) -> str:
 
 
 def notify_entry_order(pair: str, direction: str, price: float, amount: float,
-                       invest: float, current_price: float, remaining: float):
+                       invest: float, current_price: float, remaining: float,
+                       is_test: bool = False):
     dir_str = "ロング（買い）" if direction == "long" else "ショート（売り）"
     coin = _coin(pair)
-    subject = f"【CryptoBot】{dir_str}注文発注 - {coin}/JPY"
+    prefix = "[TEST] " if is_test else ""
+    subject = f"【CryptoBot】{prefix}{dir_str}注文発注 - {coin}/JPY"
+    test_note = "\n※ [TEST] 即時約定テスト：指値を意図的に現在価格+0.5%に設定しています" if is_test else ""
     body = (
         f"■ {coin}/JPY  {dir_str}\n"
         f"\n"
         f"現在価格：{current_price:,.0f}円\n"
         f"指値　　：{price:,.0f}円\n"
-        f"数量　　：{amount} {coin}\n"
+        f"数量　　：{amount:.4f} {coin}\n"
         f"購入金額：{invest:,.0f}円\n"
         f"証拠金　：{invest/2:,.0f}円（2倍レバレッジ）\n"
         f"残り証拠金：{remaining/2:,.0f}円\n"
         f"\n"
         f"※ 24時間で未約定の場合は自動キャンセルします"
+        f"{test_note}"
     )
     send_email(subject, body)
 
@@ -224,7 +228,7 @@ def notify_close(pair: str, direction: str, reason: str, price: float,
         f"エントリー：{entry:,.0f}円\n"
         f"変動　　　：{price_diff_pct:+.1f}%\n"
         f"購入金額　：{entry * amount:,.0f}円（{amount} {coin}）\n"
-        f"損益　　　：{pnl:+,.0f}円\n"
+        f"損益　　　：{pnl:+,.1f}円\n"
         f"残り証拠金：{remaining_margin/2:,.0f}円"
     )
     send_email(subject, body)
@@ -816,7 +820,8 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
             else:
                 short_count += 1
             notify_entry_order(pair, direction, entry_price, amount, invest_jpy,
-                               bb_price, available - invest_jpy)
+                               bb_price, available - invest_jpy,
+                               is_test=bool(test_entry_above))
 
         except OrderVerificationError:
             pass  # verify_order 内でメール送信済み
