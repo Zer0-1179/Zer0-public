@@ -297,22 +297,15 @@ def verify_order(bb: BitbankClient, pair: str, order_id: int, context: str = "")
 
 
 def get_available_margin(bb: BitbankClient) -> float:
-    """利用可能証拠金（円）を返す。取得失敗時は JPY 残高で代用する。"""
+    """利用可能証拠金（JPY空き残高）を返す。取得失敗時は 0 を返す。"""
     try:
-        margin = bb.get_margin_status()
-        # available_balances は通貨別リストの場合がある。まず直接フィールドを試みる
-        if "available_margin" in margin:
-            return float(margin["available_margin"])
-        # フォールバック: JPY 現物残高
         assets = bb.get_assets()
-        return float(assets.get("jpy", {}).get("free_amount", "0"))
+        jpy_free = float(assets.get("jpy", {}).get("free_amount", "0"))
+        log(f"利用可能証拠金: {jpy_free:,.0f}円")
+        return jpy_free
     except Exception as e:
-        log(f"証拠金残高取得失敗、JPY残高で代用: {e}")
-        try:
-            assets = bb.get_assets()
-            return float(assets.get("jpy", {}).get("free_amount", "0"))
-        except Exception:
-            return 0.0
+        log(f"JPY残高取得失敗: {e}")
+        return 0.0
 
 
 # ── 証拠金維持率監視 ──────────────────────────────────────────────────────────
@@ -360,6 +353,7 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     - 建玉なし(null) / 取得失敗: スキップして True を返す"""
     try:
         margin = bb.get_margin_status()
+        log(f"margin/status raw: {json.dumps(margin, ensure_ascii=False)}")
 
         # status フィールドで危険状態を直接検出（percentage スケール不問）
         status = margin.get("status", "NORMAL")
