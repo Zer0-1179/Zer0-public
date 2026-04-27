@@ -285,18 +285,24 @@ class BitbankClient:
         return self._get("/user/spot/order", {"pair": pair, "order_id": order_id})["data"]
 
     def create_order(self, pair: str, amount: str, price: str, side: str,
-                     position_side: str | None = None) -> dict:
+                     position_side: str | None = None,
+                     trigger_price: str | None = None) -> dict:
         """
         信用取引は開設・決済ともに position_side が必須。
           開設ロング : side="buy",  position_side="long"
           決済ロング : side="sell", position_side="long"
           開設ショート: side="sell", position_side="short"
           決済ショート: side="buy",  position_side="short"
+        trigger_price を指定すると stop_limit 注文（逆指値）になる。
+        SL には必ず trigger_price を指定すること（指値のみだと即時約定する）。
         """
+        order_type = "stop_limit" if trigger_price else "limit"
         body = {"pair": pair, "amount": amount, "price": price,
-                "side": side, "type": "limit"}
+                "side": side, "type": order_type}
         if position_side is not None:
             body["position_side"] = position_side
+        if trigger_price is not None:
+            body["trigger_price"] = trigger_price
         resp = self._post("/user/spot/order", body)
         if resp.get("success") != 1:
             raise Exception(f"create_order失敗 pair={pair} side={side} position_side={position_side}: code={resp.get('data', {}).get('code')}")
@@ -502,11 +508,13 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                                             round_price(tp1_price,   cfg["price_prec"]),
                                             close_side, position_side=direction)
                     verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
+                    sl_price_str = round_price(sl_price, cfg["price_prec"])
                     o_sl  = bb.create_order(pair,
                                             round_amount(trail_amount, cfg["amount_prec"]),
-                                            round_price(sl_price, cfg["price_prec"]),
-                                            close_side, position_side=direction)
-                    verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
+                                            sl_price_str,
+                                            close_side, position_side=direction,
+                                            trigger_price=sl_price_str)
+                    verify_order(bb, pair, o_sl["order_id"], "初期SL注文（stop_limit）")
 
                     pos.update({
                         "status":        "active",
@@ -604,16 +612,26 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                     # TP1未約定時: 初期SL 約定確認
                     o_sl = bb.get_order(pair, pos["sl_order_id"])
                     if o_sl.get("status") == "FULLY_FILLED":
-                        log(f"{pair}({direction}): SL（損切り）約定 → TP1キャンセル → 終了")
+                        log(f"{pair}({direction}): SL（損切り）約定 → TP1キャンセル → 残30%成行クローズ → 終了")
                         try:
                             bb.cancel_order(pair, pos["tp1_order_id"])
                         except Exception as ce:
                             log(f"{pair}: TP1キャンセル失敗: {ce}")
+                        # SL(70%)約定後、残30%(tp1_amount)を成行クローズ
+                        tp1_amt = pos.get("tp1_amount", 0)
+                        if tp1_amt > 0:
+                            try:
+                                bb.create_market_order(pair,
+                                                       round_amount(tp1_amt, cfg["amount_prec"]),
+                                                       close_side, position_side=direction)
+                                log(f"{pair}: 残30% 成行クローズ {tp1_amt}")
+                            except Exception as me:
+                                log(f"{pair}: 残30%成行クローズ失敗: {me}")
                         remaining = get_available_margin(bb, pair)
                         notify_close(pair, direction, "損切り",
                                      float(o_sl["average_price"]),
                                      pos["entry_price"],
-                                     float(o_sl["executed_amount"]),
+                                     pos["total_amount"],
                                      remaining)
                         to_delete.append(pair)
 
