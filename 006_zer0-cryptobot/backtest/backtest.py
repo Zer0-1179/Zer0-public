@@ -612,11 +612,118 @@ def run_for_years(years: int, strategy: str = "old") -> tuple:
 
 
 # ── メイン ────────────────────────────────────────────
+def _run_compare(years: int):
+    """旧戦略 vs 新戦略 を同一データで比較する"""
+    print(f"\nZer0-CryptoBot バックテスト 旧戦略 vs 新戦略 比較（直近{years}年）")
+    print("=" * 65)
+
+    # データは一度だけ取得（両戦略で共用）
+    candles = years * 365 * 6
+    btc_raw = fetch_klines(BTC_SYMBOL, total=candles)
+    btc_df  = add_indicators(btc_raw)
+    start   = btc_df["open_time"].iloc[0]
+    end     = btc_df["open_time"].iloc[-1]
+    print(f"BTC: {len(btc_df)} 本  {start} ～ {end}")
+
+    coin_dfs = {"BTC": btc_df}
+    for coin, symbol in [("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")]:
+        raw = fetch_klines(symbol, total=candles)
+        coin_dfs[coin] = add_indicators(raw)
+
+    results = {}
+    for strat in ("old", "new"):
+        label = "旧戦略（TP1 30%利確＋トレーリング70%）" if strat == "old" else "新戦略（全量トレーリングSL）"
+        print(f"\n--- {label} ---")
+        res   = run_backtest(btc_df, coin_dfs, strat)
+        stats = calc_stats(res["trades"], res["equity"])
+        print_stats(stats)
+        growth = (res["final_pool"] / INITIAL_CAPITAL - 1) * 100
+        print(f"  資本推移: {INITIAL_CAPITAL:,.0f}円 → {res['final_pool']:,.0f}円 ({growth:+.1f}%)")
+        results[strat] = {"stats": stats, "equity": res["equity"], "final": res["final_pool"], "growth": growth}
+
+    # ── 比較サマリー ──────────────────────────────────────────────────────
+    print("\n" + "=" * 65)
+    print("  ★ 比較サマリー")
+    print("=" * 65)
+    hdr = f"  {'指標':<18} {'旧戦略':>12} {'新戦略':>12} {'差異':>10}"
+    print(hdr)
+    print("  " + "-" * 55)
+
+    def row(label, old_val, new_val, fmt=".1f", suffix=""):
+        diff = new_val - old_val
+        sign = "+" if diff >= 0 else ""
+        print(f"  {label:<18} {old_val:>11{fmt}}{suffix} {new_val:>11{fmt}}{suffix} {sign}{diff:>8{fmt}}{suffix}")
+
+    old_s, new_s = results["old"]["stats"], results["new"]["stats"]
+    row("勝率",         old_s["win_rate"],  new_s["win_rate"],  suffix="%")
+    row("PF",           old_s["pf"],        new_s["pf"],        fmt=".2f")
+    row("最大DD",       old_s["max_dd"],    new_s["max_dd"],    suffix="%")
+    row("資本成長率",   results["old"]["growth"], results["new"]["growth"], suffix="%")
+    row("総損益",       old_s["total_pnl"], new_s["total_pnl"], fmt=".1f")
+    row("トレード数",   float(old_s["total"]), float(new_s["total"]), fmt=".0f", suffix="件")
+
+    ok_old = old_s["win_rate"] >= 50 and old_s["pf"] >= 1.5 and old_s["max_dd"] <= 30
+    ok_new = new_s["win_rate"] >= 50 and new_s["pf"] >= 1.5 and new_s["max_dd"] <= 30
+    print(f"\n  旧戦略: {'【合格】' if ok_old else '【不合格】'}  新戦略: {'【合格】' if ok_new else '【不合格】'}")
+    print("=" * 65)
+
+    # ── 比較チャート ──────────────────────────────────────────────────────
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharey=False)
+    configs = [
+        ("old", "旧戦略（TP1 30%利確＋トレーリング70%）", "#FF6B35"),
+        ("new", "新戦略（全量トレーリングSL）",           "#3EA8FF"),
+    ]
+    for ax, (strat, title, color) in zip(axes, configs):
+        eq    = results[strat]["equity"]
+        x     = list(range(len(eq)))
+        s     = results[strat]["stats"]
+        ok    = s["win_rate"] >= 50 and s["pf"] >= 1.5 and s["max_dd"] <= 30
+        growth = results[strat]["growth"]
+
+        ax.plot(x, eq, linewidth=2.0, color=color, zorder=3)
+        ax.axhline(0, color="#888", linewidth=1.0, linestyle="--", zorder=2)
+        ax.fill_between(x, eq, 0, where=[v >= 0 for v in eq], alpha=0.25, color=color)
+        ax.fill_between(x, eq, 0, where=[v < 0 for v in eq], alpha=0.35, color="#F44336")
+
+        verdict = "✅ 合格" if ok else "❌ 不合格"
+        ax.set_title(f"{title}  {verdict}", fontsize=11, fontweight="bold", pad=10)
+
+        stats_text = (
+            f"勝率: {s['win_rate']:.1f}%  PF: {s['pf']:.2f}  最大DD: {s['max_dd']:.1f}%\n"
+            f"トレード数: {s['total']}件  資本成長: {growth:+.1f}%\n"
+            f"ロング勝率: {s['long_wr']:.1f}%  ショート勝率: {s['short_wr']:.1f}%"
+        )
+        ax.text(0.02, 0.97, stats_text, transform=ax.transAxes,
+                fontsize=9, va="top", ha="left",
+                bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#BDBDBD", alpha=0.92))
+        ax.set_xlabel("トレード回数", fontsize=9)
+        ax.set_ylabel("累積損益（円）", fontsize=9)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:+,.0f}"))
+        ax.grid(True, alpha=0.25, linestyle="--")
+
+    s_str = pd.Timestamp(start).strftime("%Y年%m月")
+    e_str = pd.Timestamp(end).strftime("%Y年%m月")
+    fig.suptitle(
+        f"Zer0-CryptoBot  旧戦略 vs 新戦略  直近{years}年（{s_str}〜{e_str}）",
+        fontsize=13, fontweight="bold",
+    )
+    plt.tight_layout()
+    chart_path = "/root/Zer0/006_Zer0_CryptoBot/backtest/result_compare.png"
+    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
+    print(f"\n  比較チャート保存: {chart_path}")
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--years", type=int, default=YEARS, help="バックテスト期間（年）")
-    parser.add_argument("--multi", action="store_true", help="2/3/4/5年を一括比較")
+    parser.add_argument("--years",   type=int, default=YEARS, help="バックテスト期間（年）")
+    parser.add_argument("--multi",   action="store_true", help="2/3/4/5年を一括比較")
+    parser.add_argument("--compare", action="store_true", help="旧戦略 vs 新戦略 比較")
+    parser.add_argument("--strategy", default="old", choices=["old", "new"], help="使用戦略")
     args = parser.parse_args()
+
+    if args.compare:
+        _run_compare(args.years)
+        return
 
     if args.multi:
         _run_multi()
@@ -646,8 +753,8 @@ def main():
         print(f"      取得: {len(df)} 本  期間: {df['open_time'].iloc[0]} ～ {df['open_time'].iloc[-1]}")
 
     # バックテスト実行
-    print("\n[4/4] バックテスト実行中...")
-    result  = run_backtest(btc_df, coin_dfs)
+    print(f"\n[4/4] バックテスト実行中... (strategy={args.strategy})")
+    result  = run_backtest(btc_df, coin_dfs, args.strategy)
     trades  = result["trades"]
     equity     = result["equity"]
     timestamps = result["timestamps"]
