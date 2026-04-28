@@ -131,6 +131,25 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
 
+  # ── CloudWatch Logs: 保存期間 3日 ────────────────────────────────────────
+  AnalyzerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AnalyzerFunction}"
+      RetentionInDays: 3
+
+  ExecutorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ExecutorFunction}"
+      RetentionInDays: 3
+
+  FailureNotifierLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FailureNotifierFunction}"
+      RetentionInDays: 3
+
   # ── Lambda: Analyzer ──────────────────────────────────────────────────────
   AnalyzerFunction:
     Type: AWS::Serverless::Function
