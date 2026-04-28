@@ -9,6 +9,10 @@ REGION="ap-northeast-1"
 STACK_NAME="zer0-cryptobot"
 SAM_BUCKET="zer0-sam-deploy"
 
+# テスト用強制フラグ（デフォルト0=無効）
+# テスト時: ENABLE_FORCE_TEST=1 bash scripts/deploy.sh
+ENABLE_FORCE_TEST="${ENABLE_FORCE_TEST:-0}"
+
 # 必須環境変数チェック
 if [ -z "${SENDER_EMAIL:-}" ] || [ -z "${RECIPIENT_EMAIL:-}" ]; then
   echo "Error: 環境変数を設定してください"
@@ -17,6 +21,9 @@ if [ -z "${SENDER_EMAIL:-}" ] || [ -z "${RECIPIENT_EMAIL:-}" ]; then
   echo "  export SENDER_EMAIL='your-verified@example.com'"
   echo "  export RECIPIENT_EMAIL='notify@example.com'"
   echo "  ./deploy.sh"
+  echo ""
+  echo "テスト時:"
+  echo "  ENABLE_FORCE_TEST=1 bash scripts/deploy.sh"
   exit 1
 fi
 
@@ -57,6 +64,7 @@ sam deploy \
   --parameter-overrides \
     SenderEmail="${SENDER_EMAIL}" \
     RecipientEmail="${RECIPIENT_EMAIL}" \
+    EnableForceTest="${ENABLE_FORCE_TEST}" \
   --no-fail-on-empty-changeset
 
 # デプロイ結果確認

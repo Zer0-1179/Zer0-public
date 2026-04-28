@@ -35,6 +35,15 @@ TRAIL_MULT  = 1.5   # トレーリング幅 = 極値 ± ATR × 1.5
 TP1_RATIO   = 0.3   # TP1 の数量割合
 TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
 
+# 証拠金維持率閾値（total_margin_balance_percentage = 残高/建玉時価総額×100）
+# 通常の運用値: 3ポジション満杯で約55〜70%。実口座で確認済み（2026-04-28）
+MARGIN_WARN_PCT = 50   # この値以下で警告メール（処理継続）
+MARGIN_EMRG_PCT = 30   # この値以下で全ポジション緊急成行決済
+
+# テスト専用強制フラグの有効化（ENABLE_FORCE_TEST=1 の時のみ動作）
+# 本番Lambdaではこの環境変数を設定しないこと
+FORCE_TEST_ENABLED = os.environ.get("ENABLE_FORCE_TEST", "0") == "1"
+
 # コイン別精度（price小数桁数, amount小数桁数）
 PAIRS = {
     "btc_jpy": {"price_prec": 0, "amount_prec": 4},
@@ -454,21 +463,21 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
 
     log(f"証拠金維持率: {ratio:.1f}%")
 
-    if ratio <= 120:
-        log("証拠金維持率120%以下 → 緊急成行決済を実行")
+    if ratio <= MARGIN_EMRG_PCT:
+        log(f"証拠金維持率{MARGIN_EMRG_PCT}%以下 → 緊急成行決済を実行")
         _emergency_close_all(bb, state)
         state["positions"] = {}
         send_email(
             "【Zer0-CryptoBot】🚨緊急決済実行",
-            f"証拠金維持率 {ratio:.1f}% が120%以下になったため、"
+            f"証拠金維持率 {ratio:.1f}% が{MARGIN_EMRG_PCT}%以下になったため、"
             f"全ポジションを成行決済しました。\n速やかに状況を確認してください。",
         )
         return False
 
-    if ratio <= 150:
+    if ratio <= MARGIN_WARN_PCT:
         send_email(
             "【Zer0-CryptoBot】⚠️証拠金警告",
-            f"証拠金維持率が {ratio:.1f}% に低下しています（警告水準: 150%以下）。\n"
+            f"証拠金維持率が {ratio:.1f}% に低下しています（警告水準: {MARGIN_WARN_PCT}%以下）。\n"
             f"ポジション状況を確認してください。",
         )
 
@@ -551,13 +560,13 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
             # ── アクティブ: TP1約定確認 → トレーリング移行 ───────────────
             elif pos["status"] == "active":
                 if not pos.get("tp1_filled"):
-                    # テスト専用フラグ: TP1 強制約定 / SL 強制約定
-                    if event.get("test_force_tp1_fill"):
+                    # テスト専用フラグ: TP1 強制約定 / SL 強制約定（FORCE_TEST_ENABLED=True 時のみ有効）
+                    if FORCE_TEST_ENABLED and event.get("test_force_tp1_fill"):
                         log(f"{pair}({direction}): [TEST] TP1 強制約定フラグ")
                         o_tp1 = {"status": "FULLY_FILLED",
                                  "average_price": str(pos["tp1_price"]),
                                  "executed_amount": str(pos.get("tp1_amount", 0))}
-                    elif event.get("test_force_sl_fill"):
+                    elif FORCE_TEST_ENABLED and event.get("test_force_sl_fill"):
                         o_tp1 = {"status": "UNFILLED"}
                     else:
                         o_tp1 = bb.get_order(pair, pos["tp1_order_id"])
@@ -624,8 +633,24 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                              tp1_fill_price, realized_pnl)
                         continue
 
+                    # TP1未約定: CANCELLED 検出（外部キャンセル・異常系）
+                    elif o_tp1.get("status") in ("CANCELLED", "FAILED_TO_ORDER"):
+                        log(f"{pair}({direction}): TP1注文がキャンセル済み → SL確認")
+                        try:
+                            o_sl_chk = bb.get_order(pair, pos["sl_order_id"])
+                            if o_sl_chk.get("status") in ("CANCELLED", "FAILED_TO_ORDER"):
+                                send_email(
+                                    f"【Zer0-CryptoBot】🚨注文喪失 - {pair.upper()}",
+                                    f"TP1・SL注文がともに喪失しています。手動対応が必要です。\n\n"
+                                    f"コイン：{pair.upper()}\n方向：{direction}\n"
+                                    f"TP1注文ID：{pos.get('tp1_order_id')}\n"
+                                    f"SL注文ID：{pos.get('sl_order_id')}",
+                                )
+                        except Exception as chk_e:
+                            log(f"{pair}: SL確認失敗: {chk_e}")
+
                     # TP1未約定時: 初期SL 約定確認
-                    if event.get("test_force_sl_fill"):
+                    if FORCE_TEST_ENABLED and event.get("test_force_sl_fill"):
                         log(f"{pair}({direction}): [TEST] SL 強制約定フラグ")
                         o_sl = {"status": "FULLY_FILLED",
                                 "average_price": str(pos.get("sl_price", pos["entry_price"])),
@@ -638,6 +663,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             bb.cancel_order(pair, pos["tp1_order_id"])
                         except Exception as ce:
                             log(f"{pair}: TP1キャンセル失敗: {ce}")
+                            send_email(
+                                f"【Zer0-CryptoBot】⚠️TP1キャンセル失敗 - {pair.upper()}",
+                                f"SL約定後のTP1注文キャンセルに失敗しました。手動キャンセルが必要です。\n\n"
+                                f"コイン：{pair.upper()}\n方向：{direction}\n"
+                                f"TP1注文ID：{pos.get('tp1_order_id')}\nエラー：{ce}",
+                            )
                         # SL(70%)約定後、残30%(tp1_amount)を成行クローズ
                         tp1_amt = pos.get("tp1_amount", 0)
                         if tp1_amt > 0:
@@ -648,6 +679,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                 log(f"{pair}: 残30% 成行クローズ {tp1_amt}")
                             except Exception as me:
                                 log(f"{pair}: 残30%成行クローズ失敗: {me}")
+                                send_email(
+                                    f"【Zer0-CryptoBot】🚨残30%クローズ失敗 - {pair.upper()}",
+                                    f"SL約定後の残30%成行クローズに失敗しました。手動決済が必要です。\n\n"
+                                    f"コイン：{pair.upper()}\n方向：{direction}\n"
+                                    f"数量：{tp1_amt}\nエラー：{me}",
+                                )
                         remaining = get_available_margin(bb, pair)
                         notify_close(pair, direction, "損切り",
                                      float(o_sl["average_price"]),
@@ -865,29 +902,30 @@ def lambda_handler(event, context):
         api_secret = get_ssm(SSM_API_SECRET, decrypt=True)
         bb         = BitbankClient(api_key, api_secret)
 
-        # テスト専用: 指定注文を強制キャンセル
-        for cancel_req in event.get("cancel_orders", []):
-            pair     = cancel_req.get("pair")
-            order_id = cancel_req.get("order_id")
-            try:
-                bb.cancel_order(pair, order_id)
-                log(f"[TEST] 強制キャンセル完了: {pair} order_id={order_id}")
-            except Exception as ce:
-                log(f"[TEST] 強制キャンセル失敗: {pair} order_id={order_id}: {ce}")
+        # テスト専用: 指定注文を強制キャンセル（ENABLE_FORCE_TEST=1 時のみ有効）
+        if FORCE_TEST_ENABLED:
+            for cancel_req in event.get("cancel_orders", []):
+                pair     = cancel_req.get("pair")
+                order_id = cancel_req.get("order_id")
+                try:
+                    bb.cancel_order(pair, order_id)
+                    log(f"[TEST] 強制キャンセル完了: {pair} order_id={order_id}")
+                except Exception as ce:
+                    log(f"[TEST] 強制キャンセル失敗: {pair} order_id={order_id}: {ce}")
 
-        # テスト専用: 指定ペアを成行クローズ
-        for close_req in event.get("market_close", []):
-            pair     = close_req.get("pair")
-            amount   = close_req.get("amount")
-            side     = close_req.get("side")          # "buy" or "sell"
-            pos_side = close_req.get("position_side")  # "long" or "short"
-            cfg      = PAIRS.get(pair, {"price_prec": 0, "amount_prec": 4})
-            try:
-                bb.create_market_order(pair, round_amount(float(amount), cfg["amount_prec"]),
-                                       side, position_side=pos_side)
-                log(f"[TEST] 成行クローズ完了: {pair} {side} {amount} ({pos_side})")
-            except Exception as me:
-                log(f"[TEST] 成行クローズ失敗: {pair}: {me}")
+            # テスト専用: 指定ペアを成行クローズ
+            for close_req in event.get("market_close", []):
+                pair     = close_req.get("pair")
+                amount   = close_req.get("amount")
+                side     = close_req.get("side")          # "buy" or "sell"
+                pos_side = close_req.get("position_side")  # "long" or "short"
+                cfg      = PAIRS.get(pair, {"price_prec": 0, "amount_prec": 4})
+                try:
+                    bb.create_market_order(pair, round_amount(float(amount), cfg["amount_prec"]),
+                                           side, position_side=pos_side)
+                    log(f"[TEST] 成行クローズ完了: {pair} {side} {amount} ({pos_side})")
+                except Exception as me:
+                    log(f"[TEST] 成行クローズ失敗: {pair}: {me}")
 
         state = load_state()
         log(f"現在のポジション: {list(state['positions'].keys())}")
