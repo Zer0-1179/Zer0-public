@@ -476,7 +476,7 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
 
 
 # ── Phase A: 既存ポジション管理 ───────────────────────────────────────────────
-def maintain_positions(bb: BitbankClient, state: dict) -> dict:
+def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict:
     to_delete = []
 
     for pair, pos in list(state["positions"].items()):
@@ -551,7 +551,16 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
             # ── アクティブ: TP1約定確認 → トレーリング移行 ───────────────
             elif pos["status"] == "active":
                 if not pos.get("tp1_filled"):
-                    o_tp1 = bb.get_order(pair, pos["tp1_order_id"])
+                    # テスト専用フラグ: TP1 強制約定 / SL 強制約定
+                    if event.get("test_force_tp1_fill"):
+                        log(f"{pair}({direction}): [TEST] TP1 強制約定フラグ")
+                        o_tp1 = {"status": "FULLY_FILLED",
+                                 "average_price": str(pos["tp1_price"]),
+                                 "executed_amount": str(pos.get("tp1_amount", 0))}
+                    elif event.get("test_force_sl_fill"):
+                        o_tp1 = {"status": "UNFILLED"}
+                    else:
+                        o_tp1 = bb.get_order(pair, pos["tp1_order_id"])
 
                     if o_tp1.get("status") == "FULLY_FILLED":
                         log(f"{pair}({direction}): TP1 約定 → トレーリングSL 開始")
@@ -616,7 +625,13 @@ def maintain_positions(bb: BitbankClient, state: dict) -> dict:
                         continue
 
                     # TP1未約定時: 初期SL 約定確認
-                    o_sl = bb.get_order(pair, pos["sl_order_id"])
+                    if event.get("test_force_sl_fill"):
+                        log(f"{pair}({direction}): [TEST] SL 強制約定フラグ")
+                        o_sl = {"status": "FULLY_FILLED",
+                                "average_price": str(pos.get("sl_price", pos["entry_price"])),
+                                "executed_amount": str(pos.get("trail_amount", 0))}
+                    else:
+                        o_sl = bb.get_order(pair, pos["sl_order_id"])
                     if o_sl.get("status") == "FULLY_FILLED":
                         log(f"{pair}({direction}): SL（損切り）約定 → TP1キャンセル → 残30%成行クローズ → 終了")
                         try:
@@ -860,7 +875,7 @@ def lambda_handler(event, context):
             return {"statusCode": 200, "body": json.dumps({"emergency_close": True})}
 
         log("Phase A: 既存ポジションメンテナンス")
-        state = maintain_positions(bb, state)
+        state = maintain_positions(bb, state, event)
 
         if signals:
             log(f"Phase B: 新規シグナル処理 ({len(signals)} 件)")
