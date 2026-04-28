@@ -152,7 +152,11 @@ def notify_entry_order(pair: str, direction: str, price: float, amount: float,
     coin = _coin(pair)
     prefix = "[TEST] " if is_test else ""
     subject = f"【CryptoBot】{prefix}{dir_str}注文発注 - {coin}/JPY"
-    test_note = "\n※ [TEST] 即時約定テスト：指値を意図的に現在価格+0.5%に設定しています" if is_test else ""
+    if is_test:
+        offset = "+0.5%" if direction == "long" else "-0.5%"
+        test_note = f"\n※ [TEST] 即時約定テスト：指値を意図的に現在価格{offset}に設定しています"
+    else:
+        test_note = ""
     body = (
         f"■ {coin}/JPY  {dir_str}\n"
         f"\n"

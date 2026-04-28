@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Zer0 CryptoBot - Automated SOL/AVAX/ARB spot trading bot
+  Zer0 CryptoBot - Automated BTC/ETH/SOL margin trading bot
   using Binance signals and bitbank execution (4h interval).
 
 Parameters:
@@ -48,20 +48,17 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # SSM: APIキーとstateの読み取り
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/*"
-              # SES: エラー通知
               - Effect: Allow
                 Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
                 Resource:
                   - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
-              # Lambda: Executor の非同期 invoke
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
@@ -88,14 +85,45 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # SSM: APIキー（SecureString）とstate（読み書き）
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
                   - ssm:PutParameter
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/*"
-              # SES: 売買通知・エラー通知
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource:
+                  - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+              # EventInvokeConfig OnFailure 送信先 FailureNotifier の invoke 権限
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:Zer0-CryptoBot-FailureNotifier"
+
+  # ── IAM ロール: FailureNotifier ───────────────────────────────────────────
+  FailureNotifierRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-CryptoBot-FailureNotifierRole-${AWS::Region}"
+      Description: Lambda execution role for Zer0-CryptoBot FailureNotifier
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: Zer0-CryptoBot-FailureNotifierPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -127,9 +155,26 @@ Resources:
       Timeout: 300
       Role: !GetAtt ExecutorRole.Arn
       Description: "Zer0-CryptoBot: bitbank注文発注・ポジション管理"
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+        DestinationConfig:
+          OnFailure:
+            Type: Lambda
+            Destination: !GetAtt FailureNotifierFunction.Arn
       Environment:
         Variables:
           ENABLE_FORCE_TEST: !Ref EnableForceTest
+
+  # ── Lambda: FailureNotifier ───────────────────────────────────────────────
+  FailureNotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Zer0-CryptoBot-FailureNotifier
+      CodeUri: lambda/failure_notifier/
+      Handler: lambda_function.lambda_handler
+      Timeout: 30
+      Role: !GetAtt FailureNotifierRole.Arn
+      Description: "Zer0-CryptoBot: Executor非同期起動失敗時のSESアラート通知"
 
   # ── EventBridge Scheduler 用ロール ────────────────────────────────────────
   SchedulerRole:
@@ -202,13 +247,14 @@ Resources:
                 Resource:
                   - !GetAtt ExecutorFunction.Arn
 
-  # ── EventBridge Schedule: Executor 30分毎（ポジション管理） ──────────────
+  # ── EventBridge Schedule: Executor 毎時15分・45分（ポジション管理）─────────
+  # Analyzer は毎時0分起動のため :15/:45 にオフセットして同時実行を回避
   ExecutorSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: Zer0-CryptoBot-Executor-Schedule
-      Description: "30分毎にExecutorを直接起動してポジション管理を実行する"
-      ScheduleExpression: "cron(*/30 * * * ? *)"
+      Description: "毎時15分・45分にExecutorを直接起動してポジション管理を実行する"
+      ScheduleExpression: "cron(15,45 * * * ? *)"
       FlexibleTimeWindow:
         Mode: "OFF"
       Target:
@@ -241,6 +287,10 @@ Outputs:
   ExecutorFunctionArn:
     Description: Executor Lambda function ARN
     Value: !GetAtt ExecutorFunction.Arn
+
+  FailureNotifierFunctionName:
+    Description: FailureNotifier Lambda function name
+    Value: !Ref FailureNotifierFunction
 
   ScheduleName:
     Description: EventBridge schedule name
