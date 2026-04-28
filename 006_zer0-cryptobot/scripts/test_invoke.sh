@@ -419,18 +419,21 @@ for pair, pos in state['positions'].items():
     with urllib.request.urlopen(url, timeout=5) as r:
         current = float(json.loads(r.read())['data']['last'])
     direction = pos.get('direction', 'long')
+    atr = pos.get('atr_jpy', current * 0.02)
     if direction == 'long':
-        old_val = pos.get('highest_price', current)
-        # highest_price を現在価格より 3% 低く設定
-        # → phase_a: current > highest_price が真になり trail 更新が走る
+        # highest_price を現在価格より 3% 低く設定 → current > highest が真になる
         pos['highest_price'] = round(current * 0.97, 0)
-        print(f'  {pair}(long): highest_price {old_val:.0f} → {pos[\"highest_price\"]:.0f}  current={current:.0f}', file=sys.stderr)
+        # trail_sl_price を entry より 10% 低く設定 → new_trail_val > trail_sl が真になる
+        old_sl = pos.get('trail_sl_price', pos.get('entry_price', current))
+        pos['trail_sl_price'] = round(pos.get('entry_price', current) * 0.90, 0)
+        print(f'  {pair}(long): highest_price → {pos[\"highest_price\"]:.0f}  trail_sl {old_sl:.0f} → {pos[\"trail_sl_price\"]:.0f}  current={current:.0f}', file=sys.stderr)
     else:
-        old_val = pos.get('lowest_price', current)
-        # lowest_price を現在価格より 3% 高く設定
-        # → phase_a: current < lowest_price が真になり trail 更新が走る
+        # lowest_price を現在価格より 3% 高く設定 → current < lowest が真になる
         pos['lowest_price'] = round(current * 1.03, 0)
-        print(f'  {pair}(short): lowest_price {old_val:.0f} → {pos[\"lowest_price\"]:.0f}  current={current:.0f}', file=sys.stderr)
+        # trail_sl_price を entry より 10% 高く設定 → new_trail_val < trail_sl が真になる
+        old_sl = pos.get('trail_sl_price', pos.get('entry_price', current))
+        pos['trail_sl_price'] = round(pos.get('entry_price', current) * 1.10, 0)
+        print(f'  {pair}(short): lowest_price → {pos[\"lowest_price\"]:.0f}  trail_sl {old_sl:.0f} → {pos[\"trail_sl_price\"]:.0f}  current={current:.0f}', file=sys.stderr)
 print(json.dumps(state))
 ")
     echo ""
