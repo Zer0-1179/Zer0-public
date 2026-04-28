@@ -220,6 +220,8 @@ def analyze_coin(symbol: str, direction: str) -> dict | None:
 def lambda_handler(event, context):
     log("Analyzer 開始")
     signals = []
+    market_direction = "unknown"
+    analysis_error = None
 
     try:
         # ── BTC 200EMA で市場方向を判定 ──────────────────────────────────
@@ -251,23 +253,32 @@ def lambda_handler(event, context):
 
     except Exception as e:
         log(f"致命的エラー: {e}")
+        analysis_error = e
         send_error_email(
             "【Zer0-CryptoBot】Analyzer 致命的エラー",
-            f"Analyzer で予期せぬエラーが発生しました。\n\nエラー: {e}",
+            f"Analyzer で予期せぬエラーが発生しました。Executorはメンテナンスのため継続起動します。\n\nエラー: {e}",
         )
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
 
+    # 分析エラー時もポジション管理のため常に Executor を invoke
     log(f"シグナル数: {len(signals)} → Executor invoke（メンテナンス含む）")
+    try:
+        payload = json.dumps({"signals": signals}).encode()
+        lambda_client = boto3.client("lambda", region_name=AWS_REGION)
+        lambda_client.invoke(
+            FunctionName=EXECUTOR_NAME,
+            InvocationType="Event",   # 非同期
+            Payload=payload,
+        )
+        log("Executor invoke 完了")
+    except Exception as ie:
+        log(f"Executor invoke 失敗: {ie}")
+        send_error_email(
+            "【Zer0-CryptoBot】🚨Executor invoke 失敗",
+            f"Executorの起動に失敗しました。ポジションが管理されない可能性があります。\n\nエラー: {ie}",
+        )
 
-    # ── Executor を常に invoke（シグナルなし時もメンテナンス実行） ──────────
-    payload = json.dumps({"signals": signals}).encode()
-    lambda_client = boto3.client("lambda", region_name=AWS_REGION)
-    lambda_client.invoke(
-        FunctionName=EXECUTOR_NAME,
-        InvocationType="Event",   # 非同期
-        Payload=payload,
-    )
-    log("Executor invoke 完了")
+    if analysis_error:
+        return {"statusCode": 500, "body": json.dumps({"error": str(analysis_error)})}
 
     return {
         "statusCode": 200,

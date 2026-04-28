@@ -96,9 +96,21 @@ def load_state() -> dict:
 
 def save_state(state: dict):
     ssm = boto3.client("ssm", region_name=AWS_REGION)
-    ssm.put_parameter(
-        Name=SSM_STATE, Value=json.dumps(state),
-        Type="String", Overwrite=True,
+    for attempt in range(1, 4):
+        try:
+            ssm.put_parameter(
+                Name=SSM_STATE, Value=json.dumps(state),
+                Type="String", Overwrite=True,
+            )
+            return
+        except Exception as e:
+            log(f"SSM書き込み失敗({attempt}/3): {e}")
+            if attempt < 3:
+                time.sleep(2)
+    send_email(
+        "【Zer0-CryptoBot】🚨SSM状態保存失敗",
+        f"ポジション状態の保存に3回失敗しました。ポジション情報が失われた可能性があります。\n"
+        f"手動でSSMを確認・修正してください。\n\nパラメータ: {SSM_STATE}",
     )
 
 
@@ -689,7 +701,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         notify_close(pair, direction, "損切り",
                                      float(o_sl["average_price"]),
                                      pos["entry_price"],
-                                     pos["total_amount"],
+                                     pos["trail_amount"],
                                      remaining)
                         to_delete.append(pair)
 

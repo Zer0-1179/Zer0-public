@@ -178,6 +178,53 @@ Resources:
       Principal: scheduler.amazonaws.com
       SourceArn: !GetAtt CryptoBotSchedule.Arn
 
+  # ── EventBridge Scheduler 用ロール（Executor 直接起動） ───────────────────
+  ExecutorSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-CryptoBot-ExecutorSchedulerRole-${AWS::Region}"
+      Description: EventBridge Scheduler role for Zer0-CryptoBot Executor direct invocation
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: Zer0-CryptoBot-ExecutorSchedulerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ExecutorFunction.Arn
+
+  # ── EventBridge Schedule: Executor 30分毎（ポジション管理） ──────────────
+  ExecutorSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: Zer0-CryptoBot-Executor-Schedule
+      Description: "30分毎にExecutorを直接起動してポジション管理を実行する"
+      ScheduleExpression: "cron(*/30 * * * ? *)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt ExecutorFunction.Arn
+        RoleArn: !GetAtt ExecutorSchedulerRole.Arn
+        Input: "{\"signals\": []}"
+
+  # ── Lambda 実行許可（EventBridge Scheduler → Executor） ──────────────────
+  ExecutorSchedulerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ExecutorFunction
+      Action: lambda:InvokeFunction
+      Principal: scheduler.amazonaws.com
+      SourceArn: !GetAtt ExecutorSchedule.Arn
+
 Outputs:
   AnalyzerFunctionName:
     Description: Analyzer Lambda function name
