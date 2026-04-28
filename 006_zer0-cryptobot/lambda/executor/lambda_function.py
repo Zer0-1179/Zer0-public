@@ -865,6 +865,30 @@ def lambda_handler(event, context):
         api_secret = get_ssm(SSM_API_SECRET, decrypt=True)
         bb         = BitbankClient(api_key, api_secret)
 
+        # テスト専用: 指定注文を強制キャンセル
+        for cancel_req in event.get("cancel_orders", []):
+            pair     = cancel_req.get("pair")
+            order_id = cancel_req.get("order_id")
+            try:
+                bb.cancel_order(pair, order_id)
+                log(f"[TEST] 強制キャンセル完了: {pair} order_id={order_id}")
+            except Exception as ce:
+                log(f"[TEST] 強制キャンセル失敗: {pair} order_id={order_id}: {ce}")
+
+        # テスト専用: 指定ペアを成行クローズ
+        for close_req in event.get("market_close", []):
+            pair     = close_req.get("pair")
+            amount   = close_req.get("amount")
+            side     = close_req.get("side")          # "buy" or "sell"
+            pos_side = close_req.get("position_side")  # "long" or "short"
+            cfg      = PAIRS.get(pair, {"price_prec": 0, "amount_prec": 4})
+            try:
+                bb.create_market_order(pair, round_amount(float(amount), cfg["amount_prec"]),
+                                       side, position_side=pos_side)
+                log(f"[TEST] 成行クローズ完了: {pair} {side} {amount} ({pos_side})")
+            except Exception as me:
+                log(f"[TEST] 成行クローズ失敗: {pair}: {me}")
+
         state = load_state()
         log(f"現在のポジション: {list(state['positions'].keys())}")
 
