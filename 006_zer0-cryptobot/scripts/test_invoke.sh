@@ -21,6 +21,12 @@
 #   ./test_invoke.sh phase_a_force_tp1 # TP1強制約定テスト（active → trailing移行）
 #   ./test_invoke.sh trail_inject      # トレーリングSL更新テスト（価格注入）
 #                                      # 事前に trailing ポジションが必要
+#
+# ※ phase_a_force_sl / phase_a_force_tp1 / cancel_orders / market_close は
+#    Lambda に ENABLE_FORCE_TEST=1 が必要:
+#      ENABLE_FORCE_TEST=1 bash scripts/deploy.sh
+#    テスト終了後は必ず通常デプロイに戻す:
+#      bash scripts/deploy.sh
 
 set -euo pipefail
 
@@ -57,6 +63,9 @@ case "${MODE}" in
 
   clear)
     echo "=== SSM state クリア ==="
+    echo "⚠️  警告: SSM stateをクリアしても bitbank 上の注文・ポジションは残ります。"
+    echo "    クリア前に bitbank アプリで未決済注文・建玉がないか必ず確認してください。"
+    echo ""
     aws ssm put-parameter \
         --name "${SSM_STATE}" \
         --value '{"positions":{}}' \

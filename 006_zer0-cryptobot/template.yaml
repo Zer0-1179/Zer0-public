@@ -11,6 +11,11 @@ Parameters:
   RecipientEmail:
     Type: String
     Description: Notification recipient email address
+  EnableForceTest:
+    Type: String
+    Default: "0"
+    AllowedValues: ["0", "1"]
+    Description: "Enable force-test flags in Executor (0=off / 1=on). Set 1 only for test suite."
 
 Globals:
   Function:
@@ -122,6 +127,9 @@ Resources:
       Timeout: 300
       Role: !GetAtt ExecutorRole.Arn
       Description: "Zer0-CryptoBot: bitbank注文発注・ポジション管理"
+      Environment:
+        Variables:
+          ENABLE_FORCE_TEST: !Ref EnableForceTest
 
   # ── EventBridge Scheduler 用ロール ────────────────────────────────────────
   SchedulerRole:
