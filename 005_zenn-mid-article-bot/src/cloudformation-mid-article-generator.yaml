@@ -146,7 +146,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/ZennMidArticleGenerator"
-      RetentionInDays: 14
+      RetentionInDays: 7
 
 Outputs:
   LambdaFunctionArn:
