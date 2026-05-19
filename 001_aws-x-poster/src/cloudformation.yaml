@@ -104,6 +104,7 @@ Resources:
 
   PosterLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub "/aws/lambda/${PosterFunction}"
       RetentionInDays: 7
