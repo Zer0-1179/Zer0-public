@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Zenn Mid-level Article Auto-Generation System -
+  Generates AWS intermediate architecture articles via Bedrock (Claude Sonnet)
+  on the 1st and 15th of each month at 21:00 JST, with SES email notifications
+
+Parameters:
+  SenderEmail:
+    Type: String
+    Description: SES verified sender email address
+  RecipientEmail:
+    Type: String
+    Description: Notification recipient email address
+  BedrockModelId:
+    Type: String
+    Default: jp.anthropic.claude-sonnet-4-6
+  DiagramsLayerVersion:
+    Type: String
+    Default: "23"
+    Description: Version number of the matplotlib-aws-icons-mid Lambda Layer
+
+Resources:
+
+  MidArticleGeneratorDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ZennMidArticleGenerator-DLQ
+      MessageRetentionPeriod: 1209600
+
+  MidArticleGeneratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "ZennMidArticleGeneratorRole-${AWS::Region}"
+      Description: Lambda execution role for Zenn Mid-level Article Bot (CloudWatch Logs, Bedrock, SES, S3, SSM)
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ZennMidArticleGeneratorPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-sonnet-4-6"
+                  - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-sonnet-4-6"
+                  - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+              - Effect: Allow
+                Action:
+                  - aws-marketplace:ViewSubscriptions
+                  - aws-marketplace:Subscribe
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: "arn:aws:s3:::zer0-dev-s3/zenn-mid-articles/*"
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mid-article-bot/*"
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt MidArticleGeneratorDLQ.Arn
+
+  MidArticleGeneratorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ZennMidArticleGenerator
+      Runtime: python3.14
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt MidArticleGeneratorRole.Arn
+      Timeout: 900
+      MemorySize: 512
+      Layers:
+        - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:matplotlib-aws-icons-mid:${DiagramsLayerVersion}"
+      Description: BedrockでAWS中級者向けZenn技術記事（複合アーキテクチャ構成図付き）を毎月1日・15日21時JSTに自動生成し、SESメールで通知するLambda関数
+      Environment:
+        Variables:
+          SES_SENDER_EMAIL: !Ref SenderEmail
+          SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          MATPLOTLIB_BACKEND: Agg
+          S3_BUCKET: zer0-dev-s3
+      DeadLetterConfig:
+        TargetArn: !GetAtt MidArticleGeneratorDLQ.Arn
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder - deploy via deploy.sh"}
+
+  MonthlyScheduleDay1:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: ZennMidArticleMonthly1st
+      Description: 毎月1日21時（JST）に中級記事を生成
+      ScheduleExpression: "cron(0 12 1 * ? *)"
+      State: ENABLED
+      Targets:
+        - Id: ZennMidArticleGeneratorTarget1st
+          Arn: !GetAtt MidArticleGeneratorFunction.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 1
+
+  MonthlyScheduleDay15:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: ZennMidArticleMonthly15th
+      Description: 毎月15日21時（JST）に中級記事を生成
+      ScheduleExpression: "cron(0 12 15 * ? *)"
+      State: ENABLED
+      Targets:
+        - Id: ZennMidArticleGeneratorTarget15th
+          Arn: !GetAtt MidArticleGeneratorFunction.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 1
+
+  LambdaInvokePermission1st:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MidArticleGeneratorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MonthlyScheduleDay1.Arn
+
+  LambdaInvokePermission15th:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MidArticleGeneratorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MonthlyScheduleDay15.Arn
+
+  MidArticleGeneratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/ZennMidArticleGenerator"
+      RetentionInDays: 7
+
+Outputs:
+  LambdaFunctionArn:
+    Description: Lambda関数のARN
+    Value: !GetAtt MidArticleGeneratorFunction.Arn
+  LambdaFunctionName:
+    Description: Lambda関数名
+    Value: !Ref MidArticleGeneratorFunction
+  EventBridgeRule1stName:
+    Description: EventBridgeルール名（毎月1日21時JST）
+    Value: !Ref MonthlyScheduleDay1
+  EventBridgeRule15thName:
+    Description: EventBridgeルール名（毎月15日21時JST）
+    Value: !Ref MonthlyScheduleDay15
+  DLQArn:
+    Description: Lambda実行失敗イベント保存先DLQのARN
+    Value: !GetAtt MidArticleGeneratorDLQ.Arn
