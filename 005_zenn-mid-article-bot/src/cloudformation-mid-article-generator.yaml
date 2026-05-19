@@ -14,10 +14,6 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: jp.anthropic.claude-sonnet-4-6
-  DiagramsLayerVersion:
-    Type: String
-    Default: "23"
-    Description: Version number of the matplotlib-aws-icons-mid Lambda Layer
 
 Resources:
 
@@ -88,7 +84,7 @@ Resources:
       Timeout: 900
       MemorySize: 512
       Layers:
-        - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:matplotlib-aws-icons-mid:${DiagramsLayerVersion}"
+        - !ImportValue ZennMidArticleDiagramLayerArn
       Description: BedrockでAWS中級者向けZenn技術記事（複合アーキテクチャ構成図付き）を毎月1日・15日21時JSTに自動生成し、SESメールで通知するLambda関数
       Environment:
         Variables:
@@ -104,7 +100,7 @@ Resources:
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "placeholder - deploy via deploy.sh"}
 
-  MonthlyScheduleDay1:
+  MidArticleGeneratorFunctionMonthlyScheduleDay1:
     Type: AWS::Events::Rule
     Properties:
       Name: ZennMidArticleMonthly1st
@@ -117,7 +113,7 @@ Resources:
           RetryPolicy:
             MaximumRetryAttempts: 1
 
-  MonthlyScheduleDay15:
+  MidArticleGeneratorFunctionMonthlyScheduleDay15:
     Type: AWS::Events::Rule
     Properties:
       Name: ZennMidArticleMonthly15th
@@ -130,27 +126,27 @@ Resources:
           RetryPolicy:
             MaximumRetryAttempts: 1
 
-  LambdaInvokePermission1st:
+  MidArticleGeneratorFunctionMonthlyScheduleDay1Permission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref MidArticleGeneratorFunction
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt MonthlyScheduleDay1.Arn
+      SourceArn: !GetAtt MidArticleGeneratorFunctionMonthlyScheduleDay1.Arn
 
-  LambdaInvokePermission15th:
+  MidArticleGeneratorFunctionMonthlyScheduleDay15Permission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref MidArticleGeneratorFunction
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt MonthlyScheduleDay15.Arn
+      SourceArn: !GetAtt MidArticleGeneratorFunctionMonthlyScheduleDay15.Arn
 
   MidArticleGeneratorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/ZennMidArticleGenerator"
-      RetentionInDays: 7
+      RetentionInDays: 14
 
 Outputs:
   LambdaFunctionArn:
@@ -161,10 +157,10 @@ Outputs:
     Value: !Ref MidArticleGeneratorFunction
   EventBridgeRule1stName:
     Description: EventBridgeルール名（毎月1日21時JST）
-    Value: !Ref MonthlyScheduleDay1
+    Value: !Ref MidArticleGeneratorFunctionMonthlyScheduleDay1
   EventBridgeRule15thName:
     Description: EventBridgeルール名（毎月15日21時JST）
-    Value: !Ref MonthlyScheduleDay15
+    Value: !Ref MidArticleGeneratorFunctionMonthlyScheduleDay15
   DLQArn:
     Description: Lambda実行失敗イベント保存先DLQのARN
     Value: !GetAtt MidArticleGeneratorDLQ.Arn
