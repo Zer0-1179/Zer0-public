@@ -30,10 +30,19 @@ echo "通知先メール   : ${RECIPIENT_EMAIL}"
 echo "=============================="
 echo ""
 
-# [1/3] CloudFormationスタックデプロイ（S3不使用）
-echo "[1/3] CloudFormationスタックをデプロイ中..."
+# [1/3] 依存スタック（Layerスタック）を先にデプロイ
+echo "[1/3] 依存スタックをデプロイ中..."
 aws cloudformation deploy \
-  --template-file "${SCRIPT_DIR}/cloudformation.yaml" \
+  --template-file "${SCRIPT_DIR}/cloudformation-diagram-layer.yaml" \
+  --stack-name "zenn-article-diagram-layer" \
+  --region "${REGION}" \
+  --no-fail-on-empty-changeset
+echo "  ✓ Layerスタックデプロイ完了"
+
+echo ""
+echo "[2/3] CloudFormationスタックをデプロイ中..."
+aws cloudformation deploy \
+  --template-file "${SCRIPT_DIR}/cloudformation-article-generator.yaml" \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -45,9 +54,9 @@ aws cloudformation deploy \
 
 echo "  ✓ スタックデプロイ完了"
 
-# [2/3] Lambdaコードを直接デプロイ（S3不使用）
+# [3/3] Lambdaコードを直接デプロイ（S3不使用）
 echo ""
-echo "[2/3] Lambdaコードをデプロイ中（S3不使用）..."
+echo "[3/3] Lambdaコードをデプロイ中（S3不使用）..."
 cd "${SCRIPT_DIR}"
 zip -r /tmp/zenn_function.zip \
   lambda_function.py \
@@ -67,9 +76,9 @@ aws lambda update-function-code \
 rm -f /tmp/zenn_function.zip
 echo "  ✓ Lambdaコードデプロイ完了"
 
-# [3/3] デプロイ結果確認
+# デプロイ結果確認
 echo ""
-echo "[3/3] デプロイ結果を確認中..."
+echo "デプロイ結果を確認中..."
 aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
