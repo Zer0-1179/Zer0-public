@@ -4,7 +4,7 @@
 
 ## 概要
 
-```
+```text
 /root/Zer0/  (プライベート・WSL)
     │
     ├── 001_aws-x-poster/

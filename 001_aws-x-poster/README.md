@@ -20,7 +20,7 @@ AWSの最新ニュースをRSSで取得し、Bedrockで @Zer0_Infra の口調に
 
 ![アーキテクチャ図](./images/001_architecture.png)
 
-```
+```text
 EventBridge（朝9時 / 夜20時 JST）
   ↓
 Lambda（aws-x-poster）

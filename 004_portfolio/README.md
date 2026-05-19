@@ -8,13 +8,13 @@ AWS Lambda + API Gateway + CloudFront + S3 で構築した、Astro SSR 動的ポ
 
 ## 概要
 
-| 項目           | 内容                                                  |
-| -------------- | ----------------------------------------------------- |
-| フレームワーク | Astro 6.x（SSRモード）                                |
-| 言語対応       | 日本語（`/ja/`）・英語（`/en/`）                      |
-| ホスティング   | AWS Lambda + API Gateway HTTP API + CloudFront + S3   |
-| 月額コスト     | ほぼ $0（Lambda/CloudFront 無料枠内）                 |
-| IaC            | CloudFormation                                        |
+| 項目           | 内容                                                          |
+| -------------- | ------------------------------------------------------------- |
+| フレームワーク | Astro 6.x（SSRモード）                                        |
+| 言語対応       | 日本語（`/ja/`）・英語（`/en/`）                              |
+| ホスティング   | AWS Lambda + API Gateway HTTP API + CloudFront + S3           |
+| 月額コスト     | ほぼ $0（Lambda/CloudFront 無料枠内）                         |
+| IaC            | CloudFormation                                                |
 | デプロイ       | `bash scripts/deploy.sh`（ビルド→Lambda更新→S3同期→CF無効化） |
 
 ---
@@ -23,7 +23,7 @@ AWS Lambda + API Gateway + CloudFront + S3 で構築した、Astro SSR 動的ポ
 
 ![アーキテクチャ図](./images/004_architecture.png)
 
-```
+```text
 ユーザー
   ↓ HTTPS
 CloudFront (E33SJ6UEA95L47)
@@ -67,7 +67,7 @@ CloudFront (E33SJ6UEA95L47)
 
 ## ディレクトリ構成
 
-```
+```text
 004_portfolio/
 ├── README.md
 ├── scripts/

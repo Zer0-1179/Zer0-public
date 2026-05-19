@@ -6,7 +6,7 @@ AI活用術・会社員あるある系コンテンツをXに1日1回自動投稿
 
 ![アーキテクチャ図](./images/003_architecture.png)
 
-```
+```text
 EventBridge Scheduler（21:00 JST 毎日 + 日曜 10:00 JST）
     ↓
 Lambda（XAiBot）
@@ -23,7 +23,7 @@ Lambda（XAiBot）
 
 ## ファイル構成
 
-```
+```text
 003_X_AI_Bot/
 ├── README.md              # このファイル
 ├── システム仕様書.md        # 詳細仕様・コスト試算
@@ -117,11 +117,11 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 
 ## 投稿スケジュール
 
-| 時刻（JST）  | 曜日        | モード        | 内容                                           |
-|--------------|-------------|---------------|------------------------------------------------|
-| 21:00        | 毎日        | `random`      | 4カテゴリ（shigoto/fukugyo/kyokan/question）ローテーション |
-| 21:00        | 火・金      | url_reaction  | Zenn/QiitaのAI記事に感想コメント＋URL投稿       |
-| 10:00        | 日曜        | `trend`       | Google Trendsトレンド連動（フォールバックあり） |
+| 時刻（JST） | 曜日   | モード       | 内容                                                       |
+| ----------- | ------ | ------------ | ---------------------------------------------------------- |
+| 21:00       | 毎日   | `random`     | 4カテゴリ（shigoto/fukugyo/kyokan/question）ローテーション |
+| 21:00       | 火・金 | url_reaction | Zenn/QiitaのAI記事に感想コメント＋URL投稿                  |
+| 10:00       | 日曜   | `trend`      | Google Trendsトレンド連動（フォールバックあり）            |
 
 - 火・金に記事取得失敗した場合は通常ローテーションにフォールバック
 
