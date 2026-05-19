@@ -161,6 +161,13 @@ aws logs tail /aws/lambda/Zer0-CryptoBot-Analyzer --since 10m --region ap-northe
 aws ssm get-parameter --name "/Zer0/CryptoBot/state" --region ap-northeast-1
 ```
 
+## 更新履歴
+
+| 日付 | バージョン | 内容 |
+| ---- | ---------- | ---- |
+| 2026-04-28 | v2.2〜v2.4 | bitbank API修正・Executor高頻度化・FailureNotifier追加 |
+| 2026-05-19 | **v2.5** | **バグ修正**: Analyzer が Binance から取得する末尾の未確定足（オープン中）を除外するよう修正。4h境界起動時の Supertrend 転換が正常に検出されていなかった問題を解消。KLINES_LIMIT を 201 に変更。 |
+
 ## 実口座テスト結果（2026-04-28 完了）
 
 ロング・ショート全経路をbitbank信用取引（SOL/JPY、500円）で確認済み。
