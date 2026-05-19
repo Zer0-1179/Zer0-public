@@ -154,7 +154,7 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 | パラメータ名                            | 内容                                       |
 | --------------------------------------- | ------------------------------------------ |
 | `/ai_bot/history/shigoto`               | shigotoカテゴリの投稿キーワード履歴        |
-| `/ai_bot/history/fukugyo`               | fukygyoカテゴリの投稿キーワード履歴        |
+| `/ai_bot/history/fukugyo`               | fukugyoカテゴリの投稿キーワード履歴        |
 | `/ai_bot/history/kyokan`                | kyokanカテゴリの投稿キーワード履歴         |
 | `/ai_bot/history/question`              | questionカテゴリの投稿キーワード履歴       |
 | `/ai_bot/history/url_reaction`          | url_reactionカテゴリの投稿キーワード履歴   |
