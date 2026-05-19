@@ -29,7 +29,7 @@ cd "$(dirname "$0")"
 # Step 1: Deploy infrastructure via CloudFormation (no S3 required)
 echo "[1/3] Deploying infrastructure (CloudFormation)..."
 aws cloudformation deploy \
-    --template-file template.yaml \
+    --template-file cloudformation-x-ai-bot.yaml \
     --stack-name "${STACK_NAME}" \
     --region "${REGION}" \
     --capabilities CAPABILITY_NAMED_IAM \
