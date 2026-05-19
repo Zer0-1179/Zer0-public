@@ -23,7 +23,7 @@ AWS中級者向けZenn技術記事を毎月2回（1日・15日）自動生成す
 
 ![アーキテクチャ図](./images/005_architecture.png)
 
-```
+```text
 EventBridge (月2回: 1日・15日 21:00 JST)
     ↓
 Lambda (ZennMidArticleGenerator)
@@ -72,7 +72,7 @@ Lambda (ZennMidArticleGenerator)
 
 ## ディレクトリ構成
 
-```
+```text
 005_Zenn_Mid_Article_Bot/
 ├── README.md
 ├── scripts/
@@ -108,8 +108,8 @@ Lambda (ZennMidArticleGenerator)
 | ハンズオン       | コンソール操作           | CloudFormation/SAMコード重視                                   |
 | 追加セクション   | なし                     | 設計上の考慮ポイント（コスト・セキュリティ・スケーラビリティ） |
 | 追加セクション   | なし                     | 月額コスト目安テーブル                                         |
-| アーキテクチャ図 | 図1: 構成図、図2: 関連図 | 図1: 全体アーキテクチャ構成図、図2: データフロー・詳細構成図  |
-| 図の挿入方式     | 固定位置                 | `{DIAGRAM_N}` マーカー方式（Bedrockが文脈に合った位置に配置） |
+| アーキテクチャ図 | 図1: 構成図、図2: 関連図 | 図1: 全体アーキテクチャ構成図、図2: データフロー・詳細構成図   |
+| 図の挿入方式     | 固定位置                 | `{DIAGRAM_N}` マーカー方式（Bedrockが文脈に合った位置に配置）  |
 | サービス数       | 1サービス中心            | 3〜6サービス組み合わせ                                         |
 
 ---
@@ -158,7 +158,8 @@ SES_SENDER_EMAIL=your@email.com SES_RECIPIENT_EMAIL=notify@email.com python3 lam
 ```
 
 成功時の出力例（所要時間: 約90〜120秒）：
-```
+
+```text
 [20260501_210000] Zenn中級記事自動生成を開始します
 Step 1: 直近トピックをSSMから取得中...
   除外トピック: ['data_lake', 'cicd_pipeline', 'multi_account', 'log_analytics']
@@ -182,7 +183,7 @@ Step 7: メール通知を送信中...
 
 ## 運用フロー
 
-```
+```text
 毎月1日 or 15日 21:00 JST
     ↓ EventBridgeが自動実行
     ↓ 約60〜90秒後にメール通知が届く
