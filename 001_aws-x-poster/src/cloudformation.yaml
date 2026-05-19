@@ -102,6 +102,12 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EveningRule.Arn
 
+  PosterLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${PosterFunction}"
+      RetentionInDays: 7
+
 Outputs:
   LambdaFunctionName:
     Value: !Ref PosterFunction

@@ -136,19 +136,19 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${AnalyzerFunction}"
-      RetentionInDays: 3
+      RetentionInDays: 1
 
   ExecutorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${ExecutorFunction}"
-      RetentionInDays: 3
+      RetentionInDays: 1
 
   FailureNotifierLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${FailureNotifierFunction}"
-      RetentionInDays: 3
+      RetentionInDays: 1
 
   # ── Lambda: Analyzer ──────────────────────────────────────────────────────
   AnalyzerFunction:
