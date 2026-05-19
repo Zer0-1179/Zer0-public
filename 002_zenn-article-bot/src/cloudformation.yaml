@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Zenn Article Auto-Generation System - Generates AWS beginner articles via Bedrock Claude Haiku
+  every Thursday 21:00 JST and sends email notifications via SES
+
+Parameters:
+  SenderEmail:
+    Type: String
+    Description: SES verified sender email address
+  RecipientEmail:
+    Type: String
+    Description: Notification recipient email address
+  BedrockModelId:
+    Type: String
+    Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+  DiagramsLayerVersion:
+    Type: String
+    Default: "34"
+    Description: Version number of the matplotlib Lambda Layer
+
+Resources:
+
+  ArticleGeneratorDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ZennArticleGenerator-DLQ
+      MessageRetentionPeriod: 1209600
+
+  ArticleGeneratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "ZennArticleGeneratorRole-${AWS::Region}"
+      Description: Lambda execution role for Zenn Article Bot (CloudWatch Logs, Bedrock, SES, S3, SSM)
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ZennArticleGeneratorPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+              - Effect: Allow
+                Action:
+                  - aws-marketplace:ViewSubscriptions
+                  - aws-marketplace:Subscribe
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: "arn:aws:s3:::zer0-dev-s3/zenn-articles/*"
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/note-article-bot/*"
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ArticleGeneratorDLQ.Arn
+
+  ArticleGeneratorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ZennArticleGenerator
+      Runtime: python3.14
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt ArticleGeneratorRole.Arn
+      Timeout: 900
+      MemorySize: 256
+      Layers:
+        - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:matplotlib-aws-icons:${DiagramsLayerVersion}"
+      Description: BedrockでAWS初心者向けZenn技術記事（アーキテクチャ図付き）を毎週木曜21時JSTに自動生成し、SESメールで通知するLambda関数
+      Environment:
+        Variables:
+          SES_SENDER_EMAIL: !Ref SenderEmail
+          SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          MATPLOTLIB_BACKEND: Agg
+          S3_BUCKET: zer0-dev-s3
+      DeadLetterConfig:
+        TargetArn: !GetAtt ArticleGeneratorDLQ.Arn
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder - deploy via deploy.sh"}
+
+  WeeklyScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: ZennArticleWeeklyTrigger
+      Description: 毎週木曜21時（JST）に記事を生成
+      ScheduleExpression: "cron(0 12 ? * THU *)"
+      State: ENABLED
+      Targets:
+        - Id: ZennArticleGeneratorTarget
+          Arn: !GetAtt ArticleGeneratorFunction.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 1
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ArticleGeneratorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeeklyScheduleRule.Arn
+
+  ArticleGeneratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/ZennArticleGenerator"
+      RetentionInDays: 14
+
+Outputs:
+  LambdaFunctionArn:
+    Description: Lambda関数のARN
+    Value: !GetAtt ArticleGeneratorFunction.Arn
+  LambdaFunctionName:
+    Description: Lambda関数名
+    Value: !Ref ArticleGeneratorFunction
+  EventBridgeRuleName:
+    Description: EventBridgeルール名（毎週木曜21時JST）
+    Value: !Ref WeeklyScheduleRule
+  DLQArn:
+    Description: Lambda実行失敗イベント保存先DLQのARN
+    Value: !GetAtt ArticleGeneratorDLQ.Arn
