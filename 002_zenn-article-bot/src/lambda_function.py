@@ -422,8 +422,8 @@ def select_topic_with_bedrock(excluded_ids: list[str]) -> dict:
 
 # ─── 記事生成 ─────────────────────────────────────────────────────────────────
 
-def generate_article(topic: dict, today: str) -> str:
-    """Bedrock を使って記事を生成する"""
+def generate_article(topic: dict, today: str) -> tuple[str, bool]:
+    """Bedrock を使って記事を生成する。(article_text, is_truncated) を返す"""
     prompt = ARTICLE_PROMPT_TEMPLATE.format(
         topic_name=topic["name"],
         topic_subtitle=topic["subtitle"],
@@ -446,8 +446,9 @@ def generate_article(topic: dict, today: str) -> str:
     text = result["content"][0]["text"]
     usage = result.get("usage", {})
     stop_reason = result.get("stop_reason", "unknown")
+    is_truncated = stop_reason == "max_tokens"
     print(f"[Bedrock/article] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}, stop={stop_reason}")
-    if stop_reason == "max_tokens":
+    if is_truncated:
         print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
 
     # Bedrock が記事冒頭に YAML frontmatter を付けることがあるため除去する
@@ -461,7 +462,7 @@ def generate_article(topic: dict, today: str) -> str:
                 break
         text = "".join(lines[end:]).lstrip()
 
-    return text
+    return text, is_truncated
 
 
 # ─── MD 生成（画像プレースホルダー付き） ─────────────────────────────────────
@@ -595,14 +596,18 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
 
 def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
-    timestamp: str, s3_url: str = "",
+    timestamp: str, s3_url: str = "", is_truncated: bool = False,
 ):
     """SES でメール通知を送信する"""
     char_count = len(article)
     preview    = article[:300].replace("\n", " ")
     diagram_info = ", ".join(os.path.basename(p) for p in png_paths) if png_paths else "生成なし"
 
-    subject = f"【Zenn記事生成完了】{topic['name']}の記事が生成されました - {timestamp}"
+    subject = (
+        f"【⚠️ 記事が途中で切れています】{topic['name']} - {timestamp}"
+        if is_truncated else
+        f"【Zenn記事生成完了】{topic['name']}の記事が生成されました - {timestamp}"
+    )
 
     png_list_html = "".join(
         f'<li><code>{os.path.basename(p)}</code></li>' for p in png_paths
@@ -619,8 +624,14 @@ def send_email_notification(
         if s3_url else ""
     )
 
-    body_text = f"""Zenn技術記事の自動生成が完了しました。
+    truncation_warning_text = """
+⚠️ 警告: 記事が途中で切れています
+記事の生成がmax_tokensに達したため、末尾が不完全な可能性があります。
+Zennに投稿する前に内容を必ず確認してください。
+""" if is_truncated else ""
 
+    body_text = f"""Zenn技術記事の自動生成が完了しました。
+{truncation_warning_text}
 ■ 記事情報
 - テーマ: {topic['name']}（{topic['subtitle']}）
 - 文字数: {char_count:,}文字
@@ -641,10 +652,21 @@ def send_email_notification(
 このメールは自動送信されています。
 """
 
+    truncation_warning_html = """
+  <div style="background:#fff3cd;border:2px solid #f0ad4e;padding:15px;border-radius:8px;margin:20px 0;">
+    <h3 style="color:#856404;margin-top:0;">⚠️ 記事が途中で切れています</h3>
+    <p style="color:#856404;margin:0;">
+      記事の生成が <code>max_tokens</code> に達したため、末尾が不完全な可能性があります。<br>
+      Zennに投稿する前に内容を必ず確認してください。
+    </p>
+  </div>
+""" if is_truncated else ""
+
     body_html = f"""
 <html>
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <h2 style="color:#3EA8FF;">Zenn技術記事の自動生成が完了しました</h2>
+  {truncation_warning_html}
 
   <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>記事情報</h3>
@@ -714,7 +736,7 @@ def run():
 
     # Step 2: 記事生成
     print("Step 2: 記事を生成中（2,000〜3,500文字）...")
-    article    = generate_article(topic, today)
+    article, is_truncated = generate_article(topic, today)
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字")
 
@@ -732,7 +754,7 @@ def run():
 
     # Step 5: SES メール通知
     print("Step 5: メール通知を送信中...")
-    send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url)
+    send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url, is_truncated)
     print("  メール送信完了")
 
     print(f"[{timestamp}] 処理が正常に完了しました")
