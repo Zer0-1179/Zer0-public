@@ -437,7 +437,7 @@ def generate_article(topic: dict, today: str) -> str:
         accept="application/json",
         body=json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 5500,
+            "max_tokens": 8192,
             "messages": [{"role": "user", "content": prompt}],
         }),
     )
@@ -445,7 +445,10 @@ def generate_article(topic: dict, today: str) -> str:
     result = json.loads(response["body"].read())
     text = result["content"][0]["text"]
     usage = result.get("usage", {})
-    print(f"[Bedrock/article] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
+    stop_reason = result.get("stop_reason", "unknown")
+    print(f"[Bedrock/article] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}, stop={stop_reason}")
+    if stop_reason == "max_tokens":
+        print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
 
     # Bedrock が記事冒頭に YAML frontmatter を付けることがあるため除去する
     if text.lstrip().startswith("---"):

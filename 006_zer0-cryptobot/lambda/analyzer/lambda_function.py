@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 BINANCE_BASE   = "https://api.binance.com/api/v3/klines"
 BTC_SYMBOL     = "BTCUSDT"
 INTERVAL       = "4h"
-KLINES_LIMIT   = 200      # 200EMA 計算に必要な本数
+KLINES_LIMIT   = 201      # 200EMA 計算に必要な本数（末尾の未確定足を除外するため+1）
 EMA_PERIOD     = 200
 ATR_PERIOD     = 8
 ST_MULT        = 2.5
@@ -172,7 +172,7 @@ def analyze_coin(symbol: str, direction: str) -> dict | None:
       short 条件: close < 200EMA, Supertrend赤転換（緑→赤）, Volume > 20本平均
     条件を満たさない場合は None。
     """
-    candles = fetch_binance(symbol)
+    candles = fetch_binance(symbol)[:-1]  # 末尾の未確定足（オープン中）を除外
     closes  = [c["close"]  for c in candles]
     volumes = [c["volume"] for c in candles]
 
@@ -226,7 +226,7 @@ def lambda_handler(event, context):
     try:
         # ── BTC 200EMA で市場方向を判定 ──────────────────────────────────
         log("BTC 200EMA 市場方向判定中...")
-        btc_candles  = fetch_binance(BTC_SYMBOL)
+        btc_candles  = fetch_binance(BTC_SYMBOL)[:-1]  # 末尾の未確定足を除外
         btc_closes   = [c["close"] for c in btc_candles]
         btc_ema200   = ema(btc_closes, EMA_PERIOD)
         btc_price    = btc_closes[-1]
