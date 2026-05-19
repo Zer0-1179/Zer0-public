@@ -24,10 +24,11 @@ SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの
 
 | ファイル               | 役割                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------ |
-| `lambda_function.py`    | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）          |
-| `diagram_generator.py`  | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                 |
-| `cloudformation.yaml`   | CloudFormationテンプレート（Lambda・EventBridge・IAMロール・CloudWatch Logs）  |
-| `deploy.sh`             | CloudFormationデプロイ + Lambda直接コードデプロイ（S3不使用）                  |
+| `lambda_function.py`                  | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）                   |
+| `diagram_generator.py`                | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                          |
+| `cloudformation-article-generator.yaml` | メインスタック（Lambda・EventBridge・IAMロール・DLQ・CloudWatch Logs）              |
+| `cloudformation-diagram-layer.yaml`   | Layerスタック（matplotlib Layer を CF で管理・`ZennArticleDiagramLayerArn` をエクスポート） |
+| `deploy.sh`                           | 2スタックデプロイ + Lambda直接コードデプロイ（コードはS3不使用）                        |
 | `requirements.txt`     | Pythonパッケージ（`matplotlib>=3.8.0`）                                        |
 | `aws_icons/`           | AWS公式アイコンPNG 38枚（AWS公式アーキテクチャアイコンパッケージ 2026年1月版） |
 
@@ -257,15 +258,17 @@ export RECIPIENT_EMAIL=your@gmail.com
 ./deploy.sh
 ```
 
-`deploy.sh` は **S3を使わない**純粋 CloudFormation + Lambda 直接デプロイ方式：
+`deploy.sh` の流れ：
 
-1. `aws cloudformation deploy`（インフラ更新、S3不使用）
-2. `aws lambda update-function-code --zip-file`（コード直接アップロード、S3不使用）
+1. `cloudformation-diagram-layer.yaml` デプロイ（`zenn-article-diagram-layer` スタック）
+2. `cloudformation-article-generator.yaml` デプロイ（`zenn-article-generator` スタック）
+3. `aws lambda update-function-code --zip-file`（コード直接アップロード、S3不使用）
 
 ### Lambda Layer
 
-`matplotlib-aws-icons:34`（matplotlib + numpy + pillow）を使用。
-Layer の更新が必要な場合は再パブリッシュ後に `cloudformation.yaml` の `DiagramsLayerVersion` パラメータを更新する。
+`matplotlib-aws-icons`（matplotlib + numpy + pillow）を `cloudformation-diagram-layer.yaml` で管理。  
+Layer の zip は `zer0-dev-s3/cfn-artifacts/matplotlib-aws-icons/layer.zip` に格納。  
+Layer ARN は `ZennArticleDiagramLayerArn` としてスタック間エクスポート。
 
 > `aws_icons/` は関数コードZIPに同梱されるため、Layerには含まない。
 
