@@ -13,6 +13,9 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+  DiagramsLayerArn:
+    Type: String
+    Description: ARN of the matplotlib Lambda Layer for diagram generation
 Resources:
 
   ArticleGeneratorDLQ:
@@ -82,7 +85,7 @@ Resources:
       Timeout: 900
       MemorySize: 256
       Layers:
-        - !ImportValue ZennArticleDiagramLayerArn
+        - !Ref DiagramsLayerArn
       Description: BedrockでAWS初心者向けZenn技術記事（アーキテクチャ図付き）を毎週木曜21時JSTに自動生成し、SESメールで通知するLambda関数
       Environment:
         Variables:

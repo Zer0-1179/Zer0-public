@@ -73,7 +73,7 @@ CloudFront (E33SJ6UEA95L47)
 ├── scripts/
 │   └── deploy.sh            # アプリデプロイスクリプト（通常使用）
 ├── infra/
-│   ├── cloudformation.yaml  # インフラ定義（S3/Lambda/API GW/CloudFront/カスタムドメイン）
+│   ├── cloudformation-portfolio.yaml  # インフラ定義（S3/Lambda/API GW/CloudFront/カスタムドメイン）
 │   ├── certificate.yaml     # ACM証明書（us-east-1、CloudFront用）
 │   └── deploy-infra.sh      # インフラ構築スクリプト（初回のみ）
 └── src/
