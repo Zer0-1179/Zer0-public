@@ -3,10 +3,11 @@ set -euo pipefail
 
 # ============================================================
 # Zenn中級記事自動生成システム デプロイスクリプト
-# SAM不使用・S3不使用・Lambdaコード直接更新
+# SAM不使用・S3不使用・CloudFormation + Lambda直接更新
 # ============================================================
 
 REGION="ap-northeast-1"
+STACK_NAME="zenn-mid-article-generator"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ -z "${SENDER_EMAIL:-}" ] || [ -z "${RECIPIENT_EMAIL:-}" ]; then
@@ -23,13 +24,40 @@ echo "=============================="
 echo "デプロイ設定"
 echo "=============================="
 echo "リージョン     : ${REGION}"
-echo "関数名         : ZennMidArticleGenerator"
+echo "スタック名     : ${STACK_NAME}"
+echo "送信元メール   : ${SENDER_EMAIL}"
+echo "通知先メール   : ${RECIPIENT_EMAIL}"
 echo "実行スケジュール: 毎月1日・15日 21:00 JST"
 echo "=============================="
 echo ""
 
-# [1/2] Lambdaコードを直接デプロイ（S3不使用）
-echo "[1/2] Lambdaコードをデプロイ中..."
+# [1/3] 依存スタック（Layerスタック）を先にデプロイ
+echo "[1/3] 依存スタックをデプロイ中..."
+aws cloudformation deploy \
+  --template-file "${SCRIPT_DIR}/cloudformation-diagram-layer-mid.yaml" \
+  --stack-name "zenn-mid-article-diagram-layer" \
+  --region "${REGION}" \
+  --no-fail-on-empty-changeset
+echo "  ✓ Layerスタックデプロイ完了"
+
+# [2/3] メインスタックをデプロイ
+echo ""
+echo "[2/3] CloudFormationスタックをデプロイ中..."
+aws cloudformation deploy \
+  --template-file "${SCRIPT_DIR}/cloudformation-mid-article-generator.yaml" \
+  --stack-name "${STACK_NAME}" \
+  --region "${REGION}" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    SenderEmail="${SENDER_EMAIL}" \
+    RecipientEmail="${RECIPIENT_EMAIL}" \
+    BedrockModelId="${BEDROCK_MODEL_ID:-jp.anthropic.claude-sonnet-4-6}" \
+  --no-fail-on-empty-changeset
+echo "  ✓ スタックデプロイ完了"
+
+# [3/3] Lambdaコードを直接デプロイ（S3不使用）
+echo ""
+echo "[3/3] Lambdaコードをデプロイ中..."
 cd "${SCRIPT_DIR}"
 zip -r /tmp/zenn_mid_function.zip \
   lambda_function.py \
@@ -47,13 +75,13 @@ aws lambda update-function-code \
 rm -f /tmp/zenn_mid_function.zip
 echo "  ✓ Lambdaコードデプロイ完了"
 
-# [2/2] デプロイ結果確認
+# 結果確認
 echo ""
-echo "[2/2] Lambda関数の状態を確認中..."
-aws lambda get-function-configuration \
-  --function-name ZennMidArticleGenerator \
+echo "デプロイ結果を確認中..."
+aws cloudformation describe-stacks \
+  --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
-  --query "{State:State,Runtime:Runtime,Timeout:Timeout,MemorySize:MemorySize,LastModified:LastModified}" \
+  --query "Stacks[0].Outputs" \
   --output table
 
 # GitHubへ自動同期
@@ -73,8 +101,5 @@ echo "  aws lambda invoke --function-name ZennMidArticleGenerator --region ${REG
 echo ""
 echo "  ログ確認:"
 echo "  aws logs tail /aws/lambda/ZennMidArticleGenerator --region ${REGION} --since 10m --follow"
-echo ""
-echo "  ダウンロード:"
-echo "  bash ~/Zer0/005_Zenn_Mid_Article_Bot/scripts/download_article.sh"
 echo ""
 echo "自動実行スケジュール: 毎月1日・15日 21:00 JST（UTC 12:00）"
