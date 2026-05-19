@@ -1,7 +1,7 @@
 # 002_Zenn_Auto_Article_Bot — Zenn技術記事自動生成ボット
 
 AWSとBedrockで構築したZenn技術記事の自動生成システム。  
-毎週木曜21時（JST）にBedrockがAWSトピックをランダム選択し、3,000〜5,000文字の記事と構成図PNG×2枚を生成する。  
+毎週木曜21時（JST）にBedrockがAWSトピックをランダム選択し、2,000〜3,500文字の記事と構成図PNG×2枚を生成する。  
 SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの連続投稿を防止する。
 
 ## フォルダ構成
@@ -24,10 +24,10 @@ SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの
 
 | ファイル               | 役割                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------ |
-| `lambda_function.py`   | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）          |
-| `diagram_generator.py` | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                 |
-| `template.yaml`        | SAMテンプレート（Lambda・EventBridge・IAMロール・Lambda Layer）                |
-| `deploy.sh`            | SAMビルド〜デプロイ〜動作確認手順のスクリプト                                  |
+| `lambda_function.py`    | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）          |
+| `diagram_generator.py`  | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                 |
+| `cloudformation.yaml`   | CloudFormationテンプレート（Lambda・EventBridge・IAMロール・CloudWatch Logs）  |
+| `deploy.sh`             | CloudFormationデプロイ + Lambda直接コードデプロイ（S3不使用）                  |
 | `requirements.txt`     | Pythonパッケージ（`matplotlib>=3.8.0`）                                        |
 | `aws_icons/`           | AWS公式アイコンPNG 38枚（AWS公式アーキテクチャアイコンパッケージ 2026年1月版） |
 
@@ -83,7 +83,7 @@ article/
                     ↓ SSMから直近5トピックを取得（除外リスト）
                     ↓ Bedrockでトピック選択（除外リスト以外から）
                     ↓ SSMに選択トピックを保存
-                    ↓ Bedrockで記事生成（3,000〜5,000文字）
+                    ↓ Bedrockで記事生成（2,000〜3,500文字）
                     ↓ matplotlib でPNG×2枚生成（AWS公式アイコン使用）
                     ↓ {DIAGRAM_N}マーカーを画像プレースホルダーに置換（はじめに直後・ハンズオン冒頭）
                     ↓ S3に保存（zer0-dev-s3/zenn-articles/...）
@@ -251,27 +251,21 @@ bash ~/Zer0/002_Zenn_Auto_Article_Bot/scripts/download_article.sh
 ## デプロイ
 
 ```bash
-cd ~/Zer0/002_Zenn_Auto_Article_Bot
-
-# [1] matplotlibレイヤーをビルド&アップロード（初回またはrequirements.txt変更時のみ）
-bash scripts/build_layer.sh
-
-# [2] SAMでLambdaをデプロイ
-cd src
+cd ~/Zer0/002_Zenn_Auto_Article_Bot/src
 export SENDER_EMAIL=your@gmail.com
 export RECIPIENT_EMAIL=your@gmail.com
 ./deploy.sh
 ```
 
-### Lambda Layer の構成
+`deploy.sh` は **S3を使わない**純粋 CloudFormation + Lambda 直接デプロイ方式：
 
-```text
-matplotlib_layer.zip
-└── python/
-    ├── matplotlib/
-    ├── numpy/
-    └── PIL/（pillow）
-```
+1. `aws cloudformation deploy`（インフラ更新、S3不使用）
+2. `aws lambda update-function-code --zip-file`（コード直接アップロード、S3不使用）
+
+### Lambda Layer
+
+`matplotlib-aws-icons:34`（matplotlib + numpy + pillow）を使用。
+Layer の更新が必要な場合は再パブリッシュ後に `cloudformation.yaml` の `DiagramsLayerVersion` パラメータを更新する。
 
 > `aws_icons/` は関数コードZIPに同梱されるため、Layerには含まない。
 
