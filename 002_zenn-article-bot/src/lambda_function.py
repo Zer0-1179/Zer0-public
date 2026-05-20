@@ -34,6 +34,7 @@ OUTPUT_DIR = os.environ.get(
 )
 S3_BUCKET  = os.environ.get("S3_BUCKET", "zer0-dev-s3")
 S3_PREFIX  = "zenn-articles"
+OUTPUT_KEEP_MAX = 5  # ローカル output/ に残す記事フォルダの最大数
 
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/zenn-article-bot/recent-topics"
@@ -529,6 +530,16 @@ def _next_article_number(output_dir: str) -> str:
     return f"{len(existing) + 1:03d}"
 
 
+def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
+    """output/ 内の記事フォルダが keep 個を超えたら古いものを削除する"""
+    import glob
+    import shutil
+    folders = sorted(glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*")))
+    for folder in folders[:-keep] if len(folders) > keep else []:
+        shutil.rmtree(folder)
+        print(f"古い記事フォルダを削除: {os.path.basename(folder)}")
+
+
 def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[str]]:
     """記事を MD ファイルに保存し、構成図 PNG も生成する。(mdパス, pngパスリスト) を返す"""
     output_dir = os.path.expanduser(OUTPUT_DIR)
@@ -570,6 +581,7 @@ published: false
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_content)
 
+    _cleanup_old_articles(output_dir)
     return md_path, png_paths
 
 
