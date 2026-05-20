@@ -98,7 +98,16 @@ aws lambda update-function-code \
   --query "[FunctionName, LastModified]" --output text
 echo "  ✓ FailureNotifier コードデプロイ完了"
 
-rm -f /tmp/analyzer.zip /tmp/executor.zip /tmp/failure_notifier.zip
+cd "${SCRIPT_DIR}/lambda/weekly_summary"
+zip -r /tmp/weekly_summary.zip lambda_function.py -q
+aws lambda update-function-code \
+  --function-name Zer0-CryptoBot-WeeklySummary \
+  --zip-file fileb:///tmp/weekly_summary.zip \
+  --region "${REGION}" \
+  --query "[FunctionName, LastModified]" --output text
+echo "  ✓ WeeklySummary コードデプロイ完了"
+
+rm -f /tmp/analyzer.zip /tmp/executor.zip /tmp/failure_notifier.zip /tmp/weekly_summary.zip
 
 # [3/3] デプロイ結果確認
 echo ""

@@ -243,6 +243,9 @@ published: false → true に変更して公開
 | Lambda Function URL      | AWS_IAM auth（IAM署名付きリクエストで呼出可）|
 | IAMロール                | `ZennMidArticleGeneratorRole-ap-northeast-1` |
 | CloudWatch Logs          | `/aws/lambda/ZennMidArticleGenerator`        |
+| SQS（DLQ）              | `ZennMidArticleGenerator-DLQ`（Lambda失敗時）|
+| CloudWatch Alarm         | `ZennMidArticleGenerator-DLQ-NotEmpty`       |
+| SNS Topic                | `ZennMidArticleGenerator-DLQ-Alarm`          |
 
 ---
 
