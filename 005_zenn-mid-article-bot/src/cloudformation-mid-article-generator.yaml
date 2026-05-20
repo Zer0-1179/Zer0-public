@@ -151,6 +151,20 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/ZennMidArticleGenerator"
       RetentionInDays: 7
 
+  MidArticleGeneratorFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      AuthType: AWS_IAM
+      TargetFunctionArn: !Ref MidArticleGeneratorFunction
+
+  MidArticleGeneratorFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MidArticleGeneratorFunction
+      FunctionUrlAuthType: AWS_IAM
+      Action: lambda:InvokeFunctionUrl
+      Principal: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+
 Outputs:
   LambdaFunctionArn:
     Description: Lambda関数のARN
@@ -167,3 +181,6 @@ Outputs:
   DLQArn:
     Description: Lambda実行失敗イベント保存先DLQのARN
     Value: !GetAtt MidArticleGeneratorDLQ.Arn
+  FunctionUrl:
+    Description: Lambda Function URL (AWS_IAM auth - signed requests required)
+    Value: !GetAtt MidArticleGeneratorFunctionUrl.FunctionUrl

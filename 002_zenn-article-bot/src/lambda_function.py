@@ -36,7 +36,7 @@ S3_BUCKET  = os.environ.get("S3_BUCKET", "zer0-dev-s3")
 S3_PREFIX  = "zenn-articles"
 
 # SSM: 直近トピック履歴
-SSM_PARAM_PATH      = "/note-article-bot/recent-topics"
+SSM_PARAM_PATH      = "/zenn-article-bot/recent-topics"
 RECENT_TOPICS_LIMIT = 5
 
 AWS_TOPICS = [

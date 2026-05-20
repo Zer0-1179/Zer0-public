@@ -26,9 +26,8 @@ SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの
 | --------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `lambda_function.py`                    | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）                       |
 | `diagram_generator.py`                  | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                              |
-| `cloudformation-article-generator.yaml` | メインスタック（Lambda・EventBridge・IAMロール・DLQ・CloudWatch Logs）                      |
-| `cloudformation-diagram-layer.yaml`     | Layerスタック（matplotlib Layer を CF で管理・`ZennArticleDiagramLayerArn` をエクスポート） |
-| `deploy.sh`                             | 2スタックデプロイ + Lambda直接コードデプロイ（コードはS3不使用）                            |
+| `cloudformation-article-generator.yaml` | メインスタック（Lambda・EventBridge・IAMロール・DLQ・CloudWatch Logs）                |
+| `deploy.sh`                             | CFnスタックデプロイ + Lambda直接コードデプロイ（S3不使用）                             |
 | `requirements.txt`                      | Pythonパッケージ（`matplotlib>=3.8.0`）                                                     |
 | `aws_icons/`                            | AWS公式アイコンPNG 38枚（AWS公式アーキテクチャアイコンパッケージ 2026年1月版）              |
 
@@ -205,7 +204,7 @@ Zenn投稿時は `:::message` の指示に従い、Zenn CDN URLに差し替え�
 
 ## SSM トピック重複除外
 
-`/note-article-bot/recent-topics` に直近5件のトピックIDをJSON配列で保存。
+`/zenn-article-bot/recent-topics` に直近5件のトピックIDをJSON配列で保存。
 
 ```text
 1回目実行: ["sqs"]
@@ -260,15 +259,48 @@ export RECIPIENT_EMAIL=your@gmail.com
 
 `deploy.sh` の流れ：
 
-1. `cloudformation-diagram-layer.yaml` デプロイ（`zenn-article-diagram-layer` スタック）
-2. `cloudformation-article-generator.yaml` デプロイ（`zenn-article-generator` スタック）
-3. `aws lambda update-function-code --zip-file`（コード直接アップロード、S3不使用）
+1. `cloudformation-article-generator.yaml` デプロイ（`zenn-article-generator` スタック）  
+   └ Layer ARN は既存 Lambda から自動取得してパラメーター渡し
+2. `aws lambda update-function-code --zip-file`（コード直接アップロード、S3不使用）
+3. `sync_to_public.sh` でGitHub自動同期
+
+### 手動デプロイ（deploy.sh を使わない場合）
+
+```bash
+cd /root/Zer0/002_Zenn_Auto_Article_Bot/src
+
+# 現在使用中の Layer ARN を取得
+LAYER_ARN=$(aws lambda get-function-configuration \
+  --function-name ZennArticleGenerator \
+  --region ap-northeast-1 \
+  --query "Layers[0].Arn" --output text)
+
+# ① CFnスタック更新（IAMロール・環境変数変更時）
+aws cloudformation deploy \
+  --template-file cloudformation-article-generator.yaml \
+  --stack-name zenn-article-generator \
+  --region ap-northeast-1 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    SenderEmail=(通知先メールアドレス) \
+    RecipientEmail=(通知先メールアドレス) \
+    DiagramsLayerArn="$LAYER_ARN" \
+  --no-fail-on-empty-changeset
+
+# ② Lambda コードのみ更新（ソースコード変更時）
+zip -r /tmp/zenn_function.zip lambda_function.py diagram_generator.py aws_icons/ fonts/ -q
+aws lambda update-function-code \
+  --function-name ZennArticleGenerator \
+  --zip-file fileb:///tmp/zenn_function.zip \
+  --region ap-northeast-1
+rm -f /tmp/zenn_function.zip
+```
 
 ### Lambda Layer
 
-`matplotlib-aws-icons`（matplotlib + numpy + pillow）を `cloudformation-diagram-layer.yaml` で管理。  
-Layer の zip は `zer0-dev-s3/cfn-artifacts/matplotlib-aws-icons/layer.zip` に格納。  
-Layer ARN は `ZennArticleDiagramLayerArn` としてスタック間エクスポート。
+`matplotlib-aws-icons`（matplotlib + numpy + pillow）を `aws lambda publish-layer-version` で直接管理。  
+Layer ARN は `deploy.sh` が既存 Lambda 設定から自動取得し、CFn パラメーターとして渡す。  
+Layer を更新する場合：`DEPLOY_LAYER=1 ./deploy.sh` で新バージョンをパブリッシュして再デプロイ。
 
 > `aws_icons/` は関数コードZIPに同梱されるため、Layerには含まない。
 
