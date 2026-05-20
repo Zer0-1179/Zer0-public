@@ -74,6 +74,9 @@ article/
 | SSM Parameter Store            | 直近5件のトピックIDを保存し、同一トピックの連続投稿を防止 |
 | S3（zer0-dev-s3）              | 生成記事・PNG画像の一時保存（`zenn-articles/`）           |
 | SES                            | 完了メール通知（S3保存先URL・次のアクション記載）         |
+| SQS（DLQ）                    | Lambda失敗時のイベント保存（14日間保持）                  |
+| CloudWatch Alarm               | DLQにメッセージが積まれた際にSNS経由でメール通知          |
+| SNS                            | CloudWatch Alarm → メール通知のブリッジ                  |
 | Lambda Layer（matplotlib）     | matplotlib + numpy + pillow（`matplotlib_layer.zip`）     |
 
 ## 自動化フロー
