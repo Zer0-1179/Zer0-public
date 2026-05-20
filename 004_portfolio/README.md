@@ -126,7 +126,7 @@ CloudFront (E33SJ6UEA95L47)
 | API Gateway                      | `Zer0-portfolio-api`（HTTP API, `$default`ステージ） |
 | CloudFrontディストリビューション | `E33SJ6UEA95L47`                                     |
 | カスタムドメイン                 | `https://www.zer0-infra.com`                         |
-| CloudFrontドメイン               | `https://du7bbiecctrzb.cloudfront.net`               |
+| CloudFrontドメイン（内部オリジン）| `https://du7bbiecctrzb.cloudfront.net`（OGP等への露出なし）|
 | ACM証明書スタック                | `Zer0-portfolio-cert`（us-east-1）                   |
 | IAMロール                        | `Zer0-portfolio-lambda-role-{AccountId}`             |
 | リージョン                       | `ap-northeast-1`（東京）                             |

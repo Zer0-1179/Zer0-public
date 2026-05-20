@@ -70,7 +70,7 @@ bash deploy.sh --test
 bash deploy.sh --test
 
 # 朝スロットを強制してテスト（FORCE_SLOT=morning を一時設定→テスト→戻す）
-# 詳細は docs/aws-x-poster-definition.md 参照
+# ※ FORCE_SLOT に morning / evening 以外の値を設定した場合は evening にフォールバック
 
 # ログ確認
 aws logs tail /aws/lambda/aws-x-poster --follow --region ap-northeast-1
