@@ -31,7 +31,7 @@ Lambda（XAiBot）
 │   └── test_invoke.sh     # 手動テスト実行スクリプト
 └── src/
     ├── lambda_function.py # Lambda本体（投稿ロジック）
-    ├── template.yaml      # CloudFormationテンプレート（IaC）
+    ├── cloudformation-x-ai-bot.yaml  # CloudFormationテンプレート（IaC）
     ├── requirements.txt   # Python依存関係（外部パッケージなし）
     ├── setup_ssm.sh       # SSMパラメータ初期設定スクリプト
     └── deploy.sh          # デプロイスクリプト
@@ -185,5 +185,5 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 | 投稿エラー 403                          | X App の権限が `Read Only` | `Read and Write` に変更してトークン再生成・SSM再投入          |
 | SSMパラメータエラー                     | パラメータ未登録           | `bash setup_ssm.sh` を再実行                                  |
 | Bedrockエラー                           | モデルアクセス未申請       | Bedrockコンソールでモデルアクセスを有効化                     |
-| `AccessDeniedException` on PutParameter | IAMにSSM書き込み権限なし   | `template.yaml` を再デプロイ（`ssm:PutParameter` が追加済み） |
+| `AccessDeniedException` on PutParameter | IAMにSSM書き込み権限なし   | `cloudformation-x-ai-bot.yaml` を再デプロイ（`ssm:PutParameter` が追加済み） |
 | url_reaction で記事が取れない           | RSS取得失敗                | 通常ローテーションにフォールバック（自動）                    |
