@@ -70,7 +70,7 @@ Resources:
                 Action:
                   - ssm:GetParameter
                   - ssm:PutParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/note-article-bot/*"
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zenn-article-bot/*"
               - Effect: Allow
                 Action: sqs:SendMessage
                 Resource: !GetAtt ArticleGeneratorDLQ.Arn

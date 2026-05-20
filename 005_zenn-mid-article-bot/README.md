@@ -82,7 +82,7 @@ Lambda (ZennMidArticleGenerator)
 ├── src/
 │   ├── lambda_function.py  # メインハンドラ（トピック選択・記事生成・図挿入・保存）
 │   ├── diagram_generator.py# アーキテクチャ図生成（16トピック×2枚 = 32パターン、AWS公式アイコン使用）
-│   ├── template.yaml       # SAM CloudFormationテンプレート
+│   ├── cloudformation-mid-article-generator.yaml  # CloudFormationテンプレート
 │   ├── deploy.sh           # デプロイスクリプト
 │   ├── requirements.txt
 │   ├── aws_icons/          # AWS公式アーキテクチャアイコンPNG（62枚）
@@ -105,7 +105,7 @@ Lambda (ZennMidArticleGenerator)
 | 項目             | 002（初級）              | 005（中級）                                                    |
 | ---------------- | ------------------------ | -------------------------------------------------------------- |
 | 文字数           | 2,000〜3,500文字         | 10,000〜15,000文字                                             |
-| ハンズオン       | コンソール操作           | CloudFormation/SAMコード重視                                   |
+| ハンズオン       | コンソール操作           | CloudFormationコード重視                                       |
 | 追加セクション   | なし                     | 設計上の考慮ポイント（コスト・セキュリティ・スケーラビリティ） |
 | 追加セクション   | なし                     | 月額コスト目安テーブル                                         |
 | アーキテクチャ図 | 図1: 構成図、図2: 関連図 | 図1: 全体アーキテクチャ構成図、図2: データフロー・詳細構成図   |
@@ -119,27 +119,50 @@ Lambda (ZennMidArticleGenerator)
 ### 前提条件
 
 - AWS CLI 設定済み（`aws configure`）
-- SAM CLI インストール済み（`sam --version`）
 - Python 3.14
-- `diagrams` パッケージインストール済み（`pip install diagrams`）
 - SESでメールアドレス検証済み
 
 ### デプロイ手順
 
 ```bash
-# 1. リポジトリに移動
-cd ~/Zer0/005_Zenn_Mid_Article_Bot
+# 1. 環境変数を設定してデプロイ
+cd ~/Zer0/005_Zenn_Mid_Article_Bot/src
+SENDER_EMAIL=sinnjibaby@gmail.com RECIPIENT_EMAIL=sinnjibaby@gmail.com ./deploy.sh
+```
 
-# 2. AWS公式アイコンをセットアップ（初回・diagrams更新時に実行）
-cd src
-python3 install_aws_icons.py
+### 手動デプロイ（deploy.sh を使わない場合）
 
-# 3. 環境変数を設定
-export SENDER_EMAIL="your-verified@example.com"
-export RECIPIENT_EMAIL="notify@example.com"
+```bash
+cd /root/Zer0/005_Zenn_Mid_Article_Bot/src
 
-# 4. デプロイ（Lambda Layer ビルド + SAM デプロイ）
-cd src && ./deploy.sh
+# 現在使用中の Layer ARN を取得
+LAYER_ARN=$(aws lambda get-function-configuration \
+  --function-name ZennMidArticleGenerator \
+  --region ap-northeast-1 \
+  --query "Layers[0].Arn" --output text)
+
+# ① CFnスタック更新（IAMロール・環境変数変更時）
+aws cloudformation deploy \
+  --template-file cloudformation-mid-article-generator.yaml \
+  --stack-name zenn-mid-article-generator \
+  --region ap-northeast-1 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    SenderEmail=sinnjibaby@gmail.com \
+    RecipientEmail=sinnjibaby@gmail.com \
+    DiagramsLayerArn="$LAYER_ARN" \
+  --no-fail-on-empty-changeset
+
+# ② Lambda コードのみ更新（ソースコード変更時）
+zip -r /tmp/zenn_mid_function.zip lambda_function.py diagram_generator.py aws_icons/ fonts/ -q
+aws lambda update-function-code \
+  --function-name ZennMidArticleGenerator \
+  --zip-file fileb:///tmp/zenn_mid_function.zip \
+  --region ap-northeast-1
+rm -f /tmp/zenn_mid_function.zip
+
+# ③ Layer を更新する場合
+DEPLOY_LAYER=1 ./deploy.sh
 ```
 
 ### ローカル動作確認
@@ -217,6 +240,7 @@ published: false → true に変更して公開
 | S3プレフィックス         | `zer0-dev-s3/zenn-mid-articles/`             |
 | SSMパラメータ            | `/mid-article-bot/recent-topics`             |
 | CloudFormationスタック   | `zenn-mid-article-generator`                 |
+| Lambda Function URL      | AWS_IAM auth（IAM署名付きリクエストで呼出可）|
 | IAMロール                | `ZennMidArticleGeneratorRole-ap-northeast-1` |
 | CloudWatch Logs          | `/aws/lambda/ZennMidArticleGenerator`        |
 
@@ -234,11 +258,19 @@ python3 -m pytest tests/ -v
 ## Lambda手動実行（テスト）
 
 ```bash
-# Lambda直接実行
+# Lambda直接実行（CLI）
 aws lambda invoke \
   --function-name ZennMidArticleGenerator \
   --region ap-northeast-1 \
   response.json && cat response.json
+
+# Function URL 経由で実行（IAM署名付き）
+FUNC_URL=$(aws cloudformation describe-stacks \
+  --stack-name zenn-mid-article-generator --region ap-northeast-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" --output text)
+curl --aws-sigv4 "aws:amz:ap-northeast-1:lambda" \
+  --user "$(aws configure get aws_access_key_id):$(aws configure get aws_secret_access_key)" \
+  -X POST -H "Content-Type: application/json" -d '{}' "$FUNC_URL"
 
 # ログ確認
 aws logs tail /aws/lambda/ZennMidArticleGenerator \
