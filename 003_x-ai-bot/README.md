@@ -7,7 +7,7 @@ AI活用術・会社員あるある系コンテンツをXに1日1回自動投稿
 ![アーキテクチャ図](./images/003_architecture.png)
 
 ```text
-EventBridge Scheduler（21:00 JST 毎日 + 日曜 10:00 JST）
+EventBridge Scheduler（22:00 JST 毎日 + 日曜 10:00 JST）
     ↓
 Lambda（XAiBot）
     ├── SSM Parameter Store → X APIキー取得
@@ -117,11 +117,11 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 
 ## 投稿スケジュール
 
-| 時刻（JST） | 曜日   | モード       | 内容                                                       |
-| ----------- | ------ | ------------ | ---------------------------------------------------------- |
-| 21:00       | 毎日   | `random`     | 4カテゴリ（shigoto/fukugyo/kyokan/question）ローテーション |
-| 21:00       | 火・金 | url_reaction | Zenn/QiitaのAI記事に感想コメント＋URL投稿                  |
-| 10:00       | 日曜   | `trend`      | Google Trendsトレンド連動（フォールバックあり）            |
+| 時刻（JST） | 曜日   | モード       | 内容                                                          |
+| ----------- | ------ | ------------ | ------------------------------------------------------------- |
+| 22:00       | 毎日   | `random`     | 4カテゴリ（shigoto/fukugyo/jitsuwa/question）ローテーション   |
+| 22:00       | 火・金 | url_reaction | Zenn/QiitaのAI記事に感想コメント＋URL投稿                     |
+| 10:00       | 日曜   | `trend`      | Google Trendsトレンド連動（フォールバックあり）               |
 
 - 火・金に記事取得失敗した場合は通常ローテーションにフォールバック
 
@@ -129,14 +129,14 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 
 ## 投稿カテゴリ
 
-| カテゴリ       | 内容                              | ハッシュタグ              |
-|----------------|-----------------------------------|---------------------------|
-| `shigoto`      | 仕事×AIのあるある・本音           | `#AI活用`                 |
-| `fukugyo`      | 副業の現実・稼ぎ系リアル          | `#副業`                   |
-| `kyokan`       | 会社員の共感・本音・愚痴          | なし                      |
-| `question`     | 問いかけ・共感を誘う質問系        | `#AI活用` or `#副業`      |
-| `url_reaction` | Zenn/Qiita AI記事への感想コメント | HASHTAG_POOLから自動選択  |
-| `trend`        | Google Trendsトレンド連動         | `#AI活用`                 |
+| カテゴリ       | 内容                                        | ハッシュタグ                              |
+|----------------|---------------------------------------------|-------------------------------------------|
+| `shigoto`      | 仕事×AIのあるある・本音                     | `#AI活用` / `#生成AI` / `#ChatGPT`（回転）|
+| `fukugyo`      | 副業の現実・稼ぎ系リアル                    | `#副業`                                   |
+| `jitsuwa`      | 「実は〜してる」AI活用の告白・白状系         | `#生成AI` / `#AI活用` / `#ChatGPT`（回転）|
+| `question`     | 問いかけ・議論を呼ぶ質問系                  | `#AI活用` / `#生成AI`（回転）             |
+| `url_reaction` | Zenn/Qiita AI記事への感想コメント           | HASHTAG_POOLから自動選択                  |
+| `trend`        | Google Trendsトレンド連動                   | `#AI活用`                                 |
 
 - `url_reaction` は `fire・金曜` 専用。ローテーション対象外
 - カテゴリローテーション: 直近7投稿で同じカテゴリを使わない（SSM管理）
@@ -155,7 +155,7 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 | --------------------------------------- | ------------------------------------------ |
 | `/ai_bot/history/shigoto`               | shigotoカテゴリの投稿キーワード履歴        |
 | `/ai_bot/history/fukugyo`               | fukugyoカテゴリの投稿キーワード履歴        |
-| `/ai_bot/history/kyokan`                | kyokanカテゴリの投稿キーワード履歴         |
+| `/ai_bot/history/jitsuwa`               | jitsuwaカテゴリの投稿キーワード履歴        |
 | `/ai_bot/history/question`              | questionカテゴリの投稿キーワード履歴       |
 | `/ai_bot/history/url_reaction`          | url_reactionカテゴリの投稿キーワード履歴   |
 | `/ai_bot/history/trend`                 | trendカテゴリの投稿キーワード履歴          |

@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   X AI Bot - AI topic auto-posting bot for X (Twitter)
   Lambda + EventBridge Scheduler + Bedrock (Claude Haiku) + SSM Parameter Store
-  - Daily 21:00 JST: random category post (1/day)
+  - Daily 22:00 JST: random category post (1/day)
   - Every Sunday 10:00 JST: Google Trends post
 
 # ---- Parameters ----
@@ -116,13 +116,13 @@ Resources:
                 Action: lambda:InvokeFunction
                 Resource: !GetAtt XAiBotFunction.Arn
 
-  # EventBridge: 21:00 JST (UTC 12:00)
+  # EventBridge: 22:00 JST (UTC 13:00)
   EveningSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: XAiBot-Evening
-      Description: "毎日21:00 JSTにランダムカテゴリでAI関連ツイートを1件投稿"
-      ScheduleExpression: "cron(0 12 * * ? *)"
+      Description: "毎日22:00 JSTにランダムカテゴリでAI関連ツイートを1件投稿"
+      ScheduleExpression: "cron(0 13 * * ? *)"
       FlexibleTimeWindow:
         Mode: "OFF"
       Target:
@@ -155,7 +155,7 @@ Outputs:
     Value: !Ref XAiBotFunction
 
   EveningScheduleName:
-    Description: 毎日投稿スケジュール名（毎日21:00 JST）
+    Description: 毎日投稿スケジュール名（毎日22:00 JST）
     Value: !Ref EveningSchedule
 
   WeeklyTrendScheduleName:
