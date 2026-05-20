@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Zenn Article Auto-Generation System - Generates AWS beginner articles via Bedrock Claude Haiku
-  every Thursday 21:00 JST and sends email notifications via SES
+  on the 1st and 3rd Thursday of each month at 21:00 JST and sends email notifications via SES
 
 Parameters:
   SenderEmail:
@@ -86,7 +86,7 @@ Resources:
       MemorySize: 256
       Layers:
         - !Ref DiagramsLayerArn
-      Description: BedrockでAWS初心者向けZenn技術記事（アーキテクチャ図付き）を毎週木曜21時JSTに自動生成し、SESメールで通知するLambda関数
+      Description: BedrockでAWS初心者向けZenn技術記事（アーキテクチャ図付き）を毎月第1・第3木曜21時JSTに自動生成し、SESメールで通知するLambda関数
       Environment:
         Variables:
           SES_SENDER_EMAIL: !Ref SenderEmail
@@ -101,26 +101,66 @@ Resources:
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "placeholder - deploy via deploy.sh"}
 
-  WeeklyScheduleRule:
-    Type: AWS::Events::Rule
+  ArticleSchedulerRole:
+    Type: AWS::IAM::Role
     Properties:
-      Name: ZennArticleWeeklyTrigger
-      Description: 毎週木曜21時（JST）に記事を生成
-      ScheduleExpression: "cron(0 12 ? * THU *)"
+      RoleName: !Sub "ZennArticleSchedulerRole-${AWS::Region}"
+      Description: EventBridge Scheduler role for ZennArticleGenerator invocation
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ZennArticleSchedulerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt ArticleGeneratorFunction.Arn
+
+  ArticleScheduleFirstThursday:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: ZennArticleFirstThursday
+      Description: 毎月第1木曜21時（JST）にZenn記事を生成
+      ScheduleExpression: "cron(0 12 ? * THU#1 *)"
+      ScheduleExpressionTimezone: "Asia/Tokyo"
       State: ENABLED
-      Targets:
-        - Id: ZennArticleGeneratorTarget
-          Arn: !GetAtt ArticleGeneratorFunction.Arn
-          RetryPolicy:
-            MaximumRetryAttempts: 1
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt ArticleGeneratorFunction.Arn
+        RoleArn: !GetAtt ArticleSchedulerRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 1
+
+  ArticleScheduleThirdThursday:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: ZennArticleThirdThursday
+      Description: 毎月第3木曜21時（JST）にZenn記事を生成
+      ScheduleExpression: "cron(0 12 ? * THU#3 *)"
+      ScheduleExpressionTimezone: "Asia/Tokyo"
+      State: ENABLED
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt ArticleGeneratorFunction.Arn
+        RoleArn: !GetAtt ArticleSchedulerRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 1
 
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref ArticleGeneratorFunction
       Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt WeeklyScheduleRule.Arn
+      Principal: scheduler.amazonaws.com
+      SourceArn: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*"
 
   ArticleGeneratorLogGroup:
     Type: AWS::Logs::LogGroup
@@ -135,9 +175,12 @@ Outputs:
   LambdaFunctionName:
     Description: Lambda関数名
     Value: !Ref ArticleGeneratorFunction
-  EventBridgeRuleName:
-    Description: EventBridgeルール名（毎週木曜21時JST）
-    Value: !Ref WeeklyScheduleRule
+  ScheduleFirstThursday:
+    Description: EventBridge Scheduler name (1st Thursday 21:00 JST)
+    Value: !Ref ArticleScheduleFirstThursday
+  ScheduleThirdThursday:
+    Description: EventBridge Scheduler name (3rd Thursday 21:00 JST)
+    Value: !Ref ArticleScheduleThirdThursday
   DLQArn:
     Description: Lambda実行失敗イベント保存先DLQのARN
     Value: !GetAtt ArticleGeneratorDLQ.Arn

@@ -1,7 +1,7 @@
 # 002_Zenn_Auto_Article_Bot — Zenn技術記事自動生成ボット
 
 AWSとBedrockで構築したZenn技術記事の自動生成システム。  
-毎週木曜21時（JST）にBedrockがAWSトピックをランダム選択し、2,000〜3,500文字の記事と構成図PNG×2枚を生成する。  
+毎月第1・第3木曜21時（JST）にBedrockがAWSトピックをランダム選択し、2,000〜3,500文字の記事と構成図PNG×2枚を生成する。  
 SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの連続投稿を防止する。
 
 ## フォルダ構成
@@ -68,7 +68,7 @@ article/
 
 | サービス                       | 役割                                                      |
 | ------------------------------ | --------------------------------------------------------- |
-| EventBridge                    | 毎週木曜21時（UTC 12時）に起動                            |
+| EventBridge Scheduler          | 毎月第1・第3木曜21時（UTC 12時）に起動                    |
 | Lambda                         | メイン処理（Python 3.14、タイムアウト15分、256MB）        |
 | Bedrock（Claude Haiku 4.5 JP） | 記事生成・トピックランダム選択                            |
 | SSM Parameter Store            | 直近5件のトピックIDを保存し、同一トピックの連続投稿を防止 |
@@ -79,7 +79,7 @@ article/
 ## 自動化フロー
 
 ```text
-木曜21:00 JST  EventBridge → Lambda自動実行
+第1・第3木曜21:00 JST  EventBridge Scheduler → Lambda自動実行
                     ↓ SSMから直近5トピックを取得（除外リスト）
                     ↓ Bedrockでトピック選択（除外リスト以外から）
                     ↓ SSMに選択トピックを保存
