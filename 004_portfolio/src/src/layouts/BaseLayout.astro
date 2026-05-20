@@ -13,7 +13,7 @@ interface Props {
 const { title, description, ogImage } = Astro.props;
 const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
-const siteUrl = 'https://du7bbiecctrzb.cloudfront.net';
+const siteUrl = 'https://www.zer0-infra.com';
 const ogTitle = `${title} | Zer0_Infra`;
 const defaultDesc = lang === 'ja'
   ? 'Zer0_Infra - AWS認定10資格を持つクラウドエンジニアのポートフォリオ。金融機関向けAWS基盤構築・サーバーレス自動化システム開発の実績。'
