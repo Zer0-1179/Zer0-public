@@ -588,6 +588,8 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
             lines = result.split("\n")
             target_heading = _FALLBACK_HEADINGS[img_idx] if img_idx < len(_FALLBACK_HEADINGS) else None
             h2_positions = [i for i, line in enumerate(lines) if line.startswith("## ")]
+            if not h2_positions:
+                continue  # 見出しが1つもない場合は挿入をスキップ
 
             if target_heading:
                 matched = [i for i, line in enumerate(lines)

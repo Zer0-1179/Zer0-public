@@ -408,11 +408,24 @@ def fetch_rss(sources):
             req = urllib.request.Request(feed["url"], headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=10) as r:
                 tree = ET.parse(r)
+            # RSS 2.0形式
             for item in tree.findall(".//item")[:5]:
                 title    = item.findtext("title", "").strip()
                 link     = item.findtext("link", "").strip()
                 desc     = item.findtext("description", "").strip()[:150]
                 pub_date = item.findtext("pubDate", "").strip()
+                if title and link:
+                    articles.append({"source": feed["source"], "label": feed["label"], "title": title, "url": link, "desc": desc, "pub_date": pub_date})
+            # Atom形式（Qiita等）
+            for entry in tree.findall(".//{http://www.w3.org/2005/Atom}entry")[:5]:
+                title = (entry.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
+                link  = ""
+                for lk in entry.findall("{http://www.w3.org/2005/Atom}link"):
+                    if lk.get("rel") in (None, "alternate"):
+                        link = lk.get("href", "")
+                        break
+                desc     = (entry.findtext("{http://www.w3.org/2005/Atom}summary") or "")[:150]
+                pub_date = (entry.findtext("{http://www.w3.org/2005/Atom}updated") or "").strip()
                 if title and link:
                     articles.append({"source": feed["source"], "label": feed["label"], "title": title, "url": link, "desc": desc, "pub_date": pub_date})
         except Exception as e:
@@ -423,6 +436,9 @@ def fetch_rss(sources):
 def lambda_handler(event, context):
     now      = datetime.now(JST)
     slot_key = os.environ.get("FORCE_SLOT") or ("morning" if now.hour < 15 else "evening")
+    if slot_key not in SLOTS:
+        print(f"[Warning] 無効なFORCE_SLOT値: '{slot_key}' → evening にフォールバック")
+        slot_key = "evening"
     slot     = SLOTS[slot_key]
     with_url = slot["with_url"]
 
