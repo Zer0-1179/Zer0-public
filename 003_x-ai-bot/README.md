@@ -117,13 +117,15 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 
 ## 投稿スケジュール
 
-| 時刻（JST） | 曜日   | モード       | 内容                                                          |
-| ----------- | ------ | ------------ | ------------------------------------------------------------- |
-| 22:00       | 毎日   | `random`     | 4カテゴリ（shigoto/fukugyo/jitsuwa/question）ローテーション   |
-| 22:00       | 火・金 | url_reaction | Zenn/QiitaのAI記事に感想コメント＋URL投稿                     |
-| 10:00       | 日曜   | `trend`      | Google Trendsトレンド連動（フォールバックあり）               |
+| 時刻（JST） | 曜日   | モード       | 内容                                                                  |
+| ----------- | ------ | ------------ | --------------------------------------------------------------------- |
+| 22:00       | 火・金 | url_reaction | Zenn/QiitaのAI記事に感想コメント＋URL投稿                             |
+| 22:00       | 水     | question固定 | 問いかけ・議論を呼ぶ質問系（返信を最大化）                            |
+| 22:00       | その他 | `random`     | 5カテゴリ（shigoto/fukugyo/jitsuwa/question/suji）ローテーション      |
+| 10:00       | 日曜   | `trend`      | Google Trendsトレンド連動（フォールバックあり）                       |
 
 - 火・金に記事取得失敗した場合は通常ローテーションにフォールバック
+- 水曜は `question` 固定でリプライ・エンゲージメントを狙う
 
 ---
 
@@ -134,11 +136,13 @@ aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
 | `shigoto`      | 仕事×AIのあるある・本音                     | `#AI活用` / `#生成AI` / `#ChatGPT`（回転）|
 | `fukugyo`      | 副業の現実・稼ぎ系リアル                    | `#副業`                                   |
 | `jitsuwa`      | 「実は〜してる」AI活用の告白・白状系         | `#生成AI` / `#AI活用` / `#ChatGPT`（回転）|
-| `question`     | 問いかけ・議論を呼ぶ質問系                  | `#AI活用` / `#生成AI`（回転）             |
+| `question`     | 問いかけ・議論を呼ぶ質問系（水曜固定）      | `#AI活用` / `#生成AI`（回転）             |
+| `suji`         | 数字・リスト型「〇つのこと」シリーズ        | `#生成AI` / `#AI活用` / `#ChatGPT`（回転）|
 | `url_reaction` | Zenn/Qiita AI記事への感想コメント           | HASHTAG_POOLから自動選択                  |
-| `trend`        | Google Trendsトレンド連動                   | `#AI活用`                                 |
+| `trend`        | Google Trendsトレンド連動（日曜固定）        | `#AI活用` / `#生成AI`（回転）             |
 
-- `url_reaction` は `fire・金曜` 専用。ローテーション対象外
+- `url_reaction` は火・金専用。ローテーション対象外
+- `question` は水曜固定のほか、ランダムローテーションでも出現する
 - カテゴリローテーション: 直近7投稿で同じカテゴリを使わない（SSM管理）
 
 ### ハッシュタグプール（url_reaction用）
