@@ -279,9 +279,10 @@ def pick_category_hashtag(category: str) -> str:
 def pick_hashtag(body: str) -> str:
     """本文・記事タイトルの内容に合わせてHASHTAG_POOLから最適なハッシュタグを選ぶ。
     スコアが同点の場合はランダム選択。マッチなしは '#AI活用' を返す。"""
+    body_lower = body.lower()
     scores = {}
     for item in HASHTAG_POOL:
-        score = sum(1 for kw in item["keywords"] if kw in body)
+        score = sum(1 for kw in item["keywords"] if kw.lower() in body_lower)
         if score > 0:
             scores[item["tag"]] = score
     if not scores:
@@ -372,7 +373,7 @@ def fetch_url_reaction_article(used_urls: list) -> dict | None:
             for item in tree.findall(".//item")[:5]:
                 title = item.findtext("title", "").strip()
                 link  = item.findtext("link", "").strip()
-                desc  = item.findtext("description", "").strip()[:150]
+                desc  = item.findtext("description", "").strip()[:300]
                 if title and link:
                     articles.append({"source": feed["source"], "label": feed["label"],
                                      "title": title, "url": link, "desc": desc})
@@ -384,7 +385,7 @@ def fetch_url_reaction_article(used_urls: list) -> dict | None:
                     if l.get("rel") in (None, "alternate"):
                         link = l.get("href", "")
                         break
-                desc  = (entry.findtext("{http://www.w3.org/2005/Atom}summary") or "")[:150]
+                desc  = (entry.findtext("{http://www.w3.org/2005/Atom}summary") or "")[:300]
                 if title and link:
                     articles.append({"source": feed["source"], "label": feed["label"],
                                      "title": title, "url": link, "desc": desc})
@@ -1029,6 +1030,13 @@ def trim_body_excluding_hashtags(text: str, limit: int = 140) -> str:
 # Bedrock 呼び出し
 # ─────────────────────────────────────────────────────
 
+_BEDROCK_SYSTEM = (
+    "あなたはAIに頼りながらなんとか生きてる普通の会社員です。"
+    "X（旧Twitter）に本音の短文を投稿します。"
+    "指示されたフォーマットとルールを必ず守り、ツイート本文のみを出力してください。"
+    "説明・前置き・「ツイート：」などの余計な文字は一切付けないでください。"
+)
+
 def invoke_bedrock(prompt: str) -> str:
     """Bedrockでツイートテキストを生成する。"""
     resp = bedrock.invoke_model(
@@ -1036,6 +1044,8 @@ def invoke_bedrock(prompt: str) -> str:
         body=json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 512,
+            "system": _BEDROCK_SYSTEM,
+            "temperature": 0.95,
             "messages": [{"role": "user", "content": prompt}],
         }),
         contentType="application/json",
