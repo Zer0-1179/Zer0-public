@@ -9,7 +9,7 @@ type Article = { title: string; link: string; date: string; source: 'zenn' | 'no
 
 const parseRss = (xml: string, source: 'zenn' | 'note'): Article[] => {
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-  return items.slice(0, 10).map((m) => {
+  return items.slice(0, 5).map((m) => {
     const title = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ?? m[1].match(/<title>(.*?)<\/title>/)?.[1] ?? '';
     const rawLink = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? '';
     const link = rawLink.startsWith('https://') || rawLink.startsWith('http://') ? rawLink : '';
