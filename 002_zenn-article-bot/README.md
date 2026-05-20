@@ -22,15 +22,15 @@ SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの
 
 ### src/
 
-| ファイル               | 役割                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| `lambda_function.py`                  | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）                   |
-| `diagram_generator.py`                | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                          |
-| `cloudformation-article-generator.yaml` | メインスタック（Lambda・EventBridge・IAMロール・DLQ・CloudWatch Logs）              |
-| `cloudformation-diagram-layer.yaml`   | Layerスタック（matplotlib Layer を CF で管理・`ZennArticleDiagramLayerArn` をエクスポート） |
-| `deploy.sh`                           | 2スタックデプロイ + Lambda直接コードデプロイ（コードはS3不使用）                        |
-| `requirements.txt`     | Pythonパッケージ（`matplotlib>=3.8.0`）                                        |
-| `aws_icons/`           | AWS公式アイコンPNG 38枚（AWS公式アーキテクチャアイコンパッケージ 2026年1月版） |
+| ファイル                                | 役割                                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `lambda_function.py`                    | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）                       |
+| `diagram_generator.py`                  | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                              |
+| `cloudformation-article-generator.yaml` | メインスタック（Lambda・EventBridge・IAMロール・DLQ・CloudWatch Logs）                      |
+| `cloudformation-diagram-layer.yaml`     | Layerスタック（matplotlib Layer を CF で管理・`ZennArticleDiagramLayerArn` をエクスポート） |
+| `deploy.sh`                             | 2スタックデプロイ + Lambda直接コードデプロイ（コードはS3不使用）                            |
+| `requirements.txt`                      | Pythonパッケージ（`matplotlib>=3.8.0`）                                                     |
+| `aws_icons/`                            | AWS公式アイコンPNG 38枚（AWS公式アーキテクチャアイコンパッケージ 2026年1月版）              |
 
 ### output/
 
