@@ -260,6 +260,107 @@ Resources:
         OnFailure:
           Destination: !GetAtt FailureNotifierFunction.Arn
 
+  # ── IAM ロール: EventBridge Scheduler → WeeklySummary ───────────────────
+  WeeklySummarySchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-CryptoBot-WeeklySummarySchedulerRole-${AWS::Region}"
+      Description: EventBridge Scheduler role for Zer0-CryptoBot WeeklySummary
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: Zer0-CryptoBot-WeeklySummarySchedulerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt WeeklySummaryFunction.Arn
+
+  # ── IAM ロール: WeeklySummary Lambda 実行 ────────────────────────────────
+  WeeklySummaryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-CryptoBot-WeeklySummaryRole-${AWS::Region}"
+      Description: Execution role for Zer0-CryptoBot WeeklySummary Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: Zer0-CryptoBot-WeeklySummaryPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/state"
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+
+  # ── Lambda: WeeklySummary ─────────────────────────────────────────────────
+  WeeklySummaryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/Zer0-CryptoBot-WeeklySummary
+      RetentionInDays: 7
+
+  WeeklySummaryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: Zer0-CryptoBot-WeeklySummary
+      Runtime: python3.14
+      Handler: lambda_function.lambda_handler
+      Timeout: 60
+      MemorySize: 128
+      Role: !GetAtt WeeklySummaryRole.Arn
+      Description: "Zer0-CryptoBot: 毎週日曜09:00JSTにポジション状況と含み損益をメールで送信する週次サマリー"
+      Environment:
+        Variables:
+          SES_SENDER_EMAIL: !Ref SenderEmail
+          SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder"}
+
+  # ── EventBridge Scheduler: 毎週日曜09:00 JST → WeeklySummary ─────────────
+  WeeklySummarySchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: Zer0-CryptoBot-WeeklySummary-Schedule
+      Description: "毎週日曜09:00JSTに週次ポジションサマリーをメール送信する"
+      ScheduleExpression: "cron(0 9 ? * 1 *)"
+      ScheduleExpressionTimezone: "Asia/Tokyo"
+      State: ENABLED
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt WeeklySummaryFunction.Arn
+        RoleArn: !GetAtt WeeklySummarySchedulerRole.Arn
+
+  # ── Lambda 許可: EventBridge Scheduler → WeeklySummary ───────────────────
+  WeeklySummarySchedulerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WeeklySummaryFunction
+      Action: lambda:InvokeFunction
+      Principal: scheduler.amazonaws.com
+      SourceArn: !GetAtt WeeklySummarySchedule.Arn
+
   # ── EventBridge Scheduler: 4時間毎 → Analyzer ────────────────────────────
   CryptoBotSchedule:
     Type: AWS::Scheduler::Schedule

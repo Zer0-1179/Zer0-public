@@ -162,6 +162,33 @@ Resources:
       Principal: scheduler.amazonaws.com
       SourceArn: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*"
 
+  DLQAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ZennArticleGenerator-DLQ-Alarm
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref RecipientEmail
+
+  DLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ZennArticleGenerator-DLQ-NotEmpty
+      AlarmDescription: ZennArticleGenerator-DLQ にメッセージが積まれたら通知
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ArticleGeneratorDLQ.QueueName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref DLQAlarmTopic
+
   ArticleGeneratorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
