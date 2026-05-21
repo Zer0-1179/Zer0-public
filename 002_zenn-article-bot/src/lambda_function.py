@@ -523,11 +523,18 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
     return result
 
 
+SSM_COUNTER_PATH = "/zenn-article-bot/article-counter"
+
 def _next_article_number(output_dir: str) -> str:
-    """output/ 内の既存記事フォルダ数をカウントして次の連番を返す（例: '006'）"""
-    import glob
-    existing = glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*"))
-    return f"{len(existing) + 1:03d}"
+    """SSMカウンターから次の記事番号を取得してインクリメントする（例: '016'）"""
+    try:
+        resp = ssm.get_parameter(Name=SSM_COUNTER_PATH)
+        current = int(resp["Parameter"]["Value"])
+    except ssm.exceptions.ParameterNotFound:
+        current = 0
+    next_num = current + 1
+    ssm.put_parameter(Name=SSM_COUNTER_PATH, Value=str(next_num), Type="String", Overwrite=True)
+    return f"{next_num:03d}"
 
 
 def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
