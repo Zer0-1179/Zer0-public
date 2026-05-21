@@ -29,7 +29,8 @@ EventBridge (月2回: 1日・15日 21:00 JST)
 Lambda (ZennMidArticleGenerator)
     ├─ Step 1: SSM から直近4トピックを取得（除外リスト）
     ├─ Step 2: Bedrock でトピック選択（16種類からランダム）
-    ├─ Step 3: Bedrock で中級者向け記事を生成（10,000〜15,000文字）
+    ├─ Step 2.5: AWS公式ドキュメント取得（primary_serviceのdocs.aws.amazon.comページ・最大6,000文字）
+    ├─ Step 3: Bedrock で中級者向け記事を生成（10,000〜15,000文字）※公式ドキュメントを根拠情報として付与
     ├─ Step 4: matplotlib でアーキテクチャ図を2枚生成（AWS公式アイコン使用）
     ├─ Step 5: S3 に保存（zenn-mid-articles/ プレフィックス）
     ├─ Step 6: SSM にトピックを保存
