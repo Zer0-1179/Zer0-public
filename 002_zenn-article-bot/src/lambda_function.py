@@ -177,6 +177,32 @@ AWS_TOPICS = [
     },
 ]
 
+# ─── AWS公式ドキュメント URL マップ ───────────────────────────────────────────
+DOCS_URL_MAP: dict[str, str] = {
+    "ec2":            "https://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/concepts.html",
+    "s3":             "https://docs.aws.amazon.com/ja_jp/AmazonS3/latest/userguide/Welcome.html",
+    "iam":            "https://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/introduction.html",
+    "vpc":            "https://docs.aws.amazon.com/ja_jp/vpc/latest/userguide/what-is-amazon-vpc.html",
+    "rds":            "https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/Welcome.html",
+    "lambda":         "https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/welcome.html",
+    "cloudwatch":     "https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/monitoring/WhatIsCloudWatch.html",
+    "ecs":            "https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/Welcome.html",
+    "dynamodb":       "https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/Introduction.html",
+    "cloudfront":     "https://docs.aws.amazon.com/ja_jp/AmazonCloudFront/latest/DeveloperGuide/Introduction.html",
+    "api_gateway":    "https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/welcome.html",
+    "sqs":            "https://docs.aws.amazon.com/ja_jp/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html",
+    "bedrock":        "https://docs.aws.amazon.com/ja_jp/bedrock/latest/userguide/what-is-bedrock.html",
+    "sagemaker":      "https://docs.aws.amazon.com/ja_jp/sagemaker/latest/dg/whatis.html",
+    "rekognition":    "https://docs.aws.amazon.com/ja_jp/rekognition/latest/dg/what-is.html",
+    "textract":       "https://docs.aws.amazon.com/ja_jp/textract/latest/dg/what-is.html",
+    "step_functions": "https://docs.aws.amazon.com/ja_jp/step-functions/latest/dg/welcome.html",
+    "sns":            "https://docs.aws.amazon.com/ja_jp/sns/latest/dg/welcome.html",
+    "elasticache":    "https://docs.aws.amazon.com/ja_jp/AmazonElastiCache/latest/dg/WhatIs.html",
+    "route53":        "https://docs.aws.amazon.com/ja_jp/Route53/latest/DeveloperGuide/Welcome.html",
+    "kinesis":        "https://docs.aws.amazon.com/ja_jp/streams/latest/dev/introduction.html",
+    "cloudtrail":     "https://docs.aws.amazon.com/ja_jp/awscloudtrail/latest/userguide/cloudtrail-user-guide.html",
+}
+
 # ─── Zennフロントマター用メタ情報 ─────────────────────────────────────────────
 _ZENN_META: dict[str, dict] = {
     "ec2":           {"emoji": "🖥️",  "topics": ["aws", "ec2", "インフラ", "クラウド"]},
@@ -213,6 +239,7 @@ ARTICLE_PROMPT_TEMPLATE = """
 ## キーワード（記事中に自然に含めること）
 {keywords}
 
+{docs_section}
 ## 読者像
 プログラミング経験はあるが、AWSをほぼ使ったことがない初級エンジニア。
 「概念を知りたい」より「実際に動かして仕事で使いたい」が動機。
@@ -344,6 +371,39 @@ aws s3 ls
 """
 
 
+# ─── AWS公式ドキュメント取得 ──────────────────────────────────────────────────
+
+def fetch_aws_docs(topic_id: str, max_chars: int = 6000) -> str:
+    """AWS公式ドキュメントを取得してプレーンテキストを返す。失敗時は空文字列。"""
+    import re
+    import urllib.request
+
+    url = DOCS_URL_MAP.get(topic_id, "")
+    if not url:
+        print(f"[Docs] {topic_id}: URL未定義のためスキップ")
+        return ""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible)"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+
+        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
+        html = re.sub(r'<style[^>]*>.*?</style>',  '', html, flags=re.DOTALL)
+
+        main = re.search(r'<main[^>]*>(.*?)</main>', html, re.DOTALL)
+        content = main.group(1) if main else html
+
+        text = re.sub(r'<[^>]+>', ' ', content)
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text).strip()
+
+        print(f"[Docs] {topic_id}: {len(text)}文字取得 ({url})")
+        return text[:max_chars]
+    except Exception as e:
+        print(f"[Docs] {topic_id}: 取得エラー（スキップ）: {e}")
+        return ""
+
+
 # ─── SSM: トピック重複除外 ────────────────────────────────────────────────────
 
 def get_recent_topics() -> list[str]:
@@ -424,11 +484,20 @@ def select_topic_with_bedrock(excluded_ids: list[str]) -> dict:
 
 def generate_article(topic: dict, today: str) -> tuple[str, bool]:
     """Bedrock を使って記事を生成する。(article_text, is_truncated) を返す"""
+    docs_content = fetch_aws_docs(topic["id"])
+    docs_section = (
+        "## AWS公式ドキュメント（根拠情報）\n"
+        "以下はAWS公式ドキュメントから取得した情報です。技術的事実はこの内容を根拠として正確に記述し、矛盾しないようにしてください。\n"
+        "ドキュメントに記載のない事実は、確実に知っている場合のみ記述し、不確かな場合は記述しないか「〜の場合があります」等の不確定表現を使ってください。\n\n"
+        f"{docs_content}\n\n---\n"
+        if docs_content else ""
+    )
     prompt = ARTICLE_PROMPT_TEMPLATE.format(
         topic_name=topic["name"],
         topic_subtitle=topic["subtitle"],
         keywords=topic["keywords"],
         today=today,
+        docs_section=docs_section,
     )
 
     response = bedrock.invoke_model(
