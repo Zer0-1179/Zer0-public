@@ -8,7 +8,7 @@
 ├── sync_to_public.sh              # プライベート→公開リポジトリ同期スクリプト
 ├── 000_git-auto-sync/             # git自動同期の仕様書・ドキュメント
 ├── 001_aws-x-poster/              # AWSニュース自動投稿ボット（@Zer0_Infra）
-├── 002_Zenn_Auto_Article_Bot/     # Zenn初級者向け技術記事自動生成ボット（毎週木曜）
+├── 002_Zenn_Auto_Article_Bot/     # Zenn初級者向け技術記事自動生成ボット（毎月第1・第3木曜）
 ├── 003_X_AI_Bot/                  # AI活用術 X自動投稿ボット
 ├── 004_portfolio/                 # Astro SSR ポートフォリオサイト
 ├── 005_Zenn_Mid_Article_Bot/      # Zenn中級者向け技術記事自動生成ボット（毎月2回）
@@ -26,7 +26,7 @@
 | --------------------------- | ----------------------------------------------------------------------------------------------- | ---------- |
 | `000_git-auto-sync`         | プライベート→公開リポジトリのgit自動同期ドキュメント                                            | 運用中     |
 | `001_aws-x-poster`          | AWSニュースをRSSで取得しBedrockで加工してX投稿（朝・夜2回/日）                                  | 稼働中     |
-| `002_Zenn_Auto_Article_Bot` | 毎週木曜21時にBedrockでAWS初心者向けZenn技術記事を自動生成・S3保存                              | 稼働中     |
+| `002_Zenn_Auto_Article_Bot` | 毎月第1・第3木曜21時（月2回）にBedrockでAWS初心者向けZenn技術記事を自動生成・S3保存            | 稼働中     |
 | `003_X_AI_Bot`              | AI活用術ジャンルのXアカウントを1日2回自動投稿（21時＋日曜10時）                                 | 稼働中     |
 | `004_portfolio`             | Astro SSR ポートフォリオサイト（CloudFront + Lambda + S3）                                      | 稼働中     |
 | `005_Zenn_Mid_Article_Bot`  | 毎月1日・15日21時にAWS中級者向けZenn技術記事を自動生成・S3保存                                  | 稼働中     |
