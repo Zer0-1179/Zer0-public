@@ -36,16 +36,16 @@
 
 ## 技術スタック
 
-| レイヤー       | 技術                                                              |
-| -------------- | ----------------------------------------------------------------- |
-| フロントエンド | Astro（`output: 'static'`）+ PWA（Web Manifest + Service Worker） |
-| 現在地取得     | ブラウザ Geolocation API                                          |
-| 天気取得       | Open-Meteo API（無料・APIキー不要）                               |
+| レイヤー       | 技術                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| フロントエンド | Astro（`output: 'static'`）+ PWA（Web Manifest + Service Worker）                                        |
+| 現在地取得     | ブラウザ Geolocation API                                                                                 |
+| 天気取得       | Open-Meteo API（無料・APIキー不要）                                                                      |
 | AI提案         | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048） |
-| API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                   |
-| ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                    |
-| 写真           | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）          |
-| IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                  |
+| API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                          |
+| ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                                                           |
+| 写真           | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）                                                 |
+| IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                                                         |
 
 ## UI フロー
 

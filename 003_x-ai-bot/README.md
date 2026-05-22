@@ -8,14 +8,14 @@
 
 ## 概要
 
-| 項目       | 内容                                                                     |
-| ---------- | ------------------------------------------------------------------------ |
-| 投稿頻度   | 毎日 22:00 JST + 日曜 10:00 JST（trend）の計2スロット                    |
-| カテゴリ数 | 6カテゴリ（+ 固定2スロット = 実質7パターン）                             |
-| 重複防止   | 直近7投稿で同カテゴリが連続しないようSSMで履歴管理                       |
-| 曜日別制御 | 水曜: question 固定 / 火・金: url_reaction / 日曜: trend                 |
+| 項目       | 内容                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| 投稿頻度   | 毎日 22:00 JST + 日曜 10:00 JST（trend）の計2スロット                                                   |
+| カテゴリ数 | 6カテゴリ（+ 固定2スロット = 実質7パターン）                                                            |
+| 重複防止   | 直近7投稿で同カテゴリが連続しないようSSMで履歴管理                                                      |
+| 曜日別制御 | 水曜: question 固定 / 火・金: url_reaction / 日曜: trend                                                |
 | AI生成     | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
-| 月額コスト | ~$0.38（約57円）                                                         |
+| 月額コスト | ~$0.38（約57円）                                                                                        |
 
 ## アーキテクチャ
 
@@ -71,15 +71,15 @@ EventBridge Scheduler（22:00 JST / 日曜 10:00 JST）
 
 ## 技術スタック
 
-| レイヤー         | 技術                                               |
-| ---------------- | -------------------------------------------------- |
-| 実行基盤         | AWS Lambda（Python 3.14）                          |
-| スケジューリング | Amazon EventBridge Scheduler（JST対応・2スロット） |
+| レイヤー         | 技術                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| 実行基盤         | AWS Lambda（Python 3.14）                                                                               |
+| スケジューリング | Amazon EventBridge Scheduler（JST対応・2スロット）                                                      |
 | AI生成           | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
-| 状態管理         | SSM Parameter Store（8パラメータで履歴管理）       |
-| 外部データ       | Zenn RSS / Qiita RSS / Google Trends RSS           |
-| 投稿先           | X API v2                                           |
-| IaC              | CloudFormation                                     |
+| 状態管理         | SSM Parameter Store（8パラメータで履歴管理）                                                            |
+| 外部データ       | Zenn RSS / Qiita RSS / Google Trends RSS                                                                |
+| 投稿先           | X API v2                                                                                                |
+| IaC              | CloudFormation                                                                                          |
 
 ## ディレクトリ構成
 
