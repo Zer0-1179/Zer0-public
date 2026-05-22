@@ -1,193 +1,110 @@
-# X AI Bot - AI活用術 自動投稿Bot
+# 003 X AI Bot
 
-AI活用術・会社員あるある系コンテンツをXに1日1回自動投稿するサーバーレスBot。
+> AI活用術・会社員あるある系コンテンツを6カテゴリで日替わりローテーションしながら毎日22:00に自動投稿するBot。曜日別投稿ロジック・Google Trends連動・直近7投稿での重複回避で飽きさせないコンテンツ設計を実現。
+
+[![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20EventBridge-orange)](https://aws.amazon.com)
+[![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
+[![Cost](https://img.shields.io/badge/月額-~%240.38-green)](https://aws.amazon.com/pricing)
+
+## 概要
+
+| 項目 | 内容 |
+|------|------|
+| 投稿頻度 | 毎日 22:00 JST + 日曜 10:00 JST（trend）の計2スロット |
+| カテゴリ数 | 6カテゴリ（+ 固定2スロット = 実質7パターン） |
+| 重複防止 | 直近7投稿で同カテゴリが連続しないようSSMで履歴管理 |
+| 曜日別制御 | 水曜: question 固定 / 火・金: url_reaction / 日曜: trend |
+| AI生成 | Amazon Bedrock Claude Haiku（temperature=0.95 / システムプロンプト設定） |
+| 月額コスト | ~$0.38（約57円） |
 
 ## アーキテクチャ
 
-![アーキテクチャ図](./images/003_architecture.png)
+![アーキテクチャ図](images/003_architecture.png)
 
-```text
-EventBridge Scheduler（22:00 JST 毎日 + 日曜 10:00 JST）
-    ↓
-Lambda（XAiBot）
-    ├── SSM Parameter Store → X APIキー取得
-    ├── SSM Parameter Store → カテゴリ使用履歴・投稿キーワード履歴・URL履歴 読み込み
-    ├── [火・金] Zenn/Qiita RSS → AI記事取得 → url_reaction カテゴリ
-    ├── [日曜 trend モード] Google Trends RSS → AIと絡めやすいキーワード取得
-    ├── Bedrock（Claude Haiku 4.5）でツイート生成
-    │   └── url_reaction: 記事感想本文のみ生成（URL・ハッシュタグはlambda_handler側で付加）
-    ├── [url_reaction] HASHTAG_POOLから文章に合うハッシュタグを自動選択
-    ├── X API v2 投稿
-    └── SSM Parameter Store → 投稿履歴を更新して保存
 ```
-
-## ファイル構成
-
-```text
-003_X_AI_Bot/
-├── README.md              # このファイル
-├── システム仕様書.md        # 詳細仕様・コスト試算
-├── scripts/
-│   └── test_invoke.sh     # 手動テスト実行スクリプト
-└── src/
-    ├── lambda_function.py # Lambda本体（投稿ロジック）
-    ├── cloudformation-x-ai-bot.yaml  # CloudFormationテンプレート（IaC）
-    ├── requirements.txt   # Python依存関係（外部パッケージなし）
-    ├── setup_ssm.sh       # SSMパラメータ初期設定スクリプト
-    └── deploy.sh          # デプロイスクリプト
+EventBridge Scheduler（22:00 JST / 日曜 10:00 JST）
+  └─▶ Lambda（Python 3.14）
+        ├─ 曜日判定 → カテゴリ選択（SSM 履歴参照）
+        ├─ カテゴリ別データ取得
+        │   ├─ url_reaction: Zenn/Qiita RSS から AI記事取得
+        │   └─ trend: Google Trends RSS から急上昇ワード取得
+        ├─ Bedrock Claude Haiku（カテゴリ別プロンプトで生成）
+        ├─ SSM 投稿履歴更新（used_categories / history）
+        └─ X API v2（POST）
 ```
-
----
-
-## セットアップ手順
-
-### Step 1: Xアカウント・APIキーの準備（手動）
-
-1. Xアカウントを作成
-2. [X Developer Portal](https://developer.twitter.com) でAppを作成
-3. 以下4つのキーを取得:
-   - Consumer Key (API Key)
-   - Consumer Secret (API Key Secret)
-   - Access Token
-   - Access Token Secret
-4. App権限を **Read and Write** に設定（デフォルトはReadのみ）
-
-### Step 2: SSMパラメータ投入
-
-```bash
-cd ~/Zer0/003_X_AI_Bot/src
-bash setup_ssm.sh
-```
-
-投入されるパラメータ（全てSecureString）:
-
-| パラメータ名                          | 内容                  |
-| ------------------------------------- | --------------------- |
-| `/ai_bot/twitter_api_key`             | X API Key             |
-| `/ai_bot/twitter_api_secret`          | X API Key Secret      |
-| `/ai_bot/twitter_access_token`        | X Access Token        |
-| `/ai_bot/twitter_access_token_secret` | X Access Token Secret |
-
-※ `/ai_bot/history/*` は Lambda 初回実行時に自動作成される。
-
-### Step 3: デプロイ
-
-```bash
-cd ~/Zer0/003_X_AI_Bot/src
-bash deploy.sh
-```
-
-### Step 4: 動作テスト
-
-```bash
-# テストスクリプトで実行（DRY_RUN=true に自動切替・終了後に自動復元）
-bash ~/Zer0/003_X_AI_Bot/scripts/test_invoke.sh          # ランダムカテゴリ
-bash ~/Zer0/003_X_AI_Bot/scripts/test_invoke.sh trend    # トレンドモード
-```
-
-または手動で：
-
-```bash
-# DRY RUN モードに切替
-aws lambda update-function-configuration \
-  --function-name XAiBot \
-  --environment "Variables={SSM_PREFIX=/ai_bot,DRY_RUN=true}" \
-  --region ap-northeast-1
-
-# ランダムカテゴリで手動テスト
-aws lambda invoke \
-  --function-name XAiBot \
-  --region ap-northeast-1 \
-  --log-type Tail \
-  --payload '{"mode": "random"}' \
-  --cli-binary-format raw-in-base64-out \
-  --query "LogResult" --output text /dev/null | base64 -d
-
-# 本番に戻す
-aws lambda update-function-configuration \
-  --function-name XAiBot \
-  --environment "Variables={SSM_PREFIX=/ai_bot,DRY_RUN=false}" \
-  --region ap-northeast-1
-
-# ログ確認
-aws logs tail /aws/lambda/XAiBot --since 5m --region ap-northeast-1
-```
-
----
-
-## 投稿スケジュール
-
-| 時刻（JST） | 曜日   | モード       | 内容                                                                  |
-| ----------- | ------ | ------------ | --------------------------------------------------------------------- |
-| 22:00       | 火・金 | url_reaction | Zenn/QiitaのAI記事に感想コメント＋URL投稿                             |
-| 22:00       | 水     | question固定 | 問いかけ・議論を呼ぶ質問系（返信を最大化）                            |
-| 22:00       | その他 | `random`     | 5カテゴリ（shigoto/fukugyo/jitsuwa/question/suji）ローテーション      |
-| 10:00       | 日曜   | `trend`      | Google Trendsトレンド連動（フォールバックあり）                       |
-
-- 火・金に記事取得失敗した場合は通常ローテーションにフォールバック
-- 水曜は `question` 固定でリプライ・エンゲージメントを狙う
-
----
 
 ## 投稿カテゴリ
 
-| カテゴリ       | 内容                                        | ハッシュタグ                              |
-|----------------|---------------------------------------------|-------------------------------------------|
-| `shigoto`      | 仕事×AIのあるある・本音                     | `#AI活用` / `#生成AI` / `#ChatGPT`（回転）|
-| `fukugyo`      | 副業の現実・稼ぎ系リアル                    | `#副業`                                   |
-| `jitsuwa`      | 「実は〜してる」AI活用の告白・白状系         | `#生成AI` / `#AI活用` / `#ChatGPT`（回転）|
-| `question`     | 問いかけ・議論を呼ぶ質問系（水曜固定）      | `#AI活用` / `#生成AI`（回転）             |
-| `suji`         | 数字・リスト型「〇つのこと」シリーズ        | `#生成AI` / `#AI活用` / `#ChatGPT`（回転）|
-| `url_reaction` | Zenn/Qiita AI記事への感想コメント           | HASHTAG_POOLから自動選択                  |
-| `trend`        | Google Trendsトレンド連動（日曜固定）        | `#AI活用` / `#生成AI`（回転）             |
+| カテゴリ | 内容 | 曜日 |
+|----------|------|------|
+| `shigoto` | 仕事×AIあるある | ランダム |
+| `fukugyo` | 副業の現実 | ランダム |
+| `jitsuwa` | 「実は〜してる」告白系 | ランダム |
+| `question` | 問いかけ・議論系 | **水曜固定** + ランダム |
+| `suji` | 「〇つのこと」リスト型 | ランダム |
+| `url_reaction` | Zenn/Qiita 記事感想（URL付き） | 火・金固定 |
+| `trend` | Google Trends トレンド連動 | 日曜固定 |
 
-- `url_reaction` は火・金専用。ローテーション対象外
-- `question` は水曜固定のほか、ランダムローテーションでも出現する
-- カテゴリローテーション: 直近7投稿で同じカテゴリを使わない（SSM管理）
+## 実装のこだわり
 
-### ハッシュタグプール（url_reaction用）
+### 1. カテゴリローテーション設計
+単純なランダム選択では同じカテゴリが連続するケースが発生する。SSM Parameter Store に直近7件の投稿カテゴリを記録し、**現在候補から直近履歴を除外**することで均等なローテーションを実現。フォロワーに同じトーンの投稿が続かないようコンテンツの多様性を担保。
 
-文章の内容キーワードに基づいて以下10個から自動選択:
+### 2. 曜日別固定スロットの設計思想
+- **水曜 `question`**: 週の中間でエンゲージメント（リプライ・引用RT）を狙う問いかけ投稿
+- **火・金 `url_reaction`**: ビジネスデーの終わりに技術記事の感想を届け、学習意欲の高いフォロワーへリーチ
+- **日曜 `trend`**: 週末の話題と AI を絡めてバズりやすいコンテンツを投入
 
-`#AI活用` `#生成AI` `#ChatGPT` `#副業` `#時短` `#仕事術` `#エンジニア` `#働き方` `#プロンプト` `#AI副業`
+### 3. Bedrock システムプロンプトの導入
+カテゴリ別の「一行目フック必須」「体言止め禁止」「絵文字の使用箇所制限」を**システムプロンプト**として設定。temperature=0.95 の高い多様性設定と組み合わせ、毎回異なる表現ながらも口調が崩れない投稿を生成。
 
----
+### 4. `url_reaction` の記事概要拡張
+当初 150 文字の記事概要では Bedrock が感想の根拠を生成しにくい問題があった。Zenn/Qiita の記事本文冒頭を 300 文字に拡張し、具体的な感想付きで投稿できるよう改善。
 
-## SSM 投稿履歴管理
+### 5. ハッシュタグの動的ローテーション
+`#AI活用` / `#生成AI` / `#ChatGPT` など10個のハッシュタグプールから投稿ごとに選択し、特定タグへの依存を避ける。アルゴリズムの変動に対してリスク分散。
 
-| パラメータ名                            | 内容                                       |
-| --------------------------------------- | ------------------------------------------ |
-| `/ai_bot/history/shigoto`               | shigotoカテゴリの投稿キーワード履歴        |
-| `/ai_bot/history/fukugyo`               | fukugyoカテゴリの投稿キーワード履歴        |
-| `/ai_bot/history/jitsuwa`               | jitsuwaカテゴリの投稿キーワード履歴        |
-| `/ai_bot/history/question`              | questionカテゴリの投稿キーワード履歴       |
-| `/ai_bot/history/url_reaction`          | url_reactionカテゴリの投稿キーワード履歴   |
-| `/ai_bot/history/trend`                 | trendカテゴリの投稿キーワード履歴          |
-| `/ai_bot/history/used_categories`       | カテゴリ使用順履歴（直近7件）              |
-| `/ai_bot/history/url_reaction_urls`     | 使用済みURL履歴（直近28件）                |
+## 技術スタック
 
-- 投稿後にキーワードを3〜5個抽出してSSMに保存
-- 7日以上古いエントリは自動削除
-- 過去7日分のキーワードをプロンプトに渡して繰り返し防止
+| レイヤー | 技術 |
+|----------|------|
+| 実行基盤 | AWS Lambda（Python 3.14） |
+| スケジューリング | Amazon EventBridge Scheduler（JST対応・2スロット） |
+| AI生成 | Amazon Bedrock（Claude Haiku / temperature=0.95） |
+| 状態管理 | SSM Parameter Store（8パラメータで履歴管理） |
+| 外部データ | Zenn RSS / Qiita RSS / Google Trends RSS |
+| 投稿先 | X API v2 |
+| IaC | CloudFormation |
 
----
+## ディレクトリ構成
 
-## 運用メモ
+```
+003_X_AI_Bot/
+├── src/
+│   ├── lambda_function.py   # メインロジック
+│   └── deploy.sh            # デプロイスクリプト
+├── scripts/
+│   └── test_invoke.sh       # テストスクリプト（DRY_RUN対応）
+├── cloudformation-x-ai-bot.yaml
+└── images/
+    └── 003_architecture.png
+```
 
-- 投稿頻度: 1回/日（21:00）＋ 日曜10:00
-- 完全自動化（人手不要）
-- Lambdaコスト目安: 無料枠内（月34回実行）
-- Bedrockコスト目安: 月$0.04程度（Claude Haiku 4.5）
-- X API: Free tier（月500投稿まで）で十分
+## デプロイ
 
----
+```bash
+# デプロイ（SSMパラメータは別途設定が必要）
+bash src/deploy.sh
 
-## トラブルシューティング
+# DRY_RUN テスト（実投稿なし）
+bash scripts/test_invoke.sh
+```
 
-| エラー                                  | 原因                       | 対処                                                          |
-| --------------------------------------- | -------------------------- | ------------------------------------------------------------- |
-| 投稿エラー 403                          | X App の権限が `Read Only` | `Read and Write` に変更してトークン再生成・SSM再投入          |
-| SSMパラメータエラー                     | パラメータ未登録           | `bash setup_ssm.sh` を再実行                                  |
-| Bedrockエラー                           | モデルアクセス未申請       | Bedrockコンソールでモデルアクセスを有効化                     |
-| `AccessDeniedException` on PutParameter | IAMにSSM書き込み権限なし   | `cloudformation-x-ai-bot.yaml` を再デプロイ（`ssm:PutParameter` が追加済み） |
-| url_reaction で記事が取れない           | RSS取得失敗                | 通常ローテーションにフォールバック（自動）                    |
+## コスト内訳
+
+| サービス | 月額 |
+|----------|------|
+| Lambda 実行（~35回/月） | ~$0.001 |
+| Bedrock Claude Haiku（~400 tokens/回） | ~$0.35 |
+| EventBridge・SSM | ~$0 |
+| **合計** | **~$0.38（約57円）** |

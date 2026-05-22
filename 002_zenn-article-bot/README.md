@@ -1,326 +1,129 @@
-# 002_Zenn_Auto_Article_Bot — Zenn技術記事自動生成ボット
+# 002 Zenn Article Bot（初級）
 
-AWSとBedrockで構築したZenn技術記事の自動生成システム。  
-毎月第1・第3木曜21時（JST）にBedrockがAWSトピックをランダム選択し、2,000〜3,500文字の記事と構成図PNG×2枚を生成する。  
-SSM Parameter Storeで直近5件のトピックを管理し、同じテーマの連続投稿を防止する。
+> AWS初学者向け技術記事を毎月2回、Bedrock Claude で 3,000〜5,500文字自動生成し、matplotlib + AWS公式アイコンでアーキテクチャ図PNG×2枚を同時生成してS3に保存するシステム。
 
-## フォルダ構成
+[![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20S3-orange)](https://aws.amazon.com)
+[![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
+[![Zenn](https://img.shields.io/badge/Zenn-zenn.dev%2Fzer0__infra-3EA8FF)](https://zenn.dev/zer0_infra)
+[![Cost](https://img.shields.io/badge/月額-~%240.16-green)](https://aws.amazon.com/pricing)
 
-```text
+## 概要
+
+| 項目 | 内容 |
+|------|------|
+| 生成頻度 | 毎月第1・第3木曜 21:00 JST |
+| 対応トピック | 22種類のAWSサービス（EC2/S3/Lambda/RDS 等） |
+| 記事ボリューム | 3,000〜5,500文字 + Zenn Markdown 完全対応 |
+| 生成画像 | アーキテクチャ図 PNG × 2枚（AWS公式アイコン使用） |
+| 重複防止 | SSM で直近5件を記録、同一トピック連続生成を防止 |
+| 出力先 | Amazon S3（`zer0-dev-s3/zenn-articles/`）+ SES メール通知 |
+| 月額コスト | ~$0.16（約24円） |
+
+## アーキテクチャ
+
+![アーキテクチャ図](images/002_architecture.png)
+
+```
+EventBridge Scheduler（第1・第3木曜 21:00 JST）
+  └─▶ Lambda（Python 3.14 / 256MB / 900秒）
+        ├─ SSM からトピック履歴取得（直近5件除外）
+        ├─ Bedrock Claude Haiku（記事本文生成 ~8,000 tokens出力）
+        ├─ diagram_generator.py
+        │   ├─ matplotlib + AWS公式アイコン（64px PNG）
+        │   └─ PNG 生成 × 2枚（メイン構成図 + 詳細図）
+        ├─ S3 PUT（MD + PNG × 2）
+        ├─ SSM PUT（トピック履歴更新）
+        └─ SES（生成完了メール通知）
+```
+
+## 技術スタック
+
+| レイヤー | 技術 |
+|----------|------|
+| 実行基盤 | AWS Lambda（Python 3.14 / 256MB / 900秒） |
+| AI生成 | Amazon Bedrock（Claude Haiku / max_tokens: 8,192） |
+| 図生成 | matplotlib（Graphviz・diagrams 依存ゼロ） |
+| アイコン | AWS公式アイコン 64px PNG（Lambda Layer に同梱） |
+| 状態管理 | SSM Parameter Store（トピック履歴 + 記事カウンター） |
+| ストレージ | Amazon S3（ライフサイクル90日自動削除設定済み） |
+| 通知 | Amazon SES |
+| IaC | CloudFormation |
+| Lambda Layer | matplotlib / numpy / Pillow（50MB 以内 / 直接アップロード） |
+
+## 実装のこだわり
+
+### 1. Lambda 環境での図生成（Graphviz 不使用）
+`diagrams` や `graphviz` はシステムバイナリが必要なため Lambda では動作しない。**matplotlib のみで AWS公式アイコンを配置・矢印描画するカスタムエンジン**（`diagram_generator.py`）を自前実装。ノード間の矢印衝突回避・クラスター枠の自動パディング調整・日本語フォントの動的ロードまで独自で実装している。
+
+### 2. Zenn Markdown 完全対応
+単純な Markdown ではなく、Zenn 独自の記法（`:::message`・`:::details`・コードタイトル付きブロック）をプロンプトに組み込み。Few-shot で出力フォーマットを固定し、Bedrock がフォーマット違反を起こさないよう制御。
+
+### 3. AWSサービス名の自動最新化
+古い名称（例: `SageMaker` → `SageMaker AI`、`Kinesis Data Streams` → `Managed Streaming for Apache Kafka`）を辞書で管理し生成記事内を自動置換。Bedrock の学習データが古くても公式名称での出力を保証。
+
+### 4. `output/` 自動クリーンアップ
+記事保存のたびに `_cleanup_old_articles()` が実行され、最新5件（`OUTPUT_KEEP_MAX=5`）を超えた古いフォルダを自動削除。ローカル容量の肥大化を防ぎ、S3 側も90日ライフサイクルで自動削除。
+
+## 対応トピック（22種）
+
+| カテゴリ | トピック |
+|----------|----------|
+| コンピューティング | EC2、Lambda、ECS、Fargate |
+| ストレージ | S3、EBS、EFS |
+| データベース | RDS、DynamoDB、ElastiCache |
+| ネットワーク | VPC、CloudFront、Route53、API Gateway |
+| セキュリティ | IAM、KMS、WAF、Shield |
+| 運用監視 | CloudWatch、Systems Manager |
+| AI/ML | Bedrock |
+
+## ディレクトリ構成
+
+```
 002_Zenn_Auto_Article_Bot/
-├── README.md              # このファイル
+├── src/
+│   ├── lambda_function.py    # メインロジック
+│   ├── diagram_generator.py  # matplotlib 図生成エンジン
+│   ├── deploy.sh             # デプロイスクリプト
+│   └── tests/
+│       └── test_lambda.py    # ユニットテスト（4件）
 ├── scripts/
-│   ├── build_layer.sh     # matplotlib Lambda Layer をビルド&アップロードするスクリプト
-│   └── download_article.sh# S3からoutput/にダウンロードするスクリプト
-├── src/                   # 実装コード
-│   ├── aws_icons/         # AWS公式アイコンPNG（38枚、Lambda関数コードに同梱）
-│   └── ...
-├── output/                # 生成された記事・画像の出力先
-├── logs/                  # download_article.sh の実行ログ
-└── article/               # このボットを紹介するZenn記事
-```
-
-### src/
-
-| ファイル                                | 役割                                                                                        |
-| --------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `lambda_function.py`                    | メイン処理（トピック選択・SSM重複除外・記事生成・S3保存・メール通知）                       |
-| `diagram_generator.py`                  | 22トピック × 2枚（計44パターン）のAWSアーキテクチャ図をPNG生成                              |
-| `cloudformation-article-generator.yaml` | メインスタック（Lambda・EventBridge・IAMロール・DLQ・CloudWatch Logs）                |
-| `deploy.sh`                             | CFnスタックデプロイ + Lambda直接コードデプロイ（S3不使用）                             |
-| `requirements.txt`                      | Pythonパッケージ（`matplotlib>=3.8.0`）                                                     |
-| `aws_icons/`                            | AWS公式アイコンPNG 38枚（AWS公式アーキテクチャアイコンパッケージ 2026年1月版）              |
-
-### output/
-
-S3からダウンロードした記事が `YYYYMMDD_HHMMSS_{トピックID}` の命名規則で保存される。
-
-```text
-output/
-├── 001_20260403_233457_sqs/
-│   ├── 20260403_233457_sqs.md                  # 記事本文（Zenn Markdown、frontmatter付き）
-│   └── images/
-│       ├── 20260403_233457_sqs_diagram_1.png   # 構成図①（はじめに直後・よく使われる構成）
-│       └── 20260403_233457_sqs_diagram_2.png   # 構成図②（ハンズオン冒頭・構築する構成）
-├── 002_20260410_210000_ec2/
-│   ├── 20260410_210000_ec2.md
-│   └── images/
-│       └── ...
-└── ...
-```
-
-記事ごとに `NNN_YYYYMMDD_HHMMSS_トピックID/` フォルダが作成される。連番はSSMカウンター（`/zenn-article-bot/article-counter`）で管理し、Lambda再起動（コールドスタート）に関係なく一貫した連番を保証する。新しい記事が保存されるたびに古いフォルダが自動削除され、常に最新5件のみ保持される（`OUTPUT_KEEP_MAX = 5`）。
-
-### article/
-
-このボットの構築過程を解説したZenn掲載用の記事一式。
-
-```text
-article/
-├── note_bot_article.md       # 「作った話」Zenn記事本文
+│   ├── build_layer.sh        # Lambda Layer ビルド
+│   └── download_article.sh   # S3 から生成記事をローカルに取得
+├── cloudformation-article-generator.yaml
 └── images/
-    └── （Zenn記事用画像）
+    └── 002_architecture.png
 ```
-
-## システム構成
-
-![アーキテクチャ図](./images/002_architecture.png)
-
-| サービス                       | 役割                                                      |
-| ------------------------------ | --------------------------------------------------------- |
-| EventBridge Scheduler          | 毎月第1・第3木曜21時（UTC 12時）に起動                    |
-| Lambda                         | メイン処理（Python 3.14、タイムアウト15分、256MB）        |
-| Bedrock（Claude Haiku 4.5 JP） | 記事生成・トピックランダム選択                            |
-| SSM Parameter Store            | 直近5件のトピックIDを保存し、同一トピックの連続投稿を防止 |
-| SSM Parameter Store（記事番号）| 記事連番カウンターを管理（`/zenn-article-bot/article-counter`） |
-| S3（zer0-dev-s3）              | 生成記事・PNG画像の一時保存（`zenn-articles/`）           |
-| SES                            | 完了メール通知（S3保存先URL・次のアクション記載）         |
-| SQS（DLQ）                    | Lambda失敗時のイベント保存（14日間保持）                  |
-| CloudWatch Alarm               | DLQにメッセージが積まれた際にSNS経由でメール通知          |
-| SNS                            | CloudWatch Alarm → メール通知のブリッジ                  |
-| Lambda Layer（matplotlib）     | matplotlib + numpy + pillow（`matplotlib_layer.zip`）     |
-
-## 自動化フロー
-
-```text
-第1・第3木曜21:00 JST  EventBridge Scheduler → Lambda自動実行
-                    ↓ SSMから直近5トピックを取得（除外リスト）
-                    ↓ Bedrockでトピック選択（除外リスト以外から）
-                    ↓ SSMに選択トピックを保存
-                    ↓ AWS公式ドキュメント取得（docs.aws.amazon.com から該当サービスのページをHTTP取得・最大6,000文字）
-                    ↓ Bedrockで記事生成（2,000〜3,500文字）※公式ドキュメントを根拠情報としてプロンプトに含める
-                    ↓ matplotlib でPNG×2枚生成（AWS公式アイコン使用）
-                    ↓ {DIAGRAM_N}マーカーを画像プレースホルダーに置換（はじめに直後・ハンズオン冒頭）
-                    ↓ S3に保存（zer0-dev-s3/zenn-articles/...）
-                    ↓ SESメール送信（S3保存先URL・手順記載）
-```
-
-> **ダウンロードはメール受信後に手動で実行する。**  
-> S3に保存されているため、いつ実行しても記事・画像は消えない。
-
-## 対応トピック（22種類）
-
-**基本サービス（12）:** EC2 / S3 / IAM / VPC / RDS / Lambda / CloudWatch / ECS / DynamoDB / CloudFront / API Gateway / SQS
-
-**AI / ML（4）:** Bedrock / SageMaker / Rekognition / Textract
-
-**その他主要サービス（6）:** Step Functions / SNS / ElastiCache / Route 53 / Kinesis / CloudTrail
-
-各トピックにつき構成図を**2枚**生成（合計44パターン）。
-
-| トピック        | 図①                                    | 図②                                |
-| --------------- | -------------------------------------- | ---------------------------------- |
-| EC2             | ALB + EC2×2 + RDS                      | CloudWatch + Auto Scaling          |
-| S3              | S3 → CloudFront 配信                   | S3 イベント → Lambda → DynamoDB    |
-| IAM             | ユーザー / ロール構成                  | EC2 インスタンスプロファイル       |
-| VPC             | パブリック/プライベートサブネット      | NAT Gateway アウトバウンド         |
-| RDS             | Multi-AZ（AZ-a/b）                     | Read Replica（読み取り分離）       |
-| Lambda          | EventBridge → Lambda → DDB/S3          | SQS トリガー → Lambda → DDB        |
-| CloudWatch      | メトリクス監視 + SNS 通知              | Alarm + EventBridge 自動修復       |
-| ECS             | ALB + Fargate + RDS                    | CloudWatch + Auto Scaling          |
-| DynamoDB        | Streams + Lambda トリガー              | DAX インメモリキャッシュ           |
-| CloudFront      | S3 + ALB オリジン                      | WAF 統合                           |
-| API Gateway     | Lambda + DynamoDB                      | Cognito 認証統合                   |
-| SQS             | Producer / Consumer                    | デッドレターキュー（DLQ）          |
-| **Bedrock**     | API GW + Lambda → Claude               | Knowledge Base（RAG構成）          |
-| **SageMaker**   | Training Job → S3 → Endpoint           | API GW 経由の推論API公開           |
-| **Rekognition** | S3 + Lambda 画像解析パイプライン       | API GW リアルタイム顔認証          |
-| **Textract**    | S3 非同期文書解析 → DynamoDB           | Textract + Comprehend テキスト解析 |
-| **Step Func**   | Lambda 順次実行ワークフロー            | Retry/Catch エラーハンドリング     |
-| **SNS**         | Pub/Sub ファンアウト                   | CloudWatch Alarm → メール + Lambda |
-| **ElastiCache** | Lambda + Redis + RDS キャッシュ        | ALB + EC2 セッション共有           |
-| **Route 53**    | フェイルオーバールーティング           | CloudFront + S3/ALB エイリアス     |
-| **Kinesis**     | Data Streams + Lambda リアルタイム処理 | Firehose + S3 + Athena 分析        |
-| **CloudTrail**  | 操作ログ S3保存 + CloudWatch Logs      | EventBridge セキュリティ自動対応   |
-
-## 生成記事のフォーマット（Zenn Markdown）
-
-ZennはMarkdownテーブル・`:::message`・`:::details`・コードブロックのファイル名指定に対応しており、これらを積極活用したプロンプトになっている。
-
-```markdown
-# テーブル（料金比較など）
-| プラン | 料金 |
-| ------ | ---- |
-| 標準キュー | $0. 40/100万 |
-
-# メッセージボックス
-:::message
-重要ポイント
-:::
-
-:::message alert
-コスト・セキュリティの注意
-:::
-
-# アコーディオン
-:::details 応用設定
-補足内容
-:::
-```
-
-生成されたMDファイルはZenn YAML frontmatter付きで出力される。
-
-```yaml
----
-title: "Amazon SQS：メッセージキューで疎結合アーキテクチャを実現するガイド"
-emoji: "📬"
-type: "tech"
-topics: ["aws", "sqs", "メッセージキュー", "クラウド"]
-published: false
----
-```
-
-## MDファイルの画像挿入について
-
-Bedrockが記事中に `{DIAGRAM_1}` / `{DIAGRAM_2}` マーカーを書き、Pythonがそのマーカーを画像プレースホルダーに置換する（マーカーなしの場合は見出し名でフォールバック挿入）。
-
-| 図  | 挿入位置             | キャプション                                |
-| --- | -------------------- | ------------------------------------------- |
-| 図① | `## はじめに` 直後   | `{サービス名} – よく使われる全体構成図`     |
-| 図② | `## ハンズオン` 冒頭 | `{サービス名} – ハンズオンで構築する構成図` |
-
-**ローカルでは `./images/ファイル名` の相対パスで画像がそのまま表示される。**  
-Zenn投稿時は `:::message` の指示に従い、Zenn CDN URLに差し替える。
-
-```markdown
-:::message
-📷 **【Zenn投稿時】** `20260403_233457_sqs_diagram_1.png` をZennエディタでアップロードし、下の画像パスをZenn CDN URLに置き換えてください。
-:::
-
-![Amazon SQS – よく使われる全体構成図](./images/20260403_233457_sqs_diagram_1.png)
-*Amazon SQS – よく使われる全体構成図*
-```
-
-## AWSサービス名の最新化
-
-プロンプトに以下のルールを組み込み済み。
-
-- 記事内では**現在の正式名称**を使用する
-- 改名があった場合は「○○とは？」冒頭に `:::message` で旧称→新称テーブルを挿入する
-- コードブロック内のサンプル日付は**Lambda実行日（JST）を自動注入**する（`2024`等の過去年は出力されない）
-
-### 主な改名済みサービス（対応トピック内）
-
-| 現在の正式名称                          | 旧称                   | 改名時期   |
-| --------------------------------------- | ---------------------- | ---------- |
-| Amazon SageMaker AI                     | Amazon SageMaker       | 2024年11月 |
-| Amazon Data Firehose                    | Kinesis Data Firehose  | 2024年     |
-| Amazon Managed Service for Apache Flink | Kinesis Data Analytics | 2023年     |
-
-## SSM パラメータ
-
-| パラメータ名 | 内容 |
-|---|---|
-| `/zenn-article-bot/recent-topics` | 直近5件のトピックID（JSON配列）。同一トピックの連続生成を防止 |
-| `/zenn-article-bot/article-counter` | 記事連番カウンター（整数）。Lambda実行ごとにインクリメント |
-
-## SSM トピック重複除外
-
-`/zenn-article-bot/recent-topics` に直近5件のトピックIDをJSON配列で保存。
-
-```text
-1回目実行: ["sqs"]
-2回目実行: ["sqs", "ec2"]
-...
-6回目実行: ["ec2", "s3", "iam", "rds", "lambda"]  ← sqs が解禁
-```
-
-手動でリセットする場合:
-
-```bash
-aws ssm delete-parameter --name "/zenn-article-bot/recent-topics" --region ap-northeast-1
-```
-
-## ユニットテスト
-
-```bash
-cd ~/Zer0/002_Zenn_Auto_Article_Bot/src
-python3 -m pytest tests/ -v
-```
-
-テスト内容（4件）: プロンプトformat / SSM読み込み（空・有・不正JSON） / モデル切替
-
-## ローカル実行（手動生成）
-
-```bash
-cd ~/Zer0/002_Zenn_Auto_Article_Bot/src
-export SES_SENDER_EMAIL=your@gmail.com
-export SES_RECIPIENT_EMAIL=your@gmail.com
-python3 lambda_function.py
-```
-
-生成物は `output/` に保存される。
-
-## S3からの手動ダウンロード
-
-```bash
-bash ~/Zer0/002_Zenn_Auto_Article_Bot/scripts/download_article.sh
-```
-
-- S3の `zenn-articles/` 以下を全て `output/` にダウンロード
-- ダウンロード完了後、S3オブジェクトを自動削除
 
 ## デプロイ
 
 ```bash
-cd ~/Zer0/002_Zenn_Auto_Article_Bot/src
-export SENDER_EMAIL=your@gmail.com
-export RECIPIENT_EMAIL=your@gmail.com
-./deploy.sh
+# 初回デプロイ（CloudFormation + Lambda）
+SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
+
+# Layer も更新する場合
+DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
 ```
 
-`deploy.sh` の流れ：
-
-1. `cloudformation-article-generator.yaml` デプロイ（`zenn-article-generator` スタック）  
-   └ Layer ARN は既存 Lambda から自動取得してパラメーター渡し
-2. `aws lambda update-function-code --zip-file`（コード直接アップロード、S3不使用）
-3. `sync_to_public.sh` でGitHub自動同期
-
-### 手動デプロイ（deploy.sh を使わない場合）
+## テスト / 動作確認
 
 ```bash
-cd /root/Zer0/002_Zenn_Auto_Article_Bot/src
+# ユニットテスト（4件）
+cd src && python -m pytest tests/ -v
 
-# 現在使用中の Layer ARN を取得
-LAYER_ARN=$(aws lambda get-function-configuration \
-  --function-name ZennArticleGenerator \
-  --region ap-northeast-1 \
-  --query "Layers[0].Arn" --output text)
+# Lambda 手動実行（DRY_RUN: S3保存・SES送信をスキップ）
+aws lambda invoke --function-name zenn-article-generator \
+  --payload '{"dry_run": true}' /tmp/out.json --region ap-northeast-1
 
-# ① CFnスタック更新（IAMロール・環境変数変更時）
-aws cloudformation deploy \
-  --template-file cloudformation-article-generator.yaml \
-  --stack-name zenn-article-generator \
-  --region ap-northeast-1 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides \
-    SenderEmail=sinnjibaby@gmail.com \
-    RecipientEmail=sinnjibaby@gmail.com \
-    DiagramsLayerArn="$LAYER_ARN" \
-  --no-fail-on-empty-changeset
-
-# ② Lambda コードのみ更新（ソースコード変更時）
-zip -r /tmp/zenn_function.zip lambda_function.py diagram_generator.py aws_icons/ fonts/ -q
-aws lambda update-function-code \
-  --function-name ZennArticleGenerator \
-  --zip-file fileb:///tmp/zenn_function.zip \
-  --region ap-northeast-1
-rm -f /tmp/zenn_function.zip
+# S3 から生成記事をローカルに取得
+bash scripts/download_article.sh
 ```
 
-### Lambda Layer
+## コスト内訳
 
-`matplotlib-aws-icons`（matplotlib + numpy + pillow）を `aws lambda publish-layer-version` で直接管理。  
-Layer ARN は `deploy.sh` が既存 Lambda 設定から自動取得し、CFn パラメーターとして渡す。  
-Layer を更新する場合：`DEPLOY_LAYER=1 ./deploy.sh` で新バージョンをパブリッシュして再デプロイ。
-
-> `aws_icons/` は関数コードZIPに同梱されるため、Layerには含まない。
-
-## 技術スタック
-
-| 項目           | 内容                                                          |
-| -------------- | ------------------------------------------------------------- |
-| 構成図描画     | matplotlib + AWS公式アイコンPNG（公式パッケージ 2026年1月版） |
-| 依存排除       | Graphviz・diagrams ライブラリへの依存ゼロ                     |
-| Lambda互換     | `matplotlib.use('Agg')` でGUIバックエンドを無効化             |
-| 日本語フォント | Noto Sans CJK JP を優先使用、なければデフォルト               |
+| サービス | 月額 |
+|----------|------|
+| Lambda 実行（2回/月 × ~90秒 × 256MB） | ~$0.001 |
+| Bedrock Claude Haiku（~8,000 tokens/回） | ~$0.12 |
+| S3 ストレージ・PUT | ~$0.01 |
+| SES 送信（2通/月） | ~$0 |
+| **合計** | **~$0.16（約24円）** |

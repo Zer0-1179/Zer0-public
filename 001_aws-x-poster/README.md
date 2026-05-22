@@ -1,104 +1,116 @@
-# 001_aws-x-poster — AWSニュース自動投稿Bot
+# 001 AWS News Auto-Poster
 
-AWSの最新ニュースをRSSで取得し、Bedrockで @Zer0_Infra の口調に変換してXに自動投稿するBot。
+> AWS最新ニュースを4ソースのRSSから収集し、Bedrock Claude で @Zer0_Infra の口調に変換してXへ毎日2回自動投稿するサーバーレスBot。3段階の重複フィルタで品質を担保。
 
-## フォルダ構成
+[![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20EventBridge-orange)](https://aws.amazon.com)
+[![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
+[![Cost](https://img.shields.io/badge/月額-~%241.2-green)](https://aws.amazon.com/pricing)
 
-```text
+## 概要
+
+| 項目 | 内容 |
+|------|------|
+| 投稿頻度 | 毎日 9:00 JST（朝）・20:00 JST（夜）の計2回 |
+| 情報ソース | AWS公式ブログ / クラスメソッド / Zenn / Qiita（4ソース） |
+| 取得期間 | 過去14日以内の記事のみ |
+| 重複排除 | URL完全一致 → キーワード → AWSサービス名の3段階 |
+| AI変換 | Amazon Bedrock Claude Haiku（口調変換・ハッシュタグ生成） |
+| IaC | CloudFormation（全リソース管理） |
+| 月額コスト | ~$1.2（約180円） |
+
+## アーキテクチャ
+
+![アーキテクチャ図](images/001_architecture.png)
+
+```
+EventBridge Scheduler（9:00 / 20:00 JST）
+  └─▶ Lambda（Python 3.14）
+        ├─ RSS/Atom 取得（AWS公式・Classmethod・Zenn・Qiita）
+        ├─ 14日フィルタ + 3段階重複排除
+        ├─ Bedrock Claude Haiku（口調変換・ハッシュタグ生成）
+        ├─ SSM Parameter Store（投稿済み URL 記録）
+        └─ X API v2（POST）
+```
+
+## 技術スタック
+
+| レイヤー | 技術 |
+|----------|------|
+| 実行基盤 | AWS Lambda（Python 3.14 / 256MB / 120秒） |
+| スケジューリング | Amazon EventBridge Scheduler（JST タイムゾーン対応） |
+| AI変換 | Amazon Bedrock（Claude Haiku） |
+| 状態管理 | AWS Systems Manager Parameter Store |
+| 投稿先 | X（旧Twitter）API v2 |
+| IaC | AWS CloudFormation |
+
+## 実装のこだわり
+
+### 1. Qiita の Atom 形式対応
+Qiita は RSS ではなく Atom 形式でフィードを配信する。RSS パーサーのみ実装していたため記事が0件になる障害が発生。Atom 名前空間（`{http://www.w3.org/2005/Atom}`）を個別処理するパーサーを追加して解決。フォーマット違いを吸収する設計にしたことで、今後ソース追加時も対応しやすい構造を実現。
+
+### 2. 3段階の重複排除ロジック
+単純な URL 一致だと「別 URL の同内容記事」を投稿してしまうケースがあった。
+- **第1段階**: 投稿済み URL 完全一致チェック（SSM 保存）
+- **第2段階**: タイトルキーワード類似度チェック
+- **第3段階**: AWS サービス名抽出 + 直近投稿との重複チェック
+
+### 3. 時間帯別プロンプト設計
+朝（9:00）は「情報提供型」、夜（20:00）は「振り返り・考察型」でプロンプトを切り替え。同じ記事でも読み手の文脈に合ったコンテンツを生成。
+
+### 4. IAM 最小権限設計
+`AmazonBedrockFullAccess` から特定モデル ARN のみ許可するカスタムポリシーに変更。SSM も `/xposter/*` パスのみ読み取り許可に絞り込み、最小権限の原則を実装。
+
+## ディレクトリ構成
+
+```
 001_aws-x-poster/
-├── README.md                          # このファイル
-├── src/                               # 実装コード（デプロイ対象）
-│   ├── lambda_function.py             # Lambda本体（RSS取得・Bedrock生成・X投稿）
-│   ├── cloudformation.yaml            # インフラ定義（Lambda・EventBridge・IAMロール）
-│   └── deploy.sh                      # デプロイスクリプト
-└── docs/                              # ドキュメント（参照用）
-    ├── aws-x-poster-definition.md     # 構築定義書（設計・手順・運用コマンド集）
-    └── x-poster-apikey.md             # APIキー管理メモ（SSM登録済み）
+├── src/
+│   ├── lambda_function.py   # メインロジック
+│   └── deploy.sh            # デプロイスクリプト
+├── cloudformation-aws-x-poster.yaml
+└── images/
+    └── 001_architecture.png
 ```
-
-## システム構成
-
-![アーキテクチャ図](./images/001_architecture.png)
-
-```text
-EventBridge（朝9時 / 夜20時 JST）
-  ↓
-Lambda（aws-x-poster）
-  ├── SSM Parameter Store → X APIキー取得
-  ├── SSM Parameter Store → 投稿履歴（used_urls / used_types / used_keywords / used_services）読み込み
-  ├── RSS取得（AWS公式ニュース・AWSブログ・クラスメソッド・Zenn・Qiita）
-  │   ├── 14日以内の記事のみを対象（古い記事を除外）
-  │   ├── 段階的フィルタで重複除外（URL→キーワード→サービスクールダウン）
-  │   └── MAINSTREAM_KEYWORDSスコアで記事選択（Zenn・Qiitaはスコア1以上のみ）
-  ├── Bedrock（Claude Haiku 4.5 JP）でツイート生成
-  │   └── @Zer0_Infra のFew-shot例で口調を再現
-  ├── X API v2（OAuth 1.0a）で投稿
-  └── SSM Parameter Store → 投稿履歴を更新して保存
-```
-
-## 投稿スタイル
-
-| 時間帯       | スタイル                    | URL                | 投稿タイプ                                                                |
-| ------------ | --------------------------- | ------------------ | ------------------------------------------------------------------------- |
-| 朝 9:00 JST  | ひとこと感想系・100文字以内 | なし（リーチ重視） | `news_reaction` / `aws_tips` / `aws_question`                             |
-| 夜 20:00 JST | ニュース紹介系・160文字以内 | あり（ソース明示） | `news_intro` / `aws_failure` / `news_comparison` / `classmethod_reaction` |
-
-- 投稿タイプはSSMに記録した直近6件の使用履歴をもとに、未使用タイプからランダム選択
-- `classmethod_reaction` はクラスメソッドの記事固定・日本語タイトル優先
-- 記事内容に応じてハッシュタグを動的生成（`#AWS` 固定 + 最大2サービス）
-- 重複防止：14日以内の記事のみ対象 + URL（直近28件）・トピックキーワード（直近40件）・サービス別3日クールダウンの段階的フィルタ
 
 ## デプロイ
 
 ```bash
-cd ~/Zer0/001_aws-x-poster/src
+# 初回（CloudFormation + Lambda コード）
+bash src/deploy.sh --full
 
-# 初回セットアップ（SSM登録 + CloudFormation + コード更新）
-bash deploy.sh
+# コードのみ更新
+bash src/deploy.sh
 
-# コードのみ再デプロイ
-bash deploy.sh --code-only
-
-# DRY RUNテスト（投稿なし・ログ確認）
-bash deploy.sh --test
+# DRY_RUN テスト（実投稿なし）
+FORCE_SLOT=morning bash src/deploy.sh --test
 ```
 
 ## 運用コマンド
 
 ```bash
-# DRY RUNテスト（実行時刻のスロットで動作）
-bash deploy.sh --test
-
-# 朝スロットを強制してテスト（FORCE_SLOT=morning を一時設定→テスト→戻す）
-# ※ FORCE_SLOT に morning / evening 以外の値を設定した場合は evening にフォールバック
-
-# ログ確認
+# 最新ログ確認
 aws logs tail /aws/lambda/aws-x-poster --follow --region ap-northeast-1
 
-# 停止 / 再開
+# EventBridge 一時停止
 aws events disable-rule --name aws-x-poster-morning --region ap-northeast-1
 aws events disable-rule --name aws-x-poster-evening --region ap-northeast-1
-aws events enable-rule  --name aws-x-poster-morning --region ap-northeast-1
-aws events enable-rule  --name aws-x-poster-evening --region ap-northeast-1
 ```
 
-## コスト概算（月額）
+## コスト内訳
 
-| サービス            | 費用                     |
-| ------------------- | ------------------------ |
-| Lambda（月60回）    | 無料枠内                 |
-| EventBridge         | 無料                     |
-| SSM Parameter Store | 無料                     |
-| Bedrock（月60回）   | 約$0.6                   |
-| X API（月60投稿）   | 約$0.6                   |
-| **合計**            | **約$1.2（約180円）/月** |
+| サービス | 月額 |
+|----------|------|
+| Lambda 実行（60回/月 × ~3秒） | ~$0.001 |
+| Bedrock Claude Haiku（~500 tokens/回） | ~$1.2 |
+| EventBridge・SSM | ~$0 |
+| **合計** | **~$1.2（約180円）** |
 
 ## トラブルシューティング
 
-| エラー                                      | 原因                                    | 対処                                                     |
-| ------------------------------------------- | --------------------------------------- | -------------------------------------------------------- |
-| `ValidationException: model ID invalid`     | Bedrockのモデルプレフィックスが違う     | 日本向けは `jp.` プレフィックスを使用                    |
-| `402 Payment Required`                      | X APIクレジット不足                     | developer.x.com でクレジットをチャージ（最低$5）         |
-| `403 Forbidden`                             | コードに不要な残骸が混在している        | `bash deploy.sh --code-only` でゼロからビルドし直す      |
-| `AccessDeniedException: reserved parameter` | SSMパラメータ名が `/aws` で始まっている | `/xposter/` など別のプレフィックスを使う                 |
-| `AccessDeniedException` on PutParameter     | IAMロールにSSM書き込み権限がない        | `xposter-history-write` インラインポリシーをロールに追加 |
+| 症状 | 原因 | 対処 |
+|------|------|------|
+| 投稿が0件 | RSS/Atom フィード取得失敗 | CloudWatch Logs で HTTP ステータス確認 |
+| 重複投稿 | SSM パラメータ破損 | `/xposter/posted_urls` を手動クリア |
+| Bedrock エラー | IAM 権限不足 | カスタムポリシーのモデル ARN を確認 |
+| X API 403 | レート制限 | 15分後に再実行 |
+| Qiita 記事0件 | Atom パーサー未対応の旧コード | `parse_atom()` 関数の有無を確認 |

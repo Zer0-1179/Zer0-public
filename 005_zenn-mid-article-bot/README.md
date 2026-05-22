@@ -1,290 +1,122 @@
-# 005_Zenn_Mid_Article_Bot
+# 005 Zenn Article Bot（中級）
 
-AWS中級者向けZenn技術記事を毎月2回（1日・15日）自動生成するサーバーレスシステム。
+> 複合アーキテクチャ×ユースケース別の16トピックから毎月2回、10,000〜15,000文字の中級 AWS 技術記事を Bedrock Claude Sonnet で自動生成するシステム。002（初級Bot）の上位互換として設計。
 
-複数AWSサービスを組み合わせた「複合アーキテクチャ」記事と「ユースケース別ソリューション」記事をミックスして生成します。
-
----
+[![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20S3-orange)](https://aws.amazon.com)
+[![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
+[![Zenn](https://img.shields.io/badge/Zenn-zenn.dev%2Fzer0__infra-3EA8FF)](https://zenn.dev/zer0_infra)
+[![Cost](https://img.shields.io/badge/月額-~%242.8-green)](https://aws.amazon.com/pricing)
 
 ## 概要
 
-| 項目             | 内容                                              |
-| ---------------- | ------------------------------------------------- |
-| 対象読者         | AWSの基本サービスを知っている中級者               |
-| 記事タイプ       | 複合アーキテクチャ / ユースケース別ソリューション |
-| 実行スケジュール | 毎月1日・15日 21:00 JST                           |
-| 記事ボリューム   | 10,000〜15,000文字 + アーキテクチャ図2枚          |
-| トピック数       | 16テーマ（約8ヶ月分）                             |
-| 重複防止         | 直近4記事を除外                                   |
-
----
+| 項目 | 内容 |
+|------|------|
+| 生成頻度 | 毎月1日・15日 21:00 JST |
+| 対応トピック | 16種類（複合アーキテクチャ8 + ユースケース別8） |
+| 記事ボリューム | 10,000〜15,000文字（初級Botの約3倍） |
+| 差別化セクション | コスト最適化・セキュリティ設計・スケーラビリティの考慮点を追加 |
+| 生成画像 | アーキテクチャ図 PNG × 2枚（AWS公式アイコン使用） |
+| 使用モデル | Amazon Bedrock Claude Sonnet 4.6（初級Botは Haiku） |
+| 月額コスト | ~$2.8（約420円） |
 
 ## アーキテクチャ
 
-![アーキテクチャ図](./images/005_architecture.png)
+![アーキテクチャ図](images/005_architecture.png)
 
-```text
-EventBridge (月2回: 1日・15日 21:00 JST)
-    ↓
-Lambda (ZennMidArticleGenerator)
-    ├─ Step 1: SSM から直近4トピックを取得（除外リスト）
-    ├─ Step 2: Bedrock でトピック選択（16種類からランダム）
-    ├─ Step 2.5: AWS公式ドキュメント取得（primary_serviceのdocs.aws.amazon.comページ・最大6,000文字）
-    ├─ Step 3: Bedrock で中級者向け記事を生成（10,000〜15,000文字）※公式ドキュメントを根拠情報として付与
-    ├─ Step 4: matplotlib でアーキテクチャ図を2枚生成（AWS公式アイコン使用）
-    ├─ Step 5: S3 に保存（zenn-mid-articles/ プレフィックス）
-    ├─ Step 6: SSM にトピックを保存
-    └─ Step 7: SES でメール通知
-    ↓
-手動: scripts/download_article.sh → output/ → Zennに投稿
+```
+EventBridge（毎月1日・15日 21:00 JST）
+  └─▶ Lambda（Python 3.14 / 512MB / 900秒）
+        ├─ Bedrock Claude Haiku（トピック選択: ~10 tokens）
+        ├─ SSM からトピック履歴取得（直近4件除外）
+        ├─ Bedrock Claude Sonnet（記事本文生成: ~12,000 tokens出力）
+        ├─ diagram_generator.py（matplotlib + AWS公式アイコン）
+        ├─ S3 PUT（MD + PNG × 2）
+        ├─ SSM PUT（トピック履歴更新）
+        └─ SES（生成完了メール通知）
 ```
 
----
+## 初級Bot（002）との比較
 
-## トピック一覧
+| 項目 | 002（初級） | 005（中級） |
+|------|-------------|-------------|
+| ターゲット | AWS 入門者 | AWS 実務経験者 |
+| 文字数 | 3,000〜5,500 文字 | 10,000〜15,000 文字 |
+| 使用モデル | Claude Haiku | Claude Sonnet |
+| トピック数 | 22種（単一サービス） | 16種（複合アーキテクチャ） |
+| 追加セクション | なし | コスト最適化・セキュリティ・スケーラビリティ |
+| 月額コスト | ~$0.16 | ~$2.8 |
+| Lambda メモリ | 256MB | 512MB |
 
-### 複合アーキテクチャ系（8記事）
+## 対応トピック（16種）
 
-| ID                      | テーマ                         | 使用サービス                                  |
-| ----------------------- | ------------------------------ | --------------------------------------------- |
-| `serverless_ec`         | サーバーレスECバックエンド     | API GW + Lambda + DynamoDB + SQS + SNS        |
-| `static_web_hosting`    | 静的Webホスティング最適解      | S3 + CloudFront + Route 53 + ACM + WAF        |
-| `container_platform`    | コンテナアプリ本番運用         | ECS Fargate + ALB + ECR + CloudWatch          |
-| `event_driven_pipeline` | イベント駆動データパイプライン | Kinesis + Lambda + S3 + Athena                |
-| `microservices_base`    | マイクロサービス観測性基盤     | API GW + Lambda + DynamoDB + SQS + X-Ray      |
-| `multi_region_dr`       | マルチリージョンDR構成         | Route 53 + ALB + EC2 + RDS                    |
-| `realtime_notify`       | リアルタイム通知システム       | SNS + SQS + Lambda + SES + EventBridge        |
-| `bedrock_rag`           | Bedrock RAGアーキテクチャ      | Bedrock + S3 + OpenSearch Serverless + Lambda |
+| 複合アーキテクチャ（8種） | ユースケース別（8種） |
+|--------------------------|----------------------|
+| サーバーレス Web API | CI/CD パイプライン |
+| マイクロサービス（ECS）| ML モデル提供基盤 |
+| イベント駆動アーキテクチャ | ログ収集・分析基盤 |
+| データレイク構成 | コンテナ移行 |
+| マルチリージョン冗長化 | セキュリティ監視 |
+| ハイブリッドクラウド | コスト最適化 |
+| エッジコンピューティング | 災害復旧（DR）|
+| 機械学習パイプライン | モバイルバックエンド |
 
-### ユースケース別ソリューション（8記事）
+## 実装のこだわり
 
-| ID                   | テーマ                     | 使用サービス                                        |
-| -------------------- | -------------------------- | --------------------------------------------------- |
-| `cicd_pipeline`      | CI/CDパイプライン構築      | CodePipeline + CodeBuild + CodeDeploy + ECR         |
-| `ml_pipeline`        | 機械学習パイプライン自動化 | SageMaker AI + Step Functions + Lambda              |
-| `log_analytics`      | ログ集約・分析基盤         | CloudTrail + Kinesis Firehose + S3 + Athena         |
-| `cost_optimization`  | AWSコスト最適化実践        | Cost Explorer + Budgets + Savings Plans + Lambda    |
-| `security_hardening` | セキュリティ強化設計       | WAF + GuardDuty + Security Hub + Config             |
-| `backup_dr`          | バックアップ・DR設計       | AWS Backup + S3 Cross-Region + RDS                  |
-| `multi_account`      | マルチアカウント管理       | Organizations + Control Tower + IAM Identity Center |
-| `data_lake`          | データレイク構築           | S3 + Glue + Athena + Lake Formation + QuickSight    |
+### 1. 2段階 Bedrock 呼び出し設計
+記事生成に Claude Sonnet（高精度・高コスト）を使いつつ、**トピック選択には Claude Haiku**（低コスト）を使い分け。トピック選択は数トークンの判断で十分なため、コストを抑えながら記事品質を最大化。月額コストを約30%削減。
 
----
+### 2. 512MB メモリ設定の根拠
+中級記事では matplotlib で生成する構成図が複合アーキテクチャのため複雑化し、256MB では OOM エラーが発生。プロファイリングにより 380〜420MB が実使用量であることを確認し、512MB に設定。
+
+### 3. 初級Botとのコードベース分離
+002 と 005 は別 Lambda・別 CloudFormation スタック・別デプロイスクリプトとして完全分離。一方のバグ修正が他方に影響しない設計。プロンプトも読者層に応じて独立してチューニング可能。
+
+### 4. Function URL（AWS_IAM 認証）対応
+本番から独立したテスト経路として Lambda Function URL（AWS_IAM 認証）を追加。EventBridge を停止せず、AWS CLI の署名付きリクエストで任意のタイミングでテスト実行できる。
 
 ## ディレクトリ構成
 
-```text
+```
 005_Zenn_Mid_Article_Bot/
-├── README.md
-├── scripts/
-│   ├── build_layer.sh      # Lambda Layer（matplotlib）ビルド
-│   ├── download_article.sh # S3→ローカル記事取得スクリプト
-│   └── test_invoke.sh      # 手動テスト実行スクリプト
 ├── src/
-│   ├── lambda_function.py  # メインハンドラ（トピック選択・記事生成・図挿入・保存）
-│   ├── diagram_generator.py# アーキテクチャ図生成（16トピック×2枚 = 32パターン、AWS公式アイコン使用）
-│   ├── cloudformation-mid-article-generator.yaml  # CloudFormationテンプレート
-│   ├── deploy.sh           # デプロイスクリプト
-│   ├── requirements.txt
-│   ├── aws_icons/          # AWS公式アーキテクチャアイコンPNG（62枚）
-│   ├── install_aws_icons.py# diagrams パッケージから公式アイコンをコピーするスクリプト
-│   └── fonts/              # Noto Sans CJK JP フォント
-└── output/                 # 生成記事の保存先
-    └── NNN_YYYYMMDD_HHMMSS_TOPIC_ID/
-        ├── YYYYMMDD_HHMMSS_TOPIC_ID.md
-        └── images/
-            ├── YYYYMMDD_HHMMSS_TOPIC_ID_diagram_1.png
-            └── YYYYMMDD_HHMMSS_TOPIC_ID_diagram_2.png
+│   ├── lambda_function.py    # メインロジック
+│   ├── diagram_generator.py  # matplotlib 図生成エンジン
+│   ├── deploy.sh             # デプロイスクリプト
+│   └── tests/
+│       └── test_lambda.py    # ユニットテスト（5件）
+├── cloudformation-mid-article-generator.yaml
+└── images/
+    └── 005_architecture.png
 ```
 
----
-
-## 記事テンプレート構造（中級者向け）
-
-002プロジェクト（初級者向け）との主な違い：
-
-| 項目             | 002（初級）              | 005（中級）                                                    |
-| ---------------- | ------------------------ | -------------------------------------------------------------- |
-| 文字数           | 2,000〜3,500文字         | 10,000〜15,000文字                                             |
-| ハンズオン       | コンソール操作           | CloudFormationコード重視                                       |
-| 追加セクション   | なし                     | 設計上の考慮ポイント（コスト・セキュリティ・スケーラビリティ） |
-| 追加セクション   | なし                     | 月額コスト目安テーブル                                         |
-| アーキテクチャ図 | 図1: 構成図、図2: 関連図 | 図1: 全体アーキテクチャ構成図、図2: データフロー・詳細構成図   |
-| 図の挿入方式     | 固定位置                 | `{DIAGRAM_N}` マーカー方式（Bedrockが文脈に合った位置に配置）  |
-| サービス数       | 1サービス中心            | 3〜6サービス組み合わせ                                         |
-
----
-
-## セットアップ
-
-### 前提条件
-
-- AWS CLI 設定済み（`aws configure`）
-- Python 3.14
-- SESでメールアドレス検証済み
-
-### デプロイ手順
+## デプロイ
 
 ```bash
-# 1. 環境変数を設定してデプロイ
-cd ~/Zer0/005_Zenn_Mid_Article_Bot/src
-SENDER_EMAIL=sinnjibaby@gmail.com RECIPIENT_EMAIL=sinnjibaby@gmail.com ./deploy.sh
+# 初回デプロイ（CloudFormation + Lambda）
+SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
+
+# Layer も更新する場合
+DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
 ```
 
-### 手動デプロイ（deploy.sh を使わない場合）
+## テスト / 動作確認
 
 ```bash
-cd /root/Zer0/005_Zenn_Mid_Article_Bot/src
+# ユニットテスト（5件）
+cd src && python -m pytest tests/ -v
 
-# 現在使用中の Layer ARN を取得
-LAYER_ARN=$(aws lambda get-function-configuration \
-  --function-name ZennMidArticleGenerator \
-  --region ap-northeast-1 \
-  --query "Layers[0].Arn" --output text)
-
-# ① CFnスタック更新（IAMロール・環境変数変更時）
-aws cloudformation deploy \
-  --template-file cloudformation-mid-article-generator.yaml \
-  --stack-name zenn-mid-article-generator \
-  --region ap-northeast-1 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides \
-    SenderEmail=sinnjibaby@gmail.com \
-    RecipientEmail=sinnjibaby@gmail.com \
-    DiagramsLayerArn="$LAYER_ARN" \
-  --no-fail-on-empty-changeset
-
-# ② Lambda コードのみ更新（ソースコード変更時）
-zip -r /tmp/zenn_mid_function.zip lambda_function.py diagram_generator.py aws_icons/ fonts/ -q
-aws lambda update-function-code \
-  --function-name ZennMidArticleGenerator \
-  --zip-file fileb:///tmp/zenn_mid_function.zip \
-  --region ap-northeast-1
-rm -f /tmp/zenn_mid_function.zip
-
-# ③ Layer を更新する場合
-DEPLOY_LAYER=1 ./deploy.sh
+# Function URL でテスト実行（AWS_IAM 認証）
+aws lambda invoke --function-name zenn-mid-article-generator \
+  --payload '{"dry_run": true}' /tmp/out.json --region ap-northeast-1
 ```
 
-### ローカル動作確認
+## コスト内訳
 
-```bash
-cd ~/Zer0/005_Zenn_Mid_Article_Bot/src
-
-# 依存パッケージをインストール（初回のみ）
-pip install matplotlib boto3 diagrams
-
-# AWS公式アイコンをセットアップ（初回のみ）
-python3 install_aws_icons.py
-
-# 実行（AWS認証情報が必要: Bedrock/SSM/SESアクセス権限）
-SES_SENDER_EMAIL=your@email.com SES_RECIPIENT_EMAIL=notify@email.com python3 lambda_function.py
-```
-
-成功時の出力例（所要時間: 約90〜120秒）：
-
-```text
-[20260501_210000] Zenn中級記事自動生成を開始します
-Step 1: 直近トピックをSSMから取得中...
-  除外トピック: ['data_lake', 'cicd_pipeline', 'multi_account', 'log_analytics']
-Step 2: Bedrockでトピックを選択中...
-  選択されたトピック: AWSコスト最適化の実践戦略 (cost_optimization)
-  記事タイプ: usecase
-  使用サービス: Cost Explorer, AWS Budgets, Savings Plans, Lambda, CloudWatch
-Step 3: 記事を生成中（10,000〜15,000文字）...
-  記事生成完了: 14,256文字
-Step 4: ローカルに保存中（記事MD + 構成図PNG）...
-  PNG生成完了: /path/to/output/.../images/..._diagram_1.png
-  PNG生成完了: /path/to/output/.../images/..._diagram_2.png
-  MD保存完了: /path/to/output/.../20260501_210000_cost_optimization.md
-  PNG生成完了: 2枚
-Step 6: SSMにトピックを保存中...
-Step 7: メール通知を送信中...
-[20260501_210000] 処理が正常に完了しました
-```
-
----
-
-## 運用フロー
-
-```text
-毎月1日 or 15日 21:00 JST
-    ↓ EventBridgeが自動実行
-    ↓ 約60〜90秒後にメール通知が届く
-    ↓
-メールを確認 → "次のアクション" の手順に従う
-    ↓
-bash ~/Zer0/005_Zenn_Mid_Article_Bot/scripts/download_article.sh
-    ↓
-output/NNN_YYYYMMDD_HHMMSS_TOPIC_ID/ に記事が保存される
-    ↓
-Zennエディタで新規記事を作成
-    ↓
-MDファイルの内容を貼り付け
-    ↓
-:::message ブロック内の指示に従いPNGをアップロード・URLを差し替え
-（図1は ## アーキテクチャ概要 内、図2は ## 設計上の考慮ポイント 内に配置済み）
-    ↓
-published: false → true に変更して公開
-```
-
----
-
-## AWSリソース一覧
-
-| リソース                 | 名前                                         |
-| ------------------------ | -------------------------------------------- |
-| Lambda関数               | `ZennMidArticleGenerator`                    |
-| EventBridgeルール (1日)  | `ZennMidArticleMonthly1st`                   |
-| EventBridgeルール (15日) | `ZennMidArticleMonthly15th`                  |
-| Lambda Layer             | `matplotlib-aws-icons-mid`                   |
-| S3プレフィックス         | `zer0-dev-s3/zenn-mid-articles/`             |
-| SSMパラメータ            | `/mid-article-bot/recent-topics`             |
-| CloudFormationスタック   | `zenn-mid-article-generator`                 |
-| Lambda Function URL      | AWS_IAM auth（IAM署名付きリクエストで呼出可）|
-| IAMロール                | `ZennMidArticleGeneratorRole-ap-northeast-1` |
-| CloudWatch Logs          | `/aws/lambda/ZennMidArticleGenerator`        |
-| SQS（DLQ）              | `ZennMidArticleGenerator-DLQ`（Lambda失敗時）|
-| CloudWatch Alarm         | `ZennMidArticleGenerator-DLQ-NotEmpty`       |
-| SNS Topic                | `ZennMidArticleGenerator-DLQ-Alarm`          |
-
----
-
-## ユニットテスト
-
-```bash
-cd ~/Zer0/005_Zenn_Mid_Article_Bot/src
-python3 -m pytest tests/ -v
-```
-
-テスト内容（5件）: プロンプトformat / SSM読み込み（空・有・不正JSON） / test_mode時のHaiku切替
-
-## Lambda手動実行（テスト）
-
-```bash
-# Lambda直接実行（CLI）
-aws lambda invoke \
-  --function-name ZennMidArticleGenerator \
-  --region ap-northeast-1 \
-  response.json && cat response.json
-
-# Function URL 経由で実行（IAM署名付き）
-FUNC_URL=$(aws cloudformation describe-stacks \
-  --stack-name zenn-mid-article-generator --region ap-northeast-1 \
-  --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" --output text)
-curl --aws-sigv4 "aws:amz:ap-northeast-1:lambda" \
-  --user "$(aws configure get aws_access_key_id):$(aws configure get aws_secret_access_key)" \
-  -X POST -H "Content-Type: application/json" -d '{}' "$FUNC_URL"
-
-# ログ確認
-aws logs tail /aws/lambda/ZennMidArticleGenerator \
-  --region ap-northeast-1 \
-  --since 10m
-```
-
----
-
-## 関連プロジェクト
-
-- **002_Zenn_Auto_Article_Bot**: AWS初級者向け単一サービス記事（毎週木曜自動生成）
-- **005_Zenn_Mid_Article_Bot** (本プロジェクト): AWS中級者向け複合アーキテクチャ記事（毎月2回）
+| サービス | 月額 |
+|----------|------|
+| Lambda 実行（2回/月 × ~120秒 × 512MB） | ~$0.002 |
+| Bedrock Claude Sonnet（~12,000 tokens/回） | ~$2.7 |
+| Bedrock Claude Haiku（トピック選択 / ~10 tokens/回） | ~$0.001 |
+| S3 ストレージ・PUT | ~$0.01 |
+| SES 送信（2通/月） | ~$0 |
+| **合計** | **~$2.8（約420円）** |
