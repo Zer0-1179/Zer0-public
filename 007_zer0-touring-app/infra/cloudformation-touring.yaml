@@ -191,8 +191,9 @@ Resources:
             ReferrerPolicy: strict-origin-when-cross-origin
             Override: true
           ContentSecurityPolicy:
-            # connect-src に Open-Meteo を許可（天気 API）
-            ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
+            # connect-src: Open-Meteo（天気）+ Wikipedia API（写真取得）
+            # img-src: Wikimedia（写真表示）
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://ja.wikipedia.org; img-src 'self' data: https://upload.wikimedia.org; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
             Override: true
         CustomHeadersConfig:
           Items:

@@ -1,7 +1,4 @@
 ---
-// PUBLIC_API_URL: ローカル開発時のみ設定（例: https://xyz.execute-api.ap-northeast-1.amazonaws.com）
-// 本番（CloudFront）では空文字のまま /api/suggest を同一オリジンで呼ぶ
-const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
 ---
 
 <!doctype html>
@@ -28,11 +25,9 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
         --yellow: #eab308;
         --red: #ef4444;
         --border: #334155;
-        --blue: #38bdf8;
       }
 
       * { box-sizing: border-box; margin: 0; padding: 0; }
-
       body {
         background: var(--bg);
         color: var(--text);
@@ -42,12 +37,11 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
       }
 
       /* ── 画面切り替え ── */
-      .screen { display: none; min-height: 100svh; }
-      .screen.active { display: flex; }
+      .screen { display: none; }
+      .screen.active { display: flex; flex-direction: column; min-height: 100svh; }
 
       /* ── Landing ── */
       #screen-idle {
-        flex-direction: column;
         align-items: center;
         justify-content: center;
         padding: 2rem;
@@ -58,68 +52,22 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
       .hero-title { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
       .hero-sub { color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
 
-      /* ── ボタン ── */
-      .btn-primary {
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        border-radius: 9999px;
-        padding: 1rem 0;
-        font-size: 1.125rem;
-        font-weight: 600;
-        cursor: pointer;
-        width: 100%;
-        max-width: 320px;
-        transition: opacity 0.15s;
-      }
-      .btn-primary:active { opacity: 0.75; }
-
-      .btn-outline {
-        background: transparent;
-        color: var(--accent);
-        border: 1.5px solid var(--accent);
-        border-radius: 9999px;
-        padding: 0.5rem 1.25rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        cursor: pointer;
-        white-space: nowrap;
-      }
-      .btn-outline:active { opacity: 0.75; }
-
-      .btn-ghost {
-        background: transparent;
-        color: var(--muted);
-        border: 1.5px solid var(--border);
-        border-radius: 9999px;
-        padding: 0.5rem 1.25rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        cursor: pointer;
-        white-space: nowrap;
-      }
-      .btn-ghost:active { opacity: 0.75; }
-
       /* ── Loading ── */
       #screen-loading {
-        flex-direction: column;
         align-items: center;
         justify-content: center;
         padding: 2rem;
         gap: 2.5rem;
       }
       .loading-title { font-size: 1.25rem; font-weight: 600; }
-
       .steps { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; max-width: 300px; }
       .step { display: flex; align-items: center; gap: 0.875rem; color: var(--muted); font-size: 0.95rem; }
       .step.active { color: var(--accent); }
       .step.done { color: var(--green); }
       .step-icon { width: 2rem; text-align: center; font-size: 1.25rem; flex-shrink: 0; }
-
       .spinner {
         display: inline-block;
-        width: 1.25rem;
-        height: 1.25rem;
+        width: 1.25rem; height: 1.25rem;
         border: 2px solid var(--border);
         border-top-color: var(--accent);
         border-radius: 50%;
@@ -127,156 +75,196 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
       }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      /* ── Results ── */
-      #screen-results {
-        flex-direction: column;
-        padding: 1rem 1rem 2rem;
-        gap: 1rem;
-        max-width: 640px;
-        margin: 0 auto;
-        width: 100%;
+      /* ── ボタン ── */
+      .btn-primary {
+        background: var(--accent); color: #fff; border: none;
+        border-radius: 9999px; padding: 1rem 0;
+        font-size: 1.125rem; font-weight: 600; cursor: pointer;
+        width: 100%; max-width: 320px; transition: opacity .15s;
       }
-      .results-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        padding-bottom: 0.25rem;
+      .btn-primary:active { opacity: .75; }
+      .btn-outline {
+        background: transparent; color: var(--accent);
+        border: 1.5px solid var(--accent); border-radius: 9999px;
+        padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
+        cursor: pointer; white-space: nowrap;
       }
-      .results-title { font-size: 1.2rem; font-weight: 700; flex: 1; }
-      .header-btns { display: flex; gap: 0.5rem; }
+      .btn-ghost {
+        background: transparent; color: var(--muted);
+        border: 1.5px solid var(--border); border-radius: 9999px;
+        padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
+        cursor: pointer; white-space: nowrap;
+      }
 
-      /* ── コースカード ── */
+      /* ── 共通ヘッダーバー ── */
+      .topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 1rem; border-bottom: 1px solid var(--border); gap: .5rem;
+        position: sticky; top: 0; background: var(--bg); z-index: 10;
+      }
+      .topbar-title { font-size: 1.1rem; font-weight: 700; flex: 1; }
+      .topbar-btns { display: flex; gap: .5rem; }
+
+      /* ────────────────────────────────
+         コース一覧
+      ──────────────────────────────── */
+      #screen-results { gap: 0; }
+      .courses-list { display: flex; flex-direction: column; gap: 1rem; padding: 1rem; flex: 1; }
+
+      /* カード */
       .course-card {
         background: var(--card);
         border-radius: 1rem;
         border: 1px solid var(--border);
         overflow: hidden;
+        cursor: pointer;
+        transition: border-color .2s, transform .15s;
+        -webkit-tap-highlight-color: transparent;
       }
-      .card-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+      .course-card:active { transform: scale(.98); }
+      .course-card:hover { border-color: var(--accent); }
 
-      /* カード上部 */
-      .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
-      .card-name { font-size: 1.1rem; font-weight: 700; flex: 1; line-height: 1.3; }
-
-      .diff-badge {
-        border-radius: 9999px;
-        padding: 0.2rem 0.65rem;
-        font-size: 0.72rem;
-        font-weight: 700;
-        white-space: nowrap;
-        flex-shrink: 0;
+      /* カード写真エリア */
+      .card-photo {
+        width: 100%; height: 160px;
+        background-size: cover; background-position: center;
+        position: relative;
+        transition: background-image .3s;
+      }
+      /* 距離ラベルオーバーレイ */
+      .card-distance-label {
+        position: absolute; top: .75rem; left: .75rem;
+        background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+        color: #fff; font-size: .75rem; font-weight: 700;
+        border-radius: .4rem; padding: .25rem .6rem;
+        display: flex; align-items: center; gap: .3rem;
+      }
+      /* 難易度バッジオーバーレイ */
+      .card-diff-overlay {
+        position: absolute; top: .75rem; right: .75rem;
+        border-radius: 9999px; padding: .2rem .65rem;
+        font-size: .72rem; font-weight: 700;
       }
       .diff-easy { background: #14532d; color: #4ade80; }
       .diff-mid  { background: #713f12; color: #fbbf24; }
       .diff-hard { background: #7f1d1d; color: #f87171; }
 
-      /* 距離・時間 */
-      .card-meta { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      /* カード本文 */
+      .card-body { padding: 1rem 1rem .75rem; display: flex; flex-direction: column; gap: .6rem; }
+      .card-name { font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
+      .card-meta { display: flex; gap: .4rem; flex-wrap: wrap; }
       .meta-pill {
-        background: #172554;
-        color: #93c5fd;
-        border-radius: 9999px;
-        padding: 0.25rem 0.75rem;
-        font-size: 0.8rem;
-        font-weight: 500;
+        background: #172554; color: #93c5fd;
+        border-radius: 9999px; padding: .2rem .65rem; font-size: .78rem; font-weight: 500;
       }
-
-      /* セクションラベル */
-      .section-label {
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.4rem;
-      }
-
-      /* 見どころ */
-      .highlights { list-style: none; display: flex; flex-direction: column; gap: 0.35rem; }
-      .highlights li { color: var(--text); font-size: 0.875rem; padding-left: 1.4rem; position: relative; }
-      .highlights li::before { content: "📍"; position: absolute; left: 0; font-size: 0.8rem; }
-
-      /* 道路タイプ */
-      .road-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+      .card-roads { display: flex; gap: .3rem; flex-wrap: wrap; }
       .road-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3rem;
-        background: var(--card2);
-        border: 1px solid var(--border);
-        border-radius: 0.4rem;
-        padding: 0.25rem 0.6rem;
-        font-size: 0.8rem;
-        color: var(--text);
+        background: var(--card2); border: 1px solid var(--border);
+        border-radius: .35rem; padding: .15rem .5rem; font-size: .75rem; color: var(--text);
+      }
+      .card-footer {
+        display: flex; justify-content: flex-end; align-items: center;
+        padding: 0 1rem .75rem;
+      }
+      .btn-detail {
+        color: var(--accent); font-size: .85rem; font-weight: 600;
+        background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: .25rem;
       }
 
-      /* 立ち寄りスポット */
-      .rest-spots { display: flex; flex-direction: column; gap: 0.4rem; }
+      /* ────────────────────────────────
+         コース詳細
+      ──────────────────────────────── */
+      #screen-detail { overflow-y: auto; }
+
+      /* 詳細写真 */
+      .detail-photo-wrap {
+        width: 100%; height: 240px; flex-shrink: 0;
+        background-size: cover; background-position: center;
+        position: relative;
+      }
+      .detail-photo-gradient {
+        position: absolute; inset: 0;
+        background: linear-gradient(to top, rgba(15,23,42,.85) 0%, transparent 60%);
+      }
+      .detail-photo-info {
+        position: absolute; bottom: 1rem; left: 1rem; right: 1rem;
+      }
+      .detail-photo-name {
+        font-size: 1.3rem; font-weight: 700; line-height: 1.3;
+        text-shadow: 0 1px 4px rgba(0,0,0,.6);
+        margin-bottom: .4rem;
+      }
+      .detail-photo-badges { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+      .dist-badge {
+        background: rgba(0,0,0,.5); color: #fff;
+        border-radius: .4rem; padding: .2rem .55rem;
+        font-size: .72rem; font-weight: 700;
+      }
+
+      /* 詳細コンテンツ */
+      .detail-content { display: flex; flex-direction: column; gap: 1.25rem; padding: 1.25rem; flex: 1; }
+      .detail-meta { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+      /* セクション */
+      .section { display: flex; flex-direction: column; gap: .5rem; }
+      .section-title {
+        font-size: .7rem; font-weight: 700; color: var(--muted);
+        text-transform: uppercase; letter-spacing: .06em;
+        border-bottom: 1px solid var(--border); padding-bottom: .35rem;
+      }
+      .highlights { list-style: none; display: flex; flex-direction: column; gap: .4rem; }
+      .highlights li {
+        font-size: .9rem; padding-left: 1.4rem; position: relative; color: var(--text);
+      }
+      .highlights li::before { content: "📍"; position: absolute; left: 0; font-size: .8rem; }
+
+      .road-tags { display: flex; gap: .4rem; flex-wrap: wrap; }
+      .road-tag-lg {
+        display: inline-flex; align-items: center; gap: .3rem;
+        background: var(--card2); border: 1px solid var(--border);
+        border-radius: .4rem; padding: .3rem .7rem; font-size: .85rem;
+      }
+
+      .rest-spots { display: flex; flex-direction: column; gap: .4rem; }
       .spot-item {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        background: var(--card2);
-        border-radius: 0.5rem;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.875rem;
+        display: flex; align-items: center; gap: .6rem;
+        background: var(--card2); border-radius: .5rem; padding: .6rem .75rem;
       }
-      .spot-icon { font-size: 1rem; flex-shrink: 0; }
-      .spot-name { font-weight: 500; flex: 1; }
+      .spot-icon { font-size: 1.1rem; flex-shrink: 0; }
+      .spot-name { font-size: .9rem; font-weight: 500; flex: 1; }
       .spot-type {
-        font-size: 0.72rem;
-        color: var(--muted);
-        background: var(--border);
-        border-radius: 9999px;
-        padding: 0.1rem 0.5rem;
+        font-size: .7rem; color: var(--muted);
+        background: var(--border); border-radius: 9999px; padding: .1rem .5rem;
       }
 
-      /* 注意・シーズン */
-      .info-row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+      .info-chips { display: flex; flex-direction: column; gap: .5rem; }
       .info-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.8rem;
-        padding: 0.35rem 0.7rem;
-        border-radius: 0.4rem;
-        flex: 1;
-        min-width: 0;
+        display: flex; align-items: flex-start; gap: .5rem;
+        font-size: .85rem; padding: .6rem .75rem; border-radius: .5rem;
       }
       .info-caution { background: #3b1212; color: #fca5a5; border: 1px solid #7f1d1d; }
       .info-season  { background: #132212; color: #86efac; border: 1px solid #14532d; }
 
-      /* 地図ボタン */
       .btn-map {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.4rem;
-        text-decoration: none;
-        background: transparent;
-        color: var(--accent);
-        border: 1.5px solid var(--accent);
-        border-radius: 0.625rem;
-        padding: 0.75rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-        transition: background 0.15s;
+        display: flex; align-items: center; justify-content: center; gap: .5rem;
+        text-decoration: none; background: transparent;
+        color: var(--accent); border: 1.5px solid var(--accent);
+        border-radius: .75rem; padding: .875rem; font-size: .95rem; font-weight: 600;
+        transition: background .15s;
       }
-      .btn-map:active { background: rgba(249,115,22,0.1); }
+      .btn-map:active { background: rgba(249,115,22,.1); }
 
       /* ── Error ── */
       #screen-error {
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-        text-align: center;
-        gap: 1.25rem;
+        align-items: center; justify-content: center;
+        padding: 2rem; text-align: center; gap: 1.25rem;
       }
       .error-icon { font-size: 4rem; }
       .error-title { font-size: 1.25rem; font-weight: 600; }
-      .error-msg { color: var(--muted); font-size: 0.9rem; line-height: 1.7; max-width: 300px; white-space: pre-line; }
+      .error-msg {
+        color: var(--muted); font-size: .9rem; line-height: 1.7;
+        max-width: 300px; white-space: pre-line;
+      }
     </style>
   </head>
   <body>
@@ -308,16 +296,55 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
       </div>
     </div>
 
-    <!-- ── Results ── -->
+    <!-- ── コース一覧 ── -->
     <div id="screen-results" class="screen">
-      <div class="results-header">
-        <h2 class="results-title">おすすめコース</h2>
-        <div class="header-btns">
+      <div class="topbar">
+        <span class="topbar-title">おすすめコース</span>
+        <div class="topbar-btns">
           <button class="btn-ghost" id="btn-home">← TOP</button>
           <button class="btn-outline" id="btn-retry">再検索</button>
         </div>
       </div>
-      <div id="courses-container"></div>
+      <div class="courses-list" id="courses-container"></div>
+    </div>
+
+    <!-- ── コース詳細 ── -->
+    <div id="screen-detail" class="screen">
+      <div class="topbar">
+        <button class="btn-ghost" id="btn-back">← 一覧に戻る</button>
+        <div class="topbar-btns">
+          <button class="btn-ghost" id="btn-detail-home">← TOP</button>
+        </div>
+      </div>
+      <div id="detail-photo-wrap" class="detail-photo-wrap">
+        <div class="detail-photo-gradient"></div>
+        <div class="detail-photo-info">
+          <p class="detail-photo-name" id="detail-name"></p>
+          <div class="detail-photo-badges" id="detail-badges"></div>
+        </div>
+      </div>
+      <div class="detail-content">
+        <div class="detail-meta" id="detail-meta"></div>
+        <div class="section" id="detail-highlights-sec">
+          <p class="section-title">見どころ</p>
+          <ul class="highlights" id="detail-highlights"></ul>
+        </div>
+        <div class="section" id="detail-roads-sec">
+          <p class="section-title">道路タイプ</p>
+          <div class="road-tags" id="detail-roads"></div>
+        </div>
+        <div class="section" id="detail-spots-sec">
+          <p class="section-title">立ち寄りスポット</p>
+          <div class="rest-spots" id="detail-spots"></div>
+        </div>
+        <div class="section" id="detail-info-sec">
+          <p class="section-title">走行情報</p>
+          <div class="info-chips" id="detail-info"></div>
+        </div>
+        <a id="detail-map-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn-map">
+          🗺 Googleマップで開く
+        </a>
+      </div>
     </div>
 
     <!-- ── Error ── -->
@@ -328,35 +355,35 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
       <button class="btn-primary" id="btn-error-retry">もう一度試す</button>
     </div>
 
-    <script define:vars={{ apiBase }}>
-      const API_BASE = apiBase;
+    <script>
+      const API_BASE = import.meta.env.PUBLIC_API_URL ?? '';
 
+      // ── 定数 ──
       const WEATHER = {
-        0: '晴れ', 1: '晴れのち曇り', 2: '曇り', 3: '曇り',
-        45: '霧', 48: '霧',
-        51: '小雨', 53: '雨', 55: '大雨',
-        61: '小雨', 63: '雨', 65: '大雨',
-        71: '小雪', 73: '雪', 75: '大雪', 77: '雪',
-        80: 'にわか雨', 81: 'にわか雨', 82: 'にわか大雨',
-        85: 'にわか雪', 86: 'にわか大雪',
-        95: '雷雨', 96: '雷雨', 99: '激しい雷雨',
+        0:'晴れ',1:'晴れのち曇り',2:'曇り',3:'曇り',
+        45:'霧',48:'霧',51:'小雨',53:'雨',55:'大雨',
+        61:'小雨',63:'雨',65:'大雨',71:'小雪',73:'雪',
+        75:'大雪',77:'雪',80:'にわか雨',81:'にわか雨',
+        82:'にわか大雨',85:'にわか雪',86:'にわか大雪',
+        95:'雷雨',96:'雷雨',99:'激しい雷雨',
       };
-
-      const DIFFICULTY_CLS = { '初級': 'diff-easy', '中級': 'diff-mid', '上級': 'diff-hard' };
-
+      const DIFF_CLS  = { '初級':'diff-easy','中級':'diff-mid','上級':'diff-hard' };
       const ROAD_EMOJI = {
-        '峠道': '🏔', '山道': '🏔',
-        '高速道路': '🛣',
-        '国道': '🚗', '一般道': '🚗',
-        '県道': '🛤',
-        '海岸線': '🌊',
+        '峠道':'🏔','山道':'🏔','高速道路':'🛣',
+        '国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊',
       };
-
       const SPOT_EMOJI = {
-        '道の駅': '🏪', '温泉': '♨️', '展望台': '🔭',
-        'カフェ': '☕', '食事処': '🍜', '観光地': '📸',
-        'ガソリンスタンド': '⛽',
+        '道の駅':'🏪','温泉':'♨️','展望台':'🔭',
+        'カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽',
       };
+      // 距離ラベル（短→長ソート後に割り当て）
+      const DIST_LABELS = [
+        { label:'近距離コース', icon:'🌿', gradient:'linear-gradient(160deg,#1a3a2a,#2d7a4f)' },
+        { label:'中距離コース', icon:'🌊', gradient:'linear-gradient(160deg,#1e3a5f,#2563eb)' },
+        { label:'長距離コース', icon:'🏔', gradient:'linear-gradient(160deg,#4a1942,#9333ea)' },
+      ];
+
+      let courses = [];   // distance順ソート済み
 
       // ── 画面切り替え ──
       function showScreen(id) {
@@ -365,42 +392,122 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
         window.scrollTo(0, 0);
       }
 
-      // ── ステップ状態 ──
-      const STEP_ICONS = { 'step-gps': '📍', 'step-weather': '🌤', 'step-ai': '🤖' };
-      const ICON_IDS   = { 'step-gps': 'icon-gps', 'step-weather': 'icon-weather', 'step-ai': 'icon-ai' };
-
+      // ── ステップ ──
+      const STEP_ICONS = {'step-gps':'📍','step-weather':'🌤','step-ai':'🤖'};
+      const ICON_IDS   = {'step-gps':'icon-gps','step-weather':'icon-weather','step-ai':'icon-ai'};
       function setStep(id, state) {
         const el   = document.getElementById(id);
         const icon = document.getElementById(ICON_IDS[id]);
-        el.className = 'step' + (state === 'active' ? ' active' : state === 'done' ? ' done' : '');
-        if (state === 'active') {
-          icon.innerHTML = '<span class="spinner"></span>';
-        } else if (state === 'done') {
-          icon.textContent = '✅';
-        } else {
-          icon.textContent = STEP_ICONS[id];
-        }
+        el.className = 'step'+(state==='active'?' active':state==='done'?' done':'');
+        if (state==='active') icon.innerHTML = '<span class="spinner"></span>';
+        else if (state==='done') icon.textContent = '✅';
+        else icon.textContent = STEP_ICONS[id];
       }
 
-      // ── コースカード描画 ──
-      function renderCourses(courses) {
+      // ── Wikipedia サムネイル非同期読み込み ──
+      async function loadWikiPhoto(spot, bgEl) {
+        if (!spot) return;
+        try {
+          const res  = await fetch(
+            `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`
+          );
+          const data = await res.json();
+          const url  = data.thumbnail?.source;
+          if (url) {
+            // 高解像度版に切り替え（/320px- → /800px-）
+            const hiRes = url.replace(/\/\d+px-/, '/800px-');
+            const img   = new Image();
+            img.onload  = () => { bgEl.style.backgroundImage = `url(${hiRes})`; };
+            img.onerror = () => { bgEl.style.backgroundImage = `url(${url})`; };
+            img.src     = hiRes;
+          }
+        } catch (_) { /* グラデーションのまま */ }
+      }
+
+      // ── 一覧カード描画 ──
+      function renderResults(data) {
+        // distance_km 昇順ソート
+        courses = [...data.courses].sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
+
         const container = document.getElementById('courses-container');
-        container.innerHTML = courses.map(c => {
-          const mapsUrl    = `https://maps.google.com/maps?q=${encodeURIComponent(c.destination)}`;
-          const diffCls    = DIFFICULTY_CLS[c.difficulty] ?? 'diff-mid';
+        container.innerHTML = courses.map((c, i) => {
+          const dl      = DIST_LABELS[i];
+          const diffCls = DIFF_CLS[c.difficulty] ?? 'diff-mid';
+          const roads   = (c.road_types ?? []).map(r =>
+            `<span class="road-tag">${ROAD_EMOJI[r]??'🚗'} ${r}</span>`
+          ).join('');
 
-          // 見どころ
-          const highlights = (c.highlights ?? [])
-            .map(h => `<li>${h}</li>`).join('');
+          return `
+            <div class="course-card" data-idx="${i}">
+              <div class="card-photo" id="card-photo-${i}"
+                   style="background:${dl.gradient}">
+                <span class="card-distance-label">${dl.icon} ${dl.label}</span>
+                <span class="card-diff-overlay ${diffCls}">${c.difficulty}</span>
+              </div>
+              <div class="card-body">
+                <p class="card-name">${c.name}</p>
+                <div class="card-meta">
+                  <span class="meta-pill">🛣 ${c.distance_km}km</span>
+                  <span class="meta-pill">⏱ 約${c.duration_hours}時間</span>
+                  <span class="meta-pill">🏁 ${c.destination}</span>
+                </div>
+                <div class="card-roads">${roads}</div>
+              </div>
+              <div class="card-footer">
+                <button class="btn-detail">詳細を見る →</button>
+              </div>
+            </div>`;
+        }).join('');
 
-          // 道路タイプ
-          const roadTags = (c.road_types ?? []).map(r => {
-            const em = ROAD_EMOJI[r] ?? '🚗';
-            return `<span class="road-tag">${em} ${r}</span>`;
-          }).join('');
+        // カード写真を非同期ロード
+        courses.forEach((c, i) => {
+          const el = document.getElementById(`card-photo-${i}`);
+          loadWikiPhoto(c.photo_spot, el);
+        });
 
-          // 立ち寄りスポット
-          const spots = (c.rest_spots ?? []).map(s => {
+        // カードクリックで詳細へ
+        container.querySelectorAll('.course-card').forEach(card => {
+          card.addEventListener('click', () => openDetail(parseInt(card.dataset.idx)));
+        });
+      }
+
+      // ── 詳細画面 ──
+      function openDetail(idx) {
+        const c  = courses[idx];
+        const dl = DIST_LABELS[idx];
+
+        // 写真エリア
+        const photoWrap = document.getElementById('detail-photo-wrap');
+        photoWrap.style.backgroundImage = `none`;
+        photoWrap.style.background = dl.gradient;
+        loadWikiPhoto(c.photo_spot, photoWrap);
+
+        // 名前・バッジ
+        document.getElementById('detail-name').textContent = c.name;
+        const diffCls = DIFF_CLS[c.difficulty] ?? 'diff-mid';
+        document.getElementById('detail-badges').innerHTML =
+          `<span class="dist-badge">${dl.icon} ${dl.label}</span>` +
+          `<span class="card-diff-overlay ${diffCls}" style="position:static">${c.difficulty}</span>`;
+
+        // メタ情報
+        document.getElementById('detail-meta').innerHTML =
+          `<span class="meta-pill">🛣 ${c.distance_km}km</span>` +
+          `<span class="meta-pill">⏱ 約${c.duration_hours}時間</span>` +
+          `<span class="meta-pill">🏁 ${c.destination}</span>`;
+
+        // 見どころ
+        document.getElementById('detail-highlights').innerHTML =
+          (c.highlights ?? []).map(h => `<li>${h}</li>`).join('');
+
+        // 道路タイプ
+        document.getElementById('detail-roads').innerHTML =
+          (c.road_types ?? []).map(r =>
+            `<span class="road-tag-lg">${ROAD_EMOJI[r]??'🚗'} ${r}</span>`
+          ).join('');
+
+        // 立ち寄りスポット
+        document.getElementById('detail-spots').innerHTML =
+          (c.rest_spots ?? []).map(s => {
             const em = SPOT_EMOJI[s.type] ?? '📌';
             return `
               <div class="spot-item">
@@ -410,55 +517,21 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
               </div>`;
           }).join('');
 
-          // 注意・シーズン
-          const infoChips = [
-            c.caution      ? `<span class="info-chip info-caution">⚠️ ${c.caution}</span>` : '',
-            c.best_season  ? `<span class="info-chip info-season">🌸 ${c.best_season}</span>` : '',
-          ].filter(Boolean).join('');
+        // 走行情報
+        const chips = [
+          c.caution     ? `<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>` : '',
+          c.best_season ? `<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>` : '',
+        ].filter(Boolean).join('');
+        document.getElementById('detail-info').innerHTML = chips;
 
-          return `
-            <div class="course-card">
-              <div class="card-body">
-                <div class="card-top">
-                  <span class="card-name">${c.name}</span>
-                  <span class="diff-badge ${diffCls}">${c.difficulty}</span>
-                </div>
+        // 地図ボタン
+        document.getElementById('detail-map-btn').href =
+          `https://maps.google.com/maps?q=${encodeURIComponent(c.destination)}`;
 
-                <div class="card-meta">
-                  <span class="meta-pill">🛣 ${c.distance_km} km</span>
-                  <span class="meta-pill">⏱ 約 ${c.duration_hours} 時間</span>
-                  <span class="meta-pill">🏁 ${c.destination}</span>
-                </div>
-
-                ${highlights ? `
-                <div>
-                  <p class="section-label">見どころ</p>
-                  <ul class="highlights">${highlights}</ul>
-                </div>` : ''}
-
-                ${roadTags ? `
-                <div>
-                  <p class="section-label">道路タイプ</p>
-                  <div class="road-tags">${roadTags}</div>
-                </div>` : ''}
-
-                ${spots ? `
-                <div>
-                  <p class="section-label">立ち寄りスポット</p>
-                  <div class="rest-spots">${spots}</div>
-                </div>` : ''}
-
-                ${infoChips ? `<div class="info-row">${infoChips}</div>` : ''}
-
-                <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="btn-map">
-                  🗺 Googleマップで開く
-                </a>
-              </div>
-            </div>`;
-        }).join('');
+        showScreen('screen-detail');
       }
 
-      // ── エラー表示 ──
+      // ── エラー ──
       function showError(msg) {
         document.getElementById('error-msg').textContent = msg;
         showScreen('screen-error');
@@ -467,60 +540,54 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
       // ── メインフロー ──
       async function findCourses() {
         showScreen('screen-loading');
-        ['step-gps','step-weather','step-ai'].forEach(id => setStep(id, 'idle'));
+        ['step-gps','step-weather','step-ai'].forEach(id => setStep(id,'idle'));
 
-        // Step 1: GPS
-        setStep('step-gps', 'active');
+        // GPS
+        setStep('step-gps','active');
         let lat, lon;
         try {
           const pos = await new Promise((resolve, reject) =>
             navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: false,
-              timeout: 30000,
+              enableHighAccuracy: false, timeout: 30000,
             })
           );
           lat = pos.coords.latitude;
           lon = pos.coords.longitude;
-          setStep('step-gps', 'done');
+          setStep('step-gps','done');
         } catch (e) {
-          const msg =
+          showError(
             e.code === 1 ? 'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。' :
             e.code === 3 ? 'GPS取得がタイムアウトしました。\nもう一度試してください。' :
-            '現在地の取得に失敗しました。';
-          showError(msg);
+            '現在地の取得に失敗しました。'
+          );
           return;
         }
 
-        // Step 2: Weather（失敗してもデフォルト値で続行）
-        setStep('step-weather', 'active');
+        // 天気
+        setStep('step-weather','active');
         let temperature = 20, weatherCondition = '晴れ';
         try {
           const res = await fetch(
             `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`
           );
           const data = await res.json();
-          temperature     = Math.round(data.current.temperature_2m);
+          temperature      = Math.round(data.current.temperature_2m);
           weatherCondition = WEATHER[data.current.weathercode] ?? '晴れ';
-        } catch (_) { /* 天気 API 失敗時はデフォルト値を使う */ }
-        setStep('step-weather', 'done');
+        } catch (_) {}
+        setStep('step-weather','done');
 
-        // Step 3: AI コース提案
-        setStep('step-ai', 'active');
+        // AI
+        setStep('step-ai','active');
         try {
           const res = await fetch(`${API_BASE}/api/suggest`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              latitude: lat,
-              longitude: lon,
-              temperature,
-              weather_condition: weatherCondition,
-            }),
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ latitude:lat, longitude:lon, temperature, weather_condition:weatherCondition }),
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          setStep('step-ai', 'done');
-          renderCourses(data.courses);
+          setStep('step-ai','done');
+          renderResults(data);
           showScreen('screen-results');
         } catch (e) {
           showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');
@@ -531,13 +598,13 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
       document.getElementById('btn-start').addEventListener('click', findCourses);
       document.getElementById('btn-retry').addEventListener('click', findCourses);
       document.getElementById('btn-home').addEventListener('click', () => showScreen('screen-idle'));
+      document.getElementById('btn-back').addEventListener('click', () => showScreen('screen-results'));
+      document.getElementById('btn-detail-home').addEventListener('click', () => showScreen('screen-idle'));
       document.getElementById('btn-error-retry').addEventListener('click', () => showScreen('screen-idle'));
 
-      // ── Service Worker 登録 ──
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
       }
     </script>
-
   </body>
 </html>
