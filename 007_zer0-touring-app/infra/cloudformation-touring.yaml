@@ -1,0 +1,307 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Zer0-touring - Lambda API + API Gateway + S3 + CloudFront (PWA static site)
+
+Parameters:
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN from us-east-1 (Zer0-touring-cert stack output)
+    Default: ""
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
+
+Resources:
+
+  # ── S3 バケット（静的サイト用） ────────────────────────────────
+  TouringBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: zer0-touring-s3
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  # ── CloudFront Origin Access Control (OAC) ─────────────────────
+  TouringOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "Zer0-touring-oac-${AWS::AccountId}"
+        Description: Touring PWA OAC
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # ── S3 バケットポリシー（CloudFront OACからのみ許可）──────────
+  TouringBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TouringBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontOAC
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${TouringBucket}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub
+                  - "arn:aws:cloudfront::${AWS::AccountId}:distribution/${DistId}"
+                  - DistId: !Ref TouringDistribution
+
+  # ── Lambda 実行ロール ──────────────────────────────────────────
+  TouringLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-touring-lambda-role-${AWS::AccountId}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokeHaiku
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  # jp.* は cross-region inference profile → アカウント付き ARN が必要
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  # 実際に呼ばれる基盤モデル（マルチリージョン）
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+
+  # ── Lambda 関数（コース提案 API） ──────────────────────────────
+  TouringLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zer0-touring-suggest
+      Runtime: python3.14
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt TouringLambdaRole.Arn
+      MemorySize: 256
+      Timeout: 30
+      Description: ツーリングコース提案API（Bedrock Claude Haiku）
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": '{"status":"deploying"}'}
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  # ── Lambda ロググループ ────────────────────────────────────────
+  TouringLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${TouringLambdaFunction}"
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  # ── Lambda 呼び出し許可（API Gateway から）────────────────────
+  TouringLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TouringLambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TouringApi}/*/*"
+
+  # ── API Gateway HTTP API（CORS: localhost 開発用）──────────────
+  TouringApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: zer0-touring-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - "http://localhost:4321"
+          - "https://touring.zer0-infra.com"
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+        MaxAge: 86400
+
+  # ── Lambda インテグレーション ──────────────────────────────────
+  TouringIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref TouringApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt TouringLambdaFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  # ── POST /api/suggest ルート ───────────────────────────────────
+  TouringSuggestRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref TouringApi
+      RouteKey: "POST /api/suggest"
+      Target: !Sub "integrations/${TouringIntegration}"
+
+  # ── デフォルトステージ ─────────────────────────────────────────
+  TouringStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref TouringApi
+      StageName: "$default"
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 20
+
+  # ── CloudFront レスポンスヘッダーポリシー ─────────────────────
+  TouringResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: Zer0-touring-security-headers
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          ContentSecurityPolicy:
+            # connect-src に Open-Meteo を許可（天気 API）
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
+            Override: true
+        CustomHeadersConfig:
+          Items:
+            # geolocation=(self) で GPS を許可（デフォルトの () は GPS を禁止するため）
+            - Header: Permissions-Policy
+              Value: "camera=(), microphone=(), geolocation=(self)"
+              Override: true
+
+  # ── CloudFront ディストリビューション ─────────────────────────
+  TouringDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Zer0-touring PWA
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_200
+        DefaultRootObject: index.html
+        Aliases: !If
+          - HasCertificate
+          - [touring.zer0-infra.com]
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasCertificate
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
+        Origins:
+          # S3 オリジン（静的ファイル）
+          - Id: S3Origin
+            DomainName: !GetAtt TouringBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt TouringOAC.Id
+            S3OriginConfig: {}
+          # API Gateway オリジン（Lambda API）
+          - Id: ApiGatewayOrigin
+            DomainName: !Sub "${TouringApi}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        # デフォルト: S3 静的ファイル（キャッシュあり）
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          # AWS マネージドポリシー: CachingOptimized（1日キャッシュ）
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref TouringResponseHeadersPolicy
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+        # /api/* → API Gateway（キャッシュ無効・POST 転送）
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: ApiGatewayOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            # AWS マネージドポリシー: CachingDisabled
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            # AWS マネージドポリシー: AllViewerExceptHostHeader
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - POST
+              - PATCH
+              - DELETE
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: false
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+Outputs:
+  BucketName:
+    Description: S3 bucket name
+    Value: !Ref TouringBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-BucketName"
+
+  DistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref TouringDistribution
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionId"
+
+  CloudFrontDomain:
+    Description: CloudFront domain (set as CNAME target in DNS)
+    Value: !GetAtt TouringDistribution.DomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudFrontDomain"
+
+  ApiGatewayUrl:
+    Description: API Gateway URL (for local dev)
+    Value: !Sub "https://${TouringApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayUrl"
+
+  LambdaFunctionName:
+    Description: Lambda function name
+    Value: !Ref TouringLambdaFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"

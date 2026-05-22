@@ -1,0 +1,394 @@
+---
+// PUBLIC_API_URL: ローカル開発時のみ設定（例: https://xyz.execute-api.ap-northeast-1.amazonaws.com）
+// 本番（CloudFront）では空文字のまま /api/suggest を同一オリジンで呼ぶ
+const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="現在地からバイクのツーリングコースをAIが提案" />
+    <!-- PWA / iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Zer0 Touring" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>Zer0 Touring</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #1e293b;
+        --text: #f1f5f9;
+        --muted: #94a3b8;
+        --accent: #f97316;
+        --green: #22c55e;
+        --yellow: #eab308;
+        --red: #ef4444;
+        --border: #334155;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        min-height: 100svh;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── 画面切り替え ── */
+      .screen { display: none; min-height: 100svh; }
+      .screen.active { display: flex; }
+
+      /* ── Landing ── */
+      #screen-idle {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+        gap: 1.25rem;
+      }
+      .hero-icon { font-size: 5rem; line-height: 1; }
+      .hero-title { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+      .hero-sub { color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
+
+      /* ── ボタン ── */
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 9999px;
+        padding: 1rem 0;
+        font-size: 1.125rem;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+        max-width: 320px;
+        transition: opacity 0.15s;
+      }
+      .btn-primary:active { opacity: 0.75; }
+
+      .btn-outline {
+        background: transparent;
+        color: var(--accent);
+        border: 1.5px solid var(--accent);
+        border-radius: 9999px;
+        padding: 0.5rem 1.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      .btn-outline:active { opacity: 0.75; }
+
+      /* ── Loading ── */
+      #screen-loading {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        gap: 2.5rem;
+      }
+      .loading-title { font-size: 1.25rem; font-weight: 600; }
+
+      .steps { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; max-width: 300px; }
+      .step { display: flex; align-items: center; gap: 0.875rem; color: var(--muted); font-size: 0.95rem; }
+      .step.active { color: var(--accent); }
+      .step.done { color: var(--green); }
+      .step-icon { width: 2rem; text-align: center; font-size: 1.25rem; flex-shrink: 0; }
+
+      .spinner {
+        display: inline-block;
+        width: 1.25rem;
+        height: 1.25rem;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* ── Results ── */
+      #screen-results {
+        flex-direction: column;
+        padding: 1.25rem;
+        gap: 1rem;
+        max-width: 640px;
+        margin: 0 auto;
+        width: 100%;
+      }
+      .results-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 0.25rem;
+      }
+      .results-title { font-size: 1.2rem; font-weight: 700; }
+
+      /* ── コースカード ── */
+      .course-card {
+        background: var(--card);
+        border-radius: 1rem;
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+      .card-name { font-size: 1.1rem; font-weight: 600; flex: 1; }
+
+      .badge {
+        border-radius: 9999px;
+        padding: 0.2rem 0.65rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .badge-easy { background: #14532d; color: #4ade80; }
+      .badge-mid  { background: #713f12; color: #fbbf24; }
+      .badge-hard { background: #7f1d1d; color: #f87171; }
+
+      .card-meta { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .meta-pill {
+        background: #172554;
+        color: #93c5fd;
+        border-radius: 9999px;
+        padding: 0.25rem 0.7rem;
+        font-size: 0.78rem;
+        font-weight: 500;
+      }
+
+      .highlights { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+      .highlights li { color: var(--muted); font-size: 0.875rem; }
+      .highlights li::before { content: "📍 "; }
+
+      .btn-map {
+        display: block;
+        text-align: center;
+        text-decoration: none;
+        background: transparent;
+        color: var(--accent);
+        border: 1.5px solid var(--accent);
+        border-radius: 0.625rem;
+        padding: 0.625rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: background 0.15s;
+      }
+      .btn-map:active { background: rgba(249,115,22,0.1); }
+
+      /* ── Error ── */
+      #screen-error {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+        gap: 1.25rem;
+      }
+      .error-icon { font-size: 4rem; }
+      .error-title { font-size: 1.25rem; font-weight: 600; }
+      .error-msg { color: var(--muted); font-size: 0.9rem; line-height: 1.7; max-width: 300px; white-space: pre-line; }
+    </style>
+  </head>
+  <body>
+
+    <!-- ── Landing ── -->
+    <div id="screen-idle" class="screen active">
+      <div class="hero-icon">🏍️</div>
+      <h1 class="hero-title">Zer0 Touring</h1>
+      <p class="hero-sub">現在地と天気をもとに<br/>AIが日帰りコースを3つ提案します</p>
+      <button class="btn-primary" id="btn-start">コースを探す</button>
+    </div>
+
+    <!-- ── Loading ── -->
+    <div id="screen-loading" class="screen">
+      <p class="loading-title">コースを検索中...</p>
+      <div class="steps">
+        <div class="step" id="step-gps">
+          <span class="step-icon" id="icon-gps">📍</span>
+          <span>現在地を取得中</span>
+        </div>
+        <div class="step" id="step-weather">
+          <span class="step-icon" id="icon-weather">🌤</span>
+          <span>天気を確認中</span>
+        </div>
+        <div class="step" id="step-ai">
+          <span class="step-icon" id="icon-ai">🤖</span>
+          <span>AIがコースを生成中</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Results ── -->
+    <div id="screen-results" class="screen">
+      <div class="results-header">
+        <h2 class="results-title">おすすめコース</h2>
+        <button class="btn-outline" id="btn-retry">再検索</button>
+      </div>
+      <div id="courses-container"></div>
+    </div>
+
+    <!-- ── Error ── -->
+    <div id="screen-error" class="screen">
+      <span class="error-icon">⚠️</span>
+      <h2 class="error-title">エラーが発生しました</h2>
+      <p class="error-msg" id="error-msg"></p>
+      <button class="btn-primary" id="btn-error-retry">もう一度試す</button>
+    </div>
+
+    <script define:vars={{ apiBase }}>
+      const API_BASE = apiBase;
+
+      const WEATHER = {
+        0: '晴れ', 1: '晴れのち曇り', 2: '曇り', 3: '曇り',
+        45: '霧', 48: '霧',
+        51: '小雨', 53: '雨', 55: '大雨',
+        61: '小雨', 63: '雨', 65: '大雨',
+        71: '小雪', 73: '雪', 75: '大雪', 77: '雪',
+        80: 'にわか雨', 81: 'にわか雨', 82: 'にわか大雨',
+        85: 'にわか雪', 86: 'にわか大雪',
+        95: '雷雨', 96: '雷雨', 99: '激しい雷雨',
+      };
+
+      const DIFFICULTY = {
+        '初級': 'badge-easy',
+        '中級': 'badge-mid',
+        '上級': 'badge-hard',
+      };
+
+      // ── 画面切り替え ──
+      function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+      }
+
+      // ── ステップ状態 ──
+      const STEP_ICONS = { 'step-gps': '📍', 'step-weather': '🌤', 'step-ai': '🤖' };
+      const ICON_IDS   = { 'step-gps': 'icon-gps', 'step-weather': 'icon-weather', 'step-ai': 'icon-ai' };
+
+      function setStep(id, state) {
+        const el = document.getElementById(id);
+        const icon = document.getElementById(ICON_IDS[id]);
+        el.className = 'step' + (state === 'active' ? ' active' : state === 'done' ? ' done' : '');
+        if (state === 'active') {
+          icon.innerHTML = '<span class="spinner"></span>';
+        } else if (state === 'done') {
+          icon.textContent = '✅';
+        } else {
+          icon.textContent = STEP_ICONS[id];
+        }
+      }
+
+      // ── コースカード描画 ──
+      function renderCourses(courses) {
+        const container = document.getElementById('courses-container');
+        container.innerHTML = courses.map(c => {
+          const mapsUrl = `https://maps.google.com/maps?q=${encodeURIComponent(c.destination)}`;
+          const badgeCls = DIFFICULTY[c.difficulty] ?? 'badge-mid';
+          const highlights = (c.highlights ?? []).map(h => `<li>${h}</li>`).join('');
+          return `
+            <div class="course-card">
+              <div class="card-top">
+                <span class="card-name">${c.name}</span>
+                <span class="badge ${badgeCls}">${c.difficulty}</span>
+              </div>
+              <div class="card-meta">
+                <span class="meta-pill">🛣 ${c.distance_km} km</span>
+                <span class="meta-pill">⏱ 約 ${c.duration_hours} 時間</span>
+              </div>
+              <ul class="highlights">${highlights}</ul>
+              <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="btn-map">🗺 地図を開く</a>
+            </div>`;
+        }).join('');
+      }
+
+      // ── エラー表示 ──
+      function showError(msg) {
+        document.getElementById('error-msg').textContent = msg;
+        showScreen('screen-error');
+      }
+
+      // ── メインフロー ──
+      async function findCourses() {
+        showScreen('screen-loading');
+        ['step-gps','step-weather','step-ai'].forEach(id => setStep(id, 'idle'));
+
+        // Step 1: GPS
+        setStep('step-gps', 'active');
+        let lat, lon;
+        try {
+          const pos = await new Promise((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 10000,
+            })
+          );
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+          setStep('step-gps', 'done');
+        } catch (e) {
+          showError(
+            e.code === 1
+              ? 'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。'
+              : '現在地の取得に失敗しました。'
+          );
+          return;
+        }
+
+        // Step 2: Weather（失敗してもデフォルト値で続行）
+        setStep('step-weather', 'active');
+        let temperature = 20, weatherCondition = '晴れ';
+        try {
+          const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`
+          );
+          const data = await res.json();
+          temperature = Math.round(data.current.temperature_2m);
+          weatherCondition = WEATHER[data.current.weathercode] ?? '晴れ';
+        } catch (_) { /* 天気 API 失敗時はデフォルト値を使う */ }
+        setStep('step-weather', 'done');
+
+        // Step 3: AI コース提案
+        setStep('step-ai', 'active');
+        try {
+          const res = await fetch(`${API_BASE}/api/suggest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              latitude: lat,
+              longitude: lon,
+              temperature,
+              weather_condition: weatherCondition,
+            }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          setStep('step-ai', 'done');
+          renderCourses(data.courses);
+          showScreen('screen-results');
+        } catch (e) {
+          showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');
+        }
+      }
+
+      // ── イベント ──
+      document.getElementById('btn-start').addEventListener('click', findCourses);
+      document.getElementById('btn-retry').addEventListener('click', findCourses);
+      document.getElementById('btn-error-retry').addEventListener('click', () => showScreen('screen-idle'));
+
+      // ── Service Worker 登録 ──
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+    </script>
+
+  </body>
+</html>

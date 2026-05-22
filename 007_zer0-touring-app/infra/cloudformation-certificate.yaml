@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Zer0-touring - ACM certificate for touring.zer0-infra.com (must deploy in us-east-1)
+
+Resources:
+
+  TouringCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: touring.zer0-infra.com
+      ValidationMethod: DNS
+
+Outputs:
+  CertificateArn:
+    Description: ACM certificate ARN for CloudFront
+    Value: !Ref TouringCertificate
+    Export:
+      Name: Zer0-touring-cert-CertificateArn
