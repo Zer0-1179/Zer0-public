@@ -193,6 +193,35 @@ export const projects: Project[] = [
     featured: true,
     monthlyCost: '$0',
   },
+  {
+    slug: 'touring-app',
+    number: '007',
+    nameJa: 'バイクツーリングPWA',
+    nameEn: 'Bike Touring PWA',
+    descJa: '現在地と天気からAIが日帰りツーリングコースを3つ提案するPWA。道路タイプ・立ち寄りスポット・走行注意まで詳細表示。',
+    descEn: 'PWA that suggests 3 day-trip motorcycle routes using current location and weather, with road types, rest spots, and riding tips.',
+    longDescJa: 'GPS取得→Open-Meteo天気API→Bedrock Claude Haikuの3ステップでコースを自動生成。近距離・中距離・長距離の3コースをZennスタイルのカードグリッドで表示し、タップで詳細を確認できる。Astro static + CloudFront + S3 + Lambda のサーバーレス構成で月額$0.40の低コスト運用を実現。',
+    longDescEn: 'Three-step pipeline: GPS → Open-Meteo weather API → Bedrock Claude Haiku generates courses. Displays 3 routes (short/mid/long) in a Zenn-style card grid with tap-to-detail. Serverless Astro static + CloudFront + S3 + Lambda architecture runs at just $0.40/month.',
+    pointsJa: [
+      'GPS・天気・AI生成の3ステップをリアルタイムのローディング画面で可視化し、待ち時間のストレスを軽減',
+      'Bedrock Claude Haikuが道路タイプ（峠道/海岸線/高速等）・立ち寄りスポット・ベストシーズンを含む詳細コースを生成',
+      'Astro static PWA + CloudFront + S3 + Lambda の構成で月額 ~$0.40、1リクエスト ~$0.005 の超低コスト運用',
+      'WikipediaサムネイルAPIで目的地の写真を非同期ロード、aspect-ratio: 16/9で全カード統一表示',
+    ],
+    pointsEn: [
+      'Real-time 3-step loading indicator (GPS → weather → AI) reduces perceived wait time',
+      'Claude Haiku generates courses with road types (mountain pass, coastal, highway), rest stops, and best season',
+      'Astro static PWA + CloudFront + S3 + Lambda: ~$0.40/month, ~$0.005 per request',
+      'Wikipedia thumbnail API loads destination photos async; aspect-ratio: 16/9 unifies all card images',
+    ],
+    architecture: '/images/007_architecture.png',
+    githubUrl: 'https://github.com/Zer0-1179/Zer0-public',
+    tags: ['PWA', 'Bedrock', 'Astro', 'GPS'],
+    services: ['Lambda', 'API Gateway', 'Amazon Bedrock', 'CloudFront', 'S3', 'CloudFormation'],
+    emoji: '🏍️',
+    featured: true,
+    monthlyCost: '~$0.40',
+  },
 ];
 
 export function getProjectBySlug(slug: string) {
