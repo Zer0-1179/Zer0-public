@@ -328,18 +328,18 @@ const apiBase = import.meta.env.PUBLIC_API_URL ?? '';
           const pos = await new Promise((resolve, reject) =>
             navigator.geolocation.getCurrentPosition(resolve, reject, {
               enableHighAccuracy: false,
-              timeout: 10000,
+              timeout: 30000,
             })
           );
           lat = pos.coords.latitude;
           lon = pos.coords.longitude;
           setStep('step-gps', 'done');
         } catch (e) {
-          showError(
-            e.code === 1
-              ? 'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。'
-              : '現在地の取得に失敗しました。'
-          );
+          const msg =
+            e.code === 1 ? 'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。' :
+            e.code === 3 ? 'GPS取得がタイムアウトしました。\nもう一度試してください。' :
+            '現在地の取得に失敗しました。';
+          showError(msg);
           return;
         }
 
