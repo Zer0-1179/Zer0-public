@@ -34,14 +34,14 @@ EventBridge Scheduler（9:00 / 20:00 JST）
 
 ## 技術スタック
 
-| レイヤー         | 技術                                                 |
-| ---------------- | ---------------------------------------------------- |
-| 実行基盤         | AWS Lambda（Python 3.14 / 256MB / 120秒）            |
-| スケジューリング | Amazon EventBridge Scheduler（JST タイムゾーン対応） |
+| レイヤー         | 技術                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| 実行基盤         | AWS Lambda（Python 3.14 / 256MB / 120秒）                                            |
+| スケジューリング | Amazon EventBridge Scheduler（JST タイムゾーン対応）                                 |
 | AI変換           | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0`） |
-| 状態管理         | AWS Systems Manager Parameter Store                  |
-| 投稿先           | X（旧Twitter）API v2                                 |
-| IaC              | AWS CloudFormation                                   |
+| 状態管理         | AWS Systems Manager Parameter Store                                                  |
+| 投稿先           | X（旧Twitter）API v2                                                                 |
+| IaC              | AWS CloudFormation                                                                   |
 
 ## 実装のこだわり
 

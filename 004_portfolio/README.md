@@ -25,7 +25,7 @@
 
 ```text
 [ブラウザ] HTTPS
-  └─▶ CloudFront（touring.zer0-infra.com）
+  └─▶ CloudFront（www.zer0-infra.com）
         ├─ /_astro/* → S3（CSS/JS/画像 / 長期キャッシュ）
         └─ /* → API Gateway → Lambda（Astro SSR）
                   └─ リクエスト時に Zenn/note RSS を並列取得
@@ -118,7 +118,7 @@ bash scripts/deploy.sh
 
 | リソース    | 名前/ID                         |
 | ----------- | ------------------------------- |
-| CloudFront  | E33SJ6UEA95L47                  |
+| CloudFront  | E33SJ6UEA95L47 / `https://du7bbiecctrzb.cloudfront.net` |
 | S3 バケット | zer0-portfolio-s3               |
 | Lambda      | Zer0-portfolio-ssr              |
 | API Gateway | Zer0-portfolio-api              |

@@ -38,17 +38,17 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 
 ## 技術スタック
 
-| レイヤー     | 技術                                                        |
-| ------------ | ----------------------------------------------------------- |
-| 実行基盤     | AWS Lambda（Python 3.14 / 256MB / 900秒）                   |
+| レイヤー     | 技術                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| 実行基盤     | AWS Lambda（Python 3.14 / 256MB / 900秒）                                                                |
 | AI生成       | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 8,192） |
-| 図生成       | matplotlib（Graphviz・diagrams 依存ゼロ）                   |
-| アイコン     | AWS公式アイコン 64px PNG（Lambda Layer に同梱）             |
-| 状態管理     | SSM Parameter Store（トピック履歴 + 記事カウンター）        |
-| ストレージ   | Amazon S3（ライフサイクル90日自動削除設定済み）             |
-| 通知         | Amazon SES                                                  |
-| IaC          | CloudFormation                                              |
-| Lambda Layer | matplotlib / numpy / Pillow（50MB 以内 / 直接アップロード） |
+| 図生成       | matplotlib（Graphviz・diagrams 依存ゼロ）                                                                |
+| アイコン     | AWS公式アイコン 64px PNG（Lambda Layer に同梱）                                                          |
+| 状態管理     | SSM Parameter Store（トピック履歴 + 記事カウンター）                                                     |
+| ストレージ   | Amazon S3（ライフサイクル90日自動削除設定済み）                                                          |
+| 通知         | Amazon SES                                                                                               |
+| IaC          | CloudFormation                                                                                           |
+| Lambda Layer | matplotlib / numpy / Pillow（50MB 以内 / 直接アップロード）                                              |
 
 ## 実装のこだわり
 
