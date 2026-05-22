@@ -126,8 +126,9 @@
 
       /* 画像エリア（<img> タグ使用、ポートフォリオ準拠） */
       .card-img-wrap {
-        height: 176px; overflow: hidden;
-        background: var(--card2);          /* 読み込み前のプレースホルダー */
+        width: 100%; aspect-ratio: 16/9;   /* 比率固定でサイズ統一 */
+        overflow: hidden;
+        background: var(--card2);
         position: relative; flex-shrink: 0;
       }
       .card-img-placeholder {             /* グラデーション背景 */
@@ -213,7 +214,9 @@
 
       /* 詳細写真（<img> タグ使用） */
       .detail-img-wrap {
-        height: 260px; overflow: hidden; flex-shrink: 0;
+        width: 100%; aspect-ratio: 16/9;   /* カードと比率統一 */
+        max-height: 340px;                 /* 大画面で高くなりすぎない */
+        overflow: hidden; flex-shrink: 0;
         background: var(--card2); position: relative;
       }
       .detail-img-ph { position: absolute; inset: 0; background-size: cover; background-position: center; }
