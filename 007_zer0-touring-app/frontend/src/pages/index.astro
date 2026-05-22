@@ -15,15 +15,12 @@
     <title>Zer0 Touring</title>
     <style>
       :root {
-        --bg: #0f172a;
-        --card: #1e293b;
-        --card2: #243044;
-        --text: #f1f5f9;
-        --muted: #94a3b8;
+        --bg:     #0f172a;
+        --card:   #1e293b;
+        --card2:  #243044;
+        --text:   #f1f5f9;
+        --muted:  #94a3b8;
         --accent: #f97316;
-        --green: #22c55e;
-        --yellow: #eab308;
-        --red: #ef4444;
         --border: #334155;
       }
 
@@ -42,110 +39,104 @@
 
       /* ── Landing ── */
       #screen-idle {
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-        text-align: center;
-        gap: 1.25rem;
+        align-items: center; justify-content: center;
+        padding: 2rem; text-align: center; gap: 1.5rem;
       }
       .hero-icon { font-size: 5rem; line-height: 1; }
       .hero-title { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
-      .hero-sub { color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
+      .hero-sub { color: var(--muted); font-size: .95rem; line-height: 1.7; }
 
       /* ── Loading ── */
-      #screen-loading {
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-        gap: 2.5rem;
-      }
+      #screen-loading { align-items: center; justify-content: center; padding: 2rem; gap: 2.5rem; }
       .loading-title { font-size: 1.25rem; font-weight: 600; }
       .steps { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; max-width: 300px; }
-      .step { display: flex; align-items: center; gap: 0.875rem; color: var(--muted); font-size: 0.95rem; }
+      .step { display: flex; align-items: center; gap: .875rem; color: var(--muted); font-size: .95rem; }
       .step.active { color: var(--accent); }
-      .step.done { color: var(--green); }
-      .step-icon { width: 2rem; text-align: center; font-size: 1.25rem; flex-shrink: 0; }
+      .step.done   { color: #22c55e; }
+      .step-icon   { width: 2rem; text-align: center; font-size: 1.25rem; flex-shrink: 0; }
       .spinner {
-        display: inline-block;
-        width: 1.25rem; height: 1.25rem;
-        border: 2px solid var(--border);
-        border-top-color: var(--accent);
-        border-radius: 50%;
-        animation: spin 0.7s linear infinite;
+        display: inline-block; width: 1.25rem; height: 1.25rem;
+        border: 2px solid var(--border); border-top-color: var(--accent);
+        border-radius: 50%; animation: spin .7s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      /* ── ボタン ── */
+      /* ── ボタン共通 ── */
       .btn-primary {
         background: var(--accent); color: #fff; border: none;
-        border-radius: 9999px; padding: 1rem 0;
-        font-size: 1.125rem; font-weight: 600; cursor: pointer;
-        width: 100%; max-width: 320px; transition: opacity .15s;
+        border-radius: 9999px; padding: 1rem 0; font-size: 1.125rem;
+        font-weight: 600; cursor: pointer; width: 100%; max-width: 320px;
+        transition: opacity .15s;
       }
       .btn-primary:active { opacity: .75; }
       .btn-outline {
-        background: transparent; color: var(--accent);
-        border: 1.5px solid var(--accent); border-radius: 9999px;
-        padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
-        cursor: pointer; white-space: nowrap;
+        background: transparent; color: var(--accent); border: 1.5px solid var(--accent);
+        border-radius: 9999px; padding: .5rem 1.25rem; font-size: .875rem;
+        font-weight: 500; cursor: pointer; white-space: nowrap;
       }
       .btn-ghost {
-        background: transparent; color: var(--muted);
-        border: 1.5px solid var(--border); border-radius: 9999px;
-        padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
-        cursor: pointer; white-space: nowrap;
+        background: transparent; color: var(--muted); border: 1.5px solid var(--border);
+        border-radius: 9999px; padding: .5rem 1.25rem; font-size: .875rem;
+        font-weight: 500; cursor: pointer; white-space: nowrap;
       }
 
-      /* ── 共通ヘッダーバー ── */
+      /* ── topbar ── */
       .topbar {
         display: flex; align-items: center; justify-content: space-between;
-        padding: 1rem; border-bottom: 1px solid var(--border); gap: .5rem;
+        padding: .875rem 1rem; border-bottom: 1px solid var(--border); gap: .5rem;
         position: sticky; top: 0; background: var(--bg); z-index: 10;
         width: 100%;
       }
       .topbar-title { font-size: 1.1rem; font-weight: 700; flex: 1; }
-      .topbar-btns { display: flex; gap: .5rem; }
+      .topbar-btns  { display: flex; gap: .5rem; }
 
-      /* ────────────────────────────────
+      /* ══════════════════════════════════════
          コース一覧
-      ──────────────────────────────── */
-      #screen-results { gap: 0; align-items: center; }
+      ══════════════════════════════════════ */
+      #screen-results { align-items: center; }
       .courses-list {
-        display: flex; flex-direction: column; gap: 1rem; padding: 1rem; flex: 1;
+        display: flex; flex-direction: column; gap: 1.25rem;
+        padding: 1.25rem 1rem; flex: 1;
         width: 100%; max-width: 640px;
       }
 
-      /* カード */
+      /* ── カード ── */
       .course-card {
         background: var(--card);
-        border-radius: 1rem;
         border: 1px solid var(--border);
+        border-radius: 1rem;
         overflow: hidden;
         cursor: pointer;
-        transition: border-color .2s, transform .15s;
+        transition: border-color .2s, box-shadow .2s;
         -webkit-tap-highlight-color: transparent;
       }
-      .course-card:active { transform: scale(.98); }
-      .course-card:hover { border-color: var(--accent); }
+      .course-card:hover {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .course-card:active { opacity: .85; }
 
-      /* カード写真エリア */
+      /* カード写真（Zennスタイル：テキストオーバーレイなし） */
       .card-photo {
         width: 100%; height: 200px;
         background-size: cover; background-position: center;
-        position: relative;
-        transition: background-image .3s;
+        flex-shrink: 0;
       }
-      /* 距離ラベルオーバーレイ */
-      .card-distance-label {
-        position: absolute; top: .75rem; left: .75rem;
-        background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
-        color: #fff; font-size: .75rem; font-weight: 700;
-        border-radius: .4rem; padding: .25rem .6rem;
-        display: flex; align-items: center; gap: .3rem;
+
+      /* カードコンテンツ */
+      .card-content { padding: 1rem; display: flex; flex-direction: column; gap: .75rem; }
+
+      /* 距離タグ + 難易度バッジ（写真の下に配置） */
+      .card-tag-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+      .dist-tag {
+        display: inline-flex; align-items: center; gap: .3rem;
+        border-radius: .4rem; padding: .25rem .65rem;
+        font-size: .72rem; font-weight: 700;
       }
-      /* 難易度バッジオーバーレイ */
-      .card-diff-overlay {
-        position: absolute; top: .75rem; right: .75rem;
+      .dist-near { background: #14532d; color: #4ade80; }
+      .dist-mid  { background: #1e3a5f; color: #93c5fd; }
+      .dist-far  { background: #4a1942; color: #d8b4fe; }
+      .diff-badge {
         border-radius: 9999px; padding: .2rem .65rem;
         font-size: .72rem; font-weight: 700;
       }
@@ -153,84 +144,79 @@
       .diff-mid  { background: #713f12; color: #fbbf24; }
       .diff-hard { background: #7f1d1d; color: #f87171; }
 
-      /* カード本文 */
-      .card-body { padding: 1rem 1rem .75rem; display: flex; flex-direction: column; gap: .6rem; }
-      .card-name { font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
+      /* コース名 */
+      .card-name { font-size: 1.05rem; font-weight: 700; line-height: 1.4; }
+
+      /* メタ情報 */
       .card-meta { display: flex; gap: .4rem; flex-wrap: wrap; }
       .meta-pill {
-        background: #172554; color: #93c5fd;
-        border-radius: 9999px; padding: .2rem .65rem; font-size: .78rem; font-weight: 500;
-      }
-      .card-roads { display: flex; gap: .3rem; flex-wrap: wrap; }
-      .road-tag {
         background: var(--card2); border: 1px solid var(--border);
-        border-radius: .35rem; padding: .15rem .5rem; font-size: .75rem; color: var(--text);
+        border-radius: 9999px; padding: .2rem .65rem;
+        font-size: .78rem; color: var(--muted);
       }
+
+      /* 道路タイプ */
+      .card-roads { display: flex; gap: .35rem; flex-wrap: wrap; }
+      .road-tag {
+        background: transparent; border: 1px solid var(--border);
+        border-radius: .35rem; padding: .15rem .5rem;
+        font-size: .75rem; color: var(--muted);
+      }
+
+      /* カードフッター */
       .card-footer {
-        display: flex; justify-content: flex-end; align-items: center;
-        padding: 0 1rem .75rem;
+        display: flex; justify-content: flex-end;
+        padding: 0 1rem .875rem;
+        border-top: 1px solid var(--border); padding-top: .75rem;
+        margin-top: .25rem;
       }
       .btn-detail {
         color: var(--accent); font-size: .85rem; font-weight: 600;
-        background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: .25rem;
+        background: none; border: none; cursor: pointer;
+        display: flex; align-items: center; gap: .25rem;
       }
 
-      /* ────────────────────────────────
+      /* ══════════════════════════════════════
          コース詳細
-      ──────────────────────────────── */
+      ══════════════════════════════════════ */
       #screen-detail { overflow-y: auto; align-items: center; }
-      /* PC で中央寄せ ＋ 幅制限 */
       #screen-detail > .topbar,
       #screen-detail > .detail-photo-wrap,
-      #screen-detail > .detail-content {
-        width: 100%; max-width: 640px;
-      }
+      #screen-detail > .detail-content { width: 100%; max-width: 640px; }
 
-      /* 詳細写真 */
+      /* 詳細写真（テキストなし・クリーン） */
       .detail-photo-wrap {
         height: 260px; flex-shrink: 0;
         background-size: cover; background-position: center;
-        position: relative;
-        border-radius: 0 0 1rem 1rem;
-        overflow: hidden;
-      }
-      .detail-photo-gradient {
-        position: absolute; inset: 0;
-        background: linear-gradient(to top, rgba(15,23,42,.85) 0%, transparent 60%);
-      }
-      .detail-photo-info {
-        position: absolute; bottom: 1rem; left: 1rem; right: 1rem;
-      }
-      .detail-photo-name {
-        font-size: 1.3rem; font-weight: 700; line-height: 1.3;
-        text-shadow: 0 1px 4px rgba(0,0,0,.6);
-        margin-bottom: .4rem;
-      }
-      .detail-photo-badges { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
-      .dist-badge {
-        background: rgba(0,0,0,.5); color: #fff;
-        border-radius: .4rem; padding: .2rem .55rem;
-        font-size: .72rem; font-weight: 700;
+        border-bottom: 1px solid var(--border);
       }
 
       /* 詳細コンテンツ */
-      .detail-content { display: flex; flex-direction: column; gap: 1.25rem; padding: 1.25rem; flex: 1; }
-      .detail-meta { display: flex; gap: .5rem; flex-wrap: wrap; }
+      .detail-content {
+        display: flex; flex-direction: column; gap: 1.5rem;
+        padding: 1.25rem 1rem 2rem; flex: 1;
+      }
+
+      /* 詳細ヘッダー（写真の下） */
+      .detail-header { display: flex; flex-direction: column; gap: .65rem; }
+      .detail-tag-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+      .detail-name { font-size: 1.4rem; font-weight: 700; line-height: 1.3; }
+      .detail-meta { display: flex; gap: .4rem; flex-wrap: wrap; }
 
       /* セクション */
-      .section { display: flex; flex-direction: column; gap: .5rem; }
+      .section { display: flex; flex-direction: column; gap: .6rem; }
       .section-title {
         font-size: .7rem; font-weight: 700; color: var(--muted);
         text-transform: uppercase; letter-spacing: .06em;
-        border-bottom: 1px solid var(--border); padding-bottom: .35rem;
+        border-bottom: 1px solid var(--border); padding-bottom: .4rem;
       }
-      .highlights { list-style: none; display: flex; flex-direction: column; gap: .4rem; }
+      .highlights { list-style: none; display: flex; flex-direction: column; gap: .45rem; }
       .highlights li {
-        font-size: .9rem; padding-left: 1.4rem; position: relative; color: var(--text);
+        font-size: .9rem; padding-left: 1.4rem; position: relative;
       }
       .highlights li::before { content: "📍"; position: absolute; left: 0; font-size: .8rem; }
 
-      .road-tags { display: flex; gap: .4rem; flex-wrap: wrap; }
+      .road-tags-lg { display: flex; gap: .4rem; flex-wrap: wrap; }
       .road-tag-lg {
         display: inline-flex; align-items: center; gap: .3rem;
         background: var(--card2); border: 1px solid var(--border);
@@ -247,6 +233,7 @@
       .spot-type {
         font-size: .7rem; color: var(--muted);
         background: var(--border); border-radius: 9999px; padding: .1rem .5rem;
+        white-space: nowrap;
       }
 
       .info-chips { display: flex; flex-direction: column; gap: .5rem; }
@@ -262,7 +249,6 @@
         text-decoration: none; background: transparent;
         color: var(--accent); border: 1.5px solid var(--accent);
         border-radius: .75rem; padding: .875rem; font-size: .95rem; font-weight: 600;
-        transition: background .15s;
       }
       .btn-map:active { background: rgba(249,115,22,.1); }
 
@@ -271,12 +257,9 @@
         align-items: center; justify-content: center;
         padding: 2rem; text-align: center; gap: 1.25rem;
       }
-      .error-icon { font-size: 4rem; }
+      .error-icon  { font-size: 4rem; }
       .error-title { font-size: 1.25rem; font-weight: 600; }
-      .error-msg {
-        color: var(--muted); font-size: .9rem; line-height: 1.7;
-        max-width: 300px; white-space: pre-line;
-      }
+      .error-msg   { color: var(--muted); font-size: .9rem; line-height: 1.7; max-width: 300px; white-space: pre-line; }
     </style>
   </head>
   <body>
@@ -294,16 +277,13 @@
       <p class="loading-title">コースを検索中...</p>
       <div class="steps">
         <div class="step" id="step-gps">
-          <span class="step-icon" id="icon-gps">📍</span>
-          <span>現在地を取得中</span>
+          <span class="step-icon" id="icon-gps">📍</span><span>現在地を取得中</span>
         </div>
         <div class="step" id="step-weather">
-          <span class="step-icon" id="icon-weather">🌤</span>
-          <span>天気を確認中</span>
+          <span class="step-icon" id="icon-weather">🌤</span><span>天気を確認中</span>
         </div>
         <div class="step" id="step-ai">
-          <span class="step-icon" id="icon-ai">🤖</span>
-          <span>AIがコースを生成中</span>
+          <span class="step-icon" id="icon-ai">🤖</span><span>AIがコースを生成中</span>
         </div>
       </div>
     </div>
@@ -313,7 +293,7 @@
       <div class="topbar">
         <span class="topbar-title">おすすめコース</span>
         <div class="topbar-btns">
-          <button class="btn-ghost" id="btn-home">← TOP</button>
+          <button class="btn-ghost"   id="btn-home">← TOP</button>
           <button class="btn-outline" id="btn-retry">再検索</button>
         </div>
       </div>
@@ -324,28 +304,28 @@
     <div id="screen-detail" class="screen">
       <div class="topbar">
         <button class="btn-ghost" id="btn-back">← 一覧に戻る</button>
-        <div class="topbar-btns">
-          <button class="btn-ghost" id="btn-detail-home">← TOP</button>
-        </div>
+        <button class="btn-ghost" id="btn-detail-home">← TOP</button>
       </div>
-      <div id="detail-photo-wrap" class="detail-photo-wrap">
-        <div class="detail-photo-gradient"></div>
-        <div class="detail-photo-info">
-          <p class="detail-photo-name" id="detail-name"></p>
-          <div class="detail-photo-badges" id="detail-badges"></div>
-        </div>
-      </div>
+      <!-- 写真（テキストなし・クリーン）-->
+      <div id="detail-photo-wrap" class="detail-photo-wrap"></div>
+      <!-- コンテンツ（写真の下） -->
       <div class="detail-content">
-        <div class="detail-meta" id="detail-meta"></div>
-        <div class="section" id="detail-highlights-sec">
+        <!-- ヘッダー：タグ＋タイトル＋メタ -->
+        <div class="detail-header">
+          <div class="detail-tag-row" id="detail-tags"></div>
+          <p class="detail-name" id="detail-name"></p>
+          <div class="detail-meta" id="detail-meta"></div>
+        </div>
+        <!-- 各セクション -->
+        <div class="section">
           <p class="section-title">見どころ</p>
           <ul class="highlights" id="detail-highlights"></ul>
         </div>
-        <div class="section" id="detail-roads-sec">
+        <div class="section">
           <p class="section-title">道路タイプ</p>
-          <div class="road-tags" id="detail-roads"></div>
+          <div class="road-tags-lg" id="detail-roads"></div>
         </div>
-        <div class="section" id="detail-spots-sec">
+        <div class="section">
           <p class="section-title">立ち寄りスポット</p>
           <div class="rest-spots" id="detail-spots"></div>
         </div>
@@ -370,32 +350,24 @@
     <script>
       const API_BASE = import.meta.env.PUBLIC_API_URL ?? '';
 
-      // ── 定数 ──
       const WEATHER = {
-        0:'晴れ',1:'晴れのち曇り',2:'曇り',3:'曇り',
-        45:'霧',48:'霧',51:'小雨',53:'雨',55:'大雨',
-        61:'小雨',63:'雨',65:'大雨',71:'小雪',73:'雪',
-        75:'大雪',77:'雪',80:'にわか雨',81:'にわか雨',
-        82:'にわか大雨',85:'にわか雪',86:'にわか大雪',
-        95:'雷雨',96:'雷雨',99:'激しい雷雨',
+        0:'晴れ',1:'晴れのち曇り',2:'曇り',3:'曇り',45:'霧',48:'霧',
+        51:'小雨',53:'雨',55:'大雨',61:'小雨',63:'雨',65:'大雨',
+        71:'小雪',73:'雪',75:'大雪',77:'雪',80:'にわか雨',81:'にわか雨',
+        82:'にわか大雨',85:'にわか雪',86:'にわか大雪',95:'雷雨',96:'雷雨',99:'激しい雷雨',
       };
-      const DIFF_CLS  = { '初級':'diff-easy','中級':'diff-mid','上級':'diff-hard' };
-      const ROAD_EMOJI = {
-        '峠道':'🏔','山道':'🏔','高速道路':'🛣',
-        '国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊',
-      };
-      const SPOT_EMOJI = {
-        '道の駅':'🏪','温泉':'♨️','展望台':'🔭',
-        'カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽',
-      };
-      // 距離ラベル（短→長ソート後に割り当て）
-      const DIST_LABELS = [
-        { label:'近距離コース', icon:'🌿', gradient:'linear-gradient(160deg,#1a3a2a,#2d7a4f)' },
-        { label:'中距離コース', icon:'🌊', gradient:'linear-gradient(160deg,#1e3a5f,#2563eb)' },
-        { label:'長距離コース', icon:'🏔', gradient:'linear-gradient(160deg,#4a1942,#9333ea)' },
-      ];
 
-      let courses = [];   // distance順ソート済み
+      // 距離ラベル（distance順ソート後 0=近・1=中・2=遠）
+      const DIST = [
+        { label:'近距離コース', icon:'🌿', cls:'dist-near', grad:'linear-gradient(160deg,#1a3a2a,#2d7a4f)' },
+        { label:'中距離コース', icon:'🌊', cls:'dist-mid',  grad:'linear-gradient(160deg,#1e3a5f,#2563eb)' },
+        { label:'長距離コース', icon:'🏔', cls:'dist-far',  grad:'linear-gradient(160deg,#4a1942,#9333ea)' },
+      ];
+      const DIFF_CLS  = { '初級':'diff-easy','中級':'diff-mid','上級':'diff-hard' };
+      const ROAD_EMOJI = { '峠道':'🏔','山道':'🏔','高速道路':'🛣','国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊' };
+      const SPOT_EMOJI = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
+
+      let courses = [];
 
       // ── 画面切り替え ──
       function showScreen(id) {
@@ -408,55 +380,48 @@
       const STEP_ICONS = {'step-gps':'📍','step-weather':'🌤','step-ai':'🤖'};
       const ICON_IDS   = {'step-gps':'icon-gps','step-weather':'icon-weather','step-ai':'icon-ai'};
       function setStep(id, state) {
-        const el   = document.getElementById(id);
-        const icon = document.getElementById(ICON_IDS[id]);
-        el.className = 'step'+(state==='active'?' active':state==='done'?' done':'');
-        if (state==='active') icon.innerHTML = '<span class="spinner"></span>';
-        else if (state==='done') icon.textContent = '✅';
-        else icon.textContent = STEP_ICONS[id];
+        const el = document.getElementById(id);
+        const ic = document.getElementById(ICON_IDS[id]);
+        el.className = 'step' + (state==='active'?' active':state==='done'?' done':'');
+        if (state==='active') ic.innerHTML = '<span class="spinner"></span>';
+        else if (state==='done') ic.textContent = '✅';
+        else ic.textContent = STEP_ICONS[id];
       }
 
-      // ── Wikipedia サムネイル非同期読み込み ──
-      async function loadWikiPhoto(spot, bgEl) {
+      // ── Wikipedia 写真を非同期ロード ──
+      async function loadWikiPhoto(spot, el) {
         if (!spot) return;
         try {
-          const res  = await fetch(
-            `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`
-          );
+          const res  = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`);
           const data = await res.json();
           const url  = data.thumbnail?.source;
-          if (url) {
-            // 高解像度版に切り替え（/320px- → /800px-）
-            const hiRes = url.replace(/\/\d+px-/, '/800px-');
-            const img   = new Image();
-            img.onload  = () => { bgEl.style.backgroundImage = `url(${hiRes})`; };
-            img.onerror = () => { bgEl.style.backgroundImage = `url(${url})`; };
-            img.src     = hiRes;
-          }
-        } catch (_) { /* グラデーションのまま */ }
+          if (!url) return;
+          const hiRes = url.replace(/\/\d+px-/, '/800px-');
+          const img   = new Image();
+          img.onload  = () => { el.style.backgroundImage = `url(${hiRes})`; };
+          img.onerror = () => { el.style.backgroundImage = `url(${url})`; };
+          img.src     = hiRes;
+        } catch (_) {}
       }
 
-      // ── 一覧カード描画 ──
+      // ── コース一覧カード描画 ──
       function renderResults(data) {
-        // distance_km 昇順ソート
         courses = [...data.courses].sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
 
         const container = document.getElementById('courses-container');
         container.innerHTML = courses.map((c, i) => {
-          const dl      = DIST_LABELS[i];
-          const diffCls = DIFF_CLS[c.difficulty] ?? 'diff-mid';
-          const roads   = (c.road_types ?? []).map(r =>
-            `<span class="road-tag">${ROAD_EMOJI[r]??'🚗'} ${r}</span>`
-          ).join('');
+          const d      = DIST[i];
+          const roads  = (c.road_types ?? []).map(r => `<span class="road-tag">${ROAD_EMOJI[r]??'🚗'} ${r}</span>`).join('');
+          const dfCls  = DIFF_CLS[c.difficulty] ?? 'diff-mid';
 
           return `
             <div class="course-card" data-idx="${i}">
-              <div class="card-photo" id="card-photo-${i}"
-                   style="background:${dl.gradient}">
-                <span class="card-distance-label">${dl.icon} ${dl.label}</span>
-                <span class="card-diff-overlay ${diffCls}">${c.difficulty}</span>
-              </div>
-              <div class="card-body">
+              <div class="card-photo" id="card-photo-${i}" style="background:${d.grad}"></div>
+              <div class="card-content">
+                <div class="card-tag-row">
+                  <span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>
+                  <span class="diff-badge ${dfCls}">${c.difficulty}</span>
+                </div>
                 <p class="card-name">${c.name}</p>
                 <div class="card-meta">
                   <span class="meta-pill">🛣 ${c.distance_km}km</span>
@@ -471,37 +436,29 @@
             </div>`;
         }).join('');
 
-        // カード写真を非同期ロード
-        courses.forEach((c, i) => {
-          const el = document.getElementById(`card-photo-${i}`);
-          loadWikiPhoto(c.photo_spot, el);
-        });
-
-        // カードクリックで詳細へ
-        container.querySelectorAll('.course-card').forEach(card => {
-          card.addEventListener('click', () => openDetail(parseInt(card.dataset.idx)));
-        });
+        courses.forEach((c, i) => loadWikiPhoto(c.photo_spot, document.getElementById(`card-photo-${i}`)));
+        container.querySelectorAll('.course-card').forEach(card =>
+          card.addEventListener('click', () => openDetail(+card.dataset.idx))
+        );
       }
 
       // ── 詳細画面 ──
       function openDetail(idx) {
-        const c  = courses[idx];
-        const dl = DIST_LABELS[idx];
+        const c = courses[idx];
+        const d = DIST[idx];
+        const dfCls = DIFF_CLS[c.difficulty] ?? 'diff-mid';
 
-        // 写真エリア
+        // 写真（テキストオーバーレイなし）
         const photoWrap = document.getElementById('detail-photo-wrap');
-        photoWrap.style.backgroundImage = `none`;
-        photoWrap.style.background = dl.gradient;
+        photoWrap.style.background = d.grad;
+        photoWrap.style.backgroundImage = 'none';
         loadWikiPhoto(c.photo_spot, photoWrap);
 
-        // 名前・バッジ
+        // ヘッダー：タグ・タイトル・メタ
+        document.getElementById('detail-tags').innerHTML =
+          `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>` +
+          `<span class="diff-badge ${dfCls}">${c.difficulty}</span>`;
         document.getElementById('detail-name').textContent = c.name;
-        const diffCls = DIFF_CLS[c.difficulty] ?? 'diff-mid';
-        document.getElementById('detail-badges').innerHTML =
-          `<span class="dist-badge">${dl.icon} ${dl.label}</span>` +
-          `<span class="card-diff-overlay ${diffCls}" style="position:static">${c.difficulty}</span>`;
-
-        // メタ情報
         document.getElementById('detail-meta').innerHTML =
           `<span class="meta-pill">🛣 ${c.distance_km}km</span>` +
           `<span class="meta-pill">⏱ 約${c.duration_hours}時間</span>` +
@@ -519,22 +476,19 @@
 
         // 立ち寄りスポット
         document.getElementById('detail-spots').innerHTML =
-          (c.rest_spots ?? []).map(s => {
-            const em = SPOT_EMOJI[s.type] ?? '📌';
-            return `
-              <div class="spot-item">
-                <span class="spot-icon">${em}</span>
-                <span class="spot-name">${s.name}</span>
-                <span class="spot-type">${s.type}</span>
-              </div>`;
-          }).join('');
+          (c.rest_spots ?? []).map(s =>
+            `<div class="spot-item">
+              <span class="spot-icon">${SPOT_EMOJI[s.type]??'📌'}</span>
+              <span class="spot-name">${s.name}</span>
+              <span class="spot-type">${s.type}</span>
+            </div>`
+          ).join('');
 
         // 走行情報
-        const chips = [
+        document.getElementById('detail-info').innerHTML = [
           c.caution     ? `<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>` : '',
           c.best_season ? `<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>` : '',
         ].filter(Boolean).join('');
-        document.getElementById('detail-info').innerHTML = chips;
 
         // 地図ボタン
         document.getElementById('detail-map-btn').href =
@@ -554,44 +508,36 @@
         showScreen('screen-loading');
         ['step-gps','step-weather','step-ai'].forEach(id => setStep(id,'idle'));
 
-        // GPS
         setStep('step-gps','active');
         let lat, lon;
         try {
           const pos = await new Promise((resolve, reject) =>
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: false, timeout: 30000,
-            })
+            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy:false, timeout:30000 })
           );
-          lat = pos.coords.latitude;
-          lon = pos.coords.longitude;
+          lat = pos.coords.latitude; lon = pos.coords.longitude;
           setStep('step-gps','done');
         } catch (e) {
           showError(
-            e.code === 1 ? 'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。' :
-            e.code === 3 ? 'GPS取得がタイムアウトしました。\nもう一度試してください。' :
+            e.code===1 ? 'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。' :
+            e.code===3 ? 'GPS取得がタイムアウトしました。\nもう一度試してください。' :
             '現在地の取得に失敗しました。'
           );
           return;
         }
 
-        // 天気
         setStep('step-weather','active');
         let temperature = 20, weatherCondition = '晴れ';
         try {
-          const res = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`
-          );
+          const res  = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`);
           const data = await res.json();
           temperature      = Math.round(data.current.temperature_2m);
           weatherCondition = WEATHER[data.current.weathercode] ?? '晴れ';
         } catch (_) {}
         setStep('step-weather','done');
 
-        // AI
         setStep('step-ai','active');
         try {
-          const res = await fetch(`${API_BASE}/api/suggest`, {
+          const res  = await fetch(`${API_BASE}/api/suggest`, {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ latitude:lat, longitude:lon, temperature, weather_condition:weatherCondition }),
@@ -601,7 +547,7 @@
           setStep('step-ai','done');
           renderResults(data);
           showScreen('screen-results');
-        } catch (e) {
+        } catch (_) {
           showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');
         }
       }
@@ -614,9 +560,7 @@
       document.getElementById('btn-detail-home').addEventListener('click', () => showScreen('screen-idle'));
       document.getElementById('btn-error-retry').addEventListener('click', () => showScreen('screen-idle'));
 
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-      }
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
     </script>
   </body>
 </html>
