@@ -1,241 +1,119 @@
-# 004_portfolio
+# 004 Portfolio Site
 
-AWS Lambda + API Gateway + CloudFront + S3 で構築した、Astro SSR 動的ポートフォリオサイト。日英2言語対応。
+> Astro SSR + Lambda + CloudFront で構築した日英2言語対応の動的ポートフォリオサイト。月額ほぼ$0のサーバーレス構成で Zenn/note の RSS をサーバーサイドで動的取得して表示。
 
-**サイトURL**: `https://www.zer0-infra.com/ja/`
-
----
+[![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20CloudFront%20%7C%20S3-orange)](https://aws.amazon.com)
+[![Astro](https://img.shields.io/badge/Astro-SSR-FF5D01)](https://astro.build)
+[![Site](https://img.shields.io/badge/サイト-www.zer0--infra.com-blue)](https://www.zer0-infra.com)
+[![Cost](https://img.shields.io/badge/月額-~%240-green)](https://aws.amazon.com/pricing)
 
 ## 概要
 
-| 項目           | 内容                                                          |
-| -------------- | ------------------------------------------------------------- |
-| フレームワーク | Astro 6.x（SSRモード）                                        |
-| 言語対応       | 日本語（`/ja/`）・英語（`/en/`）                              |
-| ホスティング   | AWS Lambda + API Gateway HTTP API + CloudFront + S3           |
-| 月額コスト     | ほぼ $0（Lambda/CloudFront 無料枠内）                         |
-| IaC            | CloudFormation                                                |
-| デプロイ       | `bash scripts/deploy.sh`（ビルド→Lambda更新→S3同期→CF無効化） |
-
----
+| 項目 | 内容 |
+|------|------|
+| URL | https://www.zer0-infra.com |
+| フレームワーク | Astro（SSR / `output: 'server'` / Node.js adapter） |
+| 対応言語 | 日本語（`/ja/`）・英語（`/en/`） |
+| ホスティング | CloudFront + S3（静的） + API Gateway + Lambda（SSR） |
+| 動的コンテンツ | Zenn・note の RSS をリクエスト時にサーバーサイドで取得 |
+| IaC | CloudFormation（全リソース管理） |
+| 月額コスト | ~$0（Lambda・CloudFront 無料枠内） |
 
 ## アーキテクチャ
 
-![アーキテクチャ図](./images/004_architecture.png)
+![アーキテクチャ図](images/004_architecture.png)
 
-```text
-ユーザー
-  ↓ HTTPS
-CloudFront (E33SJ6UEA95L47)
-  ├─ /_astro/* → S3 (zer0-portfolio-s3) ← 静的アセット（長期キャッシュ）
-  └─ /* → API Gateway HTTP API (Zer0-portfolio-api)
-               ↓
-           Lambda (Zer0-portfolio-ssr, Node.js 24.x)
-               ↓
-           Astro SSR (serverless-http + express + @astrojs/node)
+```
+[ブラウザ] HTTPS
+  └─▶ CloudFront（touring.zer0-infra.com）
+        ├─ /_astro/* → S3（CSS/JS/画像 / 長期キャッシュ）
+        └─ /* → API Gateway → Lambda（Astro SSR）
+                  └─ リクエスト時に Zenn/note RSS を並列取得
 ```
 
-### リクエストフロー
+## 技術スタック
 
-1. ブラウザが CloudFront にリクエスト
-2. `/_astro/*`（CSS/JS）→ S3 から直接配信（`Cache-Control: immutable`）
-3. それ以外のパス → API Gateway → Lambda → Astro SSR でレンダリング → HTML レスポンス
+| レイヤー | 技術 |
+|----------|------|
+| フレームワーク | Astro 6.x（SSR / `@astrojs/node` adapter） |
+| スタイリング | Tailwind CSS v4（`@tailwindcss/vite` プラグイン） |
+| 実行基盤 | AWS Lambda（Node.js 24.x / 256MB / 30秒） |
+| API | Amazon API Gateway HTTP API |
+| CDN | Amazon CloudFront（静的: 1年キャッシュ / SSR: キャッシュ無効） |
+| ストレージ | Amazon S3（OAC 署名付きアクセス） |
+| IaC | CloudFormation |
+| デプロイ | `scripts/deploy.sh`（6ステップ自動化） |
 
-### 静的アセット vs SSR の分離
+## 実装のこだわり
 
-| パス                     | オリジン           | キャッシュ戦略                               |
-| ------------------------ | ------------------ | -------------------------------------------- |
-| `/_astro/*`              | S3                 | `public, max-age=31536000, immutable`（1年） |
-| `/ja/*`, `/en/*`, その他 | API Gateway→Lambda | キャッシュ無効（毎回SSR）                    |
+### 1. Organizations SCP による Lambda Function URL 問題の解決
+AWS Organizations の SCP（Service Control Policy）により Lambda Function URL が 403 ブロックされる環境だった。当初は Function URL で実装していたが、本番デプロイ時に初めて制約を発見。**API Gateway HTTP API に切り替え**ることで解決。この経験から「組織レベルのポリシーと Lambda 呼び出し方式の関係」を深く理解。
 
----
+### 2. 静的アセット vs SSR の分離キャッシュ戦略
+| パス | オリジン | キャッシュ | 理由 |
+|------|----------|------------|------|
+| `/_astro/*` | S3 | 1年（immutable） | ハッシュ付きファイル名のため変更不要 |
+| `/images/*` | S3 | 1日 | 更新頻度が低い |
+| `/*`（SSR） | API GW | 無効 | Zenn/note RSS をリクエスト毎に取得 |
 
-## ページ構成
+### 3. Zenn・note RSS の並列サーバーサイド取得
+`Promise.allSettled()` で Zenn・note 両方の RSS フィードを並列取得。片方が失敗しても残りを表示できるよう Settled（成功・失敗両対応）で処理。クライアントサイドでの取得を避け、CORS 問題を排除。
 
-| パス                                         | 内容                                            |
-| -------------------------------------------- | ----------------------------------------------- |
-| `/`                                          | `/ja/` へリダイレクト（デフォルトロケール）     |
-| `/ja/`・`/en/`                               | トップページ（Hero・Stats・Projects・Articles） |
-| `/ja/about`・`/en/about`                     | プロフィール・スキルスタック                    |
-| `/ja/projects`・`/en/projects`               | プロジェクト一覧（5件）                         |
-| `/ja/projects/[slug]`・`/en/projects/[slug]` | プロジェクト詳細                                |
-| `/ja/articles`・`/en/articles`               | 最新記事（Zenn・note RSS取得）                  |
-| `/ja/contact`・`/en/contact`                 | 依頼テキスト・SNSリンク・名刺用QRコード         |
-| 任意のパス（404）                            | 404ページ（日英自動判定、HTTP 404 返却）        |
+### 4. i18n 設計（日英2言語）
+Astro の `i18n` ルーティングを使用し、`/ja/` と `/en/` で全ページを提供。翻訳キー管理・言語切替 URL 生成・デフォルトロケールリダイレクトを単一コードベースで実装。
 
----
+### 5. デプロイ自動化（6ステップ）
+`scripts/deploy.sh` が以下を全自動化：
+1. CloudFormation Outputs からリソース情報取得
+2. Astro ビルド（SSR 用 Lambda コード生成）
+3. Lambda ZIP 作成 + S3 アップロード
+4. Lambda コード更新（`update-function-code`）
+5. S3 静的アセット同期（キャッシュ設定付き）
+6. CloudFront キャッシュ無効化 + 10ページの疎通確認
 
 ## ディレクトリ構成
 
-```text
+```
 004_portfolio/
-├── README.md
-├── scripts/
-│   └── deploy.sh            # アプリデプロイスクリプト（通常使用）
+├── src/                         # Astro プロジェクト
+│   ├── src/
+│   │   ├── components/          # ProjectCard, ArticleCard 等
+│   │   ├── data/projects.ts     # プロジェクト定義データ
+│   │   ├── layouts/             # BaseLayout
+│   │   └── pages/ja/, pages/en/ # 日英ページ
+│   ├── public/images/           # アーキテクチャ図（001〜007）
+│   ├── lambda.mjs               # CloudFront→Lambda ブリッジ
+│   ├── astro.config.mjs
+│   └── package.json
 ├── infra/
-│   ├── cloudformation-portfolio.yaml  # インフラ定義（S3/Lambda/API GW/CloudFront/カスタムドメイン）
-│   ├── certificate.yaml     # ACM証明書（us-east-1、CloudFront用）
-│   └── deploy-infra.sh      # インフラ構築スクリプト（初回のみ）
-└── src/
-    ├── astro.config.mjs     # Astro設定（SSR・i18n・Tailwind）
-    ├── tailwind.config.mjs  # Tailwindカラー設定（ネイビー系）
-    ├── package.json
-    ├── lambda.mjs           # LambdaエントリーポイントI
-    ├── .env                 # 環境変数（NOTE_RSS_URL・SITE_URL）
-    ├── public/
-    │   └── favicon.svg
-    └── src/
-        ├── components/      # 共通コンポーネント
-        │   ├── Nav.astro
-        │   ├── Hero.astro
-        │   ├── Footer.astro
-        │   ├── StatsBar.astro
-        │   ├── ProjectCard.astro
-        │   └── ArticleCard.astro
-        ├── layouts/
-        │   └── BaseLayout.astro
-        ├── pages/
-        │   ├── index.astro          # /ja/ へリダイレクト
-        │   ├── 404.astro            # 404ページ（日英判定・HTTP 404）
-        │   ├── ja/                  # 日本語ページ群
-        │   │   ├── index.astro
-        │   │   ├── about.astro
-        │   │   ├── articles.astro
-        │   │   ├── contact.astro
-        │   │   └── projects/
-        │   │       ├── index.astro
-        │   │       └── [slug].astro
-        │   └── en/                  # 英語ページ群（jaと同構成）
-        ├── data/
-        │   ├── projects.ts          # プロジェクト定義データ
-        │   └── links.ts             # SNSリンク・サイトURL
-        └── i18n/
-            ├── ui.ts                # 日英翻訳文字列定義
-            └── utils.ts             # 言語判定ユーティリティ
+│   ├── cloudformation-portfolio.yaml
+│   ├── certificate.yaml         # ACM（us-east-1）
+│   └── deploy-infra.sh
+├── scripts/
+│   └── deploy.sh                # 6ステップ自動デプロイ
+└── images/
+    └── 004_architecture.png
 ```
 
----
-
-## AWSリソース
-
-| リソース                         | 名前・ID                                             |
-| -------------------------------- | ---------------------------------------------------- |
-| CloudFormationスタック           | `Zer0-portfolio`                                     |
-| S3バケット                       | `zer0-portfolio-s3`                                  |
-| Lambda関数                       | `Zer0-portfolio-ssr`（Node.js 24.x, 256MB, 30s）     |
-| API Gateway                      | `Zer0-portfolio-api`（HTTP API, `$default`ステージ） |
-| CloudFrontディストリビューション | `E33SJ6UEA95L47`                                     |
-| カスタムドメイン                 | `https://www.zer0-infra.com`                         |
-| CloudFrontドメイン（内部オリジン）| `https://du7bbiecctrzb.cloudfront.net`（OGP等への露出なし）|
-| ACM証明書スタック                | `Zer0-portfolio-cert`（us-east-1）                   |
-| IAMロール                        | `Zer0-portfolio-lambda-role-{AccountId}`             |
-| リージョン                       | `ap-northeast-1`（東京）                             |
-
----
-
-## 環境変数・設定
-
-### `src/.env`
-
-```env
-SITE_URL=https://www.zer0-infra.com
-NOTE_RSS_URL=https://note.com/zer0_infra/rss
-```
-
-### Lambda環境変数（deploy.shが自動設定）
-
-| 変数名     | 値                           |
-| ---------- | ---------------------------- |
-| `SITE_URL` | `https://www.zer0-infra.com` |
-
----
-
-## セットアップ手順
-
-### 初回（インフラ構築）
+## セットアップ / デプロイ
 
 ```bash
-cd /root/Zer0/004_portfolio/infra
-bash deploy-infra.sh
-```
+# ローカル開発
+cd src && npm install && npm run dev
 
-内部で以下を自動実行：
+# 初回インフラ構築（ACM証明書は us-east-1 先行デプロイ）
+bash infra/deploy-infra.sh
 
-1. ACM証明書スタック（`Zer0-portfolio-cert`）を us-east-1 にデプロイ
-2. メインスタック（`Zer0-portfolio`）を ap-northeast-1 にデプロイ（証明書ARNを渡す）
-3. CloudFront は `www.zer0-infra.com` エイリアスと ACM 証明書で構成される
-
-### デプロイ（コード更新時）
-
-```bash
-cd /root/Zer0/004_portfolio
+# コード更新デプロイ（Lambda + S3 + CloudFront 無効化まで自動）
 bash scripts/deploy.sh
 ```
 
-内部で以下を自動実行：
+## AWSリソース一覧
 
-1. `npm run build`（Astroビルド → `dist/` 生成）
-2. `lambda.mjs` + `dist/server/` + 本番依存をzipに梱包
-3. zip を S3 にアップロード
-4. Lambda コードを S3 から更新（`update-function-code`）
-5. Lambda 環境変数を更新（`SITE_URL`）
-6. `dist/client/_astro/` を S3 に同期（長期キャッシュヘッダー付き）
-7. CloudFront キャッシュを全パス無効化
-8. **疎通確認**: ja/en 全10ページ HTTP 200 + セキュリティヘッダー3件を自動チェック（失敗時は中断）
-9. GitHub自動同期（`sync_to_public.sh`）— 機密スキャン → Zer0-public へ push
-
-> `set -e` により、いずれかのステップが失敗した場合は以降の処理は実行されない。
-
-### DRY RUN（設定確認のみ）
-
-```bash
-bash scripts/deploy.sh --dry-run
-```
-
----
-
-## ローカル開発
-
-```bash
-cd src
-npm install
-npm run dev
-# → http://localhost:4321/ja/ で確認
-```
-
----
-
-## 技術選定の理由
-
-### Astro SSR + Lambda
-
-- **SSG不採用の理由**: RSSフィード（Zenn・note）をリアルタイム取得するため動的レンダリングが必要
-- **Lambda選択理由**: アクセス頻度が低いポートフォリオに最適（コールドスタートは許容、月額コストほぼ$0）
-- **API Gateway HTTP API**: Lambda Function URL は Organizations SCP により `AuthType: NONE` でも403になるため HTTP API を採用
-
-### CloudFront + S3 分離
-
-- `/_astro/*`（ハッシュ付きビルド成果物）は S3 から長期キャッシュ配信
-- SSRページは毎回 Lambda で動的生成（キャッシュ無効）
-
-### i18n設計
-
-- Astro の組み込み i18n ルーティングを使用（`/ja/`・`/en/` プレフィックス）
-- 翻訳文字列は `src/i18n/ui.ts` で一元管理
-
----
-
-## 注意事項
-
-- **Lambda Function URL 非対応**: AWS Organizations の SCP により `AuthType: NONE` の Lambda Function URL が 403 になる。API Gateway HTTP API 経由が必要（このアカウント固有の制約）
-- **コールドスタート**: Lambda の初回リクエストは数秒かかる場合がある（`MemorySize: 256MB` で緩和）
-- **CloudFront伝播**: デプロイ後のキャッシュ無効化完了まで約1〜2分かかる
-
----
-
-## 関連プロジェクト
-
-- **001_X_Auto_Poster**: AWSニュース自動投稿Bot
-- **002_Zenn_Auto_Article_Bot**: Zenn初級記事自動生成Bot
-- **003_X_AI_Bot**: AI活用術自動投稿Bot
-- **005_Zenn_Mid_Article_Bot**: Zenn中級記事自動生成Bot
+| リソース | 名前/ID |
+|----------|---------|
+| CloudFront | E33SJ6UEA95L47 |
+| S3 バケット | zer0-portfolio-s3 |
+| Lambda | Zer0-portfolio-ssr |
+| API Gateway | Zer0-portfolio-api |
+| ACM 証明書 | us-east-1（www.zer0-infra.com） |

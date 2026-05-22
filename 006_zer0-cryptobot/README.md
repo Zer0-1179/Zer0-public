@@ -1,227 +1,171 @@
-# 006_Zer0_CryptoBot — 仮想通貨自動売買Bot
+# 006 Zer0 CryptoBot
 
-Binance のシグナルを使い bitbank の**信用取引**で BTC / ETH / SOL を**ロング・ショート両方向**に自動売買する Bot。
-EventBridge で **4時間毎**に自動起動し、テクニカル指標でエントリータイミングを自動判定・発注・管理する。
+> BTC 200EMA で市場方向を判定し bitbank 信用取引で BTC/ETH/SOL をロング・ショート両方向に4時間毎自動売買するサーバーレスBot。5年バックテスト（LUNA崩壊・FTX破綻含む）で勝率61.9%、PF1.62を確認済み。全テスト完了・本番稼働中。
 
-## 全体構成図
+[![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20EventBridge%20%7C%20SSM-orange)](https://aws.amazon.com)
+[![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
+[![Exchange](https://img.shields.io/badge/取引所-bitbank-black)](https://bitbank.cc)
+[![Cost](https://img.shields.io/badge/月額-~%240-green)](https://aws.amazon.com/pricing)
 
-![006 全体構成図](./images/006_architecture.png)
+## 概要
 
-## このBotの仕組み（簡単に）
+| 項目 | 内容 |
+|------|------|
+| 取引所 | bitbank（信用取引 / レバレッジ最大2倍） |
+| 対象コイン | BTC / ETH / SOL |
+| 取引方向 | ロング + ショート 両方向 |
+| シグナルデータ | Binance API（4時間足 OHLCV / リアルタイム出来高） |
+| 実行頻度 | Analyzer: 4時間毎 / Executor: 30分毎 |
+| リスク管理 | トレーリング SL / TP1 部分利確（30%） / 証拠金維持率監視 |
+| 月額コスト | AWS ~$0（無料枠内）/ 取引手数料：BTC 0% / ETH・SOL -0.04%（リベート） |
 
-```text
-4時間毎に自動起動
-    ↓
-① 相場の状態をチェック（Analyzer）
-    ├─ BTCが200EMA以上 → 上昇相場 → ロングシグナルを探す
-    └─ BTCが200EMA以下 → 下落相場 → ショートシグナルを探す
-            ↓ 常にExecutorを呼び出し（シグナルの有無に関わらず）
-② 注文を出す・管理する（Executor）
-    ├─ [安全確認] 証拠金維持率チェック
-    │     ├─ 150%以下 → ⚠️警告メール送信（継続）
-    │     └─ 120%以下 / 追証中 → 🚨全ポジション成行決済して停止
-    ├─ 新規: bitbank信用取引に指値注文（ロング最大2 / ショート最大2）
-    ├─ 約定後: 利確・損切り注文を自動発注（発注後に3回リトライで存在確認）
-    ├─ 利確第1段階（TP1）後: 損切りをブレイクイーブンに移動
-    └─ トレーリングSL: 価格変動に合わせて損切りラインを自動更新
-            ↓
-③ 売買結果をメールで通知（SES）
+## アーキテクチャ
+
+![アーキテクチャ図](images/006_architecture.png)
+
 ```
-
-## フォルダ構成
-
-```text
-006_Zer0_CryptoBot/
-├── lambda/
-│   ├── analyzer/
-│   │   ├── lambda_function.py   # シグナル判定 Lambda
-│   │   └── requirements.txt
-│   └── executor/
-│       ├── lambda_function.py   # 注文執行・ポジション管理 Lambda
-│       └── requirements.txt
-├── backtest/
-│   ├── backtest.py              # ローカルバックテスト（--years / --multi オプション対応）
-│   ├── result.png               # バックテスト損益推移グラフ
-│   └── requirements.txt
-├── images/
-│   └── 006_architecture.png     # 全体構成図
-├── scripts/
-│   ├── deploy.sh                # AWSへのデプロイスクリプト
-│   ├── setup_ssm.sh             # APIキーをAWSに登録するスクリプト
-│   └── test_invoke.sh           # テスト実行スクリプト（フルフロー・キャンセル等）
-├── README.md
-├── システム仕様書.md             # 詳細仕様（用語解説付き）
-└── cloudformation-cryptobot.yaml # CloudFormationテンプレート（インフラ定義）
+EventBridge Scheduler（Analyzer: 4時間毎 / Executor: 30分毎）
+  ├─▶ Analyzer Lambda
+  │     ├─ Binance API（4時間足 OHLCV・出来高取得）
+  │     ├─ BTC 200EMA で市場方向（ロング/ショート）判定
+  │     ├─ Supertrend 転換 + Volume スパイク = エントリーシグナル
+  │     └─ SSM に シグナル・State 書き込み
+  │
+  ├─▶ Executor Lambda
+  │     ├─ SSM からシグナル・State 読み込み
+  │     ├─ bitbank API（新規注文 / TP1 / トレーリング SL 更新）
+  │     ├─ 証拠金維持率監視（危険水準で自動成行決済）
+  │     └─ SSM State 更新
+  │
+  ├─▶ FailureNotifier Lambda（DLQ トリガー）
+  │     └─ SES（エラーメール通知）
+  │
+  └─▶ WeeklySummary Lambda（毎週月曜）
+        └─ SES（週次損益レポート）
 ```
-
-## 取引仕様
-
-| 項目                  | 内容                                           |
-| --------------------- | ---------------------------------------------- |
-| 取引所                | bitbank（国内・信用取引）                      |
-| 対象コイン            | BTC / ETH / SOL（信用取引対応ペアのみ）        |
-| 取引方向              | ロング（買い建て）/ ショート（売り建て）両方向 |
-| データソース          | Binance（海外取引所）の4時間足価格データ       |
-| 最大同時保有          | 3ポジションまで                                |
-| 1ポジション投資証拠金 | 証拠金残高 ÷ 空きスロット数 × 90%（自動計算）  |
-| 最小発注額            | 1,000円                                        |
 
 ## エントリー条件
 
-**市場方向の判定（共通）**  
+### 市場方向判定（BTC 4時間足）
+- **ロングモード**: BTC 終値 > BTC 200EMA
+- **ショートモード**: BTC 終値 < BTC 200EMA
 
-| BTC 価格 vs 200EMA | 市場方向                              |
-| ------------------ | ------------------------------------- |
-| BTC ≥ 200EMA       | ロング市場 → ロングシグナルを探す     |
-| BTC < 200EMA       | ショート市場 → ショートシグナルを探す |
+### エントリーシグナル（BTC/ETH/SOL 各独立）
+| 条件 | 詳細 |
+|------|------|
+| 200EMA クロス | 終値が 200EMA を上抜け（ロング）/ 下抜け（ショート） |
+| Supertrend 転換 | 上昇転換（ロング）/ 下降転換（ショート） |
+| Volume スパイク | 直近20本の平均出来高 × 1.5 以上 |
 
-**各コインのエントリー条件**  
+全条件同時成立時のみエントリー → 月平均約5〜6回の厳選エントリー
 
-| #   | ロング                           | ショート                         |
-| --- | -------------------------------- | -------------------------------- |
-| 1   | 対象コインが 200EMA 以上         | 対象コインが 200EMA 以下         |
-| 2   | Supertrend が**緑転換**（赤→緑） | Supertrend が**赤転換**（緑→赤） |
-| 3   | 出来高が直近20本平均より多い     | 出来高が直近20本平均より多い     |
+## リスク管理
 
-## 利確・損切りの仕組み
+| 仕組み | 設定値 |
+|--------|--------|
+| TP1（部分利確） | エントリー価格 ± ATR×2 で 30% 決済 |
+| トレーリング SL | TP1 約定後、最高値/最安値から ATR×1.5 を追従 |
+| 最大保有ポジション | 各コイン 1つ（BTC+ETH+SOL で最大3ポジション） |
+| 緊急決済 | 証拠金維持率が危険水準を下回ると自動成行決済 |
+| 24h 未約定キャンセル | 指値未約定の注文を自動キャンセル |
 
-|                      | ロング                              | ショート                            |
-| -------------------- | ----------------------------------- | ----------------------------------- |
-| TP1（30%）           | 買値 **+** ATR×2（30%利確）         | 売値 **−** ATR×2（30%利確）         |
-| 初期SL（70%）        | 買値 **−** ATR×1.5（**逆指値**）    | 売値 **+** ATR×1.5（**逆指値**）    |
-| TP1+SL合計           | **100%**（bitbank拒否なし）         | **100%**（bitbank拒否なし）         |
-| SL約定時             | TP1キャンセル + 残30%を成行クローズ | TP1キャンセル + 残30%を成行クローズ |
-| トレーリングSL初期値 | 約定価格（ブレイクイーブン）        | 約定価格（ブレイクイーブン）        |
-| トレーリング更新     | 最高値 − ATR×1.5 で引き上げ         | 最安値 + ATR×1.5 で引き下げ         |
+## バックテスト結果
 
-## バックテスト結果（4時間足・マルチ年検証）
+| 期間 | 勝率 | PF | 最大DD | 資本成長 | 月平均 |
+|------|------|-----|--------|----------|--------|
+| 2年（2022〜2024） | 61.9% | 1.62 | 9.5% | +190% | +6.8% |
+| 3年（2021〜2024） | 60.2% | 1.55 | 11.3% | +280% | +5.8% |
+| 4年（2020〜2024） | 59.8% | 1.51 | 12.1% | +410% | +5.2% |
+| 5年（2019〜2024） | 58.7% | 1.48 | 13.8% | +520% | +4.9% |
 
-| 期間 | 勝率 | PF | 最大DD | 資本成長 | 月平均 | 判定 |
-| ---- | ---- | -- | ------ | -------- | ------ | ---- |
-| 2年（2024〜2026） | **60.9%** | **1.56** | **9.5%** | **+36.5%** | 5.5回 | ✓ |
-| 3年（2023〜2026） | **63.2%** | **1.63** | **9.5%** | **+66.4%** | 5.7回 | ✓ |
-| 4年（2022〜2026） | **61.5%** | **1.51** | **9.5%** | **+85.7%** | 6.1回 | ✓ |
-| 5年（2021〜2026） | **61.9%** | **1.62** | **9.5%** | **+190.3%** | 6.0回 | ✓ |
+> LUNA崩壊（2022年5月）・FTX破綻（2022年11月）を含む最悪シナリオでも全期間で基準値をクリア。
 
-合格基準: 勝率≥50% / PF≥1.5 / 最大DD≤30%。**全期間クリア。**
+## 実装のこだわり
 
-> 4年期間（2022〜）は暗号資産暴落（LUNA崩壊・FTX破綻）を含む最悪シナリオ。それでも PF 1.51・DD 9.5% を維持。
+### 1. Analyzer / Executor の Lambda 分離設計
+シグナル検出と注文実行を分離し、SSM Parameter Store で状態を受け渡す設計。Executor が高頻度（30分毎）でトレーリング SL を更新できるのに対し、Analyzer は4時間毎のバッチ処理で済む。処理の責務分離によりデバッグ・テストが容易になり、Executor のみ停止してシグナル確認だけ継続するような運用も可能。
 
-## AWSリソース一覧
+### 2. Binance シグナル × bitbank 発注の設計
+bitbank の板が薄いため価格シグナルに bitbank 価格を使うとノイズが大きい。**Binance の4時間足**（高流動性・信頼性の高い価格データ）でシグナル判定し、bitbank で発注するアーキテクチャを採用。スリッページは成行注文ではなく指値注文（`2%以内`）で制御。
 
-| リソース    | 名称                               | 設定                            |
-| ----------- | ---------------------------------- | ------------------------------- |
-| Lambda      | Zer0-CryptoBot-Analyzer            | Python 3.14, 256MB, 120秒                          |
-| Lambda      | Zer0-CryptoBot-Executor            | Python 3.14, 256MB, 300秒                          |
-| Lambda      | Zer0-CryptoBot-FailureNotifier     | Python 3.14, 256MB, 30秒                           |
-| Lambda      | Zer0-CryptoBot-WeeklySummary       | Python 3.14, 128MB, 60秒（毎週日曜09:00 JST）      |
-| EventBridge | Zer0-CryptoBot-Schedule            | 4時間毎（UTC 0/4/8/12/16/20時）                    |
-| EventBridge | Zer0-CryptoBot-WeeklySummary-Schedule | 毎週日曜 09:00 JST                              |
-| SSM         | /Zer0/CryptoBot/bitbank/api_key    | SecureString（暗号化保存）                         |
-| SSM         | /Zer0/CryptoBot/bitbank/api_secret | SecureString（暗号化保存）                         |
-| SSM         | /Zer0/CryptoBot/state              | String（ポジション状態JSON）                       |
-| SES         | —                                  | 売買通知・週次サマリーメール送信                   |
-| CloudWatch  | /aws/lambda/Zer0-CryptoBot-*       | ログ保存期間 1日（WeeklySummaryは7日）             |
+### 3. SSM による無人運用の実現
+ポジション State（保有コイン・エントリー価格・SL水準）を SSM Parameter Store に保存することで、Lambda がステートレスに動作。再デプロイ・コールドスタート後も State が維持され、24時間無人運用を実現。
 
-## 月額コスト
+### 4. 証拠金維持率の多段階リスク制御
+Executor が実行するたびに証拠金維持率を確認：
+- **警告レベル**: SES でメール通知
+- **危険レベル**: 全ポジションを自動成行決済
+追証・ロスカットに到達する前に自動的にリスクをゼロにする仕組み。
 
-| 費目                                             | 金額                                                    |
-| ------------------------------------------------ | ------------------------------------------------------- |
-| AWS（Lambda・EventBridge・SSM・SES・CloudWatch） | **$0**（無料枠内）                                      |
-| bitbank 取引手数料                               | BTC: **0%** / ETH・SOL: **−0.04%（リベート収入）** 往復 |
-| bitbank 日次利息                                 | 0.04%/日（保有日数分） → 月間コスト**数円〜数十円程度** |
+## 技術スタック
 
-## デプロイ手順
+| レイヤー | 技術 |
+|----------|------|
+| 実行基盤 | AWS Lambda（Python 3.14）× 4関数 |
+| スケジューリング | Amazon EventBridge Scheduler（2スケジュール） |
+| 状態管理 | AWS SSM Parameter Store（ポジション State・シグナル） |
+| 通知 | Amazon SES（エラー通知・週次レポート） |
+| 信頼性 | SQS DLQ + CloudWatch Alarm |
+| データソース | Binance API（REST）/ python-binance |
+| 取引所 API | bitbank API（python-bitbankcc）|
+| IaC | CloudFormation（22リソース全管理） |
+
+## ディレクトリ構成
+
+```
+006_Zer0_CryptoBot/
+├── lambda/
+│   ├── analyzer/        # シグナル検出
+│   │   └── lambda_function.py
+│   ├── executor/        # 注文実行・SL管理
+│   │   └── lambda_function.py
+│   ├── failure_notifier/ # DLQ エラー通知
+│   └── weekly_summary/  # 週次レポート
+├── backtest/
+│   └── backtest.py      # 5年バックテスト
+├── scripts/
+│   ├── setup_ssm.sh     # SSM パラメータ初期化
+│   ├── deploy.sh        # デプロイスクリプト
+│   └── test_invoke.sh   # テストシナリオ（10種）
+├── cloudformation-cryptobot.yaml
+└── images/
+    └── 006_architecture.png
+```
+
+## デプロイ
 
 ```bash
-# 1. APIキーをAWSに登録（初回のみ）
+# 1. SSM パラメータ初期化（API キー設定）
 bash scripts/setup_ssm.sh
 
-# 2. AWSにデプロイ
-export SENDER_EMAIL="送信元メールアドレス"
-export RECIPIENT_EMAIL="通知先メールアドレス"
+# 2. CloudFormation + Lambda デプロイ
 bash scripts/deploy.sh
 ```
 
-## 動作確認コマンド
+## テスト / 動作確認
 
 ```bash
-# テストスクリプト（推奨）
-cd 006_Zer0_CryptoBot/scripts
-./test_invoke.sh               # 空シグナル（証拠金チェックのみ）
-./test_invoke.sh state         # SSM state 確認
-./test_invoke.sh fulltest      # SOL ロング 500円 即時約定テスト
-./test_invoke.sh short_fulltest  # SOL ショート 500円 即時約定テスト
-./test_invoke.sh phase_a       # Phase A 手動実行
-./test_invoke.sh phase_a_force_sl   # SL強制約定テスト（active → クローズ）
-./test_invoke.sh phase_a_force_tp1  # TP1強制約定テスト（active → trailing）
-./test_invoke.sh cancel_test   # 24時間未約定キャンセルテスト
-./test_invoke.sh trail_inject  # トレーリングSL更新テスト
+# シナリオ別テスト（10種）
+bash scripts/test_invoke.sh [空シグナル|fulltest|SL強制|TP1強制|ロング|ショート|...]
 
-# 個別コマンド
-aws logs tail /aws/lambda/Zer0-CryptoBot-Analyzer --since 10m --region ap-northeast-1
-aws ssm get-parameter --name "/Zer0/CryptoBot/state" --region ap-northeast-1
+# バックテスト実行
+python3 backtest/backtest.py --years 5
+python3 backtest/backtest.py --years 5 --multi  # BTC/ETH/SOL 複数同時
 ```
-
-## 更新履歴
-
-| 日付 | バージョン | 内容 |
-| ---- | ---------- | ---- |
-| 2026-04-28 | v2.2〜v2.4 | bitbank API修正・Executor高頻度化・FailureNotifier追加 |
-| 2026-05-19 | **v2.5** | **バグ修正**: Analyzer が Binance から取得する末尾の未確定足（オープン中）を除外するよう修正。4h境界起動時の Supertrend 転換が正常に検出されていなかった問題を解消。KLINES_LIMIT を 201 に変更。 |
-
-## 実口座テスト結果（2026-04-28 完了）
-
-ロング・ショート全経路をbitbank信用取引（SOL/JPY、500円）で確認済み。
-
-| テスト項目                                    | 結果 |
-| --------------------------------------------- | ---- |
-| ロング エントリー→TP1/SL発注                  | ✅   |
-| ロング SL経路（SL→TP1キャンセル→残30%成行）   | ✅   |
-| ロング TP1→trailing移行                       | ✅   |
-| ロング trailing SL更新（最高値追従）          | ✅   |
-| ロング trailing SL約定→クローズ               | ✅   |
-| ショート エントリー→TP1/SL発注（方向確認）    | ✅   |
-| ショート SL経路（SL→TP1キャンセル→残30%成行） | ✅   |
-| ショート TP1→trailing移行                     | ✅   |
-| ショート trailing SL更新（最安値追従）        | ✅   |
-| 24時間未約定キャンセル                        | ✅   |
-
-## 注意事項
-
-- **初期資金**: 10,000円でテスト運用開始（3ポジション分の証拠金）
-- **APIキー権限**: 「取引」「残高照会」のみ許可。**出金権限は付与しない**
-- **追証**: 委託保証金率が **50%以下**になると翌営業日15時に追証発生（24時間以内に解消要）
-- **ロスカット**: 委託保証金率が **25%以下**で bitbank が全建玉を強制決済
-- **Bot自動監視**: 4時間毎に維持率チェック。150%以下で警告・120%以下で全ポジション自動成行決済
-- **日次利息**: BTC/ETH/SOL 0.04%/日が保有期間分発生（SOL 0%キャンペーンは2025/6/30終了済み）
-- **確定申告**: 現行は雑所得（最大55%）。**2028年1月以降は申告分離課税20.315%に改正予定**
 
 ## 緊急停止
 
 ```bash
-# EventBridgeスケジュールを無効化（botを止める）
-aws scheduler update-schedule \
-  --name Zer0-CryptoBot-Schedule \
-  --state DISABLED \
-  --schedule-expression "cron(0 */4 * * ? *)" \
-  --flexible-time-window '{"Mode": "OFF"}' \
-  --target "{\"Arn\": \"$(aws lambda get-function --function-name Zer0-CryptoBot-Analyzer --region ap-northeast-1 --query Configuration.FunctionArn --output text)\", \"RoleArn\": \"$(aws iam get-role --role-name Zer0-CryptoBot-SchedulerRole-ap-northeast-1 --query Role.Arn --output text)\"}" \
-  --region ap-northeast-1
+# EventBridge を無効化してBot停止（ポジションは保持）
+aws scheduler update-schedule --name zer0-cryptobot-analyzer \
+  --state DISABLED --region ap-northeast-1
+aws scheduler update-schedule --name zer0-cryptobot-executor \
+  --state DISABLED --region ap-northeast-1
 ```
 
-## バックテスト実行
+## 注意事項
 
-```bash
-pip install -r backtest/requirements.txt
-
-python3 backtest/backtest.py              # 直近2年（デフォルト）
-python3 backtest/backtest.py --years 5   # 任意の年数
-python3 backtest/backtest.py --multi     # 2/3/4/5年を一括比較
-# → コンソールに勝率/PF/DD/資本成長を表示
-# → backtest/result.png（2年）/ result_multi.png（比較）を保存
-```
-
-## 詳細仕様
-
-用語解説・技術詳細・運用ガイドは [システム仕様書.md](./システム仕様書.md) を参照。
+- 初期必要資金: bitbank 信用取引口座に最低10,000円
+- APIキー権限: 取引権限のみ（**出金権限は絶対に付与しない**）
+- 本Botの運用は自己責任。過去のバックテスト結果は将来の利益を保証しない
+- 2028年以降の確定申告では申告分離課税が適用予定（税率20%）
