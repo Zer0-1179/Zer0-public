@@ -9,21 +9,21 @@
 
 ## 概要
 
-| 項目 | 内容 |
-|------|------|
-| URL | https://www.zer0-infra.com |
-| フレームワーク | Astro（SSR / `output: 'server'` / Node.js adapter） |
-| 対応言語 | 日本語（`/ja/`）・英語（`/en/`） |
-| ホスティング | CloudFront + S3（静的） + API Gateway + Lambda（SSR） |
+| 項目           | 内容                                                   |
+| -------------- | ------------------------------------------------------ |
+| URL            | https://www.zer0-infra.com                             |
+| フレームワーク | Astro（SSR / `output: 'server'` / Node.js adapter）    |
+| 対応言語       | 日本語（`/ja/`）・英語（`/en/`）                       |
+| ホスティング   | CloudFront + S3（静的） + API Gateway + Lambda（SSR）  |
 | 動的コンテンツ | Zenn・note の RSS をリクエスト時にサーバーサイドで取得 |
-| IaC | CloudFormation（全リソース管理） |
-| 月額コスト | ~$0（Lambda・CloudFront 無料枠内） |
+| IaC            | CloudFormation（全リソース管理）                       |
+| 月額コスト     | ~$0（Lambda・CloudFront 無料枠内）                     |
 
 ## アーキテクチャ
 
 ![アーキテクチャ図](images/004_architecture.png)
 
-```
+```text
 [ブラウザ] HTTPS
   └─▶ CloudFront（touring.zer0-infra.com）
         ├─ /_astro/* → S3（CSS/JS/画像 / 長期キャッシュ）
@@ -33,37 +33,43 @@
 
 ## 技術スタック
 
-| レイヤー | 技術 |
-|----------|------|
-| フレームワーク | Astro 6.x（SSR / `@astrojs/node` adapter） |
-| スタイリング | Tailwind CSS v4（`@tailwindcss/vite` プラグイン） |
-| 実行基盤 | AWS Lambda（Node.js 24.x / 256MB / 30秒） |
-| API | Amazon API Gateway HTTP API |
-| CDN | Amazon CloudFront（静的: 1年キャッシュ / SSR: キャッシュ無効） |
-| ストレージ | Amazon S3（OAC 署名付きアクセス） |
-| IaC | CloudFormation |
-| デプロイ | `scripts/deploy.sh`（6ステップ自動化） |
+| レイヤー       | 技術                                                           |
+| -------------- | -------------------------------------------------------------- |
+| フレームワーク | Astro 6.x（SSR / `@astrojs/node` adapter）                     |
+| スタイリング   | Tailwind CSS v4（`@tailwindcss/vite` プラグイン）              |
+| 実行基盤       | AWS Lambda（Node.js 24.x / 256MB / 30秒）                      |
+| API            | Amazon API Gateway HTTP API                                    |
+| CDN            | Amazon CloudFront（静的: 1年キャッシュ / SSR: キャッシュ無効） |
+| ストレージ     | Amazon S3（OAC 署名付きアクセス）                              |
+| IaC            | CloudFormation                                                 |
+| デプロイ       | `scripts/deploy.sh`（6ステップ自動化）                         |
 
 ## 実装のこだわり
 
 ### 1. Organizations SCP による Lambda Function URL 問題の解決
+
 AWS Organizations の SCP（Service Control Policy）により Lambda Function URL が 403 ブロックされる環境だった。当初は Function URL で実装していたが、本番デプロイ時に初めて制約を発見。**API Gateway HTTP API に切り替え**ることで解決。この経験から「組織レベルのポリシーと Lambda 呼び出し方式の関係」を深く理解。
 
 ### 2. 静的アセット vs SSR の分離キャッシュ戦略
-| パス | オリジン | キャッシュ | 理由 |
-|------|----------|------------|------|
-| `/_astro/*` | S3 | 1年（immutable） | ハッシュ付きファイル名のため変更不要 |
-| `/images/*` | S3 | 1日 | 更新頻度が低い |
-| `/*`（SSR） | API GW | 無効 | Zenn/note RSS をリクエスト毎に取得 |
+
+| パス        | オリジン | キャッシュ       | 理由                                 |
+| ----------- | -------- | ---------------- | ------------------------------------ |
+| `/_astro/*` | S3       | 1年（immutable） | ハッシュ付きファイル名のため変更不要 |
+| `/images/*` | S3       | 1日              | 更新頻度が低い                       |
+| `/*`（SSR） | API GW   | 無効             | Zenn/note RSS をリクエスト毎に取得   |
 
 ### 3. Zenn・note RSS の並列サーバーサイド取得
+
 `Promise.allSettled()` で Zenn・note 両方の RSS フィードを並列取得。片方が失敗しても残りを表示できるよう Settled（成功・失敗両対応）で処理。クライアントサイドでの取得を避け、CORS 問題を排除。
 
 ### 4. i18n 設計（日英2言語）
+
 Astro の `i18n` ルーティングを使用し、`/ja/` と `/en/` で全ページを提供。翻訳キー管理・言語切替 URL 生成・デフォルトロケールリダイレクトを単一コードベースで実装。
 
 ### 5. デプロイ自動化（6ステップ）
+
 `scripts/deploy.sh` が以下を全自動化：
+
 1. CloudFormation Outputs からリソース情報取得
 2. Astro ビルド（SSR 用 Lambda コード生成）
 3. Lambda ZIP 作成 + S3 アップロード
@@ -73,7 +79,7 @@ Astro の `i18n` ルーティングを使用し、`/ja/` と `/en/` で全ペー
 
 ## ディレクトリ構成
 
-```
+```text
 004_portfolio/
 ├── src/                         # Astro プロジェクト
 │   ├── src/
@@ -110,10 +116,10 @@ bash scripts/deploy.sh
 
 ## AWSリソース一覧
 
-| リソース | 名前/ID |
-|----------|---------|
-| CloudFront | E33SJ6UEA95L47 |
-| S3 バケット | zer0-portfolio-s3 |
-| Lambda | Zer0-portfolio-ssr |
-| API Gateway | Zer0-portfolio-api |
-| ACM 証明書 | us-east-1（www.zer0-infra.com） |
+| リソース    | 名前/ID                         |
+| ----------- | ------------------------------- |
+| CloudFront  | E33SJ6UEA95L47                  |
+| S3 バケット | zer0-portfolio-s3               |
+| Lambda      | Zer0-portfolio-ssr              |
+| API Gateway | Zer0-portfolio-api              |
+| ACM 証明書  | us-east-1（www.zer0-infra.com） |
