@@ -20,18 +20,35 @@ PROMPT_TEMPLATE = """あなたはバイクツーリングの専門家です。
 
 必ず以下のJSON形式のみで出力してください（説明文や前置き不要）:
 {{"courses": [
-  {{"name": "コース名", "distance_km": 数値, "duration_hours": 数値, "highlights": ["見どころ1", "見どころ2"], "destination": "目的地名", "difficulty": "初級"}},
-  {{"name": "コース名", "distance_km": 数値, "duration_hours": 数値, "highlights": ["見どころ1", "見どころ2"], "destination": "目的地名", "difficulty": "中級"}},
-  {{"name": "コース名", "distance_km": 数値, "duration_hours": 数値, "highlights": ["見どころ1", "見どころ2"], "destination": "目的地名", "difficulty": "上級"}}
+  {{
+    "name": "コース名",
+    "distance_km": 数値,
+    "duration_hours": 数値,
+    "highlights": ["メインの見どころ1", "メインの見どころ2", "メインの見どころ3"],
+    "destination": "目的地名",
+    "difficulty": "初級",
+    "road_types": ["国道", "県道"],
+    "rest_spots": [
+      {{"name": "道の駅 ○○", "type": "道の駅"}},
+      {{"name": "○○温泉", "type": "温泉"}}
+    ],
+    "caution": "走行上の注意点（なければ空文字）",
+    "best_season": "おすすめ季節（例: 5月〜10月）"
+  }}
 ]}}
+
+road_typesに使える値: 「峠道」「山道」「高速道路」「国道」「県道」「海岸線」「一般道」
+rest_spotsのtypeに使える値: 「道の駅」「温泉」「展望台」「カフェ」「食事処」「観光地」「ガソリンスタンド」
 
 条件:
 - 3コースは距離・方向が異なること（近距離・中距離・遠距離）
 - 片道200km以内の日帰り圏内
 - 天気が雨・曇りの場合は屋内施設や温泉を多く含める
-- destinationはGoogleマップで検索できる正確な地名（市区町村名や観光地名）
+- destinationはGoogleマップで検索できる正確な地名
+- rest_spotsは2〜4箇所の具体的なスポット名を必ず入れる
 - highlightsは2〜3個の具体的な見どころ
-- difficultyは「初級」「中級」「上級」のいずれか"""
+- difficultyは「初級」「中級」「上級」のいずれか
+- 3コースすべてに同じ構造のJSONを返す"""
 
 CORS_HEADERS = {
     "Content-Type": "application/json",
@@ -68,7 +85,7 @@ def lambda_handler(event, context):
             accept="application/json",
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1024,
+                "max_tokens": 2048,
                 "messages": [{"role": "user", "content": prompt}],
             }),
         )
