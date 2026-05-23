@@ -140,28 +140,28 @@
       }
       .dot.active { background: var(--accent); transform: scale(1.4); }
 
-      /* overflow:hidden でカードをクリップ */
+      /* scroll-snap スライダー本体 */
       .card-viewport {
-        overflow: hidden;
+        display: flex;
+        overflow-x: scroll;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
         border-radius: .875rem;
         border: 1px solid var(--border);
-        /* カード幅は JS で設定するため width 指定不要 */
+        width: 100%;
       }
-
-      /* transform で横にスライドする本体 */
-      #card-track {
-        display: flex;
-        transition: transform .4s cubic-bezier(.25,.46,.45,.94);
-        will-change: transform;
-      }
+      .card-viewport::-webkit-scrollbar { display: none; }
 
       /* ─── コースカード ─── */
       .course-card {
-        flex-shrink: 0;
-        /* width は JS で vp.clientWidth に設定 */
+        flex: 0 0 100%;
+        scroll-snap-align: start;
         background: var(--card);
         display: flex; flex-direction: column;
         -webkit-tap-highlight-color: transparent;
+        min-width: 0;
       }
 
       /* グラデーションヘッダー */
@@ -416,7 +416,6 @@
       <div class="slider-outer">
         <div class="slider-dots" id="slider-dots"></div>
         <div class="card-viewport" id="card-viewport">
-          <div id="card-track"></div>
         </div>
       </div>
 
@@ -552,53 +551,31 @@
       }
 
       function goTo(idx) {
-        const vp    = document.getElementById('card-viewport');
-        const track = document.getElementById('card-track');
+        const vp = document.getElementById('card-viewport');
         currentSlide = Math.max(0, Math.min(idx, courses.length-1));
-        track.style.transform = `translateX(${-currentSlide * vp.clientWidth}px)`;
+        vp.scrollTo({ left: currentSlide * vp.clientWidth, behavior: 'smooth' });
         updateDots();
       }
 
       function initSlider() {
-        const vp    = document.getElementById('card-viewport');
-        const track = document.getElementById('card-track');
-        const W     = vp.clientWidth;   // showScreen の後なので正確な幅が取れる
-
-        // 各カードの幅をピクセルで確定
-        track.querySelectorAll('.course-card').forEach(c => { c.style.width = W + 'px'; });
-
-        // 初期位置（アニメーションなし）
-        track.style.transition = 'none';
-        track.style.transform  = 'translateX(0)';
-        requestAnimationFrame(() => { track.style.transition = ''; });
-
-        // タッチスワイプ
-        let tx0 = 0;
-        vp.addEventListener('touchstart', e => { tx0 = e.touches[0].clientX; }, { passive:true });
-        vp.addEventListener('touchend',   e => {
-          const dx = e.changedTouches[0].clientX - tx0;
-          if (Math.abs(dx) > 40) goTo(currentSlide + (dx < 0 ? 1 : -1));
-        });
-
-        // リサイズ追従
-        window.addEventListener('resize', () => {
-          if (!courses.length) return;
-          const W2 = vp.clientWidth;
-          track.querySelectorAll('.course-card').forEach(c => { c.style.width = W2 + 'px'; });
-          track.style.transition = 'none';
-          track.style.transform  = `translateX(${-currentSlide * W2}px)`;
-          requestAnimationFrame(() => { track.style.transition = ''; });
-        });
+        const vp = document.getElementById('card-viewport');
+        vp.scrollLeft = 0;
+        currentSlide  = 0;
+        vp.addEventListener('scroll', () => {
+          if (!vp.clientWidth) return;
+          const idx = Math.round(vp.scrollLeft / vp.clientWidth);
+          if (idx !== currentSlide) { currentSlide = idx; updateDots(); }
+        }, { passive: true });
       }
 
       function renderSlider(data) {
         courses = [...data.courses].sort((a,b)=>(a.distance_km??0)-(b.distance_km??0));
         currentSlide = 0;
 
-        const track  = document.getElementById('card-track');
+        const vp     = document.getElementById('card-viewport');
         const dotsEl = document.getElementById('slider-dots');
 
-        track.innerHTML = courses.map((c,i) => {
+        vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
           const tagsHtml = (c.tags??[]).slice(0,3).map(t=>`<span class="course-tag">${t}</span>`).join('');
           return `
@@ -629,7 +606,7 @@
         }).join('');
 
         // ボタンイベント
-        track.querySelectorAll('.course-card').forEach(card => {
+        vp.querySelectorAll('.course-card').forEach(card => {
           card.querySelector('.card-btn-detail').addEventListener('click',()=>openDetail(+card.dataset.idx));
           card.querySelector('.card-btn-nav').addEventListener('click',()=>{
             window.location.href = buildMapUrl(courses[+card.dataset.idx]);
