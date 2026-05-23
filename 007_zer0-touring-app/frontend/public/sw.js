@@ -1,4 +1,4 @@
-const CACHE = 'zer0-touring-v1';
+const CACHE = 'zer0-touring-v2';
 const STATIC = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
