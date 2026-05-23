@@ -24,14 +24,16 @@ _SVC = 'Architecture-Service-Icons_07312025'
 _GRP = 'Architecture-Group-Icons_07312025'
 
 ICONS = {
-    'cloudfront': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
-    's3':         f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
-    'api_gw':     f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
-    'lambda':     f'{_SVC}/Arch_Compute/64/Arch_AWS-Lambda_64.png',
-    'bedrock':    f'{_SVC}/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock_64.png',
-    'region':     f'{_GRP}/Region_32.png',
-    'aws_cloud':  f'{_GRP}/AWS-Cloud-logo_32.png',
-    'user':       None,  # ローカル aws_icons/user.png
+    'cloudfront':  f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
+    's3':          f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
+    'api_gw':      f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
+    'lambda':      f'{_SVC}/Arch_Compute/64/Arch_AWS-Lambda_64.png',
+    'bedrock':     f'{_SVC}/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock_64.png',
+    'acm':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
+    'cloudwatch':  f'{_SVC}/Arch_Management-Governance/64/Arch_Amazon-CloudWatch_64.png',
+    'region':      f'{_GRP}/Region_32.png',
+    'aws_cloud':   f'{_GRP}/AWS-Cloud_32.png',
+    'user':        None,  # ローカル aws_icons/user.png
 }
 
 _USER_PNG = os.path.join(_BASE, '..', '002_Zenn_Auto_Article_Bot', 'src', 'aws_icons', 'user.png')
@@ -51,46 +53,54 @@ def _cluster_icon(key):
 
 def draw():
     # ── レイアウト ──
-    # xlim=14, ylim=7  figsize=(14,7)
-    # Browser(1.5,3.5)  OpenMeteo(1.5,5.5)  CF(4.5,3.5)
-    # S3(7.5,5.5)  APIGW(7.5,3.5)  Lambda(10.5,3.5)  Bedrock(13.5,3.5)
+    # xlim=14, ylim=8  figsize=(14,8)
+    # 外部サービス: OpenMeteo(1.5,6.0)  Browser(1.5,3.5)  Wikipedia(1.5,1.5)
+    # Edge/Global:  ACM(4.5,5.5)  CF(4.5,3.5)
+    # ap-northeast-1: S3(7.5,5.5)  APIGW(7.5,3.5)  Lambda(10.5,3.5)
+    #                 Bedrock(13.5,3.5)  CW(10.5,1.5)
     HALF = 0.55
 
     nodes = [
-        {'id': 'browser',    'icon': 'user',      'label': 'スマホ\n（ブラウザ）', 'x': 1.5, 'y': 3.5},
-        {'id': 'openmeteo',  'icon': 'user',      'label': 'Open-Meteo\n（天気API）', 'x': 1.5, 'y': 5.5},
-        {'id': 'cf',         'icon': 'cloudfront','label': 'CloudFront', 'x': 4.5, 'y': 3.5},
-        {'id': 's3',         'icon': 's3',        'label': 'S3\nzer0-touring-s3', 'x': 7.5, 'y': 5.5},
-        {'id': 'apigw',      'icon': 'api_gw',    'label': 'API Gateway\n(HTTP API)', 'x': 7.5, 'y': 3.5},
-        {'id': 'lambda',     'icon': 'lambda',    'label': 'Lambda\nzer0-touring-suggest', 'x': 10.5, 'y': 3.5},
-        {'id': 'bedrock',    'icon': 'bedrock',   'label': 'Bedrock\nClaude Haiku', 'x': 13.5, 'y': 3.5},
+        {'id': 'openmeteo', 'icon': 'user',       'label': 'Open-Meteo\n（天気API）',              'x': 1.5,  'y': 6.0},
+        {'id': 'browser',   'icon': 'user',       'label': 'スマホ\n（ブラウザ）',                 'x': 1.5,  'y': 3.5},
+        {'id': 'wikipedia', 'icon': 'user',       'label': 'Wikipedia\n（写真API）',               'x': 1.5,  'y': 1.5},
+        {'id': 'acm',       'icon': 'acm',        'label': 'ACM\n(SSL証明書)',                     'x': 4.5,  'y': 5.5},
+        {'id': 'cf',        'icon': 'cloudfront', 'label': 'CloudFront\ntouring.zer0-infra.com',   'x': 4.5,  'y': 3.5},
+        {'id': 's3',        'icon': 's3',         'label': 'S3\nzer0-touring-s3',                 'x': 7.5,  'y': 5.5},
+        {'id': 'apigw',     'icon': 'api_gw',     'label': 'API Gateway\n(HTTP API)',              'x': 7.5,  'y': 3.5},
+        {'id': 'lambda',    'icon': 'lambda',     'label': 'Lambda\nzer0-touring-suggest',         'x': 10.5, 'y': 3.5},
+        {'id': 'bedrock',   'icon': 'bedrock',    'label': 'Bedrock\nClaude Haiku',               'x': 13.5, 'y': 3.5},
+        {'id': 'cw',        'icon': 'cloudwatch', 'label': 'CloudWatch\nLogs',                    'x': 10.5, 'y': 1.5},
     ]
 
     edges = [
-        ('browser', 'openmeteo', '天気取得'),
-        ('browser', 'cf'),
-        ('cf', 's3', '/* 静的HTML'),
-        ('cf', 'apigw', '/api/*'),
-        ('apigw', 'lambda'),
-        ('lambda', 'bedrock'),
+        ('browser',  'openmeteo', '天気取得'),
+        ('browser',  'wikipedia', ''),
+        ('browser',  'cf',        ''),
+        ('acm',      'cf',        'HTTPS'),
+        ('cf',       's3',        '/* 静的HTML'),
+        ('cf',       'apigw',     '/api/*'),
+        ('apigw',    'lambda',    ''),
+        ('lambda',   'bedrock',   ''),
+        ('lambda',   'cw',        ''),
     ]
 
     clusters = [
         {
             'label': '外部サービス', 'icon': None,
-            'x': 0.5, 'y': 2.5, 'w': 2.2, 'h': 3.7,
+            'x': 0.4, 'y': 0.5, 'w': 2.3, 'h': 6.2,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '--', 'linewidth': 1.5,
         },
         {
             'label': 'Edge / Global', 'icon': 'aws_cloud',
-            'x': 3.3, 'y': 2.3, 'w': 2.6, 'h': 2.5,
+            'x': 3.3, 'y': 2.3, 'w': 2.6, 'h': 4.1,
             'color': '#EAF4FB', 'edgecolor': '#8AAFCC',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 6.2, 'y': 1.3, 'w': 8.1, 'h': 5.5,
+            'x': 6.2, 'y': 0.3, 'w': 8.1, 'h': 6.5,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
@@ -115,9 +125,9 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
-    fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
+    fig, ax = plt.subplots(figsize=(14, 8), dpi=150)
     ax.set_xlim(0, 14)
-    ax.set_ylim(0, 7)
+    ax.set_ylim(0, 8)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')
