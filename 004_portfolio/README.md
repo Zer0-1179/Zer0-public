@@ -116,10 +116,10 @@ bash scripts/deploy.sh
 
 ## AWSリソース一覧
 
-| リソース    | 名前/ID                         |
-| ----------- | ------------------------------- |
+| リソース    | 名前/ID                                                 |
+| ----------- | ------------------------------------------------------- |
 | CloudFront  | E33SJ6UEA95L47 / `https://du7bbiecctrzb.cloudfront.net` |
-| S3 バケット | zer0-portfolio-s3               |
-| Lambda      | Zer0-portfolio-ssr              |
-| API Gateway | Zer0-portfolio-api              |
-| ACM 証明書  | us-east-1（www.zer0-infra.com） |
+| S3 バケット | zer0-portfolio-s3                                       |
+| Lambda      | Zer0-portfolio-ssr                                      |
+| API Gateway | Zer0-portfolio-api                                      |
+| ACM 証明書  | us-east-1（www.zer0-infra.com）                         |
