@@ -441,7 +441,7 @@
           const data = await res.json();
           const url  = data.thumbnail?.source;
           if (!url) return;
-          const hiRes = url.replace(/\/\d+px-/, '/800px-');
+          const hiRes = url.replace(/\/\d+px-/, '/1280px-');
           imgEl.onload  = () => imgEl.classList.add('loaded');
           imgEl.onerror = () => {};
           imgEl.src = hiRes;
