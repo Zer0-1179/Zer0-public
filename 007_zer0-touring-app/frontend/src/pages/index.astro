@@ -12,6 +12,13 @@
     <meta name="apple-mobile-web-app-title" content="Zer0 Touring" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- OGP -->
+    <meta property="og:title" content="Zer0 Touring - AIがツーリングコースを提案" />
+    <meta property="og:description" content="現在地と天気をもとにAIが日帰りバイクコースを3つ提案します" />
+    <meta property="og:image" content="https://touring.zer0-infra.com/icons/icon-512.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://touring.zer0-infra.com" />
+    <meta name="twitter:card" content="summary_large_image" />
     <title>Zer0 Touring</title>
     <style>
       :root {
@@ -319,7 +326,6 @@
       <div class="topbar">
         <span class="topbar-title">おすすめコース</span>
         <div class="topbar-btns">
-          <button class="btn-ghost"   id="btn-home">← TOP</button>
           <button class="btn-outline" id="btn-retry">再検索</button>
         </div>
       </div>
@@ -330,7 +336,6 @@
     <div id="screen-detail" class="screen">
       <div class="topbar">
         <button class="btn-ghost" id="btn-back">← 一覧に戻る</button>
-        <button class="btn-ghost" id="btn-detail-home">← TOP</button>
       </div>
       <div class="detail-img-wrap" id="detail-img-wrap">
         <div class="detail-img-ph" id="detail-img-ph"></div>
@@ -365,7 +370,7 @@
     </div>
 
     <!-- ── Error ── -->
-    <div id="screen-error" class="screen">
+    <div id="screen-error" class="screen" style="display:none">
       <span class="error-icon">⚠️</span>
       <h2 class="error-title">エラーが発生しました</h2>
       <p class="error-msg" id="error-msg"></p>
@@ -409,19 +414,23 @@
         else ic.textContent=SICONS[id];
       }
 
-      // Wikipedia写真を <img> にセット
-      async function loadWikiPhoto(spot, imgEl) {
+      // Unsplash写真を <img> にセット
+      function loadUnsplashPhoto(spot, imgEl) {
         if (!spot || !imgEl) return;
-        try {
-          const res  = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`);
-          const data = await res.json();
-          const url  = data.thumbnail?.source;
-          if (!url) return;
-          const hiRes = url.replace(/\/\d+px-/, '/800px-');
-          imgEl.onload  = () => imgEl.classList.add('loaded');
-          imgEl.onerror = () => { imgEl.src = url; };
-          imgEl.src = hiRes;
-        } catch (_) {}
+        const kw = encodeURIComponent(spot);
+        imgEl.onload  = () => imgEl.classList.add('loaded');
+        imgEl.onerror = () => {};
+        imgEl.src = `https://source.unsplash.com/featured/800x400/?${kw},japan,motorcycle`;
+      }
+
+      // Googleマップ URL 生成（経由地があればルート形式）
+      function buildMapUrl(c) {
+        const dest  = encodeURIComponent(c.destination);
+        const spots = (c.rest_spots ?? []).map(s => encodeURIComponent(s.name));
+        if (spots.length > 0) {
+          return `https://www.google.com/maps/dir/?api=1&destination=${dest}&waypoints=${spots.join('%7C')}`;
+        }
+        return `https://www.google.com/maps/search/?api=1&query=${dest}`;
       }
 
       // ── 一覧描画（3カラムグリッド）──
@@ -456,7 +465,7 @@
             </article>`;
         }).join('');
 
-        courses.forEach((c, i) => loadWikiPhoto(c.photo_spot, document.getElementById(`cimg-${i}`)));
+        courses.forEach((c, i) => loadUnsplashPhoto(c.photo_spot, document.getElementById(`cimg-${i}`)));
         el.querySelectorAll('.course-card').forEach(card =>
           card.addEventListener('click', () => openDetail(+card.dataset.idx))
         );
@@ -471,7 +480,7 @@
         const dimg = document.getElementById('detail-img');
         dimg.classList.remove('loaded');
         dimg.src = '';
-        loadWikiPhoto(c.photo_spot, dimg);
+        loadUnsplashPhoto(c.photo_spot, dimg);
 
         // ヘッダー
         document.getElementById('detail-tags').innerHTML =
@@ -499,8 +508,7 @@
           c.caution     ? `<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>` : '',
           c.best_season ? `<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>` : '',
         ].filter(Boolean).join('');
-        document.getElementById('detail-map-btn').href =
-          `https://maps.google.com/maps?q=${encodeURIComponent(c.destination)}`;
+        document.getElementById('detail-map-btn').href = buildMapUrl(c);
 
         showScreen('screen-detail');
       }
@@ -552,9 +560,7 @@
 
       document.getElementById('btn-start').addEventListener('click',findCourses);
       document.getElementById('btn-retry').addEventListener('click',findCourses);
-      document.getElementById('btn-home').addEventListener('click',()=>showScreen('screen-idle'));
       document.getElementById('btn-back').addEventListener('click',()=>showScreen('screen-results'));
-      document.getElementById('btn-detail-home').addEventListener('click',()=>showScreen('screen-idle'));
       document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
 
       if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});

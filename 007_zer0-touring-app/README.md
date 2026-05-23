@@ -16,7 +16,7 @@
 | 天気取得     | Open-Meteo API（無料・APIキー不要）                                             |
 | AI提案       | Amazon Bedrock Claude Haiku（3コース生成・~1,000 tokens出力）                   |
 | コース内容   | 近距離・中距離・長距離 + 道路タイプ・立ち寄りスポット・走行注意・ベストシーズン |
-| 写真         | Wikipedia API でサムネイル非同期ロード（フォールバック: グラデーション）        |
+| 写真         | Unsplash Source API でコース写真を表示（フォールバック: グラデーション）        |
 | ホスティング | CloudFront + S3（PWA / Service Worker 対応）                                    |
 | 月額コスト   | ~$0.40（100回利用想定）/ 1回 ~$0.005（約0.7円）                                 |
 
@@ -44,7 +44,7 @@
 | AI提案         | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048） |
 | API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                          |
 | ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                                                           |
-| 写真           | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）                                                 |
+| 写真           | Unsplash Source API（`source.unsplash.com/featured/800x400/?{keyword},japan,motorcycle`）                |
 | IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                                                         |
 
 ## UI フロー
@@ -53,7 +53,7 @@
 Landing（コースを探す）
   └─▶ Loading（GPS取得中 → 天気確認中 → AI生成中）
         └─▶ コース一覧（近距離/中距離/長距離 × 3カラムグリッド）
-              └─▶ コース詳細（Wikipedia写真 + 見どころ + 道路タイプ + スポット + 地図）
+              └─▶ コース詳細（Unsplash写真 + 見どころ + 道路タイプ + スポット + Googleマップ）
 ```
 
 ## 実装のこだわり
@@ -70,15 +70,15 @@ Landing（コースを探す）
 
 プロンプトで JSON スキーマを厳密に定義し、コース名・距離・時間・道路タイプ・立ち寄りスポット（name + type）・注意・シーズン・写真スポット名を一括生成。`re.search(r'\{.*\}', text, re.DOTALL)` で JSON を確実に抽出し、パース失敗時は 500 でフォールバック。
 
-### 4. Wikipedia 写真の非同期フェードイン
+### 4. Unsplash 写真の非同期フェードイン
 
 ```javascript
 // グラデーション背景を先に表示（即座にカードが描画される）
-// Wikipedia から写真ロード成功後に opacity:0 → 1 でフェードイン
+// Unsplash から写真ロード成功後に opacity:0 → 1 でフェードイン
 img.onload = () => img.classList.add('loaded');
 ```
 
-写真のロード待ちで画面がブランクになることなく、スムーズな体験を提供。
+`source.unsplash.com/featured/800x400/?{photo_spot},japan,motorcycle` で目的地関連の写真を表示。ロード失敗時はグラデーション背景にフォールバック。
 
 ### 5. Astro `define:vars` ではなく `import.meta.env` を使用
 
