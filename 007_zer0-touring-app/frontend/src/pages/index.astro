@@ -432,33 +432,12 @@
         else ic.textContent=SICONS[id];
       }
 
-      // picsum: idx+destination をseedに確実に異なる画像を表示
-      function setPicsumPhoto(idx, destination, imgEl) {
-        const seed = encodeURIComponent(`${idx}-${destination}`);
-        imgEl.onload  = () => imgEl.classList.add('loaded');
-        imgEl.onerror = () => {};
-        imgEl.src = `https://picsum.photos/seed/${seed}/800/400`;
-      }
-
-      // Wikipedia が返せたら差し替え（成功した場合のみ）
-      async function tryWikiUpgrade(spot, imgEl) {
-        if (!spot || !imgEl) return;
-        try {
-          const res  = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`);
-          const data = await res.json();
-          const url  = data.thumbnail?.source;
-          if (!url) return;
-          const hiRes = url.replace(/\/\d+px-/, '/1280px-');
-          const probe = new Image();
-          probe.onload = () => { imgEl.src = hiRes; };
-          probe.src = hiRes;
-        } catch (_) {}
-      }
-
+      // カード番号+目的地名をseedにして3枚必ず異なる画像を表示
       function loadPhoto(spot, idx, destination, imgEl) {
         if (!imgEl) return;
-        setPicsumPhoto(idx, destination, imgEl);  // まず確実に表示
-        tryWikiUpgrade(spot, imgEl);              // 成功なら差し替え
+        const seed = encodeURIComponent(idx + '-' + (destination || spot || idx));
+        imgEl.src = 'https://picsum.photos/seed/' + seed + '/800/400';
+        imgEl.onload = function() { this.classList.add('loaded'); };
       }
 
       // Googleマップ URL 生成（経由地があればルート形式）
