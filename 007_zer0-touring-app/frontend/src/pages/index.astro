@@ -414,13 +414,38 @@
         else ic.textContent=SICONS[id];
       }
 
-      // Unsplash写真を <img> にセット
-      function loadUnsplashPhoto(spot, imgEl) {
-        if (!spot || !imgEl) return;
-        const kw = encodeURIComponent(spot);
+      // 道路タイプ → loremflickr キーワードのマップ
+      const ROAD_KW = {
+        '峠道':'mountain','山道':'mountain','高速道路':'highway',
+        '国道':'road','県道':'road','一般道':'road','海岸線':'coast,sea',
+      };
+
+      // フォールバック: loremflickr（道路タイプに応じたキーワード）
+      function loadFallbackPhoto(roadTypes, imgEl) {
+        const kw = (roadTypes ?? []).map(r => ROAD_KW[r]).filter(Boolean)[0] ?? 'nature';
         imgEl.onload  = () => imgEl.classList.add('loaded');
         imgEl.onerror = () => {};
-        imgEl.src = `https://source.unsplash.com/featured/800x400/?${kw},japan,motorcycle`;
+        imgEl.src = `https://loremflickr.com/800/400/japan,${kw}`;
+      }
+
+      // Wikipedia写真を取得し、なければ loremflickr にフォールバック
+      async function loadPhoto(spot, roadTypes, imgEl) {
+        if (!imgEl) return;
+        if (spot) {
+          try {
+            const res  = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`);
+            const data = await res.json();
+            const url  = data.thumbnail?.source;
+            if (url) {
+              const hiRes = url.replace(/\/\d+px-/, '/800px-');
+              imgEl.onload  = () => imgEl.classList.add('loaded');
+              imgEl.onerror = () => loadFallbackPhoto(roadTypes, imgEl);
+              imgEl.src = hiRes;
+              return;
+            }
+          } catch (_) {}
+        }
+        loadFallbackPhoto(roadTypes, imgEl);
       }
 
       // Googleマップ URL 生成（経由地があればルート形式）
@@ -465,7 +490,7 @@
             </article>`;
         }).join('');
 
-        courses.forEach((c, i) => loadUnsplashPhoto(c.photo_spot, document.getElementById(`cimg-${i}`)));
+        courses.forEach((c, i) => loadPhoto(c.photo_spot, c.road_types, document.getElementById(`cimg-${i}`)));
         el.querySelectorAll('.course-card').forEach(card =>
           card.addEventListener('click', () => openDetail(+card.dataset.idx))
         );
@@ -480,7 +505,7 @@
         const dimg = document.getElementById('detail-img');
         dimg.classList.remove('loaded');
         dimg.src = '';
-        loadUnsplashPhoto(c.photo_spot, dimg);
+        loadPhoto(c.photo_spot, c.road_types, dimg);
 
         // ヘッダー
         document.getElementById('detail-tags').innerHTML =
