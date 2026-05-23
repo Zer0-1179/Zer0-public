@@ -45,7 +45,7 @@
         50%       { transform: translateY(-14px); }
       }
       @keyframes slideUp {
-        from { opacity: 0; transform: translateY(28px); }
+        from { opacity: 0; transform: translateY(24px); }
         to   { opacity: 1; transform: none; }
       }
       @keyframes fadeIn {
@@ -101,16 +101,14 @@
         background: transparent; color: var(--accent);
         border: 1.5px solid var(--accent); border-radius: 9999px;
         padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
-        cursor: pointer; white-space: nowrap;
-        transition: background .15s;
+        cursor: pointer; white-space: nowrap; transition: background .15s;
       }
       .btn-outline:hover { background: rgba(249,115,22,.1); }
       .btn-ghost {
         background: transparent; color: var(--muted);
         border: 1.5px solid var(--border); border-radius: 9999px;
         padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
-        cursor: pointer; white-space: nowrap;
-        transition: border-color .15s, color .15s;
+        cursor: pointer; white-space: nowrap; transition: border-color .15s, color .15s;
       }
       .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
 
@@ -118,58 +116,61 @@
       .topbar {
         display: flex; align-items: center; justify-content: space-between;
         padding: .875rem 1.5rem; border-bottom: 1px solid var(--border);
-        position: sticky; top: 0; background: var(--bg); z-index: 10;
-        width: 100%;
+        position: sticky; top: 0; background: var(--bg); z-index: 10; width: 100%;
       }
       .topbar-left  { display: flex; flex-direction: column; gap: .15rem; flex: 1; }
       .topbar-title { font-size: 1.1rem; font-weight: 700; }
       .weather-subtitle { font-size: .73rem; font-weight: 600; color: var(--accent); display: none; }
       .topbar-btns  { display: flex; gap: .5rem; }
 
-      /* ════════════════════════════════════
+      /* ════════════════════════════════════════
          スワイプカードスライダー
-      ════════════════════════════════════ */
+         card-viewport が flex + overflow-x:scroll
+         → width:100% がビューポート幅を正しく参照
+      ════════════════════════════════════════ */
       #screen-results { align-items: center; }
 
       .slider-outer {
         width: 100%; max-width: 560px;
         padding: 1.25rem 1.5rem 0;
-        position: relative;
+        animation: slideUp .5s ease both;
       }
 
       /* ドットインジケーター */
       .slider-dots {
-        display: flex; justify-content: center; gap: .55rem;
+        display: flex; justify-content: center; gap: .6rem;
         margin-bottom: .875rem;
       }
       .dot {
         width: 8px; height: 8px; border-radius: 50%;
-        background: var(--border); cursor: pointer; border: none;
+        background: var(--border); cursor: pointer; border: none; padding: 0;
         transition: background .25s, transform .25s;
-        padding: 0;
       }
-      .dot.active { background: var(--accent); transform: scale(1.35); }
+      .dot.active { background: var(--accent); transform: scale(1.4); }
 
-      /* ビューポート（overflow: hidden でクリップ） */
+      /*
+        ビューポート = flex コンテナ + スクロール領域
+        → 各カードの width:100% はここの幅を参照 ✓
+      */
       .card-viewport {
-        overflow: hidden; border-radius: .875rem;
-        animation: slideUp .5s ease both;
-      }
-
-      /* トラック（flex で横に並べる） */
-      .card-track {
         display: flex;
-        transition: transform .38s cubic-bezier(.25,.46,.45,.94);
-        will-change: transform;
+        overflow-x: scroll;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        border-radius: .875rem;
+        border: 1px solid var(--border);
       }
+      .card-viewport::-webkit-scrollbar { display: none; }
 
       /* ─── コースカード ─── */
       .course-card {
-        flex: 0 0 100%; min-width: 100%;
+        flex: none;
+        width: 100%;          /* ← card-viewport の幅 = 1枚分 ✓ */
+        scroll-snap-align: start;
         background: var(--card);
         display: flex; flex-direction: column;
         -webkit-tap-highlight-color: transparent;
-        border: 1px solid var(--border);
       }
 
       /* グラデーションヘッダー */
@@ -181,7 +182,6 @@
       .card-header-icon {
         font-size: 2.75rem;
         filter: drop-shadow(0 4px 16px rgba(0,0,0,.55));
-        /* subtle float on active card */
         animation: float 3.5s ease-in-out infinite;
       }
       .card-header-badges {
@@ -189,16 +189,12 @@
         display: flex; gap: .4rem;
       }
 
-      /* カード情報エリア */
+      /* 情報エリア */
       .card-body {
         padding: 1.1rem 1.25rem .875rem;
-        display: flex; flex-direction: column; gap: .55rem;
-        flex: 1;
+        display: flex; flex-direction: column; gap: .55rem; flex: 1;
       }
-      .card-name {
-        font-size: 1.25rem; font-weight: 700; line-height: 1.3;
-        color: var(--text);
-      }
+      .card-name { font-size: 1.2rem; font-weight: 700; line-height: 1.3; }
       .course-tags { display: flex; gap: .3rem; flex-wrap: wrap; }
       .course-tag {
         font-size: .75rem; font-weight: 600;
@@ -222,50 +218,42 @@
         border: 1px solid rgba(249,115,22,.45);
         background: rgba(249,115,22,.12); color: var(--accent);
         border-radius: .6rem; padding: .75rem;
-        font-size: .88rem; font-weight: 600; cursor: pointer;
-        transition: background .15s;
+        font-size: .88rem; font-weight: 600; cursor: pointer; transition: background .15s;
       }
       .card-btn-nav:hover { background: rgba(249,115,22,.22); }
       .card-btn-detail {
-        display: flex; align-items: center; justify-content: center; gap: .35rem;
+        display: flex; align-items: center; justify-content: center;
         border: none; background: var(--card2); color: var(--text);
         border-radius: .6rem; padding: .75rem;
-        font-size: .88rem; font-weight: 600; cursor: pointer;
-        transition: background .15s;
+        font-size: .88rem; font-weight: 600; cursor: pointer; transition: background .15s;
       }
       .card-btn-detail:hover { background: var(--border); }
 
-      /* バッジ（スライダー用） */
+      /* バッジ */
       .dist-tag {
-        font-size: .72rem; font-weight: 700;
-        border-radius: .35rem; padding: .22rem .65rem;
-        display: inline-flex; align-items: center; gap: .25rem;
+        font-size: .72rem; font-weight: 700; border-radius: .35rem;
+        padding: .22rem .65rem; display: inline-flex; align-items: center; gap: .25rem;
       }
       .dist-near { background: rgba(34,197,94,.2);  color: #4ade80; border: 1px solid rgba(34,197,94,.4); }
       .dist-mid  { background: rgba(56,189,248,.2);  color: #7dd3fc; border: 1px solid rgba(56,189,248,.4); }
       .dist-far  { background: rgba(168,85,247,.2);  color: #c4b5fd; border: 1px solid rgba(168,85,247,.4); }
-      .diff-badge {
-        font-size: .72rem; font-weight: 700;
-        border-radius: 9999px; padding: .22rem .65rem;
-      }
+      .diff-badge { font-size: .72rem; font-weight: 700; border-radius: 9999px; padding: .22rem .65rem; }
       .diff-easy { background: rgba(34,197,94,.2);  color: #4ade80; }
       .diff-mid  { background: rgba(234,179, 8,.2);  color: #fbbf24; }
       .diff-hard { background: rgba(239, 68, 68,.2); color: #f87171; }
 
-      /* モバイル */
       @media (max-width: 679px) {
         .topbar { padding: .6rem 1rem; }
         .slider-outer { padding: 1rem .875rem 0; }
         .card-name { font-size: 1.1rem; }
       }
 
-      /* ════════════════════════════════════
+      /* ════════════════════════════════════════
          週間天気予報ストリップ
-      ════════════════════════════════════ */
+      ════════════════════════════════════════ */
       #forecast-wrap {
         width: 100%; max-width: 560px;
-        padding: 1.25rem 1.5rem 2rem;
-        display: none;
+        padding: 1.25rem 1.5rem 2rem; display: none;
       }
       .forecast-label {
         font-size: .68rem; font-weight: 700; color: var(--muted);
@@ -285,30 +273,28 @@
         display: flex; flex-direction: column; align-items: center;
         gap: .22rem; flex-shrink: 0; min-width: 60px;
         background: var(--card2); border: 1px solid var(--border);
-        border-radius: .65rem; padding: .55rem .6rem;
-        font-size: .7rem; transition: border-color .15s;
+        border-radius: .65rem; padding: .55rem .6rem; font-size: .7rem;
       }
       .forecast-day.today { border-color: rgba(56,189,248,.5); background: rgba(56,189,248,.06); }
       .forecast-day.best  { border-color: rgba(249,115,22,.6); background: rgba(249,115,22,.1); box-shadow: 0 0 0 1px rgba(249,115,22,.15); }
       .fd-dow  { font-size: .65rem; font-weight: 700; color: var(--muted); }
       .fd-icon { font-size: 1.3rem; line-height: 1; }
-      .fd-temp { font-weight: 700; color: var(--text); }
+      .fd-temp { font-weight: 700; }
       .fd-best { font-size: .6rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
       .fd-score { display: flex; gap: 2px; }
       .fd-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
       .fd-dot.on { background: var(--accent); }
 
-      /* ════════════════════════════════════
+      /* ════════════════════════════════════════
          コース詳細
-      ════════════════════════════════════ */
+      ════════════════════════════════════════ */
       #screen-detail { overflow-y: auto; align-items: center; }
       #screen-detail > .topbar,
       #screen-detail > .detail-img-wrap,
       #screen-detail > .detail-content { width: 100%; max-width: 680px; }
 
       .detail-img-wrap {
-        width: 100%; height: 160px;
-        overflow: hidden; flex-shrink: 0;
+        width: 100%; height: 160px; overflow: hidden; flex-shrink: 0;
         background: var(--card2); position: relative;
       }
       .detail-img-ph {
@@ -321,7 +307,6 @@
         object-fit: cover; opacity: 0; transition: opacity .4s;
       }
       .detail-img.loaded { opacity: 1; }
-
       .detail-content {
         display: flex; flex-direction: column; gap: 1.5rem;
         padding: 1.5rem 1.25rem 2.5rem; flex: 1;
@@ -334,7 +319,6 @@
         font-size: .82rem; color: var(--muted);
         background: var(--card2); border-radius: 9999px; padding: .25rem .75rem;
       }
-
       .section { display: flex; flex-direction: column; gap: .6rem; }
       .section-title {
         font-size: .68rem; font-weight: 700; color: var(--muted);
@@ -344,7 +328,6 @@
       .highlights { list-style: none; display: flex; flex-direction: column; gap: .45rem; }
       .highlights li { font-size: .9rem; padding-left: 1.4rem; position: relative; }
       .highlights li::before { content: "📍"; position: absolute; left: 0; font-size: .8rem; }
-
       .road-tags-lg { display: flex; gap: .4rem; flex-wrap: wrap; }
       .road-tag-lg {
         display: inline-flex; align-items: center; gap: .3rem;
@@ -370,7 +353,6 @@
       .info-return  { background: rgba(56,189,248,.1);  color: #7dd3fc; border: 1px solid rgba(56,189,248,.3); }
       .info-caution { background: rgba(239,68,68,.1);   color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
       .info-season  { background: rgba(34,197,94,.1);   color: #86efac; border: 1px solid rgba(34,197,94,.3); }
-
       .btn-map {
         display: flex; align-items: center; justify-content: center; gap: .5rem;
         text-decoration: none; background: transparent;
@@ -444,15 +426,14 @@
       </div>
 
       <div class="slider-outer">
-        <!-- ドットインジケーター -->
         <div class="slider-dots" id="slider-dots"></div>
-        <!-- カードビューポート -->
-        <div class="card-viewport">
-          <div class="card-track" id="card-track"></div>
-        </div>
+        <!--
+          card-viewport が flex + overflow-x:scroll のスクロールコンテナ。
+          各 .course-card の width:100% はここの幅（＝1枚分）を参照する。
+        -->
+        <div class="card-viewport" id="card-viewport"></div>
       </div>
 
-      <!-- 週間天気 -->
       <div id="forecast-wrap">
         <p class="forecast-label">今週のツーリング天気</p>
         <div class="forecast-strip" id="forecast-strip"></div>
@@ -530,6 +511,8 @@
       let userLat = null, userLon = null;
       let weatherMeta = { icon:'☀️', score:5, label:'絶好の日和！', temp:'--' };
       let currentSlide = 0;
+      let scrollTimer;
+      let programmaticScroll = false;
 
       /* ── 天気ヘルパー ── */
       function getWeatherMeta(code) {
@@ -558,25 +541,22 @@
           );
           const d = await res.json();
           const { time, weathercode, temperature_2m_max } = d.daily;
-
           let bestIdx = 1, bestScore = -1;
           weathercode.forEach((code, i) => {
             if (i === 0) return;
             const s = getWeatherMeta(code).score;
             if (s > bestScore) { bestScore = s; bestIdx = i; }
           });
-
           const DOW = ['日','月','火','水','木','金','土'];
           const strip = document.getElementById('forecast-strip');
           const wrap  = document.getElementById('forecast-wrap');
           if (!strip || !wrap) return;
-
           strip.innerHTML = time.map((t, i) => {
             const date = new Date(t + 'T00:00:00');
             const dow  = DOW[date.getDay()];
             const meta = getWeatherMeta(weathercode[i]);
             const temp = Math.round(temperature_2m_max[i]);
-            const dotsHtml = Array.from({length:5}, (_, di) =>
+            const dots = Array.from({length:5}, (_, di) =>
               `<span class="fd-dot${di < meta.score ? ' on' : ''}"></span>`
             ).join('');
             return `
@@ -584,35 +564,30 @@
                 <span class="fd-dow">${i===0?'今日':dow}</span>
                 <span class="fd-icon">${meta.icon}</span>
                 <span class="fd-temp">${temp}℃</span>
-                <div class="fd-score">${dotsHtml}</div>
+                <div class="fd-score">${dots}</div>
                 ${i===bestIdx?'<span class="fd-best">★ 狙い目</span>':''}
               </div>`;
           }).join('');
-
           wrap.style.display = 'block';
         } catch(_) {}
       }
 
       /* ── スライダー制御 ── */
-      function goTo(idx) {
-        const total = courses.length;
-        currentSlide = Math.max(0, Math.min(idx, total - 1));
-        const track = document.getElementById('card-track');
-        if (track) track.style.transform = `translateX(${-currentSlide * 100}%)`;
-
+      function updateDots() {
         document.querySelectorAll('.dot').forEach((dot, i) => {
           dot.classList.toggle('active', i === currentSlide);
         });
       }
 
-      /* タッチスワイプ */
-      let touchX0 = 0;
-      function initSwipe(el) {
-        el.addEventListener('touchstart', e => { touchX0 = e.touches[0].clientX; }, { passive: true });
-        el.addEventListener('touchend',   e => {
-          const dx = e.changedTouches[0].clientX - touchX0;
-          if (Math.abs(dx) > 48) dx < 0 ? goTo(currentSlide + 1) : goTo(currentSlide - 1);
-        });
+      function goTo(idx) {
+        currentSlide = Math.max(0, Math.min(idx, courses.length - 1));
+        const vp = document.getElementById('card-viewport');
+        if (!vp) return;
+        programmaticScroll = true;
+        vp.scrollTo({ left: currentSlide * vp.offsetWidth, behavior: 'smooth' });
+        updateDots();
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => { programmaticScroll = false; }, 600);
       }
 
       /* ── スライダー描画 ── */
@@ -620,13 +595,12 @@
         courses = [...data.courses].sort((a, b) => (a.distance_km??0) - (b.distance_km??0));
         currentSlide = 0;
 
-        const track = document.getElementById('card-track');
+        const vp     = document.getElementById('card-viewport');
         const dotsEl = document.getElementById('slider-dots');
 
-        track.innerHTML = courses.map((c, i) => {
+        vp.innerHTML = courses.map((c, i) => {
           const d = DIST[i];
           const tagsHtml = (c.tags ?? []).slice(0, 3).map(t => `<span class="course-tag">${t}</span>`).join('');
-          const mapUrl   = buildMapUrl(c);
           return `
             <article class="course-card" data-idx="${i}">
               <div class="card-header" style="background:${d.grad}">
@@ -648,41 +622,46 @@
                 </div>
               </div>
               <div class="card-actions">
-                <button class="card-btn-nav" data-map="${encodeURIComponent(mapUrl)}">🗺 ナビ開始</button>
+                <button class="card-btn-nav">🗺 ナビ開始</button>
                 <button class="card-btn-detail">詳細を見る →</button>
               </div>
             </article>`;
         }).join('');
 
+        // スクロール位置を先頭に戻す
+        vp.scrollLeft = 0;
+
+        // カードのボタンイベント
+        vp.querySelectorAll('.course-card').forEach(card => {
+          card.querySelector('.card-btn-detail').addEventListener('click', () => openDetail(+card.dataset.idx));
+          card.querySelector('.card-btn-nav').addEventListener('click', () => {
+            window.location.href = buildMapUrl(courses[+card.dataset.idx]);
+          });
+        });
+
         // ドット生成
         dotsEl.innerHTML = courses.map((_, i) =>
           `<button class="dot${i===0?' active':''}" data-i="${i}" aria-label="コース${i+1}"></button>`
         ).join('');
-
-        // イベント
-        track.querySelectorAll('.course-card').forEach(card => {
-          card.querySelector('.card-btn-detail').addEventListener('click', () => openDetail(+card.dataset.idx));
-          card.querySelector('.card-btn-nav').addEventListener('click', () => {
-            window.location.href = decodeURIComponent(card.querySelector('.card-btn-nav').dataset.map);
-          });
-        });
         dotsEl.querySelectorAll('.dot').forEach(dot => {
           dot.addEventListener('click', () => goTo(+dot.dataset.i));
         });
 
-        // スワイプ初期化
-        initSwipe(document.querySelector('.card-viewport'));
-
-        // 初期位置リセット
-        track.style.transition = 'none';
-        track.style.transform  = 'translateX(0)';
-        // 次フレームでトランジションを戻す
-        requestAnimationFrame(() => {
-          track.style.transition = '';
-        });
+        // ネイティブスワイプでドットを同期
+        vp.addEventListener('scroll', () => {
+          if (programmaticScroll) return;
+          clearTimeout(scrollTimer);
+          scrollTimer = setTimeout(() => {
+            const newIdx = Math.round(vp.scrollLeft / vp.offsetWidth);
+            if (newIdx !== currentSlide) {
+              currentSlide = newIdx;
+              updateDots();
+            }
+          }, 80);
+        }, { passive: true });
       }
 
-      /* ── スクリーン ── */
+      /* ── スクリーン切り替え ── */
       function showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
@@ -700,7 +679,6 @@
         else ic.textContent=SICONS[id];
       }
 
-      /* ── Wikipedia 写真 ── */
       async function loadPhoto(spot, imgEl) {
         if (!imgEl || !spot) return;
         try {
@@ -714,7 +692,6 @@
         } catch(_) { imgEl.src = ''; }
       }
 
-      /* ── Googleマップ URL ── */
       function buildMapUrl(c) {
         const dest  = encodeURIComponent(c.destination);
         const spots = (c.rest_spots ?? []).map(s => encodeURIComponent(s.name));
@@ -723,7 +700,6 @@
         const ua = navigator.userAgent;
         const isIOS     = /iP(hone|ad|od)/.test(ua);
         const isAndroid = /Android/.test(ua);
-
         if (isAndroid && hasGps) return `google.navigation:q=${dest}&mode=d`;
         if (isIOS && hasGps) {
           const wp = spots.length ? `&waypoints=${spots.join('+')}` : '';
@@ -734,7 +710,6 @@
         return `https://www.google.com/maps/dir/?api=1${originParam}&destination=${dest}${waypointParam}&travelmode=driving`;
       }
 
-      /* ── 詳細画面 ── */
       function openDetail(idx) {
         const c = courses[idx];
         const distIdx = c._distIdx ?? idx;
@@ -758,7 +733,6 @@
           `<span class="meta-pill-lg">⏱ 片道 ${c.duration_hours}時間</span>` +
           `<span class="meta-pill-lg">🔄 往復 ${roundTripH}時間</span>` +
           `<span class="meta-pill-lg">🏁 ${c.destination}</span>`;
-
         document.getElementById('detail-highlights').innerHTML =
           (c.highlights??[]).map(h=>`<li>${h}</li>`).join('');
         document.getElementById('detail-roads').innerHTML =
@@ -801,7 +775,6 @@
         showScreen('screen-detail');
       }
 
-      /* ── URLコピー ── */
       async function copyUrl() {
         const url = location.href;
         try { await navigator.clipboard.writeText(url); }
@@ -818,7 +791,6 @@
 
       function showError(msg) { document.getElementById('error-msg').textContent=msg; showScreen('screen-error'); }
 
-      /* ── メイン処理 ── */
       async function findCourses() {
         const wsub  = document.getElementById('weather-subtitle');
         const fwrap = document.getElementById('forecast-wrap');
@@ -873,7 +845,6 @@
         } catch(_) { showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。'); }
       }
 
-      /* ── イベント ── */
       document.getElementById('btn-start').addEventListener('click', findCourses);
       document.getElementById('btn-retry').addEventListener('click', findCourses);
       document.getElementById('btn-back').addEventListener('click', () => {
@@ -883,7 +854,6 @@
       document.getElementById('btn-error-retry').addEventListener('click', () => showScreen('screen-idle'));
       document.getElementById('share-url-btn').addEventListener('click', copyUrl);
 
-      /* ── ?course= URL 復元 ── */
       (function() {
         const param = new URLSearchParams(location.search).get('course');
         if (!param) return;
