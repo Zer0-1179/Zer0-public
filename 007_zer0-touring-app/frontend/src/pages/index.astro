@@ -188,19 +188,15 @@
         padding: .15rem .45rem;
       }
 
-      /* フッター */
-      .card-footer {
-        padding: .75rem 1.1rem;
+      /* 詳細ヒント */
+      .card-detail-hint {
+        padding: .3rem .875rem .4rem;
         border-top: 1px solid var(--border);
-        display: flex; justify-content: flex-end;
+        font-size: .72rem; font-weight: 600;
+        color: var(--accent); text-align: right;
+        transition: letter-spacing .15s;
       }
-      .btn-detail {
-        font-size: .8rem; font-weight: 600; color: var(--accent);
-        background: none; border: none; cursor: pointer;
-        display: flex; align-items: center; gap: .2rem;
-        transition: gap .15s;
-      }
-      .course-card:hover .btn-detail { gap: .4rem; }
+      .course-card:hover .card-detail-hint { letter-spacing: .02em; }
 
       /* ══════════════════════════════════════
          コース詳細
@@ -273,6 +269,7 @@
         display: flex; align-items: flex-start; gap: .5rem;
         font-size: .85rem; padding: .6rem .75rem; border-radius: .5rem;
       }
+      .info-return  { background: rgba(56,189,248,.1);  color: #7dd3fc; border: 1px solid rgba(56,189,248,.3); }
       .info-caution { background: rgba(239,68,68,.1);  color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
       .info-season  { background: rgba(34,197,94,.1);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
 
@@ -487,10 +484,12 @@
                 <h3 class="card-name">${c.name}</h3>
                 <div class="card-meta">
                   <span class="meta-pill">🛣 ${c.distance_km}km</span>
-                  <span class="meta-pill">⏱ 約${c.duration_hours}h</span>
+                  <span class="meta-pill">⏱ 片道${c.duration_hours}h</span>
+                  <span class="meta-pill">🔄 往復${((c.return_hours??c.duration_hours)+c.duration_hours).toFixed(1)}h</span>
                   <span class="meta-pill">🏁 ${c.destination}</span>
                 </div>
               </div>
+              <div class="card-detail-hint">詳細を見る →</div>
             </article>`;
         }).join('');
         el.querySelectorAll('.course-card').forEach(card =>
@@ -518,9 +517,12 @@
           `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>` +
           `<span class="diff-badge ${DIFF[c.difficulty]??'diff-mid'}">${c.difficulty}</span>`;
         document.getElementById('detail-name').textContent = c.name;
+        const returnH = c.return_hours ?? c.duration_hours;
+        const roundTripH = (c.duration_hours + returnH).toFixed(1);
         document.getElementById('detail-meta').innerHTML =
           `<span class="meta-pill-lg">🛣 ${c.distance_km}km</span>` +
-          `<span class="meta-pill-lg">⏱ 約${c.duration_hours}時間</span>` +
+          `<span class="meta-pill-lg">⏱ 片道 ${c.duration_hours}時間</span>` +
+          `<span class="meta-pill-lg">🔄 往復 ${roundTripH}時間</span>` +
           `<span class="meta-pill-lg">🏁 ${c.destination}</span>`;
 
         document.getElementById('detail-highlights').innerHTML =
@@ -536,6 +538,7 @@
             </div>`
           ).join('');
         document.getElementById('detail-info').innerHTML = [
+          c.return_note ? `<div class="info-chip info-return"><span>🔄</span><span>帰路: ${c.return_note}</span></div>` : '',
           c.caution     ? `<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>` : '',
           c.best_season ? `<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>` : '',
         ].filter(Boolean).join('');
