@@ -297,6 +297,21 @@
         transition: background .15s;
       }
       .btn-map:hover { background: rgba(249,115,22,.1); }
+      .btn-x-share {
+        display: flex; align-items: center; justify-content: center; gap: .5rem;
+        text-decoration: none; background: #000; color: #fff;
+        border-radius: .75rem; padding: .875rem; font-size: .95rem; font-weight: 600;
+        transition: opacity .15s;
+      }
+      .btn-x-share:hover { opacity: .85; }
+      .btn-url-copy {
+        display: flex; align-items: center; justify-content: center; gap: .5rem;
+        width: 100%; border: none; cursor: pointer;
+        background: #1a2744; color: #fff;
+        border-radius: .75rem; padding: .875rem; font-size: .95rem; font-weight: 600;
+        transition: opacity .15s;
+      }
+      .btn-url-copy:hover { opacity: .85; }
 
       /* ── モバイル最適化 ── */
       @media (max-width: 679px) {
@@ -384,6 +399,10 @@
         <a id="detail-map-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn-map">
           🗺 Googleマップで開く
         </a>
+        <a id="share-x-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn-x-share">
+          𝕏 でシェア
+        </a>
+        <button id="share-url-btn" class="btn-url-copy">🔗 URLをコピー</button>
       </div>
     </div>
 
@@ -494,7 +513,9 @@
 
       // ── 詳細画面 ──
       function openDetail(idx) {
-        const c = courses[idx], d = DIST[idx];
+        const c = courses[idx];
+        const distIdx = c._distIdx ?? idx;   // URL復元時は元のdistインデックスを使用
+        const d = DIST[distIdx];
 
         // 写真（グラデ背景 + バイクアイコン + img）
         const ph = document.getElementById('detail-img-ph');
@@ -503,7 +524,7 @@
         const dimg = document.getElementById('detail-img');
         dimg.classList.remove('loaded');
         dimg.src = '';
-        loadPhoto(c.photo_spot, idx, c.destination, dimg);
+        loadPhoto(c.photo_spot, distIdx, c.destination, dimg);
 
         // ヘッダー
         document.getElementById('detail-tags').innerHTML =
@@ -533,7 +554,47 @@
         ].filter(Boolean).join('');
         document.getElementById('detail-map-btn').href = buildMapUrl(c);
 
+        // ── Xシェアテキスト生成 ──
+        const shareText =
+          `【${c.name}】を走ってきました！\n` +
+          `距離: ${c.distance_km}km / 約${c.duration_hours}時間\n` +
+          `目的地: ${c.destination}\n` +
+          `#Zer0Touring #ツーリング #バイク`;
+        document.getElementById('share-x-btn').href =
+          'https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText) +
+          '&url=' + encodeURIComponent('https://touring.zer0-infra.com/');
+
+        // ── URLパラメータにコース情報を付与（history.pushState） ──
+        const shareData = {
+          name: c.name, distance_km: c.distance_km, duration_hours: c.duration_hours,
+          destination: c.destination, highlights: c.highlights, road_types: c.road_types,
+          rest_spots: c.rest_spots, caution: c.caution, best_season: c.best_season,
+          photo_spot: c.photo_spot, _distIdx: idx,
+        };
+        try {
+          const b64 = btoa(encodeURIComponent(JSON.stringify(shareData)));
+          history.pushState({course: b64}, '', '?course=' + b64);
+        } catch(_) {}
+
         showScreen('screen-detail');
+      }
+
+      // ── URLコピー（iOS Safari フォールバック対応） ──
+      async function copyUrl() {
+        const url = location.href;
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch(_) {
+          const ta = Object.assign(document.createElement('textarea'),
+            {value: url, style: 'position:fixed;opacity:0'});
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        const btn = document.getElementById('share-url-btn');
+        btn.textContent = '✅ コピーしました';
+        setTimeout(() => { btn.textContent = '🔗 URLをコピー'; }, 1500);
       }
 
       function showError(msg) { document.getElementById('error-msg').textContent=msg; showScreen('screen-error'); }
@@ -583,8 +644,23 @@
 
       document.getElementById('btn-start').addEventListener('click',findCourses);
       document.getElementById('btn-retry').addEventListener('click',findCourses);
-      document.getElementById('btn-back').addEventListener('click',()=>showScreen('screen-results'));
+      document.getElementById('btn-back').addEventListener('click',()=>{
+        history.pushState({}, '', location.pathname);  // ?course= を消去
+        showScreen('screen-results');
+      });
       document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
+      document.getElementById('share-url-btn').addEventListener('click', copyUrl);
+
+      // ── ページロード時に ?course= があれば直接詳細画面を復元 ──
+      (function() {
+        const param = new URLSearchParams(location.search).get('course');
+        if (!param) return;
+        try {
+          const c = JSON.parse(decodeURIComponent(atob(param)));
+          courses = [c];
+          openDetail(0);
+        } catch(_) {}
+      })();
 
       if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
     </script>
