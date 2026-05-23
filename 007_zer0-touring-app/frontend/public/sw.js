@@ -1,32 +1,41 @@
-const CACHE = 'zer0-touring-v4';
-const STATIC = ['/', '/index.html', '/manifest.json'];
+const CACHE = 'zer0-touring-v5';
 
-self.addEventListener('install', e => {
-  self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC).catch(() => {})));
-});
+self.addEventListener('install', e => { self.skipWaiting(); });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => clients.claim())
   );
 });
 
 self.addEventListener('fetch', e => {
-  // API calls: network only
-  if (e.request.url.includes('/api/')) return;
+  const url = new URL(e.request.url);
 
+  // API・外部ドメイン → SW素通し（キャッシュしない）
+  if (url.pathname.startsWith('/api/') || url.hostname !== self.location.hostname) return;
+
+  // /_astro/* と /icons/* は不変ハッシュ付きなのでキャッシュファースト
+  if (url.pathname.startsWith('/_astro/') || url.pathname.startsWith('/icons/')) {
+    e.respondWith(
+      caches.match(e.request).then(hit =>
+        hit ?? fetch(e.request).then(res => {
+          if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+          return res;
+        })
+      )
+    );
+    return;
+  }
+
+  // index.html / manifest.json → ネットワーク優先（常に最新を取得）
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      const fresh = fetch(e.request).then(res => {
-        if (res.ok) {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone()));
-        }
+    fetch(e.request)
+      .then(res => {
+        if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
         return res;
-      });
-      return cached || fresh;
-    })
+      })
+      .catch(() => caches.match(e.request))
   );
 });
