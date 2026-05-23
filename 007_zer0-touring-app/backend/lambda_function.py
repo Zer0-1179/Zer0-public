@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import re
 import random
@@ -84,17 +85,27 @@ CORS_HEADERS = {
 }
 
 
+MAX_WAYPOINT_KM = 200  # 日帰り圏内（片道200km以内）を超える座標は誤ジオコーディングとして捨てる
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+    return 2 * R * math.asin(math.sqrt(a))
+
 def nominatim_geocode(name, origin_lat, origin_lon):
     """地名をNominatimでジオコーディング。(lat, lon) または (None, None) を返す。"""
+    # ±3° (約300km) の範囲内に限定して誤ジオコーディングを防ぐ
+    box = 3
     params = {
         "q": name,
         "format": "json",
         "limit": 1,
         "countrycodes": "jp",
         "accept-language": "ja",
-        # 現在地周辺を優先（日本全国から外れた結果を抑制）
-        "viewbox": f"{origin_lon-4},{origin_lat-4},{origin_lon+4},{origin_lat+4}",
-        "bounded": 0,
+        "viewbox": f"{origin_lon-box},{origin_lat-box},{origin_lon+box},{origin_lat+box}",
+        "bounded": 1,  # viewbox 外は返さない
     }
     url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
@@ -104,9 +115,15 @@ def nominatim_geocode(name, origin_lat, origin_lon):
                 data = json.loads(r.read())
             time.sleep(0.25)  # 1req/sec 制限を守る
         if data:
-            return float(data[0]["lat"]), float(data[0]["lon"])
+            lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
+            dist = _haversine_km(origin_lat, origin_lon, lat, lon)
+            if dist > MAX_WAYPOINT_KM:
+                print(f"[geocode] SKIP {name}: {dist:.0f}km (too far)")
+                return None, None
+            print(f"[geocode] OK   {name}: ({lat:.4f},{lon:.4f}) {dist:.0f}km")
+            return lat, lon
     except Exception as e:
-        print(f"[geocode] {name}: {e}")
+        print(f"[geocode] ERR  {name}: {e}")
     return None, None
 
 
@@ -122,45 +139,40 @@ def osrm_route(waypoints):
         if data.get("code") == "Ok" and data.get("routes"):
             route = data["routes"][0]
             dist_km = round(route["distance"] / 1000)
+            driving_h = route["duration"] / 3600
+            # 日帰りツーリングとして明らかに非現実な値は誤ジオコーディング起因として捨てる
+            if dist_km > 500 or driving_h > 8:
+                print(f"[osrm] SKIP unreasonable route: {dist_km}km {driving_h:.1f}h driving")
+                return None, None
             # 走行時間 + 観光・休憩 1.5h
-            duration_hours = round(route["duration"] / 3600 + 1.5, 1)
+            duration_hours = round(driving_h + 1.5, 1)
+            print(f"[osrm] OK {dist_km}km driving={driving_h:.1f}h total={duration_hours}h")
             return dist_km, duration_hours
     except Exception as e:
-        print(f"[osrm] {e}")
+        print(f"[osrm] ERR {e}")
     return None, None
 
 
 def enrich_course(course, origin_lat, origin_lon):
     """
-    コースの全ウェイポイント（現在地→立ち寄りスポット→目的地）を
-    ジオコーディングしてOSRMで実距離・所要時間を上書きする。
-    失敗時はAI推定値をそのまま維持。
+    目的地（destination）をジオコーディングして OSRM で実距離・所要時間を取得する。
+    中間スポット名は AI 生成固有名が多く誤ジオコーディングしやすいため除外。
+    失敗時は AI 推定値をそのまま維持。
     """
-    waypoints = [(origin_lat, origin_lon)]
-
-    # rest_spots（順番通り） + destination を順にジオコーディング
-    spot_names = [s["name"] for s in course.get("rest_spots", []) if s.get("name")]
-    spot_names.append(course.get("destination", ""))
-
-    geocoded_count = 0
-    for name in spot_names:
-        if not name:
-            continue
-        lat, lon = nominatim_geocode(name, origin_lat, origin_lon)
-        if lat is not None:
-            waypoints.append((lat, lon))
-            geocoded_count += 1
-
-    print(f"[enrich] {course.get('name','')} waypoints={len(waypoints)} (geocoded={geocoded_count}/{len(spot_names)})")
-
-    if len(waypoints) < 2:
+    dest_name = course.get("destination", "")
+    if not dest_name:
         return
 
+    dest_lat, dest_lon = nominatim_geocode(dest_name, origin_lat, origin_lon)
+    if dest_lat is None:
+        print(f"[enrich] {course.get('name','')} destination geocode failed, keeping AI estimate")
+        return
+
+    waypoints = [(origin_lat, origin_lon), (dest_lat, dest_lon)]
     dist_km, duration_hours = osrm_route(waypoints)
     if dist_km is not None:
         course["distance_km"] = dist_km
         course["duration_hours"] = duration_hours
-        # 帰路は立ち寄りなし分だけ短め
         course["return_hours"] = round(duration_hours - 0.5, 1)
         print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_hours}h")
 
