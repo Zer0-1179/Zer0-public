@@ -2,6 +2,11 @@ import json
 import os
 import re
 import random
+import time
+import threading
+import urllib.request
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 import boto3
 from botocore.config import Config
 
@@ -12,6 +17,9 @@ bedrock = boto3.client(
     region_name="ap-northeast-1",
     config=Config(read_timeout=60, connect_timeout=10),
 )
+
+# Nominatim は 1req/sec の制限があるためロックで直列化
+_NOM_LOCK = threading.Lock()
 
 PROMPT_TEMPLATE = """あなたはバイクツーリングの専門家です。
 以下の情報を元に、日帰りツーリングコースを3つ提案してください。
@@ -76,6 +84,87 @@ CORS_HEADERS = {
 }
 
 
+def nominatim_geocode(name, origin_lat, origin_lon):
+    """地名をNominatimでジオコーディング。(lat, lon) または (None, None) を返す。"""
+    params = {
+        "q": name,
+        "format": "json",
+        "limit": 1,
+        "countrycodes": "jp",
+        "accept-language": "ja",
+        # 現在地周辺を優先（日本全国から外れた結果を抑制）
+        "viewbox": f"{origin_lon-4},{origin_lat-4},{origin_lon+4},{origin_lat+4}",
+        "bounded": 0,
+    }
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    try:
+        with _NOM_LOCK:
+            with urllib.request.urlopen(req, timeout=4) as r:
+                data = json.loads(r.read())
+            time.sleep(0.25)  # 1req/sec 制限を守る
+        if data:
+            return float(data[0]["lat"]), float(data[0]["lon"])
+    except Exception as e:
+        print(f"[geocode] {name}: {e}")
+    return None, None
+
+
+def osrm_route(waypoints):
+    """OSRMで実道路距離・所要時間を取得。(distance_km, duration_hours) または (None, None) を返す。"""
+    # 座標は lon,lat の順（OSRM仕様）
+    coords = ";".join(f"{lon:.6f},{lat:.6f}" for lat, lon in waypoints)
+    url = f"https://router.project-osrm.org/route/v1/driving/{coords}?overview=false"
+    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+        if data.get("code") == "Ok" and data.get("routes"):
+            route = data["routes"][0]
+            dist_km = round(route["distance"] / 1000)
+            # 走行時間 + 観光・休憩 1.5h
+            duration_hours = round(route["duration"] / 3600 + 1.5, 1)
+            return dist_km, duration_hours
+    except Exception as e:
+        print(f"[osrm] {e}")
+    return None, None
+
+
+def enrich_course(course, origin_lat, origin_lon):
+    """
+    コースの全ウェイポイント（現在地→立ち寄りスポット→目的地）を
+    ジオコーディングしてOSRMで実距離・所要時間を上書きする。
+    失敗時はAI推定値をそのまま維持。
+    """
+    waypoints = [(origin_lat, origin_lon)]
+
+    # rest_spots（順番通り） + destination を順にジオコーディング
+    spot_names = [s["name"] for s in course.get("rest_spots", []) if s.get("name")]
+    spot_names.append(course.get("destination", ""))
+
+    geocoded_count = 0
+    for name in spot_names:
+        if not name:
+            continue
+        lat, lon = nominatim_geocode(name, origin_lat, origin_lon)
+        if lat is not None:
+            waypoints.append((lat, lon))
+            geocoded_count += 1
+
+    print(f"[enrich] {course.get('name','')} waypoints={len(waypoints)} (geocoded={geocoded_count}/{len(spot_names)})")
+
+    if len(waypoints) < 2:
+        return
+
+    dist_km, duration_hours = osrm_route(waypoints)
+    if dist_km is not None:
+        course["distance_km"] = dist_km
+        course["duration_hours"] = duration_hours
+        # 帰路は立ち寄りなし分だけ短め
+        course["return_hours"] = round(duration_hours - 0.5, 1)
+        print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_hours}h")
+
+
 def lambda_handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
     if method == "OPTIONS":
@@ -136,6 +225,20 @@ def lambda_handler(event, context):
             "headers": CORS_HEADERS,
             "body": json.dumps({"error": "Failed to parse AI response"}),
         }
+
+    # OSRM で実距離・所要時間に上書き（タイムアウト余裕がある場合のみ）
+    if context.get_remaining_time_in_millis() > 12000:
+        def _enrich(course):
+            try:
+                enrich_course(course, lat, lon)
+            except Exception as e:
+                print(f"[ERROR] enrich: {e}")
+            return course
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            courses = list(executor.map(_enrich, courses))
+    else:
+        print("[WARN] Skipped OSRM enrichment: insufficient time remaining")
 
     return {
         "statusCode": 200,
