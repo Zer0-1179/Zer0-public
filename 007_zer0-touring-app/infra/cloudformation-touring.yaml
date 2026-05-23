@@ -193,7 +193,7 @@ Resources:
           ContentSecurityPolicy:
             # connect-src: Open-Meteo（天気）+ Wikipedia API（写真取得）
             # img-src: Wikimedia（Wikipedia写真）
-            ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://ja.wikipedia.org; img-src 'self' data: https://upload.wikimedia.org; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://ja.wikipedia.org; img-src 'self' data: https://picsum.photos https://fastly.picsum.photos https://upload.wikimedia.org; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
             Override: true
         CustomHeadersConfig:
           Items:
