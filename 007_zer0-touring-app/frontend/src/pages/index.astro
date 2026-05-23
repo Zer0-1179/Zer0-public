@@ -227,10 +227,6 @@
       .dist-near { background: rgba(34,197,94,.2);  color: #4ade80; border: 1px solid rgba(34,197,94,.4); }
       .dist-mid  { background: rgba(56,189,248,.2);  color: #7dd3fc; border: 1px solid rgba(56,189,248,.4); }
       .dist-far  { background: rgba(168,85,247,.2);  color: #c4b5fd; border: 1px solid rgba(168,85,247,.4); }
-      .diff-badge { font-size: .72rem; font-weight: 700; border-radius: 9999px; padding: .22rem .65rem; }
-      .diff-easy { background: rgba(34,197,94,.2);  color: #4ade80; }
-      .diff-mid  { background: rgba(234,179, 8,.2);  color: #fbbf24; }
-      .diff-hard { background: rgba(239, 68, 68,.2); color: #f87171; }
 
       @media (max-width: 679px) {
         .topbar { padding: .6rem 1rem; }
@@ -484,7 +480,6 @@
         { label:'中距離コース', icon:'🌊', cls:'dist-mid',  grad:'linear-gradient(160deg,#1a2a4a,#2563eb)' },
         { label:'長距離コース', icon:'🏔', cls:'dist-far',  grad:'linear-gradient(160deg,#3a1a42,#9333ea)' },
       ];
-      const DIFF = { '初級':'diff-easy','中級':'diff-mid','上級':'diff-hard' };
       const ROAD = { '峠道':'🏔','山道':'🏔','高速道路':'🛣','国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊' };
       const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
 
@@ -584,7 +579,6 @@
                 <span class="card-header-icon">🏍️</span>
                 <div class="card-header-badges">
                   <span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>
-                  <span class="diff-badge ${DIFF[c.difficulty]??'diff-mid'}">${c.difficulty}</span>
                 </div>
               </div>
               <div class="card-body">
@@ -681,8 +675,7 @@
         dimg.classList.remove('loaded');dimg.src='';
         loadPhoto(c.photo_spot,dimg);
         document.getElementById('detail-tags').innerHTML=
-          `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>`+
-          `<span class="diff-badge ${DIFF[c.difficulty]??'diff-mid'}">${c.difficulty}</span>`;
+          `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>`;
         document.getElementById('detail-name').textContent=c.name;
         const rh=c.return_hours??c.duration_hours;
         document.getElementById('detail-meta').innerHTML=
