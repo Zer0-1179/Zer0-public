@@ -107,7 +107,7 @@ aws events disable-rule --name aws-x-poster-evening --region ap-northeast-1
 | -------------------------------------- | -------------------- |
 | Lambda 実行（60回/月 × ~3秒）          | ~$0.001              |
 | Bedrock Claude Haiku（~500 tokens/回） | ~$0.08               |
-| X API（$0.02/件 × 60件/月）           | ~$1.20               |
+| X API（$0.02/件 × 60件/月）            | ~$1.20               |
 | EventBridge・SSM                       | ~$0                  |
 | **合計**                               | **~$1.3（約195円）** |
 
