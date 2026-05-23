@@ -40,15 +40,38 @@
         -webkit-font-smoothing: antialiased;
       }
 
+      /* ── アニメーション ── */
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50%       { transform: translateY(-14px); }
+      }
+      @keyframes cardIn {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: none; }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
       .screen { display: none; }
-      .screen.active { display: flex; flex-direction: column; min-height: 100svh; }
+      .screen.active {
+        display: flex; flex-direction: column; min-height: 100svh;
+        animation: fadeIn .3s ease;
+      }
 
       /* ── Landing ── */
       #screen-idle {
         align-items: center; justify-content: center;
         padding: 2rem; text-align: center; gap: 1.5rem;
+        background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(249,115,22,.08) 0%, transparent 70%);
       }
-      .hero-icon  { font-size: 5rem; line-height: 1; }
+      .hero-icon {
+        font-size: 5rem; line-height: 1;
+        animation: float 3s ease-in-out infinite;
+        filter: drop-shadow(0 8px 24px rgba(249,115,22,.3));
+      }
       .hero-title { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; }
       .hero-sub   { color: var(--muted); font-size: .95rem; line-height: 1.7; }
 
@@ -65,28 +88,32 @@
         border: 2px solid var(--border); border-top-color: var(--accent);
         border-radius: 50%; animation: spin .7s linear infinite;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
 
       /* ── ボタン ── */
       .btn-primary {
         background: var(--accent); color: #fff; border: none;
         border-radius: 9999px; padding: 1rem 0; font-size: 1.125rem;
         font-weight: 600; cursor: pointer; width: 100%; max-width: 320px;
-        transition: opacity .15s;
+        transition: opacity .15s, transform .1s;
+        box-shadow: 0 4px 20px rgba(249,115,22,.35);
       }
-      .btn-primary:active { opacity: .75; }
+      .btn-primary:active { opacity: .75; transform: scale(.97); }
       .btn-outline {
         background: transparent; color: var(--accent);
         border: 1.5px solid var(--accent); border-radius: 9999px;
         padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
         cursor: pointer; white-space: nowrap;
+        transition: background .15s;
       }
+      .btn-outline:hover { background: rgba(249,115,22,.1); }
       .btn-ghost {
         background: transparent; color: var(--muted);
         border: 1.5px solid var(--border); border-radius: 9999px;
         padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
         cursor: pointer; white-space: nowrap;
+        transition: border-color .15s, color .15s;
       }
+      .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
 
       /* ── topbar ── */
       .topbar {
@@ -95,26 +122,31 @@
         position: sticky; top: 0; background: var(--bg); z-index: 10;
         width: 100%;
       }
-      .topbar-title { font-size: 1.1rem; font-weight: 700; flex: 1; }
+      .topbar-left  { display: flex; flex-direction: column; gap: .15rem; flex: 1; }
+      .topbar-title { font-size: 1.1rem; font-weight: 700; }
+      .weather-subtitle {
+        font-size: .73rem; font-weight: 600; color: var(--accent);
+        display: none;
+      }
       .topbar-btns  { display: flex; gap: .5rem; }
 
       /* ══════════════════════════════════════
-         コース一覧  ─ ポートフォリオ準拠グリッド
+         コース一覧
       ══════════════════════════════════════ */
       #screen-results { align-items: center; }
 
       .courses-grid {
         display: grid;
-        grid-template-columns: 1fr;               /* mobile: 1列 */
+        grid-template-columns: 1fr;
         gap: 1.25rem;
         padding: 1.5rem;
         width: 100%; max-width: 960px;
       }
       @media (min-width: 680px) {
-        .courses-grid { grid-template-columns: repeat(3, 1fr); } /* desktop: 3列 */
+        .courses-grid { grid-template-columns: repeat(3, 1fr); }
       }
 
-      /* ── カード（ポートフォリオ ProjectCard 準拠） ── */
+      /* ── カード ── */
       .course-card {
         background: var(--card);
         border: 1px solid var(--border);
@@ -124,16 +156,18 @@
         cursor: pointer;
         transition: border-color .2s, box-shadow .2s, transform .15s;
         -webkit-tap-highlight-color: transparent;
+        animation: cardIn .45s ease both;
       }
       .course-card:hover {
-        border-color: rgba(249,115,22,.5);
-        box-shadow: 0 0 0 1px rgba(249,115,22,.2);
+        border-color: rgba(249,115,22,.55);
+        box-shadow: 0 0 0 1px rgba(249,115,22,.2), 0 8px 24px rgba(0,0,0,.3);
+        transform: translateY(-2px);
       }
-      .course-card:active { transform: scale(.98); }
+      .course-card:active { transform: scale(.97) translateY(0); }
 
-      /* 画像エリア（グラデーション帯のみ・外部写真なし） */
+      /* 画像エリア */
       .card-img-wrap {
-        width: 100%; height: 54px;
+        width: 100%; height: 60px;
         overflow: hidden; flex-shrink: 0; position: relative;
       }
       .card-img-placeholder {
@@ -147,7 +181,7 @@
       /* カードコンテンツ */
       .card-body { padding: .65rem .875rem .6rem; display: flex; flex-direction: column; gap: .28rem; flex: 1; }
 
-      /* タグ行（距離ラベル + 難易度） */
+      /* タグ行 */
       .card-tag-row { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
       .dist-tag {
         font-size: .7rem; font-weight: 700;
@@ -165,14 +199,12 @@
       .diff-mid  { background: rgba(234,179, 8,.15);  color: #fbbf24; }
       .diff-hard { background: rgba(239, 68, 68,.15); color: #f87171; }
 
-      /* コース名 */
       .card-name {
         font-size: .9rem; font-weight: 700; line-height: 1.35; color: var(--text);
         transition: color .15s;
       }
       .course-card:hover .card-name { color: var(--accent); }
 
-      /* メタ情報 */
       .card-meta { display: flex; gap: .28rem; flex-wrap: wrap; }
       .meta-pill {
         font-size: .7rem; color: var(--muted);
@@ -180,7 +212,6 @@
         padding: .15rem .5rem;
       }
 
-      /* 道路タイプ */
       .card-roads { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: auto; }
       .road-tag {
         font-size: .72rem; color: var(--muted);
@@ -188,13 +219,11 @@
         padding: .15rem .45rem;
       }
 
-      /* ルートサマリー */
       .route-summary {
         font-size: .72rem; color: var(--muted);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
 
-      /* コース特徴タグ */
       .course-tags { display: flex; gap: .25rem; flex-wrap: wrap; }
       .course-tag {
         font-size: .65rem; font-weight: 600;
@@ -202,17 +231,15 @@
         border-radius: 9999px; padding: .12rem .42rem;
       }
 
-      /* 距離バー */
       .dist-bar-wrap {
         height: 4px; background: var(--border);
         border-radius: 2px; overflow: hidden;
       }
       .dist-bar {
         height: 100%; background: var(--accent);
-        border-radius: 2px; transition: width .4s ease;
+        border-radius: 2px; transition: width .5s ease;
       }
 
-      /* 詳細ヒント */
       .card-detail-hint {
         padding: .3rem .875rem .4rem;
         border-top: 1px solid var(--border);
@@ -223,6 +250,52 @@
       .course-card:hover .card-detail-hint { letter-spacing: .02em; }
 
       /* ══════════════════════════════════════
+         週間天気予報ストリップ
+      ══════════════════════════════════════ */
+      #forecast-wrap {
+        width: 100%; max-width: 960px;
+        padding: 0 1.5rem 2rem;
+        display: none;
+      }
+      .forecast-label {
+        font-size: .68rem; font-weight: 700; color: var(--muted);
+        text-transform: uppercase; letter-spacing: .06em;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: .4rem; margin-bottom: .6rem;
+      }
+      .forecast-strip {
+        display: flex; gap: .5rem;
+        overflow-x: auto; padding-bottom: .4rem;
+        scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+      }
+      .forecast-strip::-webkit-scrollbar { height: 4px; }
+      .forecast-strip::-webkit-scrollbar-track { background: transparent; }
+      .forecast-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+      .forecast-day {
+        display: flex; flex-direction: column; align-items: center;
+        gap: .22rem; flex-shrink: 0; min-width: 60px;
+        background: var(--card2); border: 1px solid var(--border);
+        border-radius: .65rem; padding: .55rem .6rem;
+        font-size: .7rem; transition: border-color .15s;
+      }
+      .forecast-day.today {
+        border-color: rgba(56,189,248,.5);
+        background: rgba(56,189,248,.06);
+      }
+      .forecast-day.best {
+        border-color: rgba(249,115,22,.6);
+        background: rgba(249,115,22,.1);
+        box-shadow: 0 0 0 1px rgba(249,115,22,.15);
+      }
+      .fd-dow  { font-size: .65rem; font-weight: 700; color: var(--muted); }
+      .fd-icon { font-size: 1.3rem; line-height: 1; }
+      .fd-temp { font-weight: 700; color: var(--text); }
+      .fd-best { font-size: .6rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+      .fd-score { display: flex; gap: 2px; }
+      .fd-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
+      .fd-dot.on { background: var(--accent); }
+
+      /* ══════════════════════════════════════
          コース詳細
       ══════════════════════════════════════ */
       #screen-detail { overflow-y: auto; align-items: center; }
@@ -230,7 +303,6 @@
       #screen-detail > .detail-img-wrap,
       #screen-detail > .detail-content { width: 100%; max-width: 680px; }
 
-      /* 詳細写真 */
       .detail-img-wrap {
         width: 100%; height: 160px;
         overflow: hidden; flex-shrink: 0;
@@ -247,7 +319,6 @@
       }
       .detail-img.loaded { opacity: 1; }
 
-      /* 詳細コンテンツ */
       .detail-content {
         display: flex; flex-direction: column; gap: 1.5rem;
         padding: 1.5rem 1.25rem 2.5rem; flex: 1;
@@ -330,6 +401,7 @@
         .card-name { font-size: .95rem; }
         .detail-content { padding: 1.25rem 1rem 2rem; gap: 1.25rem; }
         .detail-name { font-size: 1.25rem; }
+        #forecast-wrap { padding: 0 .875rem 1.5rem; }
       }
 
       /* ── Error ── */
@@ -365,12 +437,19 @@
     <!-- ── コース一覧 ── -->
     <div id="screen-results" class="screen">
       <div class="topbar">
-        <span class="topbar-title">おすすめコース</span>
+        <div class="topbar-left">
+          <span class="topbar-title">おすすめコース</span>
+          <span id="weather-subtitle" class="weather-subtitle"></span>
+        </div>
         <div class="topbar-btns">
           <button class="btn-outline" id="btn-retry">再検索</button>
         </div>
       </div>
       <div class="courses-grid" id="courses-container"></div>
+      <div id="forecast-wrap">
+        <p class="forecast-label">今週のツーリング天気</p>
+        <div class="forecast-strip" id="forecast-strip"></div>
+      </div>
     </div>
 
     <!-- ── コース詳細 ── -->
@@ -441,7 +520,72 @@
       const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
 
       let courses = [];
-      let userLat = null, userLon = null;  // GPS取得後に保持（Googleマップの出発地に使用）
+      let userLat = null, userLon = null;
+      let weatherMeta = { icon: '☀️', score: 5, label: '絶好の日和！', temp: '--' };
+
+      // 天気コード → ツーリング適性
+      function getWeatherMeta(code) {
+        if (code === 0)                        return { icon:'☀️', score:5, label:'絶好の日和！' };
+        if (code <= 2)                         return { icon:'🌤', score:4, label:'ツーリング向き' };
+        if (code === 3)                        return { icon:'☁️', score:3, label:'まずまず' };
+        if (code === 45 || code === 48)        return { icon:'🌫', score:2, label:'視界に注意' };
+        if (code >= 51 && code <= 67)          return { icon:'🌧', score:1, label:'雨天注意' };
+        if (code >= 71 && code <= 77)          return { icon:'🌨', score:1, label:'降雪注意' };
+        if (code >= 80 && code <= 82)          return { icon:'🌦', score:2, label:'にわか雨注意' };
+        if (code >= 95)                        return { icon:'⛈', score:0, label:'走行危険' };
+        return { icon:'🌤', score:3, label:'まずまず' };
+      }
+
+      function renderWeatherInfo() {
+        const el = document.getElementById('weather-subtitle');
+        if (!el) return;
+        const { icon, label, temp } = weatherMeta;
+        el.textContent = `${icon} ${temp}℃ · ${label}`;
+        el.style.display = 'block';
+      }
+
+      async function renderForecast(lat, lon) {
+        try {
+          const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max&timezone=auto&forecast_days=7`
+          );
+          const d = await res.json();
+          const { time, weathercode, temperature_2m_max } = d.daily;
+
+          // 今日を除いて最もスコアが高い日を「狙い目」に
+          let bestIdx = 1, bestScore = -1;
+          weathercode.forEach((code, i) => {
+            if (i === 0) return;
+            const s = getWeatherMeta(code).score;
+            if (s > bestScore) { bestScore = s; bestIdx = i; }
+          });
+
+          const DOW = ['日','月','火','水','木','金','土'];
+          const strip = document.getElementById('forecast-strip');
+          const wrap  = document.getElementById('forecast-wrap');
+          if (!strip || !wrap) return;
+
+          strip.innerHTML = time.map((t, i) => {
+            const date = new Date(t + 'T00:00:00');
+            const dow  = DOW[date.getDay()];
+            const meta = getWeatherMeta(weathercode[i]);
+            const temp = Math.round(temperature_2m_max[i]);
+            const dotsHtml = Array.from({length:5}, (_, di) =>
+              `<span class="fd-dot${di < meta.score ? ' on' : ''}"></span>`
+            ).join('');
+            return `
+              <div class="forecast-day${i===0?' today':''}${i===bestIdx?' best':''}">
+                <span class="fd-dow">${i===0?'今日':dow}</span>
+                <span class="fd-icon">${meta.icon}</span>
+                <span class="fd-temp">${temp}℃</span>
+                <div class="fd-score">${dotsHtml}</div>
+                ${i===bestIdx?'<span class="fd-best">★ 狙い目</span>':''}
+              </div>`;
+          }).join('');
+
+          wrap.style.display = 'block';
+        } catch(_) {}
+      }
 
       function showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -460,8 +604,6 @@
         else ic.textContent=SICONS[id];
       }
 
-      // カード番号+目的地名をseedにして3枚必ず異なる画像を表示
-      // photo_spot の Wikipedia サムネイルを取得（失敗時はプレースホルダーをそのまま表示）
       async function loadPhoto(spot, imgEl) {
         if (!imgEl || !spot) return;
         try {
@@ -473,11 +615,10 @@
           imgEl.onerror = () => { imgEl.src = ''; imgEl.classList.remove('loaded'); };
           imgEl.src = src.replace(/\/\d+px-/, '/1280px-');
         } catch(_) {
-          imgEl.src = ''; // 失敗時はプレースホルダー（グラデーション+🏍️）を表示
+          imgEl.src = '';
         }
       }
 
-      // Googleマップ URL 生成（プラットフォーム別にアプリ直起動を試みる）
       function buildMapUrl(c) {
         const dest  = encodeURIComponent(c.destination);
         const spots = (c.rest_spots ?? []).map(s => encodeURIComponent(s.name));
@@ -489,22 +630,19 @@
         const isAndroid = /Android/.test(ua);
 
         if (isAndroid && hasGps) {
-          // Android: google.navigation で直接ナビ起動（ワンタップでナビ開始）
           return `google.navigation:q=${dest}&mode=d`;
         }
         if (isIOS && hasGps) {
-          // iOS: comgooglemaps でGoogleマップアプリを直接起動
           const wp = spots.length > 0 ? `&waypoints=${spots.join('+')}` : '';
           return `comgooglemaps://?saddr=${originCoord}&daddr=${dest}${wp}&directionsmode=driving`;
         }
 
-        // デスクトップ / GPS なし: Web版（経路表示 → スタートボタンをタップ）
-        const originParam  = hasGps ? `&origin=${originCoord}` : '';
+        const originParam   = hasGps ? `&origin=${originCoord}` : '';
         const waypointParam = spots.length > 0 ? `&waypoints=${spots.join('%7C')}` : '';
         return `https://www.google.com/maps/dir/?api=1${originParam}&destination=${dest}${waypointParam}&travelmode=driving`;
       }
 
-      // ── 一覧描画（3カラムグリッド）──
+      // ── 一覧描画（staggered アニメーション付き）──
       function renderResults(data) {
         courses = [...data.courses].sort((a, b) => (a.distance_km??0) - (b.distance_km??0));
         const maxDist = Math.max(...courses.map(c => c.distance_km ?? 0), 1);
@@ -521,7 +659,7 @@
             : `現在地 → ${c.destination}`;
           const tagsHtml   = (c.tags??[]).map(t => `<span class="course-tag">${t}</span>`).join('');
           return `
-            <article class="course-card" data-idx="${i}">
+            <article class="course-card" data-idx="${i}" style="animation-delay:${i*120}ms">
               <div class="card-img-wrap">
                 <div class="card-img-placeholder" style="background:${d.grad}">
                   <span class="ph-icon">🏍️</span>
@@ -555,10 +693,9 @@
       // ── 詳細画面 ──
       function openDetail(idx) {
         const c = courses[idx];
-        const distIdx = c._distIdx ?? idx;   // URL復元時は元のdistインデックスを使用
+        const distIdx = c._distIdx ?? idx;
         const d = DIST[distIdx];
 
-        // 写真（グラデ背景 + バイクアイコン + img）
         const ph = document.getElementById('detail-img-ph');
         ph.style.background = d.grad;
         ph.innerHTML = `<span class="ph-icon" style="font-size:2.2rem">🏍️</span><span class="ph-road">${c.name}</span>`;
@@ -567,7 +704,6 @@
         dimg.src = '';
         loadPhoto(c.photo_spot, dimg);
 
-        // ヘッダー
         document.getElementById('detail-tags').innerHTML =
           `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>` +
           `<span class="diff-badge ${DIFF[c.difficulty]??'diff-mid'}">${c.difficulty}</span>`;
@@ -599,7 +735,6 @@
         ].filter(Boolean).join('');
         document.getElementById('detail-map-btn').href = buildMapUrl(c);
 
-        // ── Xシェアテキスト生成 ──
         const shareText =
           `【${c.name}】を走ってきました！\n` +
           `距離: ${c.distance_km}km / 約${c.duration_hours}時間\n` +
@@ -608,7 +743,6 @@
         document.getElementById('share-x-btn').href =
           'https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText);
 
-        // ── URLパラメータにコース情報を付与（history.pushState） ──
         const shareData = {
           name: c.name, distance_km: c.distance_km, duration_hours: c.duration_hours,
           destination: c.destination, highlights: c.highlights, road_types: c.road_types,
@@ -623,7 +757,6 @@
         showScreen('screen-detail');
       }
 
-      // ── URLコピー（iOS Safari フォールバック対応） ──
       async function copyUrl() {
         const url = location.href;
         try {
@@ -644,6 +777,12 @@
       function showError(msg) { document.getElementById('error-msg').textContent=msg; showScreen('screen-error'); }
 
       async function findCourses() {
+        // リセット
+        const wsub = document.getElementById('weather-subtitle');
+        if (wsub) wsub.style.display = 'none';
+        const fwrap = document.getElementById('forecast-wrap');
+        if (fwrap) fwrap.style.display = 'none';
+
         showScreen('screen-loading');
         ['step-gps','step-weather','step-ai'].forEach(id=>setStep(id,'idle'));
 
@@ -654,7 +793,7 @@
             navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:false,timeout:30000})
           );
           lat=pos.coords.latitude; lon=pos.coords.longitude;
-          userLat=lat; userLon=lon;  // Googleマップ用に保持
+          userLat=lat; userLon=lon;
           setStep('step-gps','done');
         } catch(e) {
           showError(e.code===1?'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。':
@@ -669,7 +808,10 @@
           const res=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`);
           const d=await res.json();
           temperature=Math.round(d.current.temperature_2m);
-          weatherCondition=WEATHER[d.current.weathercode]??'晴れ';
+          const wCode=d.current.weathercode??0;
+          weatherCondition=WEATHER[wCode]??'晴れ';
+          const meta=getWeatherMeta(wCode);
+          weatherMeta={...meta, temp:temperature};
         } catch(_) {}
         setStep('step-weather','done');
 
@@ -684,19 +826,21 @@
           setStep('step-ai','done');
           renderResults(data);
           showScreen('screen-results');
+          renderWeatherInfo();
+          renderForecast(lat, lon);
         } catch(_) { showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。'); }
       }
 
       document.getElementById('btn-start').addEventListener('click',findCourses);
       document.getElementById('btn-retry').addEventListener('click',findCourses);
       document.getElementById('btn-back').addEventListener('click',()=>{
-        history.pushState({}, '', location.pathname);  // ?course= を消去
+        history.pushState({}, '', location.pathname);
         showScreen('screen-results');
       });
       document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
       document.getElementById('share-url-btn').addEventListener('click', copyUrl);
 
-      // ── ページロード時に ?course= があれば直接詳細画面を復元 ──
+      // ?course= から直接詳細を復元
       (function() {
         const param = new URLSearchParams(location.search).get('course');
         if (!param) return;
