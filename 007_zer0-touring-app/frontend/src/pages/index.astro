@@ -188,6 +188,30 @@
         padding: .15rem .45rem;
       }
 
+      /* ルートサマリー */
+      .route-summary {
+        font-size: .72rem; color: var(--muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+
+      /* コース特徴タグ */
+      .course-tags { display: flex; gap: .25rem; flex-wrap: wrap; }
+      .course-tag {
+        font-size: .65rem; font-weight: 600;
+        background: rgba(255,255,255,.1); color: #fff;
+        border-radius: 9999px; padding: .12rem .42rem;
+      }
+
+      /* 距離バー */
+      .dist-bar-wrap {
+        height: 4px; background: var(--border);
+        border-radius: 2px; overflow: hidden;
+      }
+      .dist-bar {
+        height: 100%; background: var(--accent);
+        border-radius: 2px; transition: width .4s ease;
+      }
+
       /* 詳細ヒント */
       .card-detail-hint {
         padding: .3rem .875rem .4rem;
@@ -356,7 +380,7 @@
       </div>
       <div class="detail-img-wrap" id="detail-img-wrap">
         <div class="detail-img-ph" id="detail-img-ph"></div>
-        <img class="detail-img" id="detail-img" alt="コース写真" />
+        <img class="detail-img" id="detail-img" alt="コース写真" loading="eager" />
       </div>
       <div class="detail-content">
         <div class="detail-header">
@@ -437,7 +461,7 @@
       }
 
       // カード番号+目的地名をseedにして3枚必ず異なる画像を表示
-      // photo_spot の Wikipedia サムネイルを取得（なければグラデ+🏍️のまま）
+      // photo_spot の Wikipedia サムネイルを取得（失敗時はプレースホルダーをそのまま表示）
       async function loadPhoto(spot, imgEl) {
         if (!imgEl || !spot) return;
         try {
@@ -446,9 +470,11 @@
           const src  = data.thumbnail?.source;
           if (!src) return;
           imgEl.onload  = () => imgEl.classList.add('loaded');
-          imgEl.onerror = () => {};
+          imgEl.onerror = () => { imgEl.src = ''; imgEl.classList.remove('loaded'); };
           imgEl.src = src.replace(/\/\d+px-/, '/1280px-');
-        } catch(_) {}
+        } catch(_) {
+          imgEl.src = ''; // 失敗時はプレースホルダー（グラデーション+🏍️）を表示
+        }
       }
 
       // Googleマップ URL 生成（プラットフォーム別にアプリ直起動を試みる）
@@ -481,11 +507,19 @@
       // ── 一覧描画（3カラムグリッド）──
       function renderResults(data) {
         courses = [...data.courses].sort((a, b) => (a.distance_km??0) - (b.distance_km??0));
+        const maxDist = Math.max(...courses.map(c => c.distance_km ?? 0), 1);
         const el = document.getElementById('courses-container');
         el.innerHTML = courses.map((c, i) => {
           const d = DIST[i];
-          const roads = (c.road_types??[]).map(r=>`<span class="road-tag">${ROAD[r]??'🚗'} ${r}</span>`).join('');
-          const roadLabel = (c.road_types??[])[0] ?? 'Touring';
+          const roadLabel  = (c.road_types??[])[0] ?? 'Touring';
+          const returnH    = c.return_hours ?? c.duration_hours;
+          const roundTrip  = (c.duration_hours + returnH).toFixed(1);
+          const distPct    = Math.round((c.distance_km / maxDist) * 100);
+          const firstSpot  = (c.rest_spots??[])[0]?.name ?? '';
+          const routeSummary = firstSpot
+            ? `現在地 → ${firstSpot} → ${c.destination}`
+            : `現在地 → ${c.destination}`;
+          const tagsHtml   = (c.tags??[]).map(t => `<span class="course-tag">${t}</span>`).join('');
           return `
             <article class="course-card" data-idx="${i}">
               <div class="card-img-wrap">
@@ -500,12 +534,15 @@
                   <span class="diff-badge ${DIFF[c.difficulty]??'diff-mid'}">${c.difficulty}</span>
                 </div>
                 <h3 class="card-name">${c.name}</h3>
+                <p class="route-summary">${routeSummary}</p>
                 <div class="card-meta">
                   <span class="meta-pill">🛣 ${c.distance_km}km</span>
                   <span class="meta-pill">⏱ 片道${c.duration_hours}h</span>
-                  <span class="meta-pill">🔄 往復${((c.return_hours??c.duration_hours)+c.duration_hours).toFixed(1)}h</span>
+                  <span class="meta-pill">🔄 往復${roundTrip}h</span>
                   <span class="meta-pill">🏁 ${c.destination}</span>
                 </div>
+                ${tagsHtml ? `<div class="course-tags">${tagsHtml}</div>` : ''}
+                <div class="dist-bar-wrap"><div class="dist-bar" style="width:${distPct}%"></div></div>
               </div>
               <div class="card-detail-hint">詳細を見る →</div>
             </article>`;
