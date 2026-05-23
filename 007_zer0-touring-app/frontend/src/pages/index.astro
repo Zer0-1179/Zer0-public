@@ -417,6 +417,7 @@
       const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
 
       let courses = [];
+      let userLat = null, userLon = null;  // GPS取得後に保持（Googleマップの出発地に使用）
 
       function showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -450,14 +451,17 @@
         } catch(_) {}
       }
 
-      // Googleマップ URL 生成（経由地があればルート形式）
+      // Googleマップ URL 生成（出発地=GPS座標、車モード、経由地あり）
       function buildMapUrl(c) {
         const dest  = encodeURIComponent(c.destination);
         const spots = (c.rest_spots ?? []).map(s => encodeURIComponent(s.name));
-        if (spots.length > 0) {
-          return `https://www.google.com/maps/dir/?api=1&destination=${dest}&waypoints=${spots.join('%7C')}`;
-        }
-        return `https://www.google.com/maps/search/?api=1&query=${dest}`;
+        const origin = (userLat && userLon)
+          ? `&origin=${userLat.toFixed(6)},${userLon.toFixed(6)}`
+          : '';
+        const waypoints = spots.length > 0
+          ? `&waypoints=${spots.join('%7C')}`
+          : '';
+        return `https://www.google.com/maps/dir/?api=1${origin}&destination=${dest}${waypoints}&travelmode=driving`;
       }
 
       // ── 一覧描画（3カラムグリッド）──
@@ -599,6 +603,7 @@
             navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:false,timeout:30000})
           );
           lat=pos.coords.latitude; lon=pos.coords.longitude;
+          userLat=lat; userLon=lon;  // Googleマップ用に保持
           setStep('step-gps','done');
         } catch(e) {
           showError(e.code===1?'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。':
