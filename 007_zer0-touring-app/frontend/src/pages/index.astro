@@ -432,19 +432,33 @@
         else ic.textContent=SICONS[id];
       }
 
-      // Wikipedia写真をフェードイン（なければグラデ+バイクアイコンのまま）
-      async function loadPhoto(spot, imgEl) {
-        if (!imgEl || !spot) return;
+      // picsum: idx+destination をseedに確実に異なる画像を表示
+      function setPicsumPhoto(idx, destination, imgEl) {
+        const seed = encodeURIComponent(`${idx}-${destination}`);
+        imgEl.onload  = () => imgEl.classList.add('loaded');
+        imgEl.onerror = () => {};
+        imgEl.src = `https://picsum.photos/seed/${seed}/800/400`;
+      }
+
+      // Wikipedia が返せたら差し替え（成功した場合のみ）
+      async function tryWikiUpgrade(spot, imgEl) {
+        if (!spot || !imgEl) return;
         try {
           const res  = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`);
           const data = await res.json();
           const url  = data.thumbnail?.source;
           if (!url) return;
           const hiRes = url.replace(/\/\d+px-/, '/1280px-');
-          imgEl.onload  = () => imgEl.classList.add('loaded');
-          imgEl.onerror = () => {};
-          imgEl.src = hiRes;
+          const probe = new Image();
+          probe.onload = () => { imgEl.src = hiRes; };
+          probe.src = hiRes;
         } catch (_) {}
+      }
+
+      function loadPhoto(spot, idx, destination, imgEl) {
+        if (!imgEl) return;
+        setPicsumPhoto(idx, destination, imgEl);  // まず確実に表示
+        tryWikiUpgrade(spot, imgEl);              // 成功なら差し替え
       }
 
       // Googleマップ URL 生成（経由地があればルート形式）
@@ -493,7 +507,7 @@
             </article>`;
         }).join('');
 
-        courses.forEach((c, i) => loadPhoto(c.photo_spot, document.getElementById(`cimg-${i}`)));
+        courses.forEach((c, i) => loadPhoto(c.photo_spot, i, c.destination, document.getElementById(`cimg-${i}`)));
         el.querySelectorAll('.course-card').forEach(card =>
           card.addEventListener('click', () => openDetail(+card.dataset.idx))
         );
@@ -510,7 +524,7 @@
         const dimg = document.getElementById('detail-img');
         dimg.classList.remove('loaded');
         dimg.src = '';
-        loadPhoto(c.photo_spot, dimg);
+        loadPhoto(c.photo_spot, idx, c.destination, dimg);
 
         // ヘッダー
         document.getElementById('detail-tags').innerHTML =
