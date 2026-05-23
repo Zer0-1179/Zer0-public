@@ -32,14 +32,11 @@
 
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
-        background: var(--bg);
-        color: var(--text);
+        background: var(--bg); color: var(--text);
         font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-        min-height: 100svh;
-        -webkit-font-smoothing: antialiased;
+        min-height: 100svh; -webkit-font-smoothing: antialiased;
       }
 
-      /* ── アニメーション ── */
       @keyframes float {
         0%, 100% { transform: translateY(0); }
         50%       { transform: translateY(-14px); }
@@ -48,17 +45,11 @@
         from { opacity: 0; transform: translateY(24px); }
         to   { opacity: 1; transform: none; }
       }
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to   { opacity: 1; }
-      }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       @keyframes spin { to { transform: rotate(360deg); } }
 
       .screen { display: none; }
-      .screen.active {
-        display: flex; flex-direction: column; min-height: 100svh;
-        animation: fadeIn .3s ease;
-      }
+      .screen.active { display: flex; flex-direction: column; min-height: 100svh; animation: fadeIn .3s ease; }
 
       /* ── Landing ── */
       #screen-idle {
@@ -125,8 +116,7 @@
 
       /* ════════════════════════════════════════
          スワイプカードスライダー
-         card-viewport が flex + overflow-x:scroll
-         → width:100% がビューポート幅を正しく参照
+         overflow:hidden + translateX で確実に動作
       ════════════════════════════════════════ */
       #screen-results { align-items: center; }
 
@@ -135,8 +125,10 @@
         padding: 1.25rem 1.5rem 0;
         animation: slideUp .5s ease both;
       }
+      @media (max-width: 679px) {
+        .slider-outer { padding: 1rem .875rem 0; }
+      }
 
-      /* ドットインジケーター */
       .slider-dots {
         display: flex; justify-content: center; gap: .6rem;
         margin-bottom: .875rem;
@@ -148,26 +140,25 @@
       }
       .dot.active { background: var(--accent); transform: scale(1.4); }
 
-      /*
-        ビューポート = flex コンテナ + スクロール領域
-        → 各カードの width:100% はここの幅を参照 ✓
-      */
+      /* overflow:hidden でカードをクリップ */
       .card-viewport {
-        display: flex;
-        overflow-x: scroll;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
+        overflow: hidden;
         border-radius: .875rem;
         border: 1px solid var(--border);
+        /* カード幅は JS で設定するため width 指定不要 */
       }
-      .card-viewport::-webkit-scrollbar { display: none; }
+
+      /* transform で横にスライドする本体 */
+      #card-track {
+        display: flex;
+        transition: transform .4s cubic-bezier(.25,.46,.45,.94);
+        will-change: transform;
+      }
 
       /* ─── コースカード ─── */
       .course-card {
-        flex: none;
-        width: 100%;          /* ← card-viewport の幅 = 1枚分 ✓ */
-        scroll-snap-align: start;
+        flex-shrink: 0;
+        /* width は JS で vp.clientWidth に設定 */
         background: var(--card);
         display: flex; flex-direction: column;
         -webkit-tap-highlight-color: transparent;
@@ -175,8 +166,7 @@
 
       /* グラデーションヘッダー */
       .card-header {
-        width: 100%; height: 130px;
-        position: relative; flex-shrink: 0;
+        width: 100%; height: 130px; position: relative; flex-shrink: 0;
         display: flex; align-items: center; justify-content: center;
       }
       .card-header-icon {
@@ -244,17 +234,17 @@
 
       @media (max-width: 679px) {
         .topbar { padding: .6rem 1rem; }
-        .slider-outer { padding: 1rem .875rem 0; }
         .card-name { font-size: 1.1rem; }
       }
 
       /* ════════════════════════════════════════
-         週間天気予報ストリップ
+         週間天気予報
       ════════════════════════════════════════ */
       #forecast-wrap {
         width: 100%; max-width: 560px;
         padding: 1.25rem 1.5rem 2rem; display: none;
       }
+      @media (max-width: 679px) { #forecast-wrap { padding: 1rem .875rem 1.5rem; } }
       .forecast-label {
         font-size: .68rem; font-weight: 700; color: var(--muted);
         text-transform: uppercase; letter-spacing: .06em;
@@ -267,7 +257,6 @@
         scrollbar-width: thin; scrollbar-color: var(--border) transparent;
       }
       .forecast-strip::-webkit-scrollbar { height: 4px; }
-      .forecast-strip::-webkit-scrollbar-track { background: transparent; }
       .forecast-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
       .forecast-day {
         display: flex; flex-direction: column; align-items: center;
@@ -276,7 +265,7 @@
         border-radius: .65rem; padding: .55rem .6rem; font-size: .7rem;
       }
       .forecast-day.today { border-color: rgba(56,189,248,.5); background: rgba(56,189,248,.06); }
-      .forecast-day.best  { border-color: rgba(249,115,22,.6); background: rgba(249,115,22,.1); box-shadow: 0 0 0 1px rgba(249,115,22,.15); }
+      .forecast-day.best  { border-color: rgba(249,115,22,.6); background: rgba(249,115,22,.1); }
       .fd-dow  { font-size: .65rem; font-weight: 700; color: var(--muted); }
       .fd-icon { font-size: 1.3rem; line-height: 1; }
       .fd-temp { font-weight: 700; }
@@ -380,7 +369,6 @@
       @media (max-width: 679px) {
         .detail-content { padding: 1.25rem 1rem 2rem; gap: 1.25rem; }
         .detail-name { font-size: 1.25rem; }
-        #forecast-wrap { padding: 1rem .875rem 1.5rem; }
       }
 
       /* ── Error ── */
@@ -427,11 +415,9 @@
 
       <div class="slider-outer">
         <div class="slider-dots" id="slider-dots"></div>
-        <!--
-          card-viewport が flex + overflow-x:scroll のスクロールコンテナ。
-          各 .course-card の width:100% はここの幅（＝1枚分）を参照する。
-        -->
-        <div class="card-viewport" id="card-viewport"></div>
+        <div class="card-viewport" id="card-viewport">
+          <div id="card-track"></div>
+        </div>
       </div>
 
       <div id="forecast-wrap">
@@ -445,7 +431,7 @@
       <div class="topbar">
         <button class="btn-ghost" id="btn-back">← 一覧に戻る</button>
       </div>
-      <div class="detail-img-wrap" id="detail-img-wrap">
+      <div class="detail-img-wrap">
         <div class="detail-img-ph" id="detail-img-ph"></div>
         <img class="detail-img" id="detail-img" alt="コース写真" loading="eager" />
       </div>
@@ -471,12 +457,8 @@
           <p class="section-title">走行情報</p>
           <div class="info-chips" id="detail-info"></div>
         </div>
-        <a id="detail-map-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn-map">
-          🗺 Googleマップでナビ開始
-        </a>
-        <a id="share-x-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn-x-share">
-          𝕏 でシェア
-        </a>
+        <a id="detail-map-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn-map">🗺 Googleマップでナビ開始</a>
+        <a id="share-x-btn"  href="#" target="_blank" rel="noopener noreferrer" class="btn-x-share">𝕏 でシェア</a>
         <button id="share-url-btn" class="btn-url-copy">🔗 URLをコピー</button>
       </div>
     </div>
@@ -507,100 +489,118 @@
       const ROAD = { '峠道':'🏔','山道':'🏔','高速道路':'🛣','国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊' };
       const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
 
-      let courses = [];
-      let userLat = null, userLon = null;
+      let courses     = [];
+      let userLat     = null, userLon = null;
       let weatherMeta = { icon:'☀️', score:5, label:'絶好の日和！', temp:'--' };
       let currentSlide = 0;
-      let scrollTimer;
-      let programmaticScroll = false;
 
       /* ── 天気ヘルパー ── */
       function getWeatherMeta(code) {
-        if (code === 0)                       return { icon:'☀️', score:5, label:'絶好の日和！' };
-        if (code <= 2)                        return { icon:'🌤', score:4, label:'ツーリング向き' };
-        if (code === 3)                       return { icon:'☁️', score:3, label:'まずまず' };
-        if (code === 45 || code === 48)       return { icon:'🌫', score:2, label:'視界に注意' };
-        if (code >= 51 && code <= 67)         return { icon:'🌧', score:1, label:'雨天注意' };
-        if (code >= 71 && code <= 77)         return { icon:'🌨', score:1, label:'降雪注意' };
-        if (code >= 80 && code <= 82)         return { icon:'🌦', score:2, label:'にわか雨注意' };
-        if (code >= 95)                       return { icon:'⛈', score:0, label:'走行危険' };
+        if (code === 0)                 return { icon:'☀️', score:5, label:'絶好の日和！' };
+        if (code <= 2)                  return { icon:'🌤', score:4, label:'ツーリング向き' };
+        if (code === 3)                 return { icon:'☁️', score:3, label:'まずまず' };
+        if (code===45 || code===48)     return { icon:'🌫', score:2, label:'視界に注意' };
+        if (code>=51 && code<=67)       return { icon:'🌧', score:1, label:'雨天注意' };
+        if (code>=71 && code<=77)       return { icon:'🌨', score:1, label:'降雪注意' };
+        if (code>=80 && code<=82)       return { icon:'🌦', score:2, label:'にわか雨注意' };
+        if (code>=95)                   return { icon:'⛈', score:0, label:'走行危険' };
         return { icon:'🌤', score:3, label:'まずまず' };
       }
-
       function renderWeatherInfo() {
         const el = document.getElementById('weather-subtitle');
         if (!el) return;
         el.textContent = `${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
         el.style.display = 'block';
       }
-
       async function renderForecast(lat, lon) {
         try {
-          const res = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max&timezone=auto&forecast_days=7`
-          );
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max&timezone=auto&forecast_days=7`);
           const d = await res.json();
           const { time, weathercode, temperature_2m_max } = d.daily;
-          let bestIdx = 1, bestScore = -1;
-          weathercode.forEach((code, i) => {
-            if (i === 0) return;
-            const s = getWeatherMeta(code).score;
-            if (s > bestScore) { bestScore = s; bestIdx = i; }
-          });
-          const DOW = ['日','月','火','水','木','金','土'];
-          const strip = document.getElementById('forecast-strip');
-          const wrap  = document.getElementById('forecast-wrap');
-          if (!strip || !wrap) return;
-          strip.innerHTML = time.map((t, i) => {
-            const date = new Date(t + 'T00:00:00');
-            const dow  = DOW[date.getDay()];
-            const meta = getWeatherMeta(weathercode[i]);
-            const temp = Math.round(temperature_2m_max[i]);
-            const dots = Array.from({length:5}, (_, di) =>
-              `<span class="fd-dot${di < meta.score ? ' on' : ''}"></span>`
-            ).join('');
-            return `
-              <div class="forecast-day${i===0?' today':''}${i===bestIdx?' best':''}">
-                <span class="fd-dow">${i===0?'今日':dow}</span>
-                <span class="fd-icon">${meta.icon}</span>
-                <span class="fd-temp">${temp}℃</span>
-                <div class="fd-score">${dots}</div>
-                ${i===bestIdx?'<span class="fd-best">★ 狙い目</span>':''}
-              </div>`;
+          let bestIdx=1, bestScore=-1;
+          weathercode.forEach((c,i)=>{if(i===0)return;const s=getWeatherMeta(c).score;if(s>bestScore){bestScore=s;bestIdx=i;}});
+          const DOW=['日','月','火','水','木','金','土'];
+          const strip=document.getElementById('forecast-strip');
+          const wrap=document.getElementById('forecast-wrap');
+          if(!strip||!wrap)return;
+          strip.innerHTML=time.map((t,i)=>{
+            const date=new Date(t+'T00:00:00');
+            const meta=getWeatherMeta(weathercode[i]);
+            const temp=Math.round(temperature_2m_max[i]);
+            const dots=Array.from({length:5},(_,di)=>`<span class="fd-dot${di<meta.score?' on':''}"></span>`).join('');
+            return `<div class="forecast-day${i===0?' today':''}${i===bestIdx?' best':''}">
+              <span class="fd-dow">${i===0?'今日':DOW[date.getDay()]}</span>
+              <span class="fd-icon">${meta.icon}</span>
+              <span class="fd-temp">${temp}℃</span>
+              <div class="fd-score">${dots}</div>
+              ${i===bestIdx?'<span class="fd-best">★ 狙い目</span>':''}
+            </div>`;
           }).join('');
-          wrap.style.display = 'block';
-        } catch(_) {}
+          wrap.style.display='block';
+        } catch(_){}
       }
 
-      /* ── スライダー制御 ── */
+      /* ─────────────────────────────────────
+         スライダー
+         showScreen の後に initSlider() を呼ぶことで
+         clientWidth が正しく取れる
+      ───────────────────────────────────── */
       function updateDots() {
-        document.querySelectorAll('.dot').forEach((dot, i) => {
-          dot.classList.toggle('active', i === currentSlide);
+        document.querySelectorAll('.dot').forEach((dot,i)=>{
+          dot.classList.toggle('active', i===currentSlide);
         });
       }
 
       function goTo(idx) {
-        currentSlide = Math.max(0, Math.min(idx, courses.length - 1));
-        const vp = document.getElementById('card-viewport');
-        if (!vp) return;
-        programmaticScroll = true;
-        vp.scrollTo({ left: currentSlide * vp.offsetWidth, behavior: 'smooth' });
+        const vp    = document.getElementById('card-viewport');
+        const track = document.getElementById('card-track');
+        currentSlide = Math.max(0, Math.min(idx, courses.length-1));
+        track.style.transform = `translateX(${-currentSlide * vp.clientWidth}px)`;
         updateDots();
-        clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(() => { programmaticScroll = false; }, 600);
       }
 
-      /* ── スライダー描画 ── */
+      function initSlider() {
+        const vp    = document.getElementById('card-viewport');
+        const track = document.getElementById('card-track');
+        const W     = vp.clientWidth;   // showScreen の後なので正確な幅が取れる
+
+        // 各カードの幅をピクセルで確定
+        track.querySelectorAll('.course-card').forEach(c => { c.style.width = W + 'px'; });
+
+        // 初期位置（アニメーションなし）
+        track.style.transition = 'none';
+        track.style.transform  = 'translateX(0)';
+        requestAnimationFrame(() => { track.style.transition = ''; });
+
+        // タッチスワイプ
+        let tx0 = 0;
+        vp.addEventListener('touchstart', e => { tx0 = e.touches[0].clientX; }, { passive:true });
+        vp.addEventListener('touchend',   e => {
+          const dx = e.changedTouches[0].clientX - tx0;
+          if (Math.abs(dx) > 40) goTo(currentSlide + (dx < 0 ? 1 : -1));
+        });
+
+        // リサイズ追従
+        window.addEventListener('resize', () => {
+          if (!courses.length) return;
+          const W2 = vp.clientWidth;
+          track.querySelectorAll('.course-card').forEach(c => { c.style.width = W2 + 'px'; });
+          track.style.transition = 'none';
+          track.style.transform  = `translateX(${-currentSlide * W2}px)`;
+          requestAnimationFrame(() => { track.style.transition = ''; });
+        });
+      }
+
       function renderSlider(data) {
-        courses = [...data.courses].sort((a, b) => (a.distance_km??0) - (b.distance_km??0));
+        courses = [...data.courses].sort((a,b)=>(a.distance_km??0)-(b.distance_km??0));
         currentSlide = 0;
 
-        const vp     = document.getElementById('card-viewport');
+        const track  = document.getElementById('card-track');
         const dotsEl = document.getElementById('slider-dots');
 
-        vp.innerHTML = courses.map((c, i) => {
+        track.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
-          const tagsHtml = (c.tags ?? []).slice(0, 3).map(t => `<span class="course-tag">${t}</span>`).join('');
+          const tagsHtml = (c.tags??[]).slice(0,3).map(t=>`<span class="course-tag">${t}</span>`).join('');
           return `
             <article class="course-card" data-idx="${i}">
               <div class="card-header" style="background:${d.grad}">
@@ -612,7 +612,7 @@
               </div>
               <div class="card-body">
                 <h3 class="card-name">${c.name}</h3>
-                ${tagsHtml ? `<div class="course-tags">${tagsHtml}</div>` : ''}
+                ${tagsHtml?`<div class="course-tags">${tagsHtml}</div>`:''}
                 <div class="card-info-row">
                   <span>🛣 ${c.distance_km}km</span>
                   <span class="card-info-sep">·</span>
@@ -628,240 +628,176 @@
             </article>`;
         }).join('');
 
-        // スクロール位置を先頭に戻す
-        vp.scrollLeft = 0;
-
-        // カードのボタンイベント
-        vp.querySelectorAll('.course-card').forEach(card => {
-          card.querySelector('.card-btn-detail').addEventListener('click', () => openDetail(+card.dataset.idx));
-          card.querySelector('.card-btn-nav').addEventListener('click', () => {
+        // ボタンイベント
+        track.querySelectorAll('.course-card').forEach(card => {
+          card.querySelector('.card-btn-detail').addEventListener('click',()=>openDetail(+card.dataset.idx));
+          card.querySelector('.card-btn-nav').addEventListener('click',()=>{
             window.location.href = buildMapUrl(courses[+card.dataset.idx]);
           });
         });
 
-        // ドット生成
-        dotsEl.innerHTML = courses.map((_, i) =>
+        // ドット
+        dotsEl.innerHTML = courses.map((_,i)=>
           `<button class="dot${i===0?' active':''}" data-i="${i}" aria-label="コース${i+1}"></button>`
         ).join('');
-        dotsEl.querySelectorAll('.dot').forEach(dot => {
-          dot.addEventListener('click', () => goTo(+dot.dataset.i));
+        dotsEl.querySelectorAll('.dot').forEach(dot=>{
+          dot.addEventListener('click',()=>goTo(+dot.dataset.i));
         });
-
-        // ネイティブスワイプでドットを同期
-        vp.addEventListener('scroll', () => {
-          if (programmaticScroll) return;
-          clearTimeout(scrollTimer);
-          scrollTimer = setTimeout(() => {
-            const newIdx = Math.round(vp.scrollLeft / vp.offsetWidth);
-            if (newIdx !== currentSlide) {
-              currentSlide = newIdx;
-              updateDots();
-            }
-          }, 80);
-        }, { passive: true });
+        // ← initSlider() は showScreen() の後に呼ぶ
       }
 
-      /* ── スクリーン切り替え ── */
+      /* ── スクリーン ── */
       function showScreen(id) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        window.scrollTo(0, 0);
+        window.scrollTo(0,0);
       }
 
-      const SICONS = {'step-gps':'📍','step-weather':'🌤','step-ai':'🤖'};
-      const SIIDS  = {'step-gps':'icon-gps','step-weather':'icon-weather','step-ai':'icon-ai'};
-      function setStep(id, state) {
-        const el = document.getElementById(id);
-        const ic = document.getElementById(SIIDS[id]);
-        el.className = 'step'+(state==='active'?' active':state==='done'?' done':'');
-        if (state==='active') ic.innerHTML='<span class="spinner"></span>';
-        else if (state==='done') ic.textContent='✅';
+      const SICONS={'step-gps':'📍','step-weather':'🌤','step-ai':'🤖'};
+      const SIIDS ={'step-gps':'icon-gps','step-weather':'icon-weather','step-ai':'icon-ai'};
+      function setStep(id,state){
+        const el=document.getElementById(id);
+        const ic=document.getElementById(SIIDS[id]);
+        el.className='step'+(state==='active'?' active':state==='done'?' done':'');
+        if(state==='active') ic.innerHTML='<span class="spinner"></span>';
+        else if(state==='done') ic.textContent='✅';
         else ic.textContent=SICONS[id];
       }
 
-      async function loadPhoto(spot, imgEl) {
-        if (!imgEl || !spot) return;
-        try {
-          const res  = await fetch('https://ja.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(spot));
-          const data = await res.json();
-          const src  = data.thumbnail?.source;
-          if (!src) return;
-          imgEl.onload  = () => imgEl.classList.add('loaded');
-          imgEl.onerror = () => { imgEl.src=''; imgEl.classList.remove('loaded'); };
-          imgEl.src = src.replace(/\/\d+px-/, '/1280px-');
-        } catch(_) { imgEl.src = ''; }
+      async function loadPhoto(spot,imgEl){
+        if(!imgEl||!spot)return;
+        try{
+          const res=await fetch('https://ja.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(spot));
+          const data=await res.json();
+          const src=data.thumbnail?.source;
+          if(!src)return;
+          imgEl.onload=()=>imgEl.classList.add('loaded');
+          imgEl.onerror=()=>{imgEl.src='';imgEl.classList.remove('loaded');};
+          imgEl.src=src.replace(/\/\d+px-/,'/1280px-');
+        }catch(_){imgEl.src='';}
       }
 
-      function buildMapUrl(c) {
-        const dest  = encodeURIComponent(c.destination);
-        const spots = (c.rest_spots ?? []).map(s => encodeURIComponent(s.name));
-        const hasGps = userLat && userLon;
-        const coord  = hasGps ? `${userLat.toFixed(6)},${userLon.toFixed(6)}` : '';
-        const ua = navigator.userAgent;
-        const isIOS     = /iP(hone|ad|od)/.test(ua);
-        const isAndroid = /Android/.test(ua);
-        if (isAndroid && hasGps) return `google.navigation:q=${dest}&mode=d`;
-        if (isIOS && hasGps) {
-          const wp = spots.length ? `&waypoints=${spots.join('+')}` : '';
-          return `comgooglemaps://?saddr=${coord}&daddr=${dest}${wp}&directionsmode=driving`;
-        }
-        const originParam   = hasGps ? `&origin=${coord}` : '';
-        const waypointParam = spots.length ? `&waypoints=${spots.join('%7C')}` : '';
-        return `https://www.google.com/maps/dir/?api=1${originParam}&destination=${dest}${waypointParam}&travelmode=driving`;
+      function buildMapUrl(c){
+        const dest=encodeURIComponent(c.destination);
+        const spots=(c.rest_spots??[]).map(s=>encodeURIComponent(s.name));
+        const hasGps=userLat&&userLon;
+        const coord=hasGps?`${userLat.toFixed(6)},${userLon.toFixed(6)}`:'';
+        const ua=navigator.userAgent;
+        const isIOS=/iP(hone|ad|od)/.test(ua);
+        const isAndroid=/Android/.test(ua);
+        if(isAndroid&&hasGps) return `google.navigation:q=${dest}&mode=d`;
+        if(isIOS&&hasGps){const wp=spots.length?`&waypoints=${spots.join('+')}`:'';return `comgooglemaps://?saddr=${coord}&daddr=${dest}${wp}&directionsmode=driving`;}
+        const op=hasGps?`&origin=${coord}`:'';
+        const wp=spots.length?`&waypoints=${spots.join('%7C')}` :'';
+        return `https://www.google.com/maps/dir/?api=1${op}&destination=${dest}${wp}&travelmode=driving`;
       }
 
-      function openDetail(idx) {
-        const c = courses[idx];
-        const distIdx = c._distIdx ?? idx;
-        const d = DIST[distIdx];
-
-        const ph = document.getElementById('detail-img-ph');
-        ph.style.background = d.grad;
-        ph.innerHTML = `<span style="font-size:2.2rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))">🏍️</span>`;
-        const dimg = document.getElementById('detail-img');
-        dimg.classList.remove('loaded'); dimg.src = '';
-        loadPhoto(c.photo_spot, dimg);
-
-        document.getElementById('detail-tags').innerHTML =
-          `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>` +
+      function openDetail(idx){
+        const c=courses[idx];
+        const d=DIST[c._distIdx??idx];
+        const ph=document.getElementById('detail-img-ph');
+        ph.style.background=d.grad;
+        ph.innerHTML=`<span style="font-size:2.2rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))">🏍️</span>`;
+        const dimg=document.getElementById('detail-img');
+        dimg.classList.remove('loaded');dimg.src='';
+        loadPhoto(c.photo_spot,dimg);
+        document.getElementById('detail-tags').innerHTML=
+          `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>`+
           `<span class="diff-badge ${DIFF[c.difficulty]??'diff-mid'}">${c.difficulty}</span>`;
-        document.getElementById('detail-name').textContent = c.name;
-        const returnH    = c.return_hours ?? c.duration_hours;
-        const roundTripH = (c.duration_hours + returnH).toFixed(1);
-        document.getElementById('detail-meta').innerHTML =
-          `<span class="meta-pill-lg">🛣 ${c.distance_km}km</span>` +
-          `<span class="meta-pill-lg">⏱ 片道 ${c.duration_hours}時間</span>` +
-          `<span class="meta-pill-lg">🔄 往復 ${roundTripH}時間</span>` +
+        document.getElementById('detail-name').textContent=c.name;
+        const rh=c.return_hours??c.duration_hours;
+        document.getElementById('detail-meta').innerHTML=
+          `<span class="meta-pill-lg">🛣 ${c.distance_km}km</span>`+
+          `<span class="meta-pill-lg">⏱ 片道 ${c.duration_hours}時間</span>`+
+          `<span class="meta-pill-lg">🔄 往復 ${(c.duration_hours+rh).toFixed(1)}時間</span>`+
           `<span class="meta-pill-lg">🏁 ${c.destination}</span>`;
-        document.getElementById('detail-highlights').innerHTML =
-          (c.highlights??[]).map(h=>`<li>${h}</li>`).join('');
-        document.getElementById('detail-roads').innerHTML =
-          (c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${r}</span>`).join('');
-        document.getElementById('detail-spots').innerHTML =
-          (c.rest_spots??[]).map(s=>
-            `<div class="spot-item">
-              <span class="spot-icon">${SPOT[s.type]??'📌'}</span>
-              <span class="spot-name">${s.name}</span>
-              <span class="spot-type">${s.type}</span>
-            </div>`
-          ).join('');
-        document.getElementById('detail-info').innerHTML = [
-          c.return_note ? `<div class="info-chip info-return"><span>🔄</span><span>帰路: ${c.return_note}</span></div>` : '',
-          c.caution     ? `<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>` : '',
-          c.best_season ? `<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>` : '',
+        document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${h}</li>`).join('');
+        document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${r}</span>`).join('');
+        document.getElementById('detail-spots').innerHTML=(c.rest_spots??[]).map(s=>
+          `<div class="spot-item"><span class="spot-icon">${SPOT[s.type]??'📌'}</span><span class="spot-name">${s.name}</span><span class="spot-type">${s.type}</span></div>`
+        ).join('');
+        document.getElementById('detail-info').innerHTML=[
+          c.return_note?`<div class="info-chip info-return"><span>🔄</span><span>帰路: ${c.return_note}</span></div>`:'',
+          c.caution    ?`<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>`:'',
+          c.best_season?`<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>`:'',
         ].filter(Boolean).join('');
-        document.getElementById('detail-map-btn').href = buildMapUrl(c);
-
-        const shareText =
-          `【${c.name}】を走ってきました！\n` +
-          `距離: ${c.distance_km}km / 約${c.duration_hours}時間\n` +
-          `目的地: ${c.destination}\n` +
-          `#ツーリング #バイク`;
-        document.getElementById('share-x-btn').href =
-          'https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText);
-
-        const shareData = {
-          name: c.name, distance_km: c.distance_km, duration_hours: c.duration_hours,
-          destination: c.destination, highlights: c.highlights, road_types: c.road_types,
-          rest_spots: c.rest_spots, caution: c.caution, best_season: c.best_season,
-          photo_spot: c.photo_spot, return_note: c.return_note, return_hours: c.return_hours,
-          tags: c.tags, difficulty: c.difficulty, _distIdx: idx,
-        };
-        try {
-          const b64 = btoa(encodeURIComponent(JSON.stringify(shareData)));
-          history.pushState({course: b64}, '', '?course=' + b64);
-        } catch(_) {}
-
+        document.getElementById('detail-map-btn').href=buildMapUrl(c);
+        const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 約${c.duration_hours}時間\n目的地: ${c.destination}\n#ツーリング #バイク`;
+        document.getElementById('share-x-btn').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
+        const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,rest_spots:c.rest_spots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,_distIdx:idx};
+        try{const b64=btoa(encodeURIComponent(JSON.stringify(sd)));history.pushState({course:b64},'','?course='+b64);}catch(_){}
         showScreen('screen-detail');
       }
 
-      async function copyUrl() {
-        const url = location.href;
-        try { await navigator.clipboard.writeText(url); }
-        catch(_) {
-          const ta = Object.assign(document.createElement('textarea'),
-            {value: url, style: 'position:fixed;opacity:0'});
-          document.body.appendChild(ta); ta.focus(); ta.select();
-          document.execCommand('copy'); document.body.removeChild(ta);
-        }
-        const btn = document.getElementById('share-url-btn');
-        btn.textContent = '✅ コピーしました';
-        setTimeout(() => { btn.textContent = '🔗 URLをコピー'; }, 1500);
+      async function copyUrl(){
+        try{await navigator.clipboard.writeText(location.href);}
+        catch(_){const ta=Object.assign(document.createElement('textarea'),{value:location.href,style:'position:fixed;opacity:0'});document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);}
+        const btn=document.getElementById('share-url-btn');
+        btn.textContent='✅ コピーしました';
+        setTimeout(()=>{btn.textContent='🔗 URLをコピー';},1500);
       }
 
-      function showError(msg) { document.getElementById('error-msg').textContent=msg; showScreen('screen-error'); }
+      function showError(msg){document.getElementById('error-msg').textContent=msg;showScreen('screen-error');}
 
-      async function findCourses() {
-        const wsub  = document.getElementById('weather-subtitle');
-        const fwrap = document.getElementById('forecast-wrap');
-        if (wsub)  wsub.style.display  = 'none';
-        if (fwrap) fwrap.style.display = 'none';
+      async function findCourses(){
+        const wsub=document.getElementById('weather-subtitle');
+        const fwrap=document.getElementById('forecast-wrap');
+        if(wsub) wsub.style.display='none';
+        if(fwrap) fwrap.style.display='none';
 
         showScreen('screen-loading');
         ['step-gps','step-weather','step-ai'].forEach(id=>setStep(id,'idle'));
 
         setStep('step-gps','active');
-        let lat, lon;
-        try {
-          const pos = await new Promise((res,rej)=>
-            navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:false,timeout:30000})
-          );
-          lat=pos.coords.latitude; lon=pos.coords.longitude;
-          userLat=lat; userLon=lon;
+        let lat,lon;
+        try{
+          const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:false,timeout:30000}));
+          lat=pos.coords.latitude;lon=pos.coords.longitude;userLat=lat;userLon=lon;
           setStep('step-gps','done');
-        } catch(e) {
+        }catch(e){
           showError(e.code===1?'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。':
                     e.code===3?'GPS取得がタイムアウトしました。\nもう一度試してください。':
-                    '現在地の取得に失敗しました。');
-          return;
+                    '現在地の取得に失敗しました。');return;
         }
 
         setStep('step-weather','active');
-        let temperature=20, weatherCondition='晴れ';
-        try {
+        let temperature=20,weatherCondition='晴れ';
+        try{
           const res=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`);
           const d=await res.json();
           temperature=Math.round(d.current.temperature_2m);
           const wCode=d.current.weathercode??0;
           weatherCondition=WEATHER[wCode]??'晴れ';
-          const meta=getWeatherMeta(wCode);
-          weatherMeta={...meta, temp:temperature};
-        } catch(_) {}
+          weatherMeta={...getWeatherMeta(wCode),temp:temperature};
+        }catch(_){}
         setStep('step-weather','done');
 
         setStep('step-ai','active');
-        try {
-          const res=await fetch(`${API_BASE}/api/suggest`,{
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition}),
-          });
+        try{
+          const res=await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition})});
           if(!res.ok) throw new Error();
           const data=await res.json();
           setStep('step-ai','done');
-          renderSlider(data);
-          showScreen('screen-results');
+
+          renderSlider(data);          // HTML・ドット・イベント生成
+          showScreen('screen-results'); // display:flex に変わる → clientWidth が確定
+          initSlider();                 // ピクセル幅設定・タッチ初期化
+
           renderWeatherInfo();
-          renderForecast(lat, lon);
-        } catch(_) { showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。'); }
+          renderForecast(lat,lon);
+        }catch(_){showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');}
       }
 
-      document.getElementById('btn-start').addEventListener('click', findCourses);
-      document.getElementById('btn-retry').addEventListener('click', findCourses);
-      document.getElementById('btn-back').addEventListener('click', () => {
-        history.pushState({}, '', location.pathname);
-        showScreen('screen-results');
-      });
-      document.getElementById('btn-error-retry').addEventListener('click', () => showScreen('screen-idle'));
-      document.getElementById('share-url-btn').addEventListener('click', copyUrl);
+      document.getElementById('btn-start').addEventListener('click',findCourses);
+      document.getElementById('btn-retry').addEventListener('click',findCourses);
+      document.getElementById('btn-back').addEventListener('click',()=>{history.pushState({},'',location.pathname);showScreen('screen-results');});
+      document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
+      document.getElementById('share-url-btn').addEventListener('click',copyUrl);
 
-      (function() {
-        const param = new URLSearchParams(location.search).get('course');
-        if (!param) return;
-        try {
-          const c = JSON.parse(decodeURIComponent(atob(param)));
-          courses = [c];
-          openDetail(0);
-        } catch(_) {}
+      (function(){
+        const param=new URLSearchParams(location.search).get('course');
+        if(!param)return;
+        try{const c=JSON.parse(decodeURIComponent(atob(param)));courses=[c];openDetail(0);}catch(_){}
       })();
 
       if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
