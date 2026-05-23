@@ -4,7 +4,7 @@
 
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20EventBridge-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
-[![Cost](https://img.shields.io/badge/月額-~%241.2-green)](https://aws.amazon.com/pricing)
+[![Cost](https://img.shields.io/badge/月額-~%241.3-green)](https://aws.amazon.com/pricing)
 
 ## 概要
 
@@ -16,7 +16,7 @@
 | 重複排除   | URL完全一致 → キーワード → AWSサービス名の3段階           |
 | AI変換     | Amazon Bedrock Claude Haiku（口調変換・ハッシュタグ生成） |
 | IaC        | CloudFormation（全リソース管理）                          |
-| 月額コスト | ~$1.2（約180円）                                          |
+| 月額コスト | ~$1.3（約195円）                                          |
 
 ## アーキテクチャ
 
@@ -106,9 +106,10 @@ aws events disable-rule --name aws-x-poster-evening --region ap-northeast-1
 | サービス                               | 月額                 |
 | -------------------------------------- | -------------------- |
 | Lambda 実行（60回/月 × ~3秒）          | ~$0.001              |
-| Bedrock Claude Haiku（~500 tokens/回） | ~$1.2                |
+| Bedrock Claude Haiku（~500 tokens/回） | ~$0.08               |
+| X API（$0.02/件 × 60件/月）           | ~$1.20               |
 | EventBridge・SSM                       | ~$0                  |
-| **合計**                               | **~$1.2（約180円）** |
+| **合計**                               | **~$1.3（約195円）** |
 
 ## トラブルシューティング
 
