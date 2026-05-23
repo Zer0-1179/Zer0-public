@@ -131,27 +131,31 @@
       }
       .course-card:active { transform: scale(.98); }
 
-      /* 画像エリア（<img> タグ使用、ポートフォリオ準拠） */
+      /* 画像エリア */
       .card-img-wrap {
-        width: 100%; aspect-ratio: 16/9;   /* 比率固定でサイズ統一 */
+        width: 100%; aspect-ratio: 5/2;
         overflow: hidden;
         background: var(--card2);
         position: relative; flex-shrink: 0;
       }
-      .card-img-placeholder {             /* グラデーション背景 */
+      .card-img-placeholder {
         position: absolute; inset: 0;
-        background-size: cover; background-position: center;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: .3rem;
       }
-      .card-img {                         /* Wikipedia写真 */
+      .ph-icon { font-size: 2rem; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
+      .ph-road {
+        font-size: .65rem; font-weight: 700; letter-spacing: .07em;
+        color: rgba(255,255,255,.7); text-transform: uppercase;
+      }
+      .card-img {
         position: absolute; inset: 0;
         width: 100%; height: 100%;
         object-fit: cover; object-position: center;
-        opacity: 0;
-        transition: opacity .4s ease;
+        opacity: 0; transition: opacity .4s ease;
       }
       .card-img.loaded { opacity: 1; }
-      /* ホバー時にわずかにズーム（ポートフォリオ準拠） */
-      .course-card:hover .card-img { transform: scale(1.05); transition: opacity .4s, transform .3s; }
+      .course-card:hover .card-img { transform: scale(1.04); transition: opacity .4s, transform .35s; }
 
       /* カードコンテンツ */
       .card-body { padding: 1.1rem; display: flex; flex-direction: column; gap: .6rem; flex: 1; }
@@ -219,14 +223,18 @@
       #screen-detail > .detail-img-wrap,
       #screen-detail > .detail-content { width: 100%; max-width: 680px; }
 
-      /* 詳細写真（<img> タグ使用） */
+      /* 詳細写真 */
       .detail-img-wrap {
-        width: 100%; aspect-ratio: 16/9;   /* カードと比率統一 */
-        max-height: 340px;                 /* 大画面で高くなりすぎない */
+        width: 100%; aspect-ratio: 5/2;
+        max-height: 260px;
         overflow: hidden; flex-shrink: 0;
         background: var(--card2); position: relative;
       }
-      .detail-img-ph { position: absolute; inset: 0; background-size: cover; background-position: center; }
+      .detail-img-ph {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: .5rem;
+      }
       .detail-img {
         position: absolute; inset: 0; width: 100%; height: 100%;
         object-fit: cover; opacity: 0; transition: opacity .4s;
@@ -290,6 +298,17 @@
         transition: background .15s;
       }
       .btn-map:hover { background: rgba(249,115,22,.1); }
+
+      /* ── モバイル最適化 ── */
+      @media (max-width: 679px) {
+        .topbar { padding: .75rem 1rem; }
+        .courses-grid { padding: 1rem; gap: .875rem; }
+        .card-body { padding: .875rem; gap: .4rem; }
+        .card-footer { padding: .5rem .875rem; }
+        .card-name { font-size: .95rem; }
+        .detail-content { padding: 1.25rem 1rem 2rem; gap: 1.25rem; }
+        .detail-name { font-size: 1.25rem; }
+      }
 
       /* ── Error ── */
       #screen-error {
@@ -414,32 +433,19 @@
         else ic.textContent=SICONS[id];
       }
 
-      // picsum fallback: destination を seed にして毎回同じ・カードごとに異なる写真
-      function loadPicsumPhoto(destination, imgEl) {
-        const seed = encodeURIComponent(destination || String(Math.random()));
-        imgEl.onload  = () => imgEl.classList.add('loaded');
-        imgEl.onerror = () => {};
-        imgEl.src = `https://picsum.photos/seed/${seed}/800/400`;
-      }
-
-      // Wikipedia → picsum の2段階フォールバック
-      async function loadPhoto(spot, destination, imgEl) {
-        if (!imgEl) return;
-        if (spot) {
-          try {
-            const res  = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`);
-            const data = await res.json();
-            const url  = data.thumbnail?.source;
-            if (url) {
-              const hiRes = url.replace(/\/\d+px-/, '/800px-');
-              imgEl.onload  = () => imgEl.classList.add('loaded');
-              imgEl.onerror = () => loadPicsumPhoto(destination, imgEl);
-              imgEl.src = hiRes;
-              return;
-            }
-          } catch (_) {}
-        }
-        loadPicsumPhoto(destination, imgEl);
+      // Wikipedia写真をフェードイン（なければグラデ+バイクアイコンのまま）
+      async function loadPhoto(spot, imgEl) {
+        if (!imgEl || !spot) return;
+        try {
+          const res  = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(spot)}`);
+          const data = await res.json();
+          const url  = data.thumbnail?.source;
+          if (!url) return;
+          const hiRes = url.replace(/\/\d+px-/, '/800px-');
+          imgEl.onload  = () => imgEl.classList.add('loaded');
+          imgEl.onerror = () => {};
+          imgEl.src = hiRes;
+        } catch (_) {}
       }
 
       // Googleマップ URL 生成（経由地があればルート形式）
@@ -459,10 +465,14 @@
         el.innerHTML = courses.map((c, i) => {
           const d = DIST[i];
           const roads = (c.road_types??[]).map(r=>`<span class="road-tag">${ROAD[r]??'🚗'} ${r}</span>`).join('');
+          const roadLabel = (c.road_types??[])[0] ?? 'Touring';
           return `
             <article class="course-card" data-idx="${i}">
               <div class="card-img-wrap">
-                <div class="card-img-placeholder" style="background:${d.grad}"></div>
+                <div class="card-img-placeholder" style="background:${d.grad}">
+                  <span class="ph-icon">🏍️</span>
+                  <span class="ph-road">${roadLabel}</span>
+                </div>
                 <img class="card-img" id="cimg-${i}" alt="${c.destination}の風景" />
               </div>
               <div class="card-body">
@@ -484,7 +494,7 @@
             </article>`;
         }).join('');
 
-        courses.forEach((c, i) => loadPhoto(c.photo_spot, c.destination, document.getElementById(`cimg-${i}`)));
+        courses.forEach((c, i) => loadPhoto(c.photo_spot, document.getElementById(`cimg-${i}`)));
         el.querySelectorAll('.course-card').forEach(card =>
           card.addEventListener('click', () => openDetail(+card.dataset.idx))
         );
@@ -494,12 +504,14 @@
       function openDetail(idx) {
         const c = courses[idx], d = DIST[idx];
 
-        // 写真（グラデ背景 + img）
-        document.getElementById('detail-img-ph').style.background = d.grad;
+        // 写真（グラデ背景 + バイクアイコン + img）
+        const ph = document.getElementById('detail-img-ph');
+        ph.style.background = d.grad;
+        ph.innerHTML = `<span class="ph-icon" style="font-size:2.8rem">🏍️</span><span class="ph-road">${c.name}</span>`;
         const dimg = document.getElementById('detail-img');
         dimg.classList.remove('loaded');
         dimg.src = '';
-        loadPhoto(c.photo_spot, c.destination, dimg);
+        loadPhoto(c.photo_spot, dimg);
 
         // ヘッダー
         document.getElementById('detail-tags').innerHTML =
