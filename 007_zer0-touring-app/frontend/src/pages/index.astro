@@ -698,6 +698,16 @@
         .detail-name { font-size: 1.25rem; }
       }
 
+      /* ── Toast ── */
+      #toast {
+        position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+        background: var(--accent); color: #fff; font-size: .85rem; font-weight: 600;
+        padding: .6rem 1.4rem; border-radius: 999px;
+        opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 999;
+        white-space: nowrap;
+      }
+      #toast.show { opacity: 1; }
+
       /* ── Error ── */
       #screen-error {
         align-items: center; justify-content: center;
@@ -709,6 +719,8 @@
     </style>
   </head>
   <body>
+
+    <div id="toast"></div>
 
     <!-- ── Landing ── -->
     <div id="screen-idle" class="screen active">
@@ -832,7 +844,7 @@
     </div>
 
     <!-- ── Error ── -->
-    <div id="screen-error" class="screen" style="display:none">
+    <div id="screen-error" class="screen">
       <span class="error-icon">⚠️</span>
       <h2 class="error-title">エラーが発生しました</h2>
       <p class="error-msg" id="error-msg"></p>
@@ -1273,6 +1285,34 @@
       });
       document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
       document.getElementById('share-url-btn').addEventListener('click',copyUrl);
+
+      // トースト表示
+      function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 3000);
+      }
+
+      // ?admin=トークン で管理者モードを localStorage に保存
+      (function(){
+        const params = new URLSearchParams(location.search);
+        const token  = params.get('admin');
+        if (token) {
+          localStorage.setItem('adminToken', token);
+          params.delete('admin');
+          const newUrl = location.pathname + (params.toString() ? '?' + params.toString() : '');
+          history.replaceState({}, '', newUrl);
+          showToast('🔑 管理者モード有効');
+          fetchUsage();
+        }
+        // ?admin=off で解除
+        if (params.get('admin') === 'off') {
+          localStorage.removeItem('adminToken');
+          showToast('管理者モード解除');
+          fetchUsage();
+        }
+      })();
 
       (function(){
         const param=new URLSearchParams(location.search).get('course');
