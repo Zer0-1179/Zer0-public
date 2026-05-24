@@ -111,7 +111,12 @@
       }
       .topbar-left  { display: flex; flex-direction: column; gap: .15rem; flex: 1; }
       .topbar-title { font-size: 1.1rem; font-weight: 700; }
-      .weather-subtitle { font-size: .73rem; font-weight: 600; color: var(--accent); display: none; }
+      .weather-subtitle {
+        display: none;
+        font-size: .8rem; font-weight: 600; color: #93c5fd;
+        background: rgba(147,197,253,.1); border: 1px solid rgba(147,197,253,.22);
+        border-radius: 9999px; padding: .16rem .65rem; align-self: flex-start;
+      }
       .topbar-btns  { display: flex; gap: .5rem; }
 
       /* ════════════════════════════════════════
@@ -228,11 +233,37 @@
       .dist-mid  { background: rgba(56,189,248,.2);  color: #7dd3fc; border: 1px solid rgba(56,189,248,.4); }
       .dist-far  { background: rgba(168,85,247,.2);  color: #c4b5fd; border: 1px solid rgba(168,85,247,.4); }
 
-      .card-dest-weather {
-        display: flex; align-items: center; gap: .4rem;
-        font-size: .8rem; color: #93c5fd;
-        border-left: 2px solid rgba(147,197,253,.35);
-        padding-left: .55rem;
+      .dest-weather-badge {
+        font-size: .72rem; font-weight: 700; color: #e0f2fe;
+        background: rgba(0,0,0,.48); border-radius: .35rem;
+        padding: .22rem .6rem; backdrop-filter: blur(4px);
+        border: 1px solid rgba(255,255,255,.15);
+      }
+
+      /* ════════════════════════════════════════
+         天気比較ウィジェット（詳細画面・画像直下）
+      ════════════════════════════════════════ */
+      .weather-compare {
+        width: 100%; max-width: 680px;
+        display: none; flex-shrink: 0;
+        background: var(--card2); border-bottom: 1px solid var(--border);
+      }
+      .weather-compare.visible { display: flex; }
+      .wc-side {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; padding: 1rem .75rem; gap: .28rem;
+      }
+      .wc-side.current { border-right: 1px solid var(--border); }
+      .wc-label {
+        font-size: .62rem; font-weight: 700; color: var(--muted);
+        text-transform: uppercase; letter-spacing: .06em;
+      }
+      .wc-icon { font-size: 1.8rem; line-height: 1; }
+      .wc-temp { font-size: 1.3rem; font-weight: 700; }
+      .wc-cond { font-size: .72rem; color: var(--muted); text-align: center; }
+      .wc-arrow {
+        display: flex; align-items: center; justify-content: center;
+        padding: 0 .6rem; font-size: 1.1rem; color: var(--muted); flex-shrink: 0;
       }
 
       @media (max-width: 679px) {
@@ -283,6 +314,7 @@
       #screen-detail { overflow-y: auto; align-items: center; }
       #screen-detail > .topbar,
       #screen-detail > .detail-img-wrap,
+      #screen-detail > .weather-compare,
       #screen-detail > .detail-content { width: 100%; max-width: 680px; }
 
       .detail-img-wrap {
@@ -437,6 +469,11 @@
         <div class="detail-img-ph" id="detail-img-ph"></div>
         <img class="detail-img" id="detail-img" alt="コース写真" loading="eager" />
       </div>
+      <div id="detail-weather-compare" class="weather-compare">
+        <div class="wc-side current" id="wc-current"></div>
+        <div class="wc-arrow">🏍️</div>
+        <div class="wc-side dest" id="wc-dest"></div>
+      </div>
       <div class="detail-content">
         <div class="detail-header">
           <div class="detail-tag-row" id="detail-tags"></div>
@@ -456,9 +493,8 @@
           <div class="rest-spots" id="detail-spots"></div>
         </div>
         <div class="section" id="detail-dest-weather-section" style="display:none">
-          <p class="section-title">目的地の天気</p>
-          <div id="detail-dest-weather-current"></div>
-          <div class="forecast-strip" id="detail-dest-forecast-strip" style="margin-top:.65rem"></div>
+          <p class="section-title">目的地の今週の天気</p>
+          <div class="forecast-strip" id="detail-dest-forecast-strip"></div>
         </div>
         <div class="section">
           <p class="section-title">走行情報</p>
@@ -515,8 +551,8 @@
       function renderWeatherInfo() {
         const el = document.getElementById('weather-subtitle');
         if (!el) return;
-        el.textContent = `${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
-        el.style.display = 'block';
+        el.textContent = `📍現在地  ${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
+        el.style.display = 'inline-flex';
       }
       async function renderForecastInto(lat, lon, stripEl) {
         try {
@@ -588,8 +624,8 @@
         vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
           const tagsHtml = (c.tags??[]).slice(0,3).map(t=>`<span class="course-tag">${t}</span>`).join('');
-          const destW = c.dest_weather_code !== undefined
-            ? (() => { const m = getWeatherMeta(c.dest_weather_code); return `<div class="card-dest-weather">📍目的地天気&nbsp; ${m.icon} ${c.dest_temp}℃ · ${m.label}</div>`; })()
+          const destWeatherBadge = c.dest_weather_code !== undefined
+            ? (() => { const m = getWeatherMeta(c.dest_weather_code); return `<span class="dest-weather-badge">📌 ${m.icon} ${c.dest_temp}℃</span>`; })()
             : '';
           return `
             <article class="course-card" data-idx="${i}">
@@ -597,6 +633,7 @@
                 <span class="card-header-icon">🏍️</span>
                 <div class="card-header-badges">
                   <span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>
+                  ${destWeatherBadge}
                 </div>
               </div>
               <div class="card-body">
@@ -605,11 +642,10 @@
                 <div class="card-info-row">
                   <span>🛣 ${c.distance_km}km</span>
                   <span class="card-info-sep">·</span>
-                  <span>⏱ 片道${c.duration_hours}h</span>
+                  <span>⏱ 片道${c.duration_hours}h走行</span>
                   <span class="card-info-sep">·</span>
                   <span>🏁 ${c.destination}</span>
                 </div>
-                ${destW}
               </div>
               <div class="card-actions">
                 <button class="card-btn-nav">🗺 ナビ開始</button>
@@ -699,8 +735,8 @@
         const rh=c.return_hours??c.duration_hours;
         document.getElementById('detail-meta').innerHTML=
           `<span class="meta-pill-lg">🛣 ${c.distance_km}km</span>`+
-          `<span class="meta-pill-lg">⏱ 片道 ${c.duration_hours}時間</span>`+
-          `<span class="meta-pill-lg">🔄 往復 ${(c.duration_hours+rh).toFixed(1)}時間</span>`+
+          `<span class="meta-pill-lg">⏱ 片道 ${c.duration_hours}h（走行のみ）</span>`+
+          `<span class="meta-pill-lg">🔄 往復 ${(c.duration_hours+rh).toFixed(1)}h（走行のみ）</span>`+
           `<span class="meta-pill-lg">🏁 ${c.destination}</span>`;
         document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${h}</li>`).join('');
         document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${r}</span>`).join('');
@@ -713,18 +749,40 @@
           c.best_season?`<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>`:'',
         ].filter(Boolean).join('');
 
-        // 目的地の天気
-        const destSection=document.getElementById('detail-dest-weather-section');
-        const destCurrentEl=document.getElementById('detail-dest-weather-current');
-        const destForecastStrip=document.getElementById('detail-dest-forecast-strip');
-        if(c.dest_weather_code!==undefined){
-          const m=getWeatherMeta(c.dest_weather_code);
-          destCurrentEl.innerHTML=`<div class="info-chip" style="background:rgba(147,197,253,.1);color:#93c5fd;border:1px solid rgba(147,197,253,.3)"><span>${m.icon}</span><span>${c.dest_temp}℃ · ${m.label}</span></div>`;
-          destSection.style.display='';
-          if(c.dest_lat!==undefined){
-            destForecastStrip.innerHTML='';
-            renderForecastInto(c.dest_lat,c.dest_lon,destForecastStrip);
+        // 現在地 vs 目的地 天気比較ウィジェット
+        const compareEl=document.getElementById('detail-weather-compare');
+        const wcCurrent=document.getElementById('wc-current');
+        const wcDest=document.getElementById('wc-dest');
+        const hasCurrentWeather = weatherMeta.temp !== '--';
+        const hasDestWeather = c.dest_weather_code !== undefined;
+        if(compareEl && (hasCurrentWeather || hasDestWeather)){
+          if(wcCurrent){
+            if(hasCurrentWeather){
+              wcCurrent.innerHTML=`<span class="wc-label">📍現在地</span><span class="wc-icon">${weatherMeta.icon}</span><span class="wc-temp">${weatherMeta.temp}℃</span><span class="wc-cond">${weatherMeta.label}</span>`;
+            }else{
+              wcCurrent.innerHTML=`<span class="wc-label">📍現在地</span><span class="wc-icon">--</span>`;
+            }
           }
+          if(wcDest){
+            if(hasDestWeather){
+              const dm=getWeatherMeta(c.dest_weather_code);
+              wcDest.innerHTML=`<span class="wc-label">📌目的地</span><span class="wc-icon">${dm.icon}</span><span class="wc-temp">${c.dest_temp}℃</span><span class="wc-cond">${dm.label}</span>`;
+            }else{
+              wcDest.innerHTML=`<span class="wc-label">📌目的地</span><span class="wc-icon" style="font-size:1rem;color:var(--muted)">取得中...</span>`;
+            }
+          }
+          compareEl.classList.add('visible');
+        }else if(compareEl){
+          compareEl.classList.remove('visible');
+        }
+
+        // 目的地の7日間予報
+        const destSection=document.getElementById('detail-dest-weather-section');
+        const destForecastStrip=document.getElementById('detail-dest-forecast-strip');
+        if(c.dest_lat!==undefined){
+          destSection.style.display='';
+          destForecastStrip.innerHTML='';
+          renderForecastInto(c.dest_lat,c.dest_lon,destForecastStrip);
         }else{
           destSection.style.display='none';
         }
