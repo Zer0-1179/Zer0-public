@@ -825,9 +825,13 @@
           <p class="section-title">道路タイプ</p>
           <div class="road-tags-lg" id="detail-roads"></div>
         </div>
-        <div class="section">
-          <p class="section-title">立ち寄りスポット</p>
-          <div class="rest-spots" id="detail-spots"></div>
+        <div class="section" id="detail-outbound-section">
+          <p class="section-title">🛣 行きの経由地</p>
+          <div class="rest-spots" id="detail-outbound-spots"></div>
+        </div>
+        <div class="section" id="detail-return-section">
+          <p class="section-title">🔄 帰りの立ち寄り</p>
+          <div class="rest-spots" id="detail-return-spots"></div>
         </div>
         <div class="section" id="detail-dest-weather-section" style="display:none">
           <p class="section-title">目的地の今週の天気</p>
@@ -987,7 +991,7 @@
 
         vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
-          const firstSpot = (c.rest_spots ?? [])[0];
+          const firstSpot = (c.outbound_spots ?? c.rest_spots ?? [])[0];
           const routeLine = firstSpot
             ? `📍 現在地 → ${escHtml(firstSpot.name)} → ${escHtml(c.destination)}`
             : `📍 現在地 → ${escHtml(c.destination)}`;
@@ -1083,7 +1087,7 @@
 
       function buildMapUrl(c){
         const dest  = encodeURIComponent(c.destination);
-        const spots = (c.rest_spots??[]).map(s=>encodeURIComponent(s.name));
+        const spots = (c.outbound_spots ?? c.rest_spots ?? []).map(s=>encodeURIComponent(s.name));
         const hasGps = userLat&&userLon;
         const coord  = hasGps?`${userLat.toFixed(6)},${userLon.toFixed(6)}`:'';
         const op = hasGps?`&origin=${coord}`:'';
@@ -1125,9 +1129,15 @@
           `<span class="meta-pill-lg">🏁 ${escHtml(c.destination)}</span>`;
         document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${escHtml(h)}</li>`).join('');
         document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${escHtml(r)}</span>`).join('');
-        document.getElementById('detail-spots').innerHTML=(c.rest_spots??[]).map(s=>
+        const spotHtml = spots => (spots??[]).map(s=>
           `<div class="spot-item"><span class="spot-icon">${SPOT[s.type]??'📌'}</span><span class="spot-name">${escHtml(s.name)}</span><span class="spot-type">${escHtml(s.type)}</span></div>`
         ).join('');
+        const outboundSpots = c.outbound_spots ?? c.rest_spots ?? [];
+        const returnSpots   = c.return_spots ?? [];
+        document.getElementById('detail-outbound-spots').innerHTML = spotHtml(outboundSpots);
+        document.getElementById('detail-return-spots').innerHTML   = spotHtml(returnSpots);
+        document.getElementById('detail-outbound-section').style.display = outboundSpots.length ? '' : 'none';
+        document.getElementById('detail-return-section').style.display   = returnSpots.length   ? '' : 'none';
         document.getElementById('detail-info').innerHTML=[
           c.return_note?`<div class="info-chip info-return"><span>🔄</span><span>帰路: ${escHtml(c.return_note)}</span></div>`:'',
           c.caution    ?`<div class="info-chip info-caution"><span>⚠️</span><span>${escHtml(c.caution)}</span></div>`:'',
@@ -1178,7 +1188,7 @@
         document.getElementById('detail-map-btn').href=buildMapUrl(c);
         const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 片道${fmtHours(c.duration_hours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
         document.getElementById('share-x-btn').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
-        const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,rest_spots:c.rest_spots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
+        const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,outbound_spots:outboundSpots,return_spots:returnSpots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
         try{
           const b64=btoa(encodeURIComponent(JSON.stringify(sd)));
           const inDetail=document.getElementById('screen-detail').classList.contains('active');
