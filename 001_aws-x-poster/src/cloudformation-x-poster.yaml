@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: AWS X Auto Poster - Lambda + EventBridge Scheduler (posts AWS tips to X twice daily)
+Description: AWS X Auto Poster - Lambda + EventBridge Rules (posts AWS tips to X twice daily)
 
 Resources:
 

@@ -23,7 +23,7 @@
 ![アーキテクチャ図](images/001_architecture.png)
 
 ```text
-EventBridge Scheduler（9:00 / 20:00 JST）
+EventBridge ルール（9:00 / 20:00 JST）
   └─▶ Lambda（Python 3.14）
         ├─ RSS/Atom 取得（AWS公式・Classmethod・Zenn・Qiita）
         ├─ 14日フィルタ + 3段階重複排除
@@ -37,7 +37,7 @@ EventBridge Scheduler（9:00 / 20:00 JST）
 | レイヤー         | 技術                                                                                 |
 | ---------------- | ------------------------------------------------------------------------------------ |
 | 実行基盤         | AWS Lambda（Python 3.14 / 256MB / 120秒）                                            |
-| スケジューリング | Amazon EventBridge Scheduler（JST タイムゾーン対応）                                 |
+| スケジューリング | Amazon EventBridge ルール（UTC cron、JST 換算）                                      |
 | AI変換           | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0`） |
 | 状態管理         | AWS Systems Manager Parameter Store                                                  |
 | 投稿先           | X（旧Twitter）API v2                                                                 |
