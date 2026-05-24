@@ -881,7 +881,16 @@
 
       document.getElementById('btn-start').addEventListener('click',findCourses);
       document.getElementById('btn-retry').addEventListener('click',findCourses);
-      document.getElementById('btn-back').addEventListener('click',()=>{history.pushState({},'',location.pathname);showScreen('screen-results');});
+      document.getElementById('btn-back').addEventListener('click',()=>{
+        history.pushState({},'',location.pathname);
+        const vp=document.getElementById('card-viewport');
+        // iOS Safariのバックグラウンドリロード後はカードが消えるため idle に戻す
+        if(vp && vp.children.length > 0){
+          showScreen('screen-results');
+        } else {
+          showScreen('screen-idle');
+        }
+      });
       document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
       document.getElementById('share-url-btn').addEventListener('click',copyUrl);
 
