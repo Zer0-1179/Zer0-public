@@ -557,9 +557,9 @@
         const total = Math.round(h * 60);
         const hrs = Math.floor(total / 60);
         const mins = total % 60;
-        if (hrs === 0) return `${mins}分`;
-        if (mins === 0) return `${hrs}時間`;
-        return `${hrs}時間${mins}分`;
+        if (hrs === 0) return `約${mins}分`;
+        if (mins === 0) return `約${hrs}時間`;
+        return `約${hrs}時間${mins}分`;
       }
 
       let courses     = [];
