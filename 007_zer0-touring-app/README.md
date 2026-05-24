@@ -20,7 +20,7 @@
 | 天気比較     | 詳細画面に現在地 🏍️→ 目的地の天気比較ウィジェット（バイク走行アニメーション付き）           |
 | 週間天気     | 現在地・目的地の7日間天気予報ストリップ（狙い目日ハイライト）                               |
 | シェア       | Xシェア・URLコピー（`?course=` Base64でコース情報を復元可能）                               |
-| ナビ         | Googleマップ連携（立ち寄りスポット含む / iOS: `comgooglemaps://` / Android・Web: maps URL） |
+| ナビ         | Googleマップ連携（立ち寄りスポット含む / 全デバイス統一 Google Maps URL）                   |
 | ホスティング | CloudFront + S3（PWA / Service Worker 対応）                                                |
 | 月額コスト   | ~$0.40（100回利用想定）/ 1回 ~$0.005（約0.7円）                                             |
 
@@ -54,6 +54,7 @@
 | API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                                 |
 | 使用数管理     | AWS SSM Parameter Store（`/zer0-touring/gmaps-usage`：Google Maps 月間使用カウント）                            |
 | レートリミット | Amazon DynamoDB（`zer0-touring-ratelimit`：IP 別・日別 3回制限 / TTL で翌々日自動削除）                         |
+| 使用回数UI     | GET /api/status でトップ画面にドット形式の残回数バッジを表示（管理者モード対応）                                 |
 | ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                                                                  |
 | 写真（詳細）   | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）/ 失敗時はグラデーション+🏍️                             |
 | IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                                                                |
@@ -94,17 +95,17 @@ Landing（コースを探す）
 
 ### 4. Googleマップナビ：立ち寄りスポット含む全ルート案内
 
-立ち寄りスポットを waypoints として含めた状態で起動。OS ごとに最適なスキームを使用。
+立ち寄りスポットを waypoints として含めた状態で起動。全デバイスで同一の `https://` URL に統一（iOS `comgooglemaps://` は廃止）。
 
 ```javascript
-// iOS: comgooglemaps:// でアプリ直起動（waypoints 対応）
-comgooglemaps://?saddr=LAT,LON&daddr=DEST&waypoints=spot1+spot2&directionsmode=driving
-
-// Android / Web: https URL（立ち寄りスポット含む。Android はアプリで開く提案が出る）
-https://www.google.com/maps/dir/?api=1&origin=LAT,LON&destination=DEST&waypoints=spot1|spot2&travelmode=driving
+// iOS / Android / Web 全デバイス統一
+// 目的地・waypoints はジオコード済み座標を優先使用（名前フォールバックあり）
+https://www.google.com/maps/dir/?api=1&origin=LAT,LON&destination=DEST_LAT,DEST_LON&waypoints=spot1_lat,spot1_lon|spot2_lat,spot2_lon&travelmode=driving
 ```
 
-Android の `google.navigation:` スキームは waypoints 非対応のため使用しない。
+- `comgooglemaps://` は廃止。iOS でも `https://` で開くと Google マップアプリが起動する
+- `google.navigation:` スキームは waypoints 非対応のため使用しない
+- 行き経由地（`outbound_spots`）を waypoints として含める。帰り立ち寄り（`return_spots`）は別管理
 
 ### 5. URLシェア・コース復元（Base64エンコード）
 
@@ -155,7 +156,17 @@ GMAPS_FREE_LIMIT を 10,000 ではなく **9,900** にしているのは、Lambd
 
 iOS Safari はバックグラウンドに回った後に再フォアグラウンドするとページをリロードする。詳細画面の URL `/?course=xxx` でリロードされた場合でもコースを Base64 URL から復元して詳細画面を直接表示できる。また、ブラウザネイティブの戻るジェスチャー（`popstate` イベント）でも詳細 → 一覧への遷移を正しく処理する。
 
-### 11. コース別景観シルエット（CSS clip-path）
+### 11. Waypoint ジオコード＋方向フィルタ
+
+AI が生成した立ち寄りスポット名を Lambda 内で Nominatim（OSM）によりジオコーディングし、`origin → destination` のバウンディングボックス外のスポットを除外する。Google マップには名前ではなく `lat,lon` 座標を渡すことで誤ジオコーディングによるルート崩壊を防ぐ。
+
+行き経由地（`outbound_spots`）と帰り立ち寄り（`return_spots`）を分離することで、往復で異なるスポットを UI に表示できる。
+
+### 12. IPレートリミット（DynamoDB）
+
+DynamoDB の Conditional Update で IP 別・日別のカウントをアトミックに管理。1日3回を超えると 429 を返す。TTL で翌々日0時に自動削除。トップ画面には残回数をドットバッジで表示（3/3 形式）。管理者は `X-Admin-Token` ヘッダーでレート制限をバイパスできる。
+
+### 13. コース別景観シルエット（CSS clip-path）
 
 カードヘッダー背景をコース種別で視覚的に差別化。`::before`/`::after` 擬似要素に `clip-path: polygon()` を使って地形シルエットを描画し、JavaScript による DOM 変更なしに純粋な CSS で実装。
 
@@ -228,9 +239,11 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
     "photo_spot": "江の島",
     "difficulty": "初級",
     "road_types": ["国道", "海岸線"],
-    "rest_spots": [
-      {"name": "道の駅 湘南江の島", "type": "道の駅"},
-      {"name": "しらす料理 食堂", "type": "食事処"}
+    "outbound_spots": [
+      {"name": "道の駅 湘南江の島", "type": "道の駅", "lat": 35.31, "lon": 139.48}
+    ],
+    "return_spots": [
+      {"name": "しらす料理 食堂", "type": "食事処", "lat": 35.32, "lon": 139.45}
     ],
     "caution": "海岸線は強風注意",
     "best_season": "3月〜10月",
@@ -245,6 +258,16 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 **所要時間**：純粋な走行時間のみ（休憩・観光時間は含まない）。Google Maps / OSRM の実データで AI 推定値を上書き。フロントエンド表示は「約X時間Y分」形式、分は10分単位で切り上げ。
 
+### GET /api/status
+
+**レスポンス**
+
+```json
+{ "used": 1, "limit": 3, "remaining": 2 }
+```
+
+管理者トークン一致時は `{ "used": 0, "limit": 3, "remaining": 3, "admin": true }`。
+
 ## コスト内訳
 
 | サービス                                              | 月額（100回利用）    |
@@ -252,5 +275,6 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | Bedrock Claude Haiku（in: ~720 / out: ~1,200 tokens） | ~$0.40               |
 | Lambda 実行（~3秒 / 256MB）                           | ~$0.001              |
 | Google Maps Directions API（300回/月以内）            | $0（無料枠内）       |
+| DynamoDB（zer0-touring-ratelimit / PAY_PER_REQUEST） | ~$0（無料枠内）      |
 | API Gateway・CloudFront・S3                           | ~$0                  |
 | **合計**                                              | **~$0.40（約60円）** |

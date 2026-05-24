@@ -1086,7 +1086,9 @@
       }
 
       function buildMapUrl(c){
-        const dest  = encodeURIComponent(c.destination);
+        const dest  = c.dest_lat&&c.dest_lon
+          ? `${c.dest_lat},${c.dest_lon}`
+          : encodeURIComponent(c.destination);
         const spots = (c.outbound_spots ?? c.rest_spots ?? []).map(s=>
           s.lat&&s.lon ? `${s.lat},${s.lon}` : encodeURIComponent(s.name)
         );
