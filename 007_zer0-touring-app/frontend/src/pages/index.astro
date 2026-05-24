@@ -554,9 +554,9 @@
       const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
 
       function fmtHours(h) {
-        const total = Math.round(h * 60);
-        const hrs = Math.floor(total / 60);
-        const mins = total % 60;
+        const rounded = Math.ceil(Math.round(h * 60) / 10) * 10;  // 10分単位で切り上げ
+        const hrs = Math.floor(rounded / 60);
+        const mins = rounded % 60;
         if (hrs === 0) return `約${mins}分`;
         if (mins === 0) return `約${hrs}時間`;
         return `約${hrs}時間${mins}分`;
