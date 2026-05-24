@@ -305,6 +305,13 @@ def lambda_handler(event, context):
             "body": json.dumps({"error": f"Invalid request: {e}"}),
         }
 
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        return {
+            "statusCode": 400,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({"error": "Coordinates out of range"}),
+        }
+
     seed = random.randint(100000, 999999)
     prompt = PROMPT_TEMPLATE.format(lat=lat, lon=lon, weather=weather, temp=temp, seed=seed)
 
