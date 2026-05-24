@@ -53,6 +53,7 @@
 | 距離・走行時間 | **Google Maps Directions API**（優先・月10,000件無料） + Nominatim（OSM ジオコーディング）→ OSRM フォールバック |
 | API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                                 |
 | 使用数管理     | AWS SSM Parameter Store（`/zer0-touring/gmaps-usage`：Google Maps 月間使用カウント）                            |
+| レートリミット | Amazon DynamoDB（`zer0-touring-ratelimit`：IP 別・日別 3回制限 / TTL で翌々日自動削除）                         |
 | ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                                                                  |
 | 写真（詳細）   | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）/ 失敗時はグラデーション+🏍️                             |
 | IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                                                                |

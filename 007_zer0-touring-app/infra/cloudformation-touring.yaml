@@ -150,7 +150,7 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub "/aws/lambda/${TouringLambdaFunction}"
-      RetentionInDays: 14
+      RetentionInDays: 7
       Tags:
         - Key: Project
           Value: Zer0-touring
