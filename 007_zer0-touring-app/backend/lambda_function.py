@@ -142,15 +142,12 @@ def osrm_route(waypoints):
         if data.get("code") == "Ok" and data.get("routes"):
             route = data["routes"][0]
             dist_km = round(route["distance"] / 1000)
-            driving_h = route["duration"] / 3600
-            # 日帰りツーリングとして明らかに非現実な値は誤ジオコーディング起因として捨てる
-            if dist_km > 500 or driving_h > 8:
-                print(f"[osrm] SKIP unreasonable route: {dist_km}km {driving_h:.1f}h driving")
+            # 日帰り圏外（500km超）は誤ジオコーディング起因として捨てる
+            if dist_km > 500:
+                print(f"[osrm] SKIP unreasonable route: {dist_km}km")
                 return None, None
-            # 純粋な走行時間のみ（休憩・観光時間は含まない）
-            duration_hours = round(driving_h, 1)
-            print(f"[osrm] OK {dist_km}km driving={driving_h:.1f}h")
-            return dist_km, duration_hours
+            print(f"[osrm] OK {dist_km}km")
+            return dist_km, None
     except Exception as e:
         print(f"[osrm] ERR {e}")
     return None, None
@@ -193,12 +190,21 @@ def enrich_course(course, origin_lat, origin_lon):
     course["dest_lon"] = dest_lon
 
     waypoints = [(origin_lat, origin_lon), (dest_lat, dest_lon)]
-    dist_km, duration_hours = osrm_route(waypoints)
+    dist_km, _ = osrm_route(waypoints)
     if dist_km is not None:
+        # OSRMの走行時間は公開サーバーの速度データが保守的なため距離から再計算
+        # 高速道路利用を想定した平均速度（日本の実態に合わせた値）
+        if dist_km >= 80:
+            avg_kmh = 70  # 高速主体
+        elif dist_km >= 40:
+            avg_kmh = 55  # 一部高速
+        else:
+            avg_kmh = 40  # 一般道
+        calc_hours = round(dist_km / avg_kmh, 1)
         course["distance_km"] = dist_km
-        course["duration_hours"] = duration_hours
-        course["return_hours"] = duration_hours  # 帰路も同じ走行時間
-        print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_hours}h")
+        course["duration_hours"] = calc_hours
+        course["return_hours"] = calc_hours
+        print(f"[enrich] {course.get('name','')} -> {dist_km}km avg={avg_kmh}km/h {calc_hours}h")
 
     dest_temp, dest_weather_code = fetch_dest_weather(dest_lat, dest_lon)
     if dest_temp is not None:
