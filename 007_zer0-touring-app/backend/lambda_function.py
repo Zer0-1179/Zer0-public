@@ -314,6 +314,36 @@ def fetch_dest_weather(lat, lon):
     return None, None
 
 
+def _is_on_route(slat, slon, olat, olon, dlat, dlon, margin_deg=0.5):
+    """スポットが origin→destination の経路コリドー内にあるか確認（バウンディングボックス+マージン）。"""
+    min_lat = min(olat, dlat) - margin_deg
+    max_lat = max(olat, dlat) + margin_deg
+    min_lon = min(olon, dlon) - margin_deg
+    max_lon = max(olon, dlon) + margin_deg
+    return min_lat <= slat <= max_lat and min_lon <= slon <= max_lon
+
+
+def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, reverse=False):
+    """
+    スポットリストをジオコードし、ルート上にないものを除外して lat/lon を付与する。
+    reverse=True のとき帰路方向（dest→origin）でフィルタリング。
+    """
+    result = []
+    for spot in spots:
+        lat, lon = nominatim_geocode(spot["name"], origin_lat, origin_lon)
+        if lat is None:
+            continue
+        if reverse:
+            on_route = _is_on_route(lat, lon, dest_lat, dest_lon, origin_lat, origin_lon)
+        else:
+            on_route = _is_on_route(lat, lon, origin_lat, origin_lon, dest_lat, dest_lon)
+        if on_route:
+            result.append({**spot, "lat": lat, "lon": lon})
+        else:
+            print(f"[waypoint] SKIP {spot['name']}: off-route ({lat:.4f},{lon:.4f})")
+    return result
+
+
 def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
     """
     目的地（destination）をジオコーディングして距離・所要時間を取得する。
@@ -331,6 +361,12 @@ def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
 
     course["dest_lat"] = dest_lat
     course["dest_lon"] = dest_lon
+
+    # outbound_spots/return_spots をジオコードしてルート外を除外
+    raw_out = course.get("outbound_spots") or course.get("rest_spots") or []
+    raw_ret = course.get("return_spots") or []
+    course["outbound_spots"] = geocode_and_filter_spots(raw_out, origin_lat, origin_lon, dest_lat, dest_lon, reverse=False)
+    course["return_spots"]   = geocode_and_filter_spots(raw_ret, origin_lat, origin_lon, dest_lat, dest_lon, reverse=True)
 
     dist_km, duration_h = None, None
 
