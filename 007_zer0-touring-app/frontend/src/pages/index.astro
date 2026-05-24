@@ -829,12 +829,16 @@
         82:'にわか大雨',85:'にわか雪',86:'にわか大雪',95:'雷雨',96:'雷雨',99:'激しい雷雨',
       };
       const DIST = [
-        { label:'近距離コース', icon:'🌿', cls:'dist-near', bgCls:'ch-near' },
-        { label:'中距離コース', icon:'🌊', cls:'dist-mid',  bgCls:'ch-mid' },
-        { label:'長距離コース', icon:'🏔', cls:'dist-far',  bgCls:'ch-far' },
+        { label:'近距離コース', icon:'🌿', cls:'dist-near', bgCls:'ch-near', phGrad:'linear-gradient(160deg,#051a0c,#184e24)' },
+        { label:'中距離コース', icon:'🌊', cls:'dist-mid',  bgCls:'ch-mid',  phGrad:'linear-gradient(160deg,#04101e,#0f2e56)' },
+        { label:'長距離コース', icon:'🏔', cls:'dist-far',  bgCls:'ch-far',  phGrad:'linear-gradient(160deg,#150422,#5e1480)' },
       ];
       const ROAD = { '峠道':'🏔','山道':'🏔','高速道路':'🛣','国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊' };
       const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
+
+      function escHtml(s) {
+        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
 
       function fmtHours(h) {
         const rounded = Math.ceil(Math.round(h * 60) / 10) * 10;  // 10分単位で切り上げ
@@ -850,6 +854,7 @@
       let weatherMeta = { icon:'☀️', score:5, label:'絶好の日和！', temp:'--' };
       let currentSlide = 0;
       let sliderListenerAdded = false;
+      let destForecastController = null;
 
       /* ── 天気ヘルパー ── */
       function getWeatherMeta(code) {
@@ -869,9 +874,9 @@
         el.textContent = `📍現在地  ${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
         el.style.display = 'inline-flex';
       }
-      async function renderForecastInto(lat, lon, stripEl) {
+      async function renderForecastInto(lat, lon, stripEl, signal) {
         try {
-          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`);
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`, signal ? { signal } : {});
           const d = await res.json();
           const { time, weathercode, temperature_2m_max, temperature_2m_min } = d.daily;
           let bestIdx=1, bestScore=-1;
@@ -892,7 +897,7 @@
               ${i===bestIdx?'<span class="fd-best">★ 狙い目</span>':''}
             </div>`;
           }).join('');
-        } catch(_){}
+        } catch(e) { if (e.name !== 'AbortError') console.warn('[forecast]', e); }
       }
       async function renderForecast(lat, lon) {
         const strip=document.getElementById('forecast-strip');
@@ -934,7 +939,7 @@
       }
 
       function renderSlider(data) {
-        courses = [...data.courses].sort((a,b)=>(a.distance_km??0)-(b.distance_km??0));
+        courses = [...data.courses].sort((a,b)=>(a.distance_km??0)-(b.distance_km??0)).slice(0,3);
         currentSlide = 0;
 
         const vp     = document.getElementById('card-viewport');
@@ -942,7 +947,7 @@
 
         vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
-          const tagsHtml = (c.tags??[]).slice(0,3).map(t=>`<span class="course-tag">${t}</span>`).join('');
+          const tagsHtml = (c.tags??[]).slice(0,3).map(t=>`<span class="course-tag">${escHtml(t)}</span>`).join('');
           const destWeatherBadge = c.dest_weather_code !== undefined
             ? (() => { const m = getWeatherMeta(c.dest_weather_code); return `<span class="dest-weather-badge">📌 ${m.icon} ${c.dest_temp}℃</span>`; })()
             : '';
@@ -965,14 +970,14 @@
                 </div>
               </div>
               <div class="card-body">
-                <h3 class="card-name">${c.name}</h3>
+                <h3 class="card-name">${escHtml(c.name)}</h3>
                 ${tagsHtml?`<div class="course-tags">${tagsHtml}</div>`:''}
                 <div class="card-info-row">
                   <span>🛣 ${c.distance_km}km</span>
                   <span class="card-info-sep">·</span>
                   <span>⏱ 片道${fmtHours(c.duration_hours)}</span>
                   <span class="card-info-sep">·</span>
-                  <span>🏁 ${c.destination}</span>
+                  <span>🏁 ${escHtml(c.destination)}</span>
                 </div>
               </div>
               <div class="card-actions">
@@ -1066,7 +1071,7 @@
         if(prevBtn){ prevBtn.disabled=idx===0; prevBtn.onclick=()=>openDetail(idx-1); }
         if(nextBtn){ nextBtn.disabled=idx===courses.length-1; nextBtn.onclick=()=>openDetail(idx+1); }
         const ph=document.getElementById('detail-img-ph');
-        ph.style.background=d.grad;
+        ph.style.background=d.phGrad;
         ph.innerHTML=`<span style="font-size:2.2rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))">🏍️</span>`;
         const dimg=document.getElementById('detail-img');
         dimg.classList.remove('loaded');dimg.src='';
@@ -1079,16 +1084,16 @@
           `<span class="meta-pill-lg">🛣 ${c.distance_km}km</span>`+
           `<span class="meta-pill-lg">⏱ 片道 ${fmtHours(c.duration_hours)}</span>`+
           `<span class="meta-pill-lg">🔄 往復 ${fmtHours(c.duration_hours+rh)}</span>`+
-          `<span class="meta-pill-lg">🏁 ${c.destination}</span>`;
-        document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${h}</li>`).join('');
-        document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${r}</span>`).join('');
+          `<span class="meta-pill-lg">🏁 ${escHtml(c.destination)}</span>`;
+        document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${escHtml(h)}</li>`).join('');
+        document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${escHtml(r)}</span>`).join('');
         document.getElementById('detail-spots').innerHTML=(c.rest_spots??[]).map(s=>
-          `<div class="spot-item"><span class="spot-icon">${SPOT[s.type]??'📌'}</span><span class="spot-name">${s.name}</span><span class="spot-type">${s.type}</span></div>`
+          `<div class="spot-item"><span class="spot-icon">${SPOT[s.type]??'📌'}</span><span class="spot-name">${escHtml(s.name)}</span><span class="spot-type">${escHtml(s.type)}</span></div>`
         ).join('');
         document.getElementById('detail-info').innerHTML=[
-          c.return_note?`<div class="info-chip info-return"><span>🔄</span><span>帰路: ${c.return_note}</span></div>`:'',
-          c.caution    ?`<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>`:'',
-          c.best_season?`<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>`:'',
+          c.return_note?`<div class="info-chip info-return"><span>🔄</span><span>帰路: ${escHtml(c.return_note)}</span></div>`:'',
+          c.caution    ?`<div class="info-chip info-caution"><span>⚠️</span><span>${escHtml(c.caution)}</span></div>`:'',
+          c.best_season?`<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${escHtml(c.best_season)}</span></div>`:'',
         ].filter(Boolean).join('');
 
         // 現在地 vs 目的地 天気比較ウィジェット
@@ -1118,13 +1123,16 @@
           compareEl.classList.remove('visible');
         }
 
-        // 目的地の7日間予報
+        // 目的地の7日間予報（prev/next 高速タップ時の古いレスポンス上書きをキャンセル）
+        if (destForecastController) destForecastController.abort();
+        destForecastController = null;
         const destSection=document.getElementById('detail-dest-weather-section');
         const destForecastStrip=document.getElementById('detail-dest-forecast-strip');
         if(c.dest_lat!==undefined){
           destSection.style.display='';
           destForecastStrip.innerHTML='';
-          renderForecastInto(c.dest_lat,c.dest_lon,destForecastStrip);
+          destForecastController = new AbortController();
+          renderForecastInto(c.dest_lat,c.dest_lon,destForecastStrip,destForecastController.signal);
         }else{
           destSection.style.display='none';
         }
@@ -1133,7 +1141,12 @@
         const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 片道${fmtHours(c.duration_hours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
         document.getElementById('share-x-btn').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
         const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,rest_spots:c.rest_spots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
-        try{const b64=btoa(encodeURIComponent(JSON.stringify(sd)));history.pushState({course:b64},'','?course='+b64);}catch(_){}
+        try{
+          const b64=btoa(encodeURIComponent(JSON.stringify(sd)));
+          const inDetail=document.getElementById('screen-detail').classList.contains('active');
+          if(inDetail) history.replaceState({course:b64},'','?course='+b64);
+          else         history.pushState({course:b64},'','?course='+b64);
+        }catch(_){}
         showScreen('screen-detail');
         // 詳細画面を開くたびにバイクアニメーションを先頭から再スタート
         const bikeEl = document.querySelector('.wc-bike');
