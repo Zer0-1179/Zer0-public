@@ -842,6 +842,14 @@
     <script>
       const API_BASE = import.meta.env.PUBLIC_API_URL ?? '';
 
+      // localStorage に adminToken があれば全リクエストに付与
+      function apiHeaders(extra = {}) {
+        const token = localStorage.getItem('adminToken') ?? '';
+        const h = { 'Content-Type': 'application/json', ...extra };
+        if (token) h['X-Admin-Token'] = token;
+        return h;
+      }
+
       const WEATHER = {
         0:'晴れ',1:'晴れのち曇り',2:'曇り',3:'曇り',45:'霧',48:'霧',
         51:'小雨',53:'雨',55:'大雨',61:'小雨',63:'雨',65:'大雨',
@@ -1223,7 +1231,7 @@
 
         setStep('step-ai','active');
         try{
-          const res=await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition})});
+          const res=await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:apiHeaders(),body:JSON.stringify({latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition})});
           if(!res.ok){const err=new Error();err.status=res.status;throw err;}
           const data=await res.json();
           setStep('step-ai','done');
@@ -1290,7 +1298,7 @@
 
       async function fetchUsage() {
         try {
-          const res = await fetch(`${API_BASE}/api/status`);
+          const res = await fetch(`${API_BASE}/api/status`, {headers: apiHeaders()});
           if(!res.ok) return;
           const d = await res.json();
           renderUsageBadge(d.used, d.limit, d.admin);
