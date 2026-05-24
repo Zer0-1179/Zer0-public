@@ -279,15 +279,62 @@
       .card-header {
         width: 100%; height: 130px; position: relative; flex-shrink: 0;
         display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
       }
       .card-header-icon {
-        font-size: 2.75rem;
+        font-size: 2.75rem; position: relative; z-index: 2;
         filter: drop-shadow(0 4px 16px rgba(0,0,0,.55));
         animation: float 3.5s ease-in-out infinite;
       }
       .card-header-badges {
-        position: absolute; bottom: .75rem; left: .875rem;
+        position: absolute; bottom: .75rem; left: .875rem; z-index: 2;
         display: flex; gap: .4rem;
+      }
+      /* アニメーションオーバーレイ */
+      .card-header-anim {
+        position: absolute; inset: 0; pointer-events: none; z-index: 1;
+      }
+      .card-header-anim::before {
+        content: '';
+        position: absolute; inset: 0;
+        background: linear-gradient(
+          110deg,
+          transparent 20%,
+          rgba(255,255,255,.05) 44%,
+          rgba(255,255,255,.1) 50%,
+          rgba(255,255,255,.05) 56%,
+          transparent 80%
+        );
+        background-size: 250% 100%;
+        animation: ch-shimmer 5s ease-in-out infinite;
+      }
+      @keyframes ch-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      .card-header-anim::after {
+        content: '';
+        position: absolute; width: 2px; height: 2px;
+        top: 0; left: 0; border-radius: 50%;
+        box-shadow:
+          24px  22px 0 1.5px rgba(255,255,255,.2),
+          62px  44px 0 1px   rgba(255,255,255,.15),
+          96px  16px 0 1.5px rgba(255,255,255,.18),
+          134px 58px 0 1px   rgba(255,255,255,.13),
+          176px 30px 0 1.5px rgba(255,255,255,.17),
+          214px 70px 0 1px   rgba(255,255,255,.14),
+          256px 14px 0 1.5px rgba(255,255,255,.2),
+          42px  86px 0 1px   rgba(255,255,255,.12),
+          84px  98px 0 1.5px rgba(255,255,255,.16),
+          122px 76px 0 1px   rgba(255,255,255,.13),
+          162px 92px 0 1.5px rgba(255,255,255,.15),
+          204px 52px 0 1px   rgba(255,255,255,.18),
+          242px 108px 0 1.5px rgba(255,255,255,.12);
+        animation: ch-sparkle 4s ease-in-out infinite;
+      }
+      @keyframes ch-sparkle {
+        0%, 100% { opacity: .4; }
+        50%      { opacity: 1; }
       }
 
       /* 情報エリア */
@@ -432,6 +479,22 @@
       .fd-score { display: flex; gap: 2px; }
       .fd-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
       .fd-dot.on { background: var(--accent); }
+
+      /* ── 詳細画面コースナビ ── */
+      .detail-nav { display: flex; align-items: center; gap: .3rem; }
+      .detail-nav-label {
+        font-size: .78rem; color: var(--muted);
+        min-width: 2.8em; text-align: center; font-variant-numeric: tabular-nums;
+      }
+      .detail-nav-btn {
+        background: var(--card2); border: 1px solid var(--border); color: var(--text);
+        border-radius: .4rem; width: 1.9rem; height: 1.9rem;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.15rem; cursor: pointer;
+        transition: background .15s, opacity .15s;
+      }
+      .detail-nav-btn:disabled { opacity: .28; cursor: default; pointer-events: none; }
+      .detail-nav-btn:not(:disabled):hover { background: var(--border); }
 
       /* ════════════════════════════════════════
          コース詳細
@@ -609,7 +672,12 @@
     <!-- ── コース詳細 ── -->
     <div id="screen-detail" class="screen">
       <div class="topbar">
-        <button class="btn-ghost" id="btn-back">← 一覧に戻る</button>
+        <button class="btn-ghost" id="btn-back">← 一覧</button>
+        <div class="detail-nav" id="detail-nav">
+          <button class="detail-nav-btn" id="btn-detail-prev">‹</button>
+          <span class="detail-nav-label" id="detail-nav-label">1 / 3</span>
+          <button class="detail-nav-btn" id="btn-detail-next">›</button>
+        </div>
       </div>
       <div class="detail-img-wrap">
         <div class="detail-img-ph" id="detail-img-ph"></div>
@@ -791,6 +859,7 @@
           return `
             <article class="course-card" data-idx="${i}">
               <div class="card-header" style="background:${d.grad}">
+                <div class="card-header-anim"></div>
                 <span class="card-header-icon">🏍️</span>
                 <div class="card-header-badges">
                   <span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>
@@ -882,8 +951,22 @@
       }
 
       function openDetail(idx){
+        // 詳細画面を開くたびに先頭へスクロール
+        const detailEl=document.getElementById('screen-detail');
+        if(detailEl) detailEl.scrollTop=0;
+
         const c=courses[idx];
         const d=DIST[c._distIdx??idx];
+
+        // コースナビ（前後ボタン・インジケーター）
+        const navEl=document.getElementById('detail-nav');
+        const prevBtn=document.getElementById('btn-detail-prev');
+        const nextBtn=document.getElementById('btn-detail-next');
+        const navLabel=document.getElementById('detail-nav-label');
+        if(navEl)  navEl.style.display = courses.length>1 ? 'flex' : 'none';
+        if(navLabel) navLabel.textContent=`${idx+1} / ${courses.length}`;
+        if(prevBtn){ prevBtn.disabled=idx===0; prevBtn.onclick=()=>openDetail(idx-1); }
+        if(nextBtn){ nextBtn.disabled=idx===courses.length-1; nextBtn.onclick=()=>openDetail(idx+1); }
         const ph=document.getElementById('detail-img-ph');
         ph.style.background=d.grad;
         ph.innerHTML=`<span style="font-size:2.2rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))">🏍️</span>`;
