@@ -290,7 +290,7 @@
         position: absolute; bottom: .75rem; left: .875rem; z-index: 2;
         display: flex; gap: .4rem;
       }
-      /* アニメーションオーバーレイ */
+      /* アニメーションオーバーレイ（シマーのみ） */
       .card-header-anim {
         position: absolute; inset: 0; pointer-events: none; z-index: 1;
       }
@@ -300,9 +300,9 @@
         background: linear-gradient(
           110deg,
           transparent 20%,
-          rgba(255,255,255,.05) 44%,
-          rgba(255,255,255,.1) 50%,
-          rgba(255,255,255,.05) 56%,
+          rgba(255,255,255,.04) 44%,
+          rgba(255,255,255,.08) 50%,
+          rgba(255,255,255,.04) 56%,
           transparent 80%
         );
         background-size: 250% 100%;
@@ -312,29 +312,47 @@
         0%   { background-position: 200% 0; }
         100% { background-position: -200% 0; }
       }
-      .card-header-anim::after {
-        content: '';
-        position: absolute; width: 2px; height: 2px;
-        top: 0; left: 0; border-radius: 50%;
-        box-shadow:
-          24px  22px 0 1.5px rgba(255,255,255,.2),
-          62px  44px 0 1px   rgba(255,255,255,.15),
-          96px  16px 0 1.5px rgba(255,255,255,.18),
-          134px 58px 0 1px   rgba(255,255,255,.13),
-          176px 30px 0 1.5px rgba(255,255,255,.17),
-          214px 70px 0 1px   rgba(255,255,255,.14),
-          256px 14px 0 1.5px rgba(255,255,255,.2),
-          42px  86px 0 1px   rgba(255,255,255,.12),
-          84px  98px 0 1.5px rgba(255,255,255,.16),
-          122px 76px 0 1px   rgba(255,255,255,.13),
-          162px 92px 0 1.5px rgba(255,255,255,.15),
-          204px 52px 0 1px   rgba(255,255,255,.18),
-          242px 108px 0 1.5px rgba(255,255,255,.12);
-        animation: ch-sparkle 4s ease-in-out infinite;
+
+      /* ── 準備シーン ── */
+      .card-header-prep {
+        position: absolute; top: .6rem; left: 0; right: 0;
+        display: flex; align-items: center; justify-content: center;
+        pointer-events: none; z-index: 1;
       }
-      @keyframes ch-sparkle {
-        0%, 100% { opacity: .4; }
-        50%      { opacity: 1; }
+      .prep-row { display: flex; gap: .6rem; align-items: center; }
+      .prep-step {
+        display: flex; align-items: center; gap: .2rem;
+        opacity: 0;
+        animation: prep-step 7s ease-in-out infinite;
+      }
+      .prep-step.s1 { animation-delay: 0s; }
+      .prep-step.s2 { animation-delay: .65s; }
+      .prep-step.s3 { animation-delay: 1.3s; }
+      .prep-step .pe { font-size: 1.15rem; line-height: 1; }
+      .prep-ok {
+        font-size: .6rem; font-weight: 900; color: #4ade80; line-height: 1;
+        text-shadow: 0 0 6px rgba(74,222,128,.6);
+      }
+      @keyframes prep-step {
+        0%   { opacity: 0; transform: translateY(-8px) scale(.85); }
+        8%   { opacity: 1; transform: translateY(0)   scale(1); }
+        55%  { opacity: 1; transform: translateY(0)   scale(1); }
+        65%  { opacity: 0; transform: translateY(-6px) scale(.9); }
+        100% { opacity: 0; transform: translateY(-8px) scale(.85); }
+      }
+      .prep-go-label {
+        position: absolute; right: .85rem;
+        font-size: .68rem; font-weight: 900; letter-spacing: .16em;
+        color: #fff;
+        text-shadow: 0 0 12px rgba(255,255,255,.8), 0 0 24px rgba(249,115,22,.6);
+        opacity: 0;
+        animation: prep-go 7s ease-in-out infinite;
+      }
+      @keyframes prep-go {
+        0%,  40% { opacity: 0; transform: scale(.5) translateX(-4px); }
+        50%, 64% { opacity: 1; transform: scale(1)   translateX(0); }
+        74%      { opacity: 0; transform: scale(1.2)  translateX(14px); }
+        100%     { opacity: 0; transform: scale(.5)  translateX(-4px); }
       }
 
       /* 情報エリア */
@@ -860,6 +878,14 @@
             <article class="course-card" data-idx="${i}">
               <div class="card-header" style="background:${d.grad}">
                 <div class="card-header-anim"></div>
+                <div class="card-header-prep">
+                  <div class="prep-row">
+                    <span class="prep-step s1"><span class="pe">🪖</span><span class="prep-ok">✓</span></span>
+                    <span class="prep-step s2"><span class="pe">🧤</span><span class="prep-ok">✓</span></span>
+                    <span class="prep-step s3"><span class="pe">🗺️</span><span class="prep-ok">✓</span></span>
+                  </div>
+                  <span class="prep-go-label">GO!</span>
+                </div>
                 <span class="card-header-icon">🏍️</span>
                 <div class="card-header-badges">
                   <span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>
