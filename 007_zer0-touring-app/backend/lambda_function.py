@@ -11,7 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 import boto3
 from botocore.config import Config
 
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
+BEDROCK_MODEL_ID   = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
 bedrock = boto3.client(
     "bedrock-runtime",
@@ -153,6 +154,38 @@ def osrm_route(waypoints):
     return None, None
 
 
+def google_maps_route(origin_lat, origin_lon, dest_lat, dest_lon):
+    """Google Maps Directions API で高速道路込みの実走行時間・距離を取得。
+    (distance_km, duration_hours) または (None, None) を返す。"""
+    if not GOOGLE_MAPS_API_KEY:
+        return None, None
+    params = {
+        "origin":      f"{origin_lat:.6f},{origin_lon:.6f}",
+        "destination": f"{dest_lat:.6f},{dest_lon:.6f}",
+        "mode":        "driving",
+        "key":         GOOGLE_MAPS_API_KEY,
+    }
+    url = "https://maps.googleapis.com/maps/api/directions/json?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+        if data.get("status") != "OK" or not data.get("routes"):
+            print(f"[gmaps] status={data.get('status')}")
+            return None, None
+        leg = data["routes"][0]["legs"][0]
+        dist_km = round(leg["distance"]["value"] / 1000)
+        duration_h = round(leg["duration"]["value"] / 3600, 1)
+        if dist_km > 500:
+            print(f"[gmaps] SKIP unreasonable: {dist_km}km")
+            return None, None
+        print(f"[gmaps] OK {dist_km}km {duration_h}h")
+        return dist_km, duration_h
+    except Exception as e:
+        print(f"[gmaps] ERR {e}")
+    return None, None
+
+
 def fetch_dest_weather(lat, lon):
     """Open-Meteo で目的地の現在天気を取得。(temp, weather_code) または (None, None) を返す。"""
     url = (
@@ -189,22 +222,27 @@ def enrich_course(course, origin_lat, origin_lon):
     course["dest_lat"] = dest_lat
     course["dest_lon"] = dest_lon
 
-    waypoints = [(origin_lat, origin_lon), (dest_lat, dest_lon)]
-    dist_km, _ = osrm_route(waypoints)
+    # Google Maps 優先（APIキー設定済みの場合）、なければ OSRM フォールバック
+    dist_km, duration_h = google_maps_route(origin_lat, origin_lon, dest_lat, dest_lon)
+    if dist_km is None:
+        waypoints = [(origin_lat, origin_lon), (dest_lat, dest_lon)]
+        dist_km, _ = osrm_route(waypoints)
+        if dist_km is not None:
+            # OSRM は高速道路の速度データが保守的なため距離から再計算
+            if dist_km >= 80:
+                avg_kmh = 70
+            elif dist_km >= 40:
+                avg_kmh = 55
+            else:
+                avg_kmh = 40
+            duration_h = round(dist_km / avg_kmh, 1)
+            print(f"[enrich/osrm] {course.get('name','')} -> {dist_km}km avg={avg_kmh}km/h {duration_h}h")
+
     if dist_km is not None:
-        # OSRMの走行時間は公開サーバーの速度データが保守的なため距離から再計算
-        # 高速道路利用を想定した平均速度（日本の実態に合わせた値）
-        if dist_km >= 80:
-            avg_kmh = 70  # 高速主体
-        elif dist_km >= 40:
-            avg_kmh = 55  # 一部高速
-        else:
-            avg_kmh = 40  # 一般道
-        calc_hours = round(dist_km / avg_kmh, 1)
         course["distance_km"] = dist_km
-        course["duration_hours"] = calc_hours
-        course["return_hours"] = calc_hours
-        print(f"[enrich] {course.get('name','')} -> {dist_km}km avg={avg_kmh}km/h {calc_hours}h")
+        course["duration_hours"] = duration_h
+        course["return_hours"] = duration_h
+        print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_h}h")
 
     dest_temp, dest_weather_code = fetch_dest_weather(dest_lat, dest_lon)
     if dest_temp is not None:
