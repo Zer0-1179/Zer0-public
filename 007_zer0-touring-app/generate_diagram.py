@@ -1,4 +1,4 @@
-"""007_Zer0_TouringApp アーキテクチャ図生成スクリプト"""
+"""007_Zer0_TouringApp アーキテクチャ図生成スクリプト（generate_project_diagrams.py の gen_007 を呼び出す）"""
 import os
 import matplotlib
 matplotlib.use('Agg')
