@@ -15,7 +15,7 @@ from botocore.config import Config
 BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 GMAPS_USAGE_PARAM   = "/zer0-touring/gmaps-usage"
-GMAPS_FREE_LIMIT    = 9_999  # 10,000件の無料枠（同時アクセス誤差は最大数リクエスト = 数円）
+GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ（同時アクセス時のSSM非アトミック書き込みによる誤差対策）
 
 bedrock = boto3.client(
     "bedrock-runtime",
