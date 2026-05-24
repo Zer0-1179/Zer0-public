@@ -566,6 +566,7 @@
       let userLat     = null, userLon = null;
       let weatherMeta = { icon:'☀️', score:5, label:'絶好の日和！', temp:'--' };
       let currentSlide = 0;
+      let sliderListenerAdded = false;
 
       /* ── 天気ヘルパー ── */
       function getWeatherMeta(code) {
@@ -638,6 +639,8 @@
         const vp = document.getElementById('card-viewport');
         vp.scrollLeft = 0;
         currentSlide  = 0;
+        if (sliderListenerAdded) return;
+        sliderListenerAdded = true;
         vp.addEventListener('scroll', () => {
           if (!vp.clientWidth) return;
           const idx = Math.round(vp.scrollLeft / vp.clientWidth);
@@ -888,16 +891,21 @@
         }catch(_){showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');}
       }
 
-      document.getElementById('btn-start').addEventListener('click',findCourses);
-      document.getElementById('btn-retry').addEventListener('click',findCourses);
-      document.getElementById('btn-back').addEventListener('click',()=>{
+      function backFromDetail() {
         history.pushState({},'',location.pathname);
         const vp=document.getElementById('card-viewport');
-        // iOS Safariのバックグラウンドリロード後はカードが消えるため idle に戻す
-        if(vp && vp.children.length > 0){
-          showScreen('screen-results');
-        } else {
-          showScreen('screen-idle');
+        if(vp && vp.children.length > 0){ showScreen('screen-results'); }
+        else { showScreen('screen-idle'); }
+      }
+
+      document.getElementById('btn-start').addEventListener('click',findCourses);
+      document.getElementById('btn-retry').addEventListener('click',findCourses);
+      document.getElementById('btn-back').addEventListener('click', backFromDetail);
+
+      // ブラウザ・iOS ネイティブ戻るジェスチャー対応
+      window.addEventListener('popstate', () => {
+        if (document.getElementById('screen-detail').classList.contains('active')) {
+          backFromDetail();
         }
       });
       document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
