@@ -156,6 +156,24 @@ def osrm_route(waypoints):
     return None, None
 
 
+def fetch_dest_weather(lat, lon):
+    """Open-Meteo で目的地の現在天気を取得。(temp, weather_code) または (None, None) を返す。"""
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat:.4f}&longitude={lon:.4f}"
+        f"&current=temperature_2m,weathercode&timezone=auto"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+        current = data.get("current", {})
+        return round(current["temperature_2m"]), int(current["weathercode"])
+    except Exception as e:
+        print(f"[dest-weather] ERR {e}")
+    return None, None
+
+
 def enrich_course(course, origin_lat, origin_lon):
     """
     目的地（destination）をジオコーディングして OSRM で実距離・所要時間を取得する。
@@ -171,6 +189,9 @@ def enrich_course(course, origin_lat, origin_lon):
         print(f"[enrich] {course.get('name','')} destination geocode failed, keeping AI estimate")
         return
 
+    course["dest_lat"] = dest_lat
+    course["dest_lon"] = dest_lon
+
     waypoints = [(origin_lat, origin_lon), (dest_lat, dest_lon)]
     dist_km, duration_hours = osrm_route(waypoints)
     if dist_km is not None:
@@ -178,6 +199,12 @@ def enrich_course(course, origin_lat, origin_lon):
         course["duration_hours"] = duration_hours
         course["return_hours"] = round(duration_hours - 0.5, 1)
         print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_hours}h")
+
+    dest_temp, dest_weather_code = fetch_dest_weather(dest_lat, dest_lon)
+    if dest_temp is not None:
+        course["dest_temp"] = dest_temp
+        course["dest_weather_code"] = dest_weather_code
+        print(f"[dest-weather] {dest_name}: {dest_temp}℃ code={dest_weather_code}")
 
 
 def lambda_handler(event, context):
