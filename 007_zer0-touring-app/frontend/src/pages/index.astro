@@ -815,6 +815,9 @@
         const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,rest_spots:c.rest_spots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
         try{const b64=btoa(encodeURIComponent(JSON.stringify(sd)));history.pushState({course:b64},'','?course='+b64);}catch(_){}
         showScreen('screen-detail');
+        // 詳細画面を開くたびにバイクアニメーションを先頭から再スタート
+        const bikeEl = document.querySelector('.wc-bike');
+        if (bikeEl) { bikeEl.style.animation='none'; void bikeEl.offsetHeight; bikeEl.style.animation=''; }
       }
 
       async function copyUrl(){
