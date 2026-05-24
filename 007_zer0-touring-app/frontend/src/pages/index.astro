@@ -446,28 +446,34 @@
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
 
-      /* 3コース距離比較スタック */
-      .dist-compare {
-        padding: .5rem 1.25rem .4rem;
-        display: flex; flex-direction: column; gap: .28rem;
+      /* 🏍️ ロードラインアニメーション */
+      .road-viz {
+        padding: .45rem 1.25rem .4rem;
+        display: flex; align-items: center; gap: .5rem;
       }
-      .dist-row { display: flex; align-items: center; gap: .45rem; }
-      .dist-row-label {
-        font-size: .62rem; font-weight: 700; color: rgba(255,255,255,.28);
-        width: 1rem; flex-shrink: 0; text-align: right;
+      .road-track-wrap { flex: 1; height: 1.5rem; position: relative; }
+      .road-dashes {
+        position: absolute; top: 50%; left: 0; right: 0; height: 2px;
+        transform: translateY(-50%);
+        background: repeating-linear-gradient(
+          to right, rgba(255,255,255,.18) 0, rgba(255,255,255,.18) 6px,
+          transparent 6px, transparent 12px
+        );
       }
-      .dist-row.active .dist-row-label { color: var(--accent); }
-      .dist-row-track {
-        flex: 1; height: 4px; border-radius: 9999px;
-        background: rgba(255,255,255,.1); overflow: hidden;
+      .road-goal {
+        position: absolute; top: 50%;
+        transform: translateX(-50%) translateY(-50%);
+        width: 3px; height: 14px;
+        background: rgba(255,255,255,.45); border-radius: 1px;
       }
-      .dist-row-fill { height: 100%; border-radius: 9999px; background: rgba(255,255,255,.22); }
-      .dist-row.active .dist-row-fill { background: var(--accent); }
-      .dist-row-km {
-        font-size: .63rem; color: rgba(255,255,255,.32);
-        width: 3rem; text-align: right; flex-shrink: 0;
+      .road-bike {
+        position: absolute; top: 50%; left: 0%;
+        transform: translateY(-50%) translateX(-100%) scaleX(-1);
+        font-size: 1rem; line-height: 1;
+        transition: left .85s ease-out;
+        filter: drop-shadow(0 2px 6px rgba(249,115,22,.5));
       }
-      .dist-row.active .dist-row-km { color: var(--text); font-weight: 600; }
+      .road-km { font-size: .7rem; font-weight: 700; flex-shrink: 0; }
 
       /* アクションボタン */
       .card-actions {
@@ -939,10 +945,24 @@
          showScreen の後に initSlider() を呼ぶことで
          clientWidth が正しく取れる
       ───────────────────────────────────── */
+      function animateRoadBike(cardEl) {
+        const bike = cardEl && cardEl.querySelector('.road-bike');
+        if (!bike) return;
+        bike.style.transition = 'none';
+        bike.style.left = '0%';
+        bike.offsetWidth;
+        bike.style.transition = 'left .85s ease-out';
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { bike.style.left = bike.dataset.pct + '%'; });
+        });
+      }
+
       function updateDots() {
         document.querySelectorAll('.dot').forEach((dot,i)=>{
           dot.classList.toggle('active', i===currentSlide);
         });
+        const cards = document.querySelectorAll('.course-card');
+        if (cards[currentSlide]) animateRoadBike(cards[currentSlide]);
       }
 
       function goTo(idx) {
@@ -976,14 +996,7 @@
 
         vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
-          const compareHtml = courses.map((cc,ci) => {
-            const pct = Math.round((cc.distance_km ?? 0) / maxDist * 100);
-            return `<div class="dist-row${ci===i?' active':''}">
-              <span class="dist-row-label">${['近','中','遠'][ci]}</span>
-              <div class="dist-row-track"><div class="dist-row-fill" style="width:${pct}%"></div></div>
-              <span class="dist-row-km">${cc.distance_km}km</span>
-            </div>`;
-          }).join('');
+          const pct = Math.round((c.distance_km ?? 0) / maxDist * 100);
           const firstSpot = (c.rest_spots ?? [])[0];
           const routeLine = firstSpot
             ? `📍 現在地 → ${escHtml(firstSpot.name)} → ${escHtml(c.destination)}`
@@ -1022,7 +1035,14 @@
                   <span>🏁 ${escHtml(c.destination)}</span>
                 </div>
               </div>
-              <div class="dist-compare">${compareHtml}</div>
+              <div class="road-viz">
+                <div class="road-track-wrap">
+                  <div class="road-dashes"></div>
+                  <div class="road-goal" style="left:${pct}%"></div>
+                  <span class="road-bike" data-pct="${pct}">🏍️</span>
+                </div>
+                <span class="road-km">${c.distance_km}km</span>
+              </div>
               <div class="card-actions">
                 <button class="card-btn-nav">🗺 ナビ開始</button>
                 <button class="card-btn-detail">詳細を見る →</button>
@@ -1249,6 +1269,7 @@
           renderSlider(data);          // HTML・ドット・イベント生成
           showScreen('screen-results'); // display:flex に変わる → clientWidth が確定
           initSlider();                 // ピクセル幅設定・タッチ初期化
+          animateRoadBike(document.querySelector('.course-card'));
 
           renderWeatherInfo();
           renderForecast(lat,lon);
