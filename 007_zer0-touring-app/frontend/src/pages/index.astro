@@ -64,6 +64,17 @@
       }
       .hero-title { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; }
       .hero-sub   { color: var(--muted); font-size: .95rem; line-height: 1.7; }
+      .usage-badge {
+        display: flex; align-items: center; gap: .4rem;
+        font-size: .8rem; color: var(--muted);
+        background: rgba(255,255,255,.05); border: 1px solid var(--border);
+        border-radius: 999px; padding: .25rem .75rem;
+        min-height: 1.6rem;
+      }
+      .usage-badge .dots { display: flex; gap: 4px; }
+      .usage-badge .dot  { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background .3s; }
+      .usage-badge .dot.used { background: var(--accent); }
+      .usage-badge.limit-reached { border-color: #ef4444; color: #ef4444; }
 
       /* ── Loading ── */
       #screen-loading { align-items: center; justify-content: center; padding: 1.75rem 2rem; gap: 1.75rem; }
@@ -705,6 +716,10 @@
       <h1 class="hero-title">Zer0 Touring</h1>
       <p class="hero-sub">現在地と天気をもとに<br/>AIが日帰りコースを3つ提案します</p>
       <button class="btn-primary" id="btn-start">コースを探す</button>
+      <div class="usage-badge" id="usage-badge" style="visibility:hidden">
+        <span class="dots" id="usage-dots"></span>
+        <span id="usage-text"></span>
+      </div>
     </div>
 
     <!-- ── Loading ── -->
@@ -1209,7 +1224,7 @@
         setStep('step-ai','active');
         try{
           const res=await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition})});
-          if(!res.ok) throw new Error();
+          if(!res.ok){const err=new Error();err.status=res.status;throw err;}
           const data=await res.json();
           setStep('step-ai','done');
 
@@ -1219,7 +1234,16 @@
 
           renderWeatherInfo();
           renderForecast(lat,lon);
-        }catch(_){showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');}
+          fetchUsage(); // 生成後にバッジ更新
+        }catch(e){
+          // 429 レートリミット
+          if(e && e.status===429){
+            fetchUsage();
+            showError('本日の利用上限（3回）に達しました。\n明日またお試しください。');
+          } else {
+            showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');
+          }
+        }
       }
 
       function backFromDetail() {
@@ -1247,6 +1271,32 @@
         if(!param)return;
         try{const c=JSON.parse(decodeURIComponent(atob(param)));courses=[c];openDetail(0);}catch(_){}
       })();
+
+      // 残り利用回数バッジ
+      function renderUsageBadge(used, limit, isAdmin) {
+        const badge = document.getElementById('usage-badge');
+        const dots  = document.getElementById('usage-dots');
+        const text  = document.getElementById('usage-text');
+        if(!badge) return;
+        if(isAdmin){ badge.style.visibility='hidden'; return; }
+        const remaining = Math.max(0, limit - used);
+        dots.innerHTML = Array.from({length: limit}, (_, i) =>
+          `<span class="dot${i < used ? ' used' : ''}"></span>`
+        ).join('');
+        text.textContent = `今日あと ${remaining} 回`;
+        badge.classList.toggle('limit-reached', remaining === 0);
+        badge.style.visibility = 'visible';
+      }
+
+      async function fetchUsage() {
+        try {
+          const res = await fetch(`${API_BASE}/api/status`);
+          if(!res.ok) return;
+          const d = await res.json();
+          renderUsageBadge(d.used, d.limit, d.admin);
+        } catch(_) {}
+      }
+      fetchUsage();
 
       if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
     </script>
