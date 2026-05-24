@@ -228,6 +228,13 @@
       .dist-mid  { background: rgba(56,189,248,.2);  color: #7dd3fc; border: 1px solid rgba(56,189,248,.4); }
       .dist-far  { background: rgba(168,85,247,.2);  color: #c4b5fd; border: 1px solid rgba(168,85,247,.4); }
 
+      .card-dest-weather {
+        display: flex; align-items: center; gap: .4rem;
+        font-size: .8rem; color: #93c5fd;
+        border-left: 2px solid rgba(147,197,253,.35);
+        padding-left: .55rem;
+      }
+
       @media (max-width: 679px) {
         .topbar { padding: .6rem 1rem; }
         .card-name { font-size: 1.1rem; }
@@ -416,7 +423,7 @@
       </div>
 
       <div id="forecast-wrap">
-        <p class="forecast-label">今週のツーリング天気</p>
+        <p class="forecast-label">現在地・今週の天気</p>
         <div class="forecast-strip" id="forecast-strip"></div>
       </div>
     </div>
@@ -447,6 +454,11 @@
         <div class="section">
           <p class="section-title">立ち寄りスポット</p>
           <div class="rest-spots" id="detail-spots"></div>
+        </div>
+        <div class="section" id="detail-dest-weather-section" style="display:none">
+          <p class="section-title">目的地の天気</p>
+          <div id="detail-dest-weather-current"></div>
+          <div class="forecast-strip" id="detail-dest-forecast-strip" style="margin-top:.65rem"></div>
         </div>
         <div class="section">
           <p class="section-title">走行情報</p>
@@ -506,7 +518,7 @@
         el.textContent = `${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
         el.style.display = 'block';
       }
-      async function renderForecast(lat, lon) {
+      async function renderForecastInto(lat, lon, stripEl) {
         try {
           const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max&timezone=auto&forecast_days=7`);
           const d = await res.json();
@@ -514,10 +526,7 @@
           let bestIdx=1, bestScore=-1;
           weathercode.forEach((c,i)=>{if(i===0)return;const s=getWeatherMeta(c).score;if(s>bestScore){bestScore=s;bestIdx=i;}});
           const DOW=['日','月','火','水','木','金','土'];
-          const strip=document.getElementById('forecast-strip');
-          const wrap=document.getElementById('forecast-wrap');
-          if(!strip||!wrap)return;
-          strip.innerHTML=time.map((t,i)=>{
+          stripEl.innerHTML=time.map((t,i)=>{
             const date=new Date(t+'T00:00:00');
             const meta=getWeatherMeta(weathercode[i]);
             const temp=Math.round(temperature_2m_max[i]);
@@ -530,8 +539,14 @@
               ${i===bestIdx?'<span class="fd-best">★ 狙い目</span>':''}
             </div>`;
           }).join('');
-          wrap.style.display='block';
         } catch(_){}
+      }
+      async function renderForecast(lat, lon) {
+        const strip=document.getElementById('forecast-strip');
+        const wrap=document.getElementById('forecast-wrap');
+        if(!strip||!wrap)return;
+        await renderForecastInto(lat, lon, strip);
+        if(strip.innerHTML) wrap.style.display='block';
       }
 
       /* ─────────────────────────────────────
@@ -573,6 +588,9 @@
         vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
           const tagsHtml = (c.tags??[]).slice(0,3).map(t=>`<span class="course-tag">${t}</span>`).join('');
+          const destW = c.dest_weather_code !== undefined
+            ? (() => { const m = getWeatherMeta(c.dest_weather_code); return `<div class="card-dest-weather">📍目的地天気&nbsp; ${m.icon} ${c.dest_temp}℃ · ${m.label}</div>`; })()
+            : '';
           return `
             <article class="course-card" data-idx="${i}">
               <div class="card-header" style="background:${d.grad}">
@@ -591,6 +609,7 @@
                   <span class="card-info-sep">·</span>
                   <span>🏁 ${c.destination}</span>
                 </div>
+                ${destW}
               </div>
               <div class="card-actions">
                 <button class="card-btn-nav">🗺 ナビ開始</button>
@@ -693,10 +712,27 @@
           c.caution    ?`<div class="info-chip info-caution"><span>⚠️</span><span>${c.caution}</span></div>`:'',
           c.best_season?`<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${c.best_season}</span></div>`:'',
         ].filter(Boolean).join('');
+
+        // 目的地の天気
+        const destSection=document.getElementById('detail-dest-weather-section');
+        const destCurrentEl=document.getElementById('detail-dest-weather-current');
+        const destForecastStrip=document.getElementById('detail-dest-forecast-strip');
+        if(c.dest_weather_code!==undefined){
+          const m=getWeatherMeta(c.dest_weather_code);
+          destCurrentEl.innerHTML=`<div class="info-chip" style="background:rgba(147,197,253,.1);color:#93c5fd;border:1px solid rgba(147,197,253,.3)"><span>${m.icon}</span><span>${c.dest_temp}℃ · ${m.label}</span></div>`;
+          destSection.style.display='';
+          if(c.dest_lat!==undefined){
+            destForecastStrip.innerHTML='';
+            renderForecastInto(c.dest_lat,c.dest_lon,destForecastStrip);
+          }
+        }else{
+          destSection.style.display='none';
+        }
+
         document.getElementById('detail-map-btn').href=buildMapUrl(c);
         const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 約${c.duration_hours}時間\n目的地: ${c.destination}\n#ツーリング #バイク`;
         document.getElementById('share-x-btn').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
-        const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,rest_spots:c.rest_spots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,_distIdx:idx};
+        const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,rest_spots:c.rest_spots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
         try{const b64=btoa(encodeURIComponent(JSON.stringify(sd)));history.pushState({course:b64},'','?course='+b64);}catch(_){}
         showScreen('screen-detail');
       }
