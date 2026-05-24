@@ -98,6 +98,7 @@ Resources:
       Environment:
         Variables:
           BEDROCK_MODEL_ID: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+          GOOGLE_MAPS_API_KEY: ""
       Code:
         ZipFile: |
           def lambda_handler(event, context):
