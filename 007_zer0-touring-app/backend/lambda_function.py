@@ -8,7 +8,7 @@ import threading
 import urllib.request
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import boto3
 from botocore.config import Config
 
@@ -16,16 +16,74 @@ BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-ha
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 GMAPS_USAGE_PARAM   = "/zer0-touring/gmaps-usage"
 GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ（同時アクセス時のSSM非アトミック書き込みによる誤差対策）
+DAILY_LIMIT         = int(os.environ.get("DAILY_LIMIT", "3"))
+RATE_LIMIT_TABLE    = "zer0-touring-ratelimit"
+
+ALLOWED_ORIGINS = {
+    "https://touring.zer0-infra.com",
+    "http://localhost:4321",
+}
 
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name="ap-northeast-1",
     config=Config(read_timeout=60, connect_timeout=10),
 )
-ssm = boto3.client("ssm", region_name="ap-northeast-1")
+ssm      = boto3.client("ssm",      region_name="ap-northeast-1")
+dynamodb = boto3.client("dynamodb", region_name="ap-northeast-1")
 
 # Nominatim は 1req/sec の制限があるためロックで直列化
 _NOM_LOCK = threading.Lock()
+
+
+def _get_cors_headers(event):
+    origin = (event.get("headers") or {}).get("origin", "")
+    allowed = origin if origin in ALLOWED_ORIGINS else "https://touring.zer0-infra.com"
+    return {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": allowed,
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+    }
+
+
+def _get_client_ip(event):
+    # CloudFront が X-Forwarded-For の先頭に本物のクライアントIPを付与する
+    xff = (event.get("headers") or {}).get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return (event.get("requestContext") or {}).get("http", {}).get("sourceIp", "unknown")
+
+
+def check_rate_limit(ip):
+    """IP別・日別カウントを DynamoDB でアトミックに管理する。
+    DAILY_LIMIT 以内なら True、超過なら False を返す。"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    pk    = f"{ip}#{today}"
+    # TTL = 翌々日0時UTC（日付またぎ直後も安全に消える）
+    ttl   = int((datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=2)).timestamp())
+    try:
+        dynamodb.update_item(
+            TableName=RATE_LIMIT_TABLE,
+            Key={"pk": {"S": pk}},
+            UpdateExpression="ADD #c :one SET #ttl = if_not_exists(#ttl, :ttl)",
+            ConditionExpression="attribute_not_exists(#c) OR #c < :limit",
+            ExpressionAttributeNames={"#c": "count", "#ttl": "ttl"},
+            ExpressionAttributeValues={
+                ":one":   {"N": "1"},
+                ":ttl":   {"N": str(ttl)},
+                ":limit": {"N": str(DAILY_LIMIT)},
+            },
+        )
+        print(f"[rate-limit] {ip} OK (limit={DAILY_LIMIT}/day)")
+        return True
+    except dynamodb.exceptions.ConditionalCheckFailedException:
+        print(f"[rate-limit] {ip} EXCEEDED (limit={DAILY_LIMIT}/day)")
+        return False
+    except Exception as e:
+        # DynamoDB 障害時は通す（ユーザーを巻き込まない）
+        print(f"[rate-limit] ERR {e} → allow")
+        return True
 
 PROMPT_TEMPLATE = """あなたはバイクツーリングの専門家です。
 以下の情報を元に、日帰りツーリングコースを3つ提案してください。
@@ -85,12 +143,6 @@ rest_spotsのルール（最重要）:
 - 各スポットは実際にそのルート上または近傍にある場所を選ぶ
 - Googleマップでwaypoints順に設定した時に自然なルートになること"""
 
-CORS_HEADERS = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-}
 
 
 MAX_WAYPOINT_KM = 200  # 日帰り圏内（片道200km以内）を超える座標は誤ジオコーディングとして捨てる
@@ -288,9 +340,22 @@ def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
 
 
 def lambda_handler(event, context):
-    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+    cors = _get_cors_headers(event)
+    method = (event.get("requestContext") or {}).get("http", {}).get("method", "")
     if method == "OPTIONS":
-        return {"statusCode": 200, "headers": CORS_HEADERS, "body": ""}
+        return {"statusCode": 200, "headers": cors, "body": ""}
+
+    # レートリミット（IP別・日別）
+    client_ip = _get_client_ip(event)
+    if not check_rate_limit(client_ip):
+        return {
+            "statusCode": 429,
+            "headers": cors,
+            "body": json.dumps(
+                {"error": f"1日{DAILY_LIMIT}回まで利用できます。明日またお試しください。"},
+                ensure_ascii=False,
+            ),
+        }
 
     try:
         body = json.loads(event.get("body") or "{}")
@@ -301,14 +366,14 @@ def lambda_handler(event, context):
     except (KeyError, ValueError, json.JSONDecodeError) as e:
         return {
             "statusCode": 400,
-            "headers": CORS_HEADERS,
+            "headers": cors,
             "body": json.dumps({"error": f"Invalid request: {e}"}),
         }
 
     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
         return {
             "statusCode": 400,
-            "headers": CORS_HEADERS,
+            "headers": cors,
             "body": json.dumps({"error": "Coordinates out of range"}),
         }
 
@@ -335,7 +400,7 @@ def lambda_handler(event, context):
         print(f"[ERROR] Bedrock: {e}")
         return {
             "statusCode": 500,
-            "headers": CORS_HEADERS,
+            "headers": cors,
             "body": json.dumps({"error": "AI service error"}),
         }
 
@@ -351,7 +416,7 @@ def lambda_handler(event, context):
         print(f"[ERROR] Parse: {e}\nRaw: {text}")
         return {
             "statusCode": 500,
-            "headers": CORS_HEADERS,
+            "headers": cors,
             "body": json.dumps({"error": "Failed to parse AI response"}),
         }
 
@@ -374,6 +439,6 @@ def lambda_handler(event, context):
 
     return {
         "statusCode": 200,
-        "headers": CORS_HEADERS,
+        "headers": cors,
         "body": json.dumps({"courses": courses}, ensure_ascii=False),
     }
