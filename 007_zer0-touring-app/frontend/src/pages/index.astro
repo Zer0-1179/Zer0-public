@@ -1086,15 +1086,8 @@
         const spots = (c.rest_spots??[]).map(s=>encodeURIComponent(s.name));
         const hasGps = userLat&&userLon;
         const coord  = hasGps?`${userLat.toFixed(6)},${userLon.toFixed(6)}`:'';
-        const isIOS  = /iP(hone|ad|od)/.test(navigator.userAgent);
         const op = hasGps?`&origin=${coord}`:'';
         const wp = spots.length?`&waypoints=${spots.join('%7C')}` :'';
-        // iOS: comgooglemaps:// でアプリ直起動（waypoints 対応）
-        if(isIOS&&hasGps){
-          const ioswp=spots.length?`&waypoints=${spots.join('+')}` :'';
-          return `comgooglemaps://?saddr=${coord}&daddr=${dest}${ioswp}&directionsmode=driving`;
-        }
-        // Android / Web: https URL（waypoints 含む。Android はアプリで開く提案が出る）
         return `https://www.google.com/maps/dir/?api=1${op}&destination=${dest}${wp}&travelmode=driving`;
       }
 
