@@ -441,6 +441,22 @@
         font-size: .83rem; color: var(--muted); flex-wrap: wrap;
       }
       .card-info-sep { color: var(--border); user-select: none; }
+      .route-summary {
+        font-size: .8rem; color: rgba(255,255,255,.6);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+
+      /* 距離バー */
+      .dist-bar-wrap {
+        height: 4px; background: rgba(255,255,255,.15);
+        border-radius: 9999px; overflow: hidden;
+        margin: 0 1.25rem .625rem;
+      }
+      .dist-bar-fill {
+        height: 100%; background: var(--accent);
+        border-radius: 9999px; width: 0%;
+        transition: width .6s ease-out;
+      }
 
       /* アクションボタン */
       .card-actions {
@@ -912,10 +928,25 @@
          showScreen の後に initSlider() を呼ぶことで
          clientWidth が正しく取れる
       ───────────────────────────────────── */
+      function animateDistBar(cardEl) {
+        const fill = cardEl && cardEl.querySelector('.dist-bar-fill');
+        if (!fill) return;
+        fill.style.transition = 'none';
+        fill.style.width = '0%';
+        fill.offsetWidth; // force reflow（iOS Safari 対応）
+        fill.style.transition = '';
+        // double rAF: iOS Safari で transition が確実に発火するよう保証
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { fill.style.width = fill.dataset.pct + '%'; });
+        });
+      }
+
       function updateDots() {
         document.querySelectorAll('.dot').forEach((dot,i)=>{
           dot.classList.toggle('active', i===currentSlide);
         });
+        const cards = document.querySelectorAll('.course-card');
+        if (cards[currentSlide]) animateDistBar(cards[currentSlide]);
       }
 
       function goTo(idx) {
@@ -945,8 +976,15 @@
         const vp     = document.getElementById('card-viewport');
         const dotsEl = document.getElementById('slider-dots');
 
+        const maxDist = Math.max(...courses.map(c => c.distance_km ?? 0)) || 1;
+
         vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
+          const pct = Math.round((c.distance_km ?? 0) / maxDist * 100);
+          const firstSpot = (c.rest_spots ?? [])[0];
+          const routeLine = firstSpot
+            ? `📍 現在地 → ${escHtml(firstSpot.name)} → ${escHtml(c.destination)}`
+            : `📍 現在地 → ${escHtml(c.destination)}`;
           const tagsHtml = (c.tags??[]).slice(0,3).map(t=>`<span class="course-tag">${escHtml(t)}</span>`).join('');
           const destWeatherBadge = c.dest_weather_code !== undefined
             ? (() => { const m = getWeatherMeta(c.dest_weather_code); return `<span class="dest-weather-badge">📌 ${m.icon} ${c.dest_temp}℃</span>`; })()
@@ -971,6 +1009,7 @@
               </div>
               <div class="card-body">
                 <h3 class="card-name">${escHtml(c.name)}</h3>
+                <p class="route-summary">${routeLine}</p>
                 ${tagsHtml?`<div class="course-tags">${tagsHtml}</div>`:''}
                 <div class="card-info-row">
                   <span>🛣 ${c.distance_km}km</span>
@@ -980,6 +1019,7 @@
                   <span>🏁 ${escHtml(c.destination)}</span>
                 </div>
               </div>
+              <div class="dist-bar-wrap"><div class="dist-bar-fill" data-pct="${pct}" style="width:0%"></div></div>
               <div class="card-actions">
                 <button class="card-btn-nav">🗺 ナビ開始</button>
                 <button class="card-btn-detail">詳細を見る →</button>
@@ -1206,6 +1246,7 @@
           renderSlider(data);          // HTML・ドット・イベント生成
           showScreen('screen-results'); // display:flex に変わる → clientWidth が確定
           initSlider();                 // ピクセル幅設定・タッチ初期化
+          animateDistBar(document.querySelector('.course-card')); // 1枚目バー初期アニメーション
 
           renderWeatherInfo();
           renderForecast(lat,lon);
