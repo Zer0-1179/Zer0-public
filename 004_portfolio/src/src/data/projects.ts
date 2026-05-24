@@ -11,6 +11,7 @@ export type Project = {
   pointsEn: string[];
   architecture: string;
   githubUrl?: string;
+  siteUrl?: string;
   tags: string[];
   services: string[];
   emoji: string;
@@ -200,8 +201,8 @@ export const projects: Project[] = [
     nameEn: 'Bike Touring PWA',
     descJa: '現在地と天気からAIが日帰りツーリングコース3ルートを提案するPWA。片道・往復時間・帰路提案・特徴タグ・Googleマップナビ・XシェアまでをBedrock一括生成。',
     descEn: 'PWA suggesting 3 day-trip motorcycle routes from current location and weather. Bedrock generates one-way/round-trip times, return routes, feature tags, and Google Maps navigation in one shot.',
-    longDescJa: 'GPS取得→Open-Meteo天気API→Bedrock Claude Haikuの3ステップでコースを自動生成。近距離・中距離・長距離の3コースをカードグリッドで1画面に表示し、タップで詳細を確認。詳細画面ではWikipedia写真・帰路提案・Googleマップナビ（Android/iOS/Web別URL）・Xシェア・?course=Base64によるURLコピー＆復元が使える。Astro static + CloudFront + S3 + Lambda のサーバーレス構成で月額$0.40の低コスト運用を実現。',
-    longDescEn: 'Three-step pipeline: GPS → Open-Meteo → Bedrock Claude Haiku. Three routes (short/mid/long) fit on one screen as a card grid, each showing feature tags, route summary, and a relative distance bar. Detail view offers Wikipedia photos, return-route suggestions, platform-adaptive Google Maps navigation (android/iOS/web), X share, and URL copy/restore via ?course=Base64. Serverless Astro static + CloudFront + S3 + Lambda at just $0.40/month.',
+    longDescJa: 'GPS取得→Open-Meteo天気API→Bedrock Claude Haikuの3ステップでコースを自動生成。近距離（緑丘）・中距離（青海）・長距離（紫山脈）の3コースをコース別景観シルエット付きカードでスワイプ表示。詳細画面ではWikipedia写真・現在地↔目的地天気比較・週間予報（最高/最低気温）・帰路提案・Googleマップナビ（Android/iOS/Web別URL）・Xシェア・?course=Base64によるURLコピー＆復元が使える。Astro static + CloudFront + S3 + Lambda のサーバーレス構成で月額$0.40の低コスト運用を実現。',
+    longDescEn: 'Three-step pipeline: GPS → Open-Meteo → Bedrock Claude Haiku. Three routes (short/mid/long) displayed as swipeable cards with per-course landscape silhouettes (green hills / blue sea / purple mountains), route summary line, and destination weather badge. Detail view: Wikipedia photos, current↔destination weather comparison, 7-day forecast with high/low temps, return-route suggestions, platform-adaptive Google Maps navigation, X share, and URL copy/restore via ?course=Base64. Serverless Astro static + CloudFront + S3 + Lambda at just $0.40/month.',
     pointsJa: [
       'GPS・天気・AI生成の3ステップをリアルタイムのローディング画面で可視化し、待ち時間のストレスを軽減',
       'Bedrock Claude Haikuが特徴タグ・ルートサマリー・片道/往復時間・帰路提案を含む詳細コースを一括生成',
@@ -216,6 +217,7 @@ export const projects: Project[] = [
     ],
     architecture: '/images/007_architecture.png',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public',
+    siteUrl: 'https://touring.zer0-infra.com',
     tags: ['PWA', 'Bedrock', 'Astro', 'GPS'],
     services: ['Lambda', 'API Gateway', 'Amazon Bedrock', 'CloudFront', 'S3', 'CloudFormation'],
     emoji: '🏍️',
