@@ -446,25 +446,27 @@
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
 
-      /* 距離バッジ */
+      /* 距離バッジ（シグナルバー） */
       .dist-badge {
         padding: .45rem 1.25rem .4rem;
         display: flex; flex-direction: column; gap: .1rem;
       }
-      .dist-badge-row {
-        display: flex; align-items: center; gap: .45rem;
-      }
+      .dist-badge-row { display: flex; align-items: center; gap: .45rem; }
       .dist-badge-label {
         font-size: .65rem; font-weight: 700; color: var(--muted);
         letter-spacing: .04em; flex-shrink: 0;
       }
-      .dist-badge-dots { display: flex; gap: .28rem; align-items: center; }
-      .db-dot {
-        width: 7px; height: 7px; border-radius: 50%;
+      .dist-bars { display: flex; align-items: flex-end; gap: 3px; }
+      .dist-bar-item {
+        width: 5px; border-radius: 1px 1px 0 0; flex-shrink: 0;
         background: rgba(255,255,255,.2);
       }
-      .db-dot.on { background: var(--accent); }
-      .dist-badge-km { font-size: .72rem; font-weight: 700; margin-left: auto; }
+      .dist-bar-item:nth-child(1){height:5px}
+      .dist-bar-item:nth-child(2){height:8px}
+      .dist-bar-item:nth-child(3){height:11px}
+      .dist-bar-item:nth-child(4){height:14px}
+      .dist-bar-item:nth-child(5){height:17px}
+      .dist-bar-item.on { background: var(--accent); }
       .dist-badge-note { font-size: .62rem; color: rgba(255,255,255,.38); }
 
       /* アクションボタン */
@@ -975,9 +977,9 @@
 
         vp.innerHTML = courses.map((c,i) => {
           const d = DIST[i];
-          const filledDots = DIST_DOTS[i];
+          const filledBars = DIST_DOTS[i];
           const distNote   = DIST_NOTES[i];
-          const dotsHtml   = Array.from({length:5},(_,di)=>`<span class="db-dot${di<filledDots?' on':''}"></span>`).join('');
+          const barsHtml   = Array.from({length:5},(_,bi)=>`<span class="dist-bar-item${bi<filledBars?' on':''}"></span>`).join('');
           const firstSpot = (c.rest_spots ?? [])[0];
           const routeLine = firstSpot
             ? `📍 現在地 → ${escHtml(firstSpot.name)} → ${escHtml(c.destination)}`
@@ -1019,8 +1021,7 @@
               <div class="dist-badge">
                 <div class="dist-badge-row">
                   <span class="dist-badge-label">距離</span>
-                  <div class="dist-badge-dots">${dotsHtml}</div>
-                  <span class="dist-badge-km">${c.distance_km}km</span>
+                  <div class="dist-bars">${barsHtml}</div>
                 </div>
                 <p class="dist-badge-note">${distNote}</p>
               </div>
