@@ -8,17 +8,21 @@ import threading
 import urllib.request
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 import boto3
 from botocore.config import Config
 
-BEDROCK_MODEL_ID   = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
+BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+GMAPS_USAGE_PARAM   = "/zer0-touring/gmaps-usage"
+GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ
 
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name="ap-northeast-1",
     config=Config(read_timeout=60, connect_timeout=10),
 )
+ssm = boto3.client("ssm", region_name="ap-northeast-1")
 
 # Nominatim は 1req/sec の制限があるためロックで直列化
 _NOM_LOCK = threading.Lock()
@@ -154,6 +158,35 @@ def osrm_route(waypoints):
     return None, None
 
 
+def check_and_reserve_gmaps(n_courses=3):
+    """今月の Google Maps 残枠を確認し、n_courses 分を予約する。
+    使用可能なら True、無料枠超過または未設定なら False を返す。"""
+    if not GOOGLE_MAPS_API_KEY:
+        return False
+    current_month = datetime.now().strftime("%Y-%m")
+    try:
+        try:
+            resp = ssm.get_parameter(Name=GMAPS_USAGE_PARAM)
+            data = json.loads(resp["Parameter"]["Value"])
+        except ssm.exceptions.ParameterNotFound:
+            data = {"month": "", "count": 0}
+
+        if data.get("month") != current_month:
+            data = {"month": current_month, "count": 0}
+
+        if data["count"] + n_courses > GMAPS_FREE_LIMIT:
+            print(f"[gmaps-usage] 無料枠上限 {data['count']}/{GMAPS_FREE_LIMIT} → OSRM使用")
+            return False
+
+        data["count"] += n_courses
+        ssm.put_parameter(Name=GMAPS_USAGE_PARAM, Value=json.dumps(data), Type="String", Overwrite=True)
+        print(f"[gmaps-usage] {current_month}: {data['count']}/{GMAPS_FREE_LIMIT}")
+        return True
+    except Exception as e:
+        print(f"[gmaps-usage] ERR {e} → OSRM使用")
+        return False
+
+
 def google_maps_route(origin_lat, origin_lon, dest_lat, dest_lon):
     """Google Maps Directions API で高速道路込みの実走行時間・距離を取得。
     (distance_km, duration_hours) または (None, None) を返す。"""
@@ -204,10 +237,10 @@ def fetch_dest_weather(lat, lon):
     return None, None
 
 
-def enrich_course(course, origin_lat, origin_lon):
+def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
     """
-    目的地（destination）をジオコーディングして OSRM で実距離・所要時間を取得する。
-    中間スポット名は AI 生成固有名が多く誤ジオコーディングしやすいため除外。
+    目的地（destination）をジオコーディングして距離・所要時間を取得する。
+    use_gmaps=True のとき Google Maps Directions API を使用、False なら OSRM。
     失敗時は AI 推定値をそのまま維持。
     """
     dest_name = course.get("destination", "")
@@ -222,13 +255,16 @@ def enrich_course(course, origin_lat, origin_lon):
     course["dest_lat"] = dest_lat
     course["dest_lon"] = dest_lon
 
-    # Google Maps 優先（APIキー設定済みの場合）、なければ OSRM フォールバック
-    dist_km, duration_h = google_maps_route(origin_lat, origin_lon, dest_lat, dest_lon)
+    dist_km, duration_h = None, None
+
+    if use_gmaps:
+        dist_km, duration_h = google_maps_route(origin_lat, origin_lon, dest_lat, dest_lon)
+
     if dist_km is None:
+        # OSRM フォールバック
         waypoints = [(origin_lat, origin_lon), (dest_lat, dest_lon)]
         dist_km, _ = osrm_route(waypoints)
         if dist_km is not None:
-            # OSRM は高速道路の速度データが保守的なため距離から再計算
             if dist_km >= 80:
                 avg_kmh = 70
             elif dist_km >= 40:
@@ -312,11 +348,14 @@ def lambda_handler(event, context):
             "body": json.dumps({"error": "Failed to parse AI response"}),
         }
 
-    # OSRM で実距離・所要時間に上書き（タイムアウト余裕がある場合のみ）
+    # 今月の Google Maps 残枠を確認（3コース分予約）
+    use_gmaps = check_and_reserve_gmaps(n_courses=len(courses))
+
+    # 距離・所要時間を実データに上書き（タイムアウト余裕がある場合のみ）
     if context.get_remaining_time_in_millis() > 12000:
         def _enrich(course):
             try:
-                enrich_course(course, lat, lon)
+                enrich_course(course, lat, lon, use_gmaps=use_gmaps)
             except Exception as e:
                 print(f"[ERROR] enrich: {e}")
             return course

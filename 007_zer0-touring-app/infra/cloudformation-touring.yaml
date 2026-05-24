@@ -83,6 +83,15 @@ Resources:
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
                   # 実際に呼ばれる基盤モデル（マルチリージョン）
                   - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+        - PolicyName: SSMGmapsUsage
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0-touring/*"
 
   # ── Lambda 関数（コース提案 API） ──────────────────────────────
   TouringLambdaFunction:
