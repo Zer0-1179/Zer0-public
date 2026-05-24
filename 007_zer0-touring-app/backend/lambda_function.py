@@ -18,6 +18,7 @@ GMAPS_USAGE_PARAM   = "/zer0-touring/gmaps-usage"
 GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ（同時アクセス時のSSM非アトミック書き込みによる誤差対策）
 DAILY_LIMIT         = int(os.environ.get("DAILY_LIMIT", "3"))
 RATE_LIMIT_TABLE    = "zer0-touring-ratelimit"
+ADMIN_TOKEN         = os.environ.get("ADMIN_TOKEN", "")
 
 ALLOWED_ORIGINS = {
     "https://touring.zer0-infra.com",
@@ -53,6 +54,24 @@ def _get_client_ip(event):
     if xff:
         return xff.split(",")[0].strip()
     return (event.get("requestContext") or {}).get("http", {}).get("sourceIp", "unknown")
+
+
+def get_usage(ip):
+    """今日の使用回数を読み取る（カウントを増やさない）。"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    pk    = f"{ip}#{today}"
+    try:
+        resp = dynamodb.get_item(
+            TableName=RATE_LIMIT_TABLE,
+            Key={"pk": {"S": pk}},
+            ProjectionExpression="#c",
+            ExpressionAttributeNames={"#c": "count"},
+        )
+        used = int(resp.get("Item", {}).get("count", {}).get("N", 0))
+    except Exception as e:
+        print(f"[get-usage] ERR {e}")
+        used = 0
+    return used
 
 
 def check_rate_limit(ip):
@@ -340,14 +359,31 @@ def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
 
 
 def lambda_handler(event, context):
-    cors = _get_cors_headers(event)
-    method = (event.get("requestContext") or {}).get("http", {}).get("method", "")
+    cors   = _get_cors_headers(event)
+    http   = (event.get("requestContext") or {}).get("http", {})
+    method = http.get("method", "")
+    path   = http.get("path", "")
+
     if method == "OPTIONS":
         return {"statusCode": 200, "headers": cors, "body": ""}
 
-    # レートリミット（IP別・日別）
+    # GET /api/status — 残り回数を返す（カウント増加なし）
+    if method == "GET" and path == "/api/status":
+        client_ip = _get_client_ip(event)
+        req_token = (event.get("headers") or {}).get("x-admin-token", "")
+        is_admin  = bool(ADMIN_TOKEN and req_token == ADMIN_TOKEN)
+        if is_admin:
+            payload = {"used": 0, "limit": DAILY_LIMIT, "remaining": DAILY_LIMIT, "admin": True}
+        else:
+            used = get_usage(client_ip)
+            payload = {"used": used, "limit": DAILY_LIMIT, "remaining": max(0, DAILY_LIMIT - used)}
+        return {"statusCode": 200, "headers": cors, "body": json.dumps(payload)}
+
+    # レートリミット（IP別・日別）— 管理者トークンがあればスキップ
     client_ip = _get_client_ip(event)
-    if not check_rate_limit(client_ip):
+    req_token = (event.get("headers") or {}).get("x-admin-token", "")
+    is_admin  = bool(ADMIN_TOKEN and req_token == ADMIN_TOKEN)
+    if not is_admin and not check_rate_limit(client_ip):
         return {
             "statusCode": 429,
             "headers": cors,
@@ -356,6 +392,8 @@ def lambda_handler(event, context):
                 ensure_ascii=False,
             ),
         }
+    if is_admin:
+        print(f"[rate-limit] admin bypass ({client_ip})")
 
     try:
         body = json.loads(event.get("body") or "{}")
