@@ -1087,7 +1087,9 @@
 
       function buildMapUrl(c){
         const dest  = encodeURIComponent(c.destination);
-        const spots = (c.outbound_spots ?? c.rest_spots ?? []).map(s=>encodeURIComponent(s.name));
+        const spots = (c.outbound_spots ?? c.rest_spots ?? []).map(s=>
+          s.lat&&s.lon ? `${s.lat},${s.lon}` : encodeURIComponent(s.name)
+        );
         const hasGps = userLat&&userLon;
         const coord  = hasGps?`${userLat.toFixed(6)},${userLon.toFixed(6)}`:'';
         const op = hasGps?`&origin=${coord}`:'';
