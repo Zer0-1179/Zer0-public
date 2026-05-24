@@ -9,20 +9,20 @@
 
 ## 概要
 
-| 項目         | 内容                                                                                    |
-| ------------ | --------------------------------------------------------------------------------------- |
-| URL          | https://touring.zer0-infra.com                                                          |
-| 現在地取得   | ブラウザ Geolocation API（30秒タイムアウト）                                            |
-| 天気取得     | Open-Meteo API（現在地・目的地の両方／無料・APIキー不要）                               |
-| AI提案       | Amazon Bedrock Claude Haiku（片道・往復時間・帰路・特徴タグを含む詳細コース生成）       |
-| コース内容   | 近距離・中距離・長距離 + タグ・立ち寄りスポット（経路順）・帰路提案                    |
-| 距離・時間   | **Google Maps Directions API（優先）** / OSRM（フォールバック）による実道路距離・走行時間  |
-| 天気比較     | 詳細画面に現在地 🏍️→ 目的地の天気比較ウィジェット（バイク走行アニメーション付き）       |
-| 週間天気     | 現在地・目的地の7日間天気予報ストリップ（狙い目日ハイライト）                          |
-| シェア       | Xシェア・URLコピー（`?course=` Base64でコース情報を復元可能）                          |
-| ナビ         | Googleマップ連携（立ち寄りスポット含む / iOS: `comgooglemaps://` / Android・Web: maps URL）|
-| ホスティング | CloudFront + S3（PWA / Service Worker 対応）                                            |
-| 月額コスト   | ~$0.40（100回利用想定）/ 1回 ~$0.005（約0.7円）                                         |
+| 項目         | 内容                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| URL          | https://touring.zer0-infra.com                                                              |
+| 現在地取得   | ブラウザ Geolocation API（30秒タイムアウト）                                                |
+| 天気取得     | Open-Meteo API（現在地・目的地の両方／無料・APIキー不要）                                   |
+| AI提案       | Amazon Bedrock Claude Haiku（片道・往復時間・帰路・特徴タグを含む詳細コース生成）           |
+| コース内容   | 近距離・中距離・長距離 + タグ・立ち寄りスポット（経路順）・帰路提案                         |
+| 距離・時間   | **Google Maps Directions API（優先）** / OSRM（フォールバック）による実道路距離・走行時間   |
+| 天気比較     | 詳細画面に現在地 🏍️→ 目的地の天気比較ウィジェット（バイク走行アニメーション付き）           |
+| 週間天気     | 現在地・目的地の7日間天気予報ストリップ（狙い目日ハイライト）                               |
+| シェア       | Xシェア・URLコピー（`?course=` Base64でコース情報を復元可能）                               |
+| ナビ         | Googleマップ連携（立ち寄りスポット含む / iOS: `comgooglemaps://` / Android・Web: maps URL） |
+| ホスティング | CloudFront + S3（PWA / Service Worker 対応）                                                |
+| 月額コスト   | ~$0.40（100回利用想定）/ 1回 ~$0.005（約0.7円）                                             |
 
 ## アーキテクチャ
 
@@ -44,18 +44,18 @@
 
 ## 技術スタック
 
-| レイヤー       | 技術                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------------- |
-| フロントエンド | Astro（`output: 'static'`）+ PWA（Web Manifest + Service Worker）                                        |
-| 現在地取得     | ブラウザ Geolocation API                                                                                 |
-| 天気取得       | Open-Meteo API（現在地・目的地・7日間予報 / 無料・APIキー不要）                                          |
-| AI提案         | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048） |
+| レイヤー       | 技術                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| フロントエンド | Astro（`output: 'static'`）+ PWA（Web Manifest + Service Worker）                                               |
+| 現在地取得     | ブラウザ Geolocation API                                                                                        |
+| 天気取得       | Open-Meteo API（現在地・目的地・7日間予報 / 無料・APIキー不要）                                                 |
+| AI提案         | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048）        |
 | 距離・走行時間 | **Google Maps Directions API**（優先・月10,000件無料） + Nominatim（OSM ジオコーディング）→ OSRM フォールバック |
-| API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                          |
-| 使用数管理     | AWS SSM Parameter Store（`/zer0-touring/gmaps-usage`：Google Maps 月間使用カウント）                    |
-| ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                                                           |
-| 写真（詳細）   | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）/ 失敗時はグラデーション+🏍️                      |
-| IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                                                         |
+| API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                                 |
+| 使用数管理     | AWS SSM Parameter Store（`/zer0-touring/gmaps-usage`：Google Maps 月間使用カウント）                            |
+| ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                                                                  |
+| 写真（詳細）   | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）/ 失敗時はグラデーション+🏍️                             |
+| IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                                                                |
 
 ## UI フロー
 
@@ -158,11 +158,11 @@ iOS Safari はバックグラウンドに回った後に再フォアグラウン
 
 カードヘッダー背景をコース種別で視覚的に差別化。`::before`/`::after` 擬似要素に `clip-path: polygon()` を使って地形シルエットを描画し、JavaScript による DOM 変更なしに純粋な CSS で実装。
 
-| コース   | 背景色 | シルエット形状                       |
-|---------|-------|--------------------------------------|
-| 近距離  | 濃緑  | 低い丘と木立（緩やかな波形）          |
-| 中距離  | 紺青  | 海の水平線（波とグラデーション）      |
-| 長距離  | 深紫  | ギザギザ山脈（2層：前景と背景）      |
+| コース | 背景色 | シルエット形状                   |
+| ------ | ------ | -------------------------------- |
+| 近距離 | 濃緑   | 低い丘と木立（緩やかな波形）     |
+| 中距離 | 紺青   | 海の水平線（波とグラデーション） |
+| 長距離 | 深紫   | ギザギザ山脈（2層：前景と背景）  |
 
 ## ディレクトリ構成
 
@@ -206,13 +206,13 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 ### POST /api/suggest
 
-**リクエスト**
+**リクエスト**  
 
 ```json
 { "latitude": 35.6762, "longitude": 139.6503, "temperature": 22, "weather_condition": "晴れ" }
 ```
 
-**レスポンス**
+**レスポンス**  
 
 ```json
 {
