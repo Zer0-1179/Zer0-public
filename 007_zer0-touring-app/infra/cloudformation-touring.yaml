@@ -92,6 +92,33 @@ Resources:
                   - ssm:GetParameter
                   - ssm:PutParameter
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0-touring/*"
+        - PolicyName: DynamoDBRateLimit
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt TouringRateLimitTable.Arn
+
+  # ── DynamoDB レートリミットテーブル ───────────────────────────
+  TouringRateLimitTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: zer0-touring-ratelimit
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
 
   # ── Lambda 関数（コース提案 API） ──────────────────────────────
   TouringLambdaFunction:
@@ -108,6 +135,7 @@ Resources:
         Variables:
           BEDROCK_MODEL_ID: jp.anthropic.claude-haiku-4-5-20251001-v1:0
           GOOGLE_MAPS_API_KEY: ""
+          DAILY_LIMIT: "3"
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -178,8 +206,8 @@ Resources:
       StageName: "$default"
       AutoDeploy: true
       DefaultRouteSettings:
-        ThrottlingBurstLimit: 50
-        ThrottlingRateLimit: 20
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 2
 
   # ── CloudFront レスポンスヘッダーポリシー ─────────────────────
   TouringResponseHeadersPolicy:
