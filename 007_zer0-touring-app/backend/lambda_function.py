@@ -136,7 +136,7 @@ def nominatim_geocode(name, origin_lat, origin_lon):
 
 
 def osrm_route(waypoints):
-    """OSRMで実道路距離・所要時間を取得。(distance_km, duration_hours) または (None, None) を返す。"""
+    """OSRMで実道路距離を取得。(distance_km, None) または (None, None) を返す。所要時間は呼び出し側で算出する。"""
     # 座標は lon,lat の順（OSRM仕様）
     coords = ";".join(f"{lon:.6f},{lat:.6f}" for lat, lon in waypoints)
     url = f"https://router.project-osrm.org/route/v1/driving/{coords}?overview=false"
