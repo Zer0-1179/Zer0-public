@@ -979,6 +979,8 @@
       let selectedPrefs = new Set();
       let originDisplayName = '現在地';
       let remainingUses = null;
+      let shortUrlCache = {}; // courseIdx → short URL
+      let detailCourseIdx = 0;
 
       /* ── 天気ヘルパー ── */
       function getWeatherMeta(code) {
@@ -1189,6 +1191,7 @@
       }
 
       function openDetail(idx){
+        detailCourseIdx = idx;
         // 詳細画面を開くたびに先頭へスクロール
         const detailEl=document.getElementById('screen-detail');
         if(detailEl) detailEl.scrollTop=0;
@@ -1280,7 +1283,12 @@
 
         document.getElementById('detail-map-btn').href=buildMapUrl(c);
         const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 片道${fmtHours(c.duration_hours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
-        document.getElementById('share-x-btn').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
+        // X share: short URL を非同期で差し込む（即時は fallback URL）
+        const xBtn=document.getElementById('share-x-btn');
+        xBtn.href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
+        getShareUrl(idx).then(url=>{
+          xBtn.href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText+'\n'+url);
+        }).catch(()=>{});
         const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,outbound_spots:outboundSpots,return_spots:returnSpots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
         try{
           const b64=btoa(encodeURIComponent(JSON.stringify(sd)));
@@ -1294,10 +1302,29 @@
         if (bikeEl) { bikeEl.style.animation='none'; void bikeEl.offsetHeight; bikeEl.style.animation=''; }
       }
 
+      async function getShareUrl(idx){
+        if(shortUrlCache[idx]) return shortUrlCache[idx];
+        const c=courses[idx];
+        const res=await fetch(`${API_BASE}/api/share`,{
+          method:'POST',
+          headers:{...apiHeaders(),'Content-Type':'application/json'},
+          body:JSON.stringify({course:c})
+        });
+        if(!res.ok) throw new Error('share failed');
+        const data=await res.json();
+        shortUrlCache[idx]=data.url;
+        return data.url;
+      }
+
       async function copyUrl(){
-        try{await navigator.clipboard.writeText(location.href);}
-        catch(_){const ta=Object.assign(document.createElement('textarea'),{value:location.href,style:'position:fixed;opacity:0'});document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);}
         const btn=document.getElementById('share-url-btn');
+        btn.textContent='⏳ 生成中...';
+        let url=location.href;
+        try{
+          url=await getShareUrl(detailCourseIdx);
+        }catch(_){}
+        try{await navigator.clipboard.writeText(url);}
+        catch(_){const ta=Object.assign(document.createElement('textarea'),{value:url,style:'position:fixed;opacity:0'});document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);}
         btn.textContent='✅ コピーしました';
         setTimeout(()=>{btn.textContent='🔗 URLをコピー';},1500);
       }

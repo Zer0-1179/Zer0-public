@@ -101,12 +101,40 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:GetItem
                 Resource: !GetAtt TouringRateLimitTable.Arn
+        - PolicyName: DynamoDBShare
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                Resource: !GetAtt TouringShareTable.Arn
 
   # ── DynamoDB レートリミットテーブル ───────────────────────────
   TouringRateLimitTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: zer0-touring-ratelimit
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  # ── DynamoDB シェアテーブル ───────────────────────────────────
+  TouringShareTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: zer0-touring-share
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: pk
@@ -176,6 +204,7 @@ Resources:
           - "http://localhost:4321"
           - "https://touring.zer0-infra.com"
         AllowMethods:
+          - GET
           - POST
           - OPTIONS
         AllowHeaders:
@@ -205,6 +234,22 @@ Resources:
     Properties:
       ApiId: !Ref TouringApi
       RouteKey: "GET /api/status"
+      Target: !Sub "integrations/${TouringIntegration}"
+
+  # ── POST /api/share ルート（URL短縮・OGP保存）────────────────
+  TouringSharePostRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref TouringApi
+      RouteKey: "POST /api/share"
+      Target: !Sub "integrations/${TouringIntegration}"
+
+  # ── GET /s/{id} ルート（OGP HTML + リダイレクト）─────────────
+  TouringShareGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref TouringApi
+      RouteKey: "GET /s/{id}"
       Target: !Sub "integrations/${TouringIntegration}"
 
   # ── デフォルトステージ ─────────────────────────────────────────
@@ -300,6 +345,14 @@ Resources:
           Compress: true
         # /api/* → API Gateway（キャッシュ無効・POST 転送）
         CacheBehaviors:
+          - PathPattern: /s/*
+            TargetOriginId: ApiGatewayOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            AllowedMethods: [GET, HEAD]
+            CachedMethods:  [GET, HEAD]
+            Compress: false
           - PathPattern: /api/*
             TargetOriginId: ApiGatewayOrigin
             ViewerProtocolPolicy: redirect-to-https
