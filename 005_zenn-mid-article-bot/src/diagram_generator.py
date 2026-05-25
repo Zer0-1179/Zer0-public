@@ -32,6 +32,7 @@ _OFFICIAL_ICON_MAP: dict[str, str] = {
     'cloudfront':  f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
     'acm':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
     'api_gateway': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
+    'dynamodb':    f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
     # ── グループアイコン（クラスター枠用・32px） ──
     'vpc':            f'{_GRP}/Virtual-private-cloud-VPC_32.png',
     'region':         f'{_GRP}/Region_32.png',
@@ -276,7 +277,7 @@ def _draw_diagram(
             facecolor=cluster.get('color', '#EAF4FB'),
             edgecolor=cluster.get('edgecolor', '#8AAFCC'),
             linewidth=cluster.get('linewidth', 2.0 if has_icon else 1.5),
-            linestyle=cluster.get('linestyle', '-' if has_icon else '--'),
+            linestyle=cluster.get('linestyle', '-'),
             zorder=1,
         )
         ax.add_patch(rect)
