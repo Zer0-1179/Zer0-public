@@ -3,8 +3,10 @@ import math
 import os
 import re
 import random
+import string
 import time
 import threading
+import base64
 import urllib.request
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
@@ -18,6 +20,8 @@ GMAPS_USAGE_PARAM   = "/zer0-touring/gmaps-usage"
 GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ（同時アクセス時のSSM非アトミック書き込みによる誤差対策）
 DAILY_LIMIT         = int(os.environ.get("DAILY_LIMIT", "3"))
 RATE_LIMIT_TABLE    = "zer0-touring-ratelimit"
+SHARE_TABLE         = "zer0-touring-share"
+SITE_URL            = "https://touring.zer0-infra.com"
 ADMIN_TOKEN         = os.environ.get("ADMIN_TOKEN", "")
 
 ALLOWED_ORIGINS = {
@@ -412,6 +416,115 @@ def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
         print(f"[dest-weather] {dest_name}: {dest_temp}℃ code={dest_weather_code}")
 
 
+def _short_id(n=6):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
+
+def _fetch_wiki_photo(spot):
+    if not spot:
+        return None
+    try:
+        url = f"https://ja.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(spot)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Zer0-Touring/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+            thumb = data.get("thumbnail", {}).get("source", "")
+            return re.sub(r'/\d+px-', '/800px-', thumb) if thumb else None
+    except Exception:
+        return None
+
+def _handle_share_post(event, cors):
+    try:
+        body = json.loads(event.get("body") or "{}")
+        course = body.get("course")
+        if not course or not isinstance(course, dict):
+            raise ValueError("course required")
+    except Exception as e:
+        return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": str(e)})}
+
+    photo_url  = _fetch_wiki_photo(course.get("photo_spot", ""))
+    short_id   = _short_id(6)
+    ttl        = int((datetime.now(timezone.utc) + timedelta(days=30)).timestamp())
+    # JS の btoa(encodeURIComponent(JSON.stringify(course))) と同等のエンコード
+    course_b64 = base64.b64encode(
+        urllib.parse.quote(json.dumps(course, ensure_ascii=False), safe="").encode("ascii")
+    ).decode("ascii")
+
+    dynamodb.put_item(
+        TableName=SHARE_TABLE,
+        Item={
+            "pk":          {"S": short_id},
+            "course_b64":  {"S": course_b64},
+            "photo_url":   {"S": photo_url or ""},
+            "name":        {"S": course.get("name", "ツーリングコース")},
+            "destination": {"S": course.get("destination", "")},
+            "duration":    {"S": str(course.get("duration_hours", ""))},
+            "tags":        {"S": json.dumps(course.get("tags", []), ensure_ascii=False)},
+            "ttl":         {"N": str(ttl)},
+        },
+    )
+    return {"statusCode": 200, "headers": cors,
+            "body": json.dumps({"url": f"{SITE_URL}/s/{short_id}"})}
+
+def _handle_share_get(short_id):
+    html_headers = {"Content-Type": "text/html; charset=utf-8"}
+    try:
+        item = dynamodb.get_item(
+            TableName=SHARE_TABLE, Key={"pk": {"S": short_id}}
+        ).get("Item")
+    except Exception:
+        item = None
+
+    if not item:
+        return {"statusCode": 404, "headers": html_headers,
+                "body": "<html><body>このリンクは無効か期限切れです。</body></html>"}
+
+    name       = item.get("name", {}).get("S", "ツーリングコース")
+    dest       = item.get("destination", {}).get("S", "")
+    duration   = item.get("duration", {}).get("S", "")
+    photo_url  = item.get("photo_url", {}).get("S", "") or f"{SITE_URL}/icons/icon-512.png"
+    course_b64 = item.get("course_b64", {}).get("S", "")
+    try:
+        tags = json.loads(item.get("tags", {}).get("S", "[]"))
+    except Exception:
+        tags = []
+
+    og_title = f"{name} | Zer0 Touring"
+    parts = []
+    if dest:
+        parts.append(f"目的地: {dest}")
+    if duration:
+        try:
+            h = float(duration)
+            parts.append(f"約{int(h)}時間{int((h % 1) * 60):02d}分")
+        except Exception:
+            pass
+    if tags:
+        parts.append(" ".join(tags[:3]))
+    og_desc = " · ".join(parts) if parts else "AIが提案する日帰りバイクツーリングコース"
+
+    redirect = f"{SITE_URL}/?course={course_b64}"
+    # og:image の Wikimedia URL はクローラーがそのまま取得できるため CSP 不要
+    html = f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta property="og:title" content="{og_title}">
+<meta property="og:description" content="{og_desc}">
+<meta property="og:image" content="{photo_url}">
+<meta property="og:url" content="{SITE_URL}/s/{short_id}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{og_title}">
+<meta name="twitter:description" content="{og_desc}">
+<meta name="twitter:image" content="{photo_url}">
+<meta http-equiv="refresh" content="0; url={redirect}">
+<script>location.replace({json.dumps(redirect)})</script>
+</head>
+<body>リダイレクト中...</body>
+</html>"""
+    return {"statusCode": 200, "headers": html_headers, "body": html}
+
+
 def lambda_handler(event, context):
     cors   = _get_cors_headers(event)
     http   = (event.get("requestContext") or {}).get("http", {})
@@ -420,6 +533,14 @@ def lambda_handler(event, context):
 
     if method == "OPTIONS":
         return {"statusCode": 200, "headers": cors, "body": ""}
+
+    # GET /s/{id} — OGP HTML + リダイレクト（レートリミット対象外）
+    if method == "GET" and path.startswith("/s/"):
+        return _handle_share_get(path[3:])
+
+    # POST /api/share — URL短縮・OGP用保存（レートリミット対象外）
+    if method == "POST" and path == "/api/share":
+        return _handle_share_post(event, cors)
 
     # GET /api/status — 残り回数を返す（カウント増加なし）
     if method == "GET" and path == "/api/status":
