@@ -124,6 +124,37 @@ def _draw_diagram(
             if ny - cl['y'] < _PAD_BOT:
                 diff = _PAD_BOT - (ny - cl['y']); cl['y'] -= diff; cl['h'] += diff
 
+    # ── クラスター間の重複解消（auto-padding 膨張後に隣接枠が重ならないよう保証）──
+    _MIN_GAP = 0.7
+    for _ in range(20):  # 収束するまで最大20パス
+        moved = False
+        cls = clusters or []
+        for i in range(len(cls)):
+            for j in range(i + 1, len(cls)):
+                ca, cb = cls[i], cls[j]
+                # 水平方向の重複: 垂直に重なりがある場合のみ判定
+                if ca['y'] < cb['y'] + cb['h'] and cb['y'] < ca['y'] + ca['h']:
+                    if ca['x'] + ca['w'] + _MIN_GAP > cb['x'] and ca['x'] < cb['x']:
+                        push = ca['x'] + ca['w'] + _MIN_GAP - cb['x']
+                        cb['x'] += push
+                        moved = True
+                    elif cb['x'] + cb['w'] + _MIN_GAP > ca['x'] and cb['x'] < ca['x']:
+                        push = cb['x'] + cb['w'] + _MIN_GAP - ca['x']
+                        ca['x'] += push
+                        moved = True
+                # 垂直方向の重複: 水平に重なりがある場合のみ判定
+                if ca['x'] < cb['x'] + cb['w'] and cb['x'] < ca['x'] + ca['w']:
+                    if ca['y'] + ca['h'] + _MIN_GAP > cb['y'] and ca['y'] < cb['y']:
+                        push = ca['y'] + ca['h'] + _MIN_GAP - cb['y']
+                        cb['y'] += push
+                        moved = True
+                    elif cb['y'] + cb['h'] + _MIN_GAP > ca['y'] and cb['y'] < ca['y']:
+                        push = cb['y'] + cb['h'] + _MIN_GAP - ca['y']
+                        ca['y'] += push
+                        moved = True
+        if not moved:
+            break
+
     fig, ax = plt.subplots(figsize=figsize, dpi=150)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
