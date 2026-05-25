@@ -75,7 +75,7 @@ def draw():
         {'id': 'lambda',    'icon': 'lambda',     'label': 'Lambda\nzer0-touring-suggest',         'x': 10.5, 'y': 3.5},
         {'id': 'bedrock',   'icon': 'bedrock',    'label': 'Bedrock\nClaude Haiku',               'x': 13.5, 'y': 3.5},
         {'id': 'cw',        'icon': 'cloudwatch', 'label': 'CloudWatch\nLogs',                    'x': 10.5, 'y': 1.5},
-        {'id': 'dynamodb',  'icon': 'dynamodb',   'label': 'DynamoDB\nレートリミット',             'x': 13.5, 'y': 1.5},
+        {'id': 'dynamodb',  'icon': 'dynamodb',   'label': 'DynamoDB\nratelimit / share',          'x': 13.5, 'y': 1.5},
     ]
 
     edges = [
@@ -84,7 +84,7 @@ def draw():
         ('browser',  'cf',        ''),
         ('acm',      'cf',        'HTTPS'),
         ('cf',       's3',        '/* 静的HTML'),
-        ('cf',       'apigw',     '/api/*'),
+        ('cf',       'apigw',     '/api/* /s/*'),
         ('apigw',    'lambda',    ''),
         ('lambda',   'bedrock',   ''),
         ('lambda',   'ssm',       ''),
