@@ -698,6 +698,57 @@
         .detail-name { font-size: 1.25rem; }
       }
 
+      /* ── 出発地トグル ── */
+      .loc-toggle {
+        display: flex;
+        background: rgba(255,255,255,.06);
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        padding: .22rem;
+        gap: .22rem;
+        width: 100%; max-width: 320px;
+      }
+      .loc-btn {
+        flex: 1; background: transparent; border: none;
+        color: var(--muted); border-radius: 9999px;
+        padding: .48rem .5rem; font-size: .875rem; font-weight: 500;
+        cursor: pointer; transition: background .2s, color .2s; white-space: nowrap;
+      }
+      .loc-btn.active { background: var(--card2); color: var(--text); }
+
+      /* ── 出発地テキスト入力 ── */
+      .origin-input-wrap { width: 100%; max-width: 320px; }
+      .origin-input {
+        width: 100%; background: rgba(255,255,255,.07);
+        border: 1.5px solid var(--border); border-radius: .75rem;
+        padding: .72rem 1rem; color: var(--text); font-size: .95rem;
+        outline: none; transition: border-color .2s;
+      }
+      .origin-input:focus { border-color: var(--accent); }
+      .origin-input::placeholder { color: var(--muted); }
+
+      /* ── 好みタグ選択 ── */
+      .pref-section {
+        display: flex; flex-direction: column; gap: .6rem;
+        width: 100%; max-width: 340px;
+      }
+      .pref-label {
+        font-size: .7rem; color: var(--muted); font-weight: 600;
+        letter-spacing: .04em; text-align: center; text-transform: uppercase;
+      }
+      .pref-tags { display: flex; flex-wrap: wrap; gap: .45rem; justify-content: center; }
+      .pref-tag {
+        background: rgba(255,255,255,.06); border: 1.5px solid var(--border);
+        color: var(--muted); border-radius: 9999px;
+        padding: .35rem .85rem; font-size: .82rem; font-weight: 500;
+        cursor: pointer; white-space: nowrap;
+        transition: background .15s, border-color .15s, color .15s;
+      }
+      .pref-tag:hover { border-color: rgba(249,115,22,.4); color: var(--text); }
+      .pref-tag.selected {
+        background: rgba(249,115,22,.18); border-color: var(--accent); color: var(--accent);
+      }
+
       /* ── Toast ── */
       #toast {
         position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
@@ -726,7 +777,30 @@
     <div id="screen-idle" class="screen active">
       <div class="hero-icon">🏍️</div>
       <h1 class="hero-title">Zer0 Touring</h1>
-      <p class="hero-sub">現在地と天気をもとに<br/>AIが日帰りコースを3つ提案します</p>
+      <p class="hero-sub">出発地と天気をもとに<br/>AIが日帰りコースを3つ提案します</p>
+
+      <div class="loc-toggle">
+        <button class="loc-btn active" id="btn-loc-gps">📍 現在地</button>
+        <button class="loc-btn" id="btn-loc-manual">✏️ 出発地を入力</button>
+      </div>
+      <div class="origin-input-wrap" id="origin-input-wrap" style="display:none">
+        <input class="origin-input" id="origin-input" type="text"
+               placeholder="例: 横浜、新宿、名古屋駅" enterkeyhint="search" />
+      </div>
+
+      <div class="pref-section">
+        <p class="pref-label">好みのスタイル（任意・複数選択可）</p>
+        <div class="pref-tags" id="pref-tags">
+          <button class="pref-tag" data-tag="峠道">🏔 峠道</button>
+          <button class="pref-tag" data-tag="海沿い">🌊 海沿い</button>
+          <button class="pref-tag" data-tag="温泉">♨️ 温泉</button>
+          <button class="pref-tag" data-tag="グルメ">🍜 グルメ</button>
+          <button class="pref-tag" data-tag="絶景">🌅 絶景</button>
+          <button class="pref-tag" data-tag="ガッツリ走る" data-exclusive="のんびり">🛣 ガッツリ走る</button>
+          <button class="pref-tag" data-tag="のんびり" data-exclusive="ガッツリ走る">☕ のんびり</button>
+        </div>
+      </div>
+
       <button class="btn-primary" id="btn-start">コースを探す</button>
       <div class="usage-badge" id="usage-badge" style="visibility:hidden">
         <span class="dots" id="usage-dots"></span>
@@ -759,7 +833,7 @@
       </div>
       <p class="loading-title">コースを検索中<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></p>
       <div class="steps">
-        <div class="step" id="step-gps"><span class="step-icon" id="icon-gps">📍</span><span>現在地を取得中</span></div>
+        <div class="step" id="step-gps"><span class="step-icon" id="icon-gps">📍</span><span id="step-gps-text">現在地を取得中</span></div>
         <div class="step" id="step-weather"><span class="step-icon" id="icon-weather">🌤</span><span>天気を確認中</span></div>
         <div class="step" id="step-ai"><span class="step-icon" id="icon-ai">🤖</span><span>AIがコースを生成中</span></div>
       </div>
@@ -899,6 +973,9 @@
       let currentSlide = 0;
       let sliderListenerAdded = false;
       let destForecastController = null;
+      let locationMode = 'gps';
+      let selectedPrefs = new Set();
+      let originDisplayName = '現在地';
 
       /* ── 天気ヘルパー ── */
       function getWeatherMeta(code) {
@@ -915,8 +992,17 @@
       function renderWeatherInfo() {
         const el = document.getElementById('weather-subtitle');
         if (!el) return;
-        el.textContent = `📍現在地  ${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
+        el.textContent = `📍${originDisplayName}  ${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
         el.style.display = 'inline-flex';
+      }
+
+      async function geocodeOrigin(input) {
+        const params = new URLSearchParams({ q: input, format: 'json', limit: 1, countrycodes: 'jp', 'accept-language': 'ja' });
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+        if (!res.ok) throw new Error('network error');
+        const data = await res.json();
+        if (!data || data.length === 0) throw new Error('not found');
+        return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
       }
       async function renderForecastInto(lat, lon, stripEl, signal) {
         try {
@@ -1216,24 +1302,48 @@
       function showError(msg){document.getElementById('error-msg').textContent=msg;showScreen('screen-error');}
 
       async function findCourses(){
+        // 手動入力モードで空欄なら事前チェック
+        if (locationMode === 'manual') {
+          const inputVal = (document.getElementById('origin-input')?.value ?? '').trim();
+          if (!inputVal) { showError('出発地を入力してください。\n例: 横浜、新宿、名古屋駅など'); return; }
+        }
+
         const wsub=document.getElementById('weather-subtitle');
         const fwrap=document.getElementById('forecast-wrap');
         if(wsub) wsub.style.display='none';
         if(fwrap) fwrap.style.display='none';
+
+        const stepGpsText = document.getElementById('step-gps-text');
+        if (stepGpsText) stepGpsText.textContent = locationMode === 'manual' ? '出発地を検索中' : '現在地を取得中';
 
         showScreen('screen-loading');
         ['step-gps','step-weather','step-ai'].forEach(id=>setStep(id,'idle'));
 
         setStep('step-gps','active');
         let lat,lon;
-        try{
-          const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:false,timeout:30000}));
-          lat=pos.coords.latitude;lon=pos.coords.longitude;userLat=lat;userLon=lon;
-          setStep('step-gps','done');
-        }catch(e){
-          showError(e.code===1?'GPS（位置情報）のアクセスが拒否されました。\nブラウザの設定から位置情報を許可してください。':
-                    e.code===3?'GPS取得がタイムアウトしました。\nもう一度試してください。':
-                    '現在地の取得に失敗しました。');return;
+        if (locationMode === 'manual') {
+          const inputVal = document.getElementById('origin-input').value.trim();
+          try {
+            const result = await geocodeOrigin(inputVal);
+            lat = result.lat; lon = result.lon;
+            userLat = lat; userLon = lon;
+            originDisplayName = inputVal;
+            setStep('step-gps','done');
+          } catch(_) {
+            showError(`「${inputVal}」の場所が見つかりませんでした。\n別の表現で試してください。\n例: 都市名・駅名・住所など`);
+            return;
+          }
+        } else {
+          try{
+            const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:false,timeout:30000}));
+            lat=pos.coords.latitude;lon=pos.coords.longitude;userLat=lat;userLon=lon;
+            originDisplayName='現在地';
+            setStep('step-gps','done');
+          }catch(e){
+            showError(e.code===1?'GPS（位置情報）のアクセスが拒否されました。\n設定から許可するか、出発地を手動で入力してください。':
+                      e.code===3?'GPS取得がタイムアウトしました。\nもう一度試してください。':
+                      '現在地の取得に失敗しました。');return;
+          }
         }
 
         setStep('step-weather','active');
@@ -1250,20 +1360,22 @@
 
         setStep('step-ai','active');
         try{
-          const res=await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:apiHeaders(),body:JSON.stringify({latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition})});
+          const prefs = Array.from(selectedPrefs);
+          const reqBody = {latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition};
+          if (prefs.length > 0) reqBody.preferences = prefs;
+          const res=await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:apiHeaders(),body:JSON.stringify(reqBody)});
           if(!res.ok){const err=new Error();err.status=res.status;throw err;}
           const data=await res.json();
           setStep('step-ai','done');
 
-          renderSlider(data);          // HTML・ドット・イベント生成
-          showScreen('screen-results'); // display:flex に変わる → clientWidth が確定
-          initSlider();                 // ピクセル幅設定・タッチ初期化
+          renderSlider(data);
+          showScreen('screen-results');
+          initSlider();
 
           renderWeatherInfo();
           renderForecast(lat,lon);
-          fetchUsage(); // 生成後にバッジ更新
+          fetchUsage();
         }catch(e){
-          // 429 レートリミット
           if(e && e.status===429){
             fetchUsage();
             showError('本日の利用上限（3回）に達しました。\n明日またお試しください。');
@@ -1292,6 +1404,40 @@
       });
       document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
       document.getElementById('share-url-btn').addEventListener('click',copyUrl);
+
+      // 出発地モード切替
+      document.getElementById('btn-loc-gps').addEventListener('click', () => {
+        locationMode = 'gps';
+        document.getElementById('btn-loc-gps').classList.add('active');
+        document.getElementById('btn-loc-manual').classList.remove('active');
+        document.getElementById('origin-input-wrap').style.display = 'none';
+      });
+      document.getElementById('btn-loc-manual').addEventListener('click', () => {
+        locationMode = 'manual';
+        document.getElementById('btn-loc-manual').classList.add('active');
+        document.getElementById('btn-loc-gps').classList.remove('active');
+        document.getElementById('origin-input-wrap').style.display = 'block';
+        document.getElementById('origin-input').focus();
+      });
+
+      // タグ選択（排他制御あり）
+      document.getElementById('pref-tags').addEventListener('click', e => {
+        const btn = e.target.closest('.pref-tag');
+        if (!btn) return;
+        const tag = btn.dataset.tag;
+        const exclusive = btn.dataset.exclusive;
+        if (selectedPrefs.has(tag)) {
+          selectedPrefs.delete(tag);
+          btn.classList.remove('selected');
+        } else {
+          selectedPrefs.add(tag);
+          btn.classList.add('selected');
+          if (exclusive) {
+            selectedPrefs.delete(exclusive);
+            document.querySelector(`.pref-tag[data-tag="${exclusive}"]`)?.classList.remove('selected');
+          }
+        }
+      });
 
       // トースト表示
       function showToast(msg) {

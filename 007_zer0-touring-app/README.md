@@ -1,6 +1,6 @@
 # 007 Zer0 Touring App
 
-> 現在地とリアルタイム天気から Bedrock Claude Haiku が日帰りバイクツーリングコース3ルートを提案する PWA。GPS → Open-Meteo → Bedrock の3ステップを全自動化し、現在地・目的地の天気比較・片道/往復時間・帰路提案・特徴タグ・Googleマップナビ連携まで一括生成する。
+> 出発地（現在地 or 手動入力）とリアルタイム天気から Bedrock Claude Haiku が日帰りバイクツーリングコース3ルートを提案する PWA。GPS → Open-Meteo → Bedrock の3ステップを全自動化し、好みスタイルタグ（峠道・海沿い・温泉・グルメ・絶景・ガッツリ走る・のんびり）によるコース調整、現在地・目的地の天気比較・片道/往復時間・帰路提案・特徴タグ・Googleマップナビ連携まで一括生成する。
 
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20CloudFront-orange)](https://aws.amazon.com)
 [![Astro](https://img.shields.io/badge/Astro-Static%20PWA-FF5D01)](https://astro.build)
@@ -12,9 +12,9 @@
 | 項目         | 内容                                                                                        |
 | ------------ | ------------------------------------------------------------------------------------------- |
 | URL          | https://touring.zer0-infra.com                                                              |
-| 現在地取得   | ブラウザ Geolocation API（30秒タイムアウト）                                                |
+| 出発地取得   | 現在地（ブラウザ Geolocation API）または手動入力（Nominatim ジオコーディング）              |
 | 天気取得     | Open-Meteo API（現在地・目的地の両方／無料・APIキー不要）                                   |
-| AI提案       | Amazon Bedrock Claude Haiku（片道・往復時間・帰路・特徴タグを含む詳細コース生成）           |
+| AI提案       | Amazon Bedrock Claude Haiku（好みタグ反映・片道/往復時間・帰路・特徴タグ含む詳細コース生成）|
 | コース内容   | 近距離・中距離・長距離 + タグ・立ち寄りスポット（経路順）・帰路提案                         |
 | 距離・時間   | **Google Maps Directions API（優先）** / OSRM（フォールバック）による実道路距離・走行時間   |
 | 天気比較     | 詳細画面に現在地 🏍️→ 目的地の天気比較ウィジェット（バイク走行アニメーション付き）           |
@@ -63,7 +63,9 @@
 
 ```text
 Landing（コースを探す）
-  └─▶ Loading（GPS取得中 → 天気確認中 → AI生成中）
+  │  📍現在地 / ✏️出発地を入力（Nominatim ジオコーディング）
+  │  好みスタイルタグ: 🏔峠道 🌊海沿い ♨️温泉 🍜グルメ 🌅絶景 🛣ガッツリ走る ☕のんびり（複数選択可）
+  └─▶ Loading（GPS/出発地取得中 → 天気確認中 → AI生成中）
         └─▶ コース一覧（スワイプカード / 1枚ずつ表示・横スワイプで切り替え）
               │  各カード: 近距離🟢（丘シルエット）/中距離🔵（海シルエット）/長距離🟣（山脈シルエット）
               │            ルートサマリー（📍現在地 → 立ち寄り → 目的地）
@@ -221,8 +223,16 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 **リクエスト**  
 
 ```json
-{ "latitude": 35.6762, "longitude": 139.6503, "temperature": 22, "weather_condition": "晴れ" }
+{
+  "latitude": 35.6762,
+  "longitude": 139.6503,
+  "temperature": 22,
+  "weather_condition": "晴れ",
+  "preferences": ["峠道", "温泉"]
+}
 ```
+
+`preferences` は省略可（空配列または未指定でAIに完全おまかせ）。指定可能な値: `峠道` / `海沿い` / `温泉` / `グルメ` / `絶景` / `ガッツリ走る` / `のんびり`（`ガッツリ走る` と `のんびり` は排他）。
 
 **レスポンス**  
 
