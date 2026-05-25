@@ -205,7 +205,6 @@
         box-shadow: 0 4px 20px rgba(249,115,22,.35);
       }
       .btn-primary:active { opacity: .75; transform: scale(.97); }
-      .btn-primary:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
       .btn-outline {
         background: transparent; color: var(--accent);
         border: 1.5px solid var(--accent); border-radius: 9999px;
@@ -977,6 +976,7 @@
       let locationMode = 'gps';
       let selectedPrefs = new Set();
       let originDisplayName = '現在地';
+      let remainingUses = null;
 
       /* ── 天気ヘルパー ── */
       function getWeatherMeta(code) {
@@ -1303,6 +1303,12 @@
       function showError(msg){document.getElementById('error-msg').textContent=msg;showScreen('screen-error');}
 
       async function findCourses(){
+        // 利用上限チェック
+        if (remainingUses !== null && remainingUses <= 0) {
+          showError('本日の利用上限（3回）に達しました。\n明日またお試しください。');
+          return;
+        }
+
         // 手動入力モードで空欄なら事前チェック
         if (locationMode === 'manual') {
           const inputVal = (document.getElementById('origin-input')?.value ?? '').trim();
@@ -1489,10 +1495,9 @@
           `<span class="dot${i < used ? ' used' : ''}"></span>`
         ).join('');
         text.textContent = `今日あと ${remaining} 回`;
+        remainingUses = remaining;
         badge.classList.toggle('limit-reached', remaining === 0);
         badge.style.visibility = 'visible';
-        const btnStart = document.getElementById('btn-start');
-        if (btnStart) btnStart.disabled = remaining === 0;
       }
 
       async function fetchUsage() {
