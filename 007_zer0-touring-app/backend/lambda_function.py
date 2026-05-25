@@ -7,6 +7,7 @@ import string
 import time
 import threading
 import base64
+import html as html_module
 import urllib.request
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
@@ -488,7 +489,7 @@ def _handle_share_get(short_id):
     except Exception:
         tags = []
 
-    og_title = f"{name} | Zer0 Touring"
+    og_title = html_module.escape(f"{name} | Zer0 Touring")
     parts = []
     if dest:
         parts.append(f"目的地: {dest}")
@@ -500,7 +501,7 @@ def _handle_share_get(short_id):
             pass
     if tags:
         parts.append(" ".join(tags[:3]))
-    og_desc = " · ".join(parts) if parts else "AIが提案する日帰りバイクツーリングコース"
+    og_desc = html_module.escape(" · ".join(parts) if parts else "AIが提案する日帰りバイクツーリングコース")
 
     redirect = f"{SITE_URL}/?course={course_b64}"
     # og:image の Wikimedia URL はクローラーがそのまま取得できるため CSP 不要
@@ -510,14 +511,14 @@ def _handle_share_get(short_id):
 <meta charset="UTF-8">
 <meta property="og:title" content="{og_title}">
 <meta property="og:description" content="{og_desc}">
-<meta property="og:image" content="{photo_url}">
+<meta property="og:image" content="{html_module.escape(photo_url)}">
 <meta property="og:url" content="{SITE_URL}/s/{short_id}">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{og_title}">
 <meta name="twitter:description" content="{og_desc}">
-<meta name="twitter:image" content="{photo_url}">
-<meta http-equiv="refresh" content="0; url={redirect}">
+<meta name="twitter:image" content="{html_module.escape(photo_url)}">
+<meta http-equiv="refresh" content="0; url={html_module.escape(redirect)}">
 <script>location.replace({json.dumps(redirect)})</script>
 </head>
 <body>リダイレクト中...</body>

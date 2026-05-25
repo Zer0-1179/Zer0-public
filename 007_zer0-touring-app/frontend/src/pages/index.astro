@@ -1076,6 +1076,7 @@
       function renderSlider(data) {
         courses = [...data.courses].sort((a,b)=>(a.distance_km??0)-(b.distance_km??0)).slice(0,3);
         currentSlide = 0;
+        shortUrlCache = {};
 
         const vp     = document.getElementById('card-viewport');
         const dotsEl = document.getElementById('slider-dots');
@@ -1448,7 +1449,13 @@
           backFromDetail();
         }
       });
-      document.getElementById('btn-error-retry').addEventListener('click',()=>showScreen('screen-idle'));
+      document.getElementById('btn-error-retry').addEventListener('click',()=>{
+        if(document.getElementById('btn-error-retry').textContent.includes('トップ')){
+          showScreen('screen-idle');
+        } else {
+          findCourses();
+        }
+      });
       document.getElementById('share-url-btn').addEventListener('click',copyUrl);
 
       // 出発地モード切替

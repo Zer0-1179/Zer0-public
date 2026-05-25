@@ -1,4 +1,4 @@
-const CACHE = 'zer0-touring-v8';
+const CACHE = 'zer0-touring-v9';
 
 self.addEventListener('install', e => { self.skipWaiting(); });
 
