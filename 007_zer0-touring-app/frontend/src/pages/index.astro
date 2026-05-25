@@ -923,8 +923,8 @@
 
     <!-- ── Error ── -->
     <div id="screen-error" class="screen">
-      <span class="error-icon">⚠️</span>
-      <h2 class="error-title">エラーが発生しました</h2>
+      <span class="error-icon" id="error-icon">⚠️</span>
+      <h2 class="error-title" id="error-title">エラーが発生しました</h2>
       <p class="error-msg" id="error-msg"></p>
       <button class="btn-primary" id="btn-error-retry">もう一度試す</button>
     </div>
@@ -1300,12 +1300,19 @@
         setTimeout(()=>{btn.textContent='🔗 URLをコピー';},1500);
       }
 
-      function showError(msg){document.getElementById('error-msg').textContent=msg;showScreen('screen-error');}
+      function showError(msg, type='error') {
+        const isLimit = type === 'limit';
+        document.getElementById('error-icon').textContent  = isLimit ? '📅' : '⚠️';
+        document.getElementById('error-title').textContent = isLimit ? '本日の上限に達しました' : 'エラーが発生しました';
+        document.getElementById('error-msg').textContent   = msg;
+        document.getElementById('btn-error-retry').textContent = isLimit ? 'トップに戻る' : 'もう一度試す';
+        showScreen('screen-error');
+      }
 
       async function findCourses(){
         // 利用上限チェック
         if (remainingUses !== null && remainingUses <= 0) {
-          showError('本日の利用上限（3回）に達しました。\n明日またお試しください。');
+          showError('本日の利用上限（3回）に達しました。\n明日またお試しください。', 'limit');
           return;
         }
 
@@ -1385,7 +1392,7 @@
         }catch(e){
           if(e && e.status===429){
             fetchUsage();
-            showError('本日の利用上限（3回）に達しました。\n明日またお試しください。');
+            showError('本日の利用上限（3回）に達しました。\n明日またお試しください。', 'limit');
           } else {
             showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');
           }
