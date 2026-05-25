@@ -55,36 +55,36 @@ def draw():
     HALF = 0.55
 
     nodes = [
-        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n(毎月1日・15日)',      'x': 2.0,  'y': 4.0},
-        {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\nzenn-article-bot',          'x': 5.5,  'y': 4.0},
-        {'id': 'bedrock', 'icon': 'bedrock',     'label': 'Bedrock\nClaude Haiku',             'x': 9.5,  'y': 4.0},
-        {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\nトピック管理',                 'x': 5.5,  'y': 6.0},
-        {'id': 's3',      'icon': 's3',          'label': 'S3\nPNG保存',                      'x': 9.5,  'y': 6.0},
-        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                  'x': 5.5,  'y': 2.0},
-        {'id': 'ses',     'icon': 'ses',         'label': 'SES\nメール送信',                   'x': 9.5,  'y': 2.0},
-        {'id': 'user',    'icon': 'user',        'label': '通知先\nメール',                    'x': 12.0, 'y': 2.0},
+        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n(毎月1日・15日)', 'x': 2.0,  'y': 4.0},
+        {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\nzenn-article-bot',     'x': 5.5,  'y': 4.0},
+        {'id': 'bedrock', 'icon': 'bedrock',     'label': 'Bedrock\nClaude Haiku',        'x': 9.5,  'y': 4.0},
+        {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\nトピック管理',            'x': 5.5,  'y': 6.0},
+        {'id': 's3',      'icon': 's3',          'label': 'S3\nPNG保存',                 'x': 9.5,  'y': 6.0},
+        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',             'x': 5.5,  'y': 2.0},
+        {'id': 'ses',     'icon': 'ses',         'label': 'SES\nメール送信',              'x': 9.5,  'y': 2.0},
+        {'id': 'user',    'icon': 'user',        'label': '通知先\nメール',               'x': 13.0, 'y': 2.0},
     ]
 
     edges = [
-        ('eb',      'lambda',  ''),
-        ('lambda',  'bedrock', '記事＋図生成'),
-        ('lambda',  'ssm',     ''),
-        ('lambda',  's3',      ''),
-        ('lambda',  'cw',      ''),
-        ('lambda',  'ses',     ''),
-        ('ses',     'user',    ''),
+        ('eb',     'lambda',  ''),
+        ('lambda', 'bedrock', '記事＋図生成'),
+        ('lambda', 'ssm',     ''),
+        ('lambda', 's3',      ''),
+        ('lambda', 'cw',      ''),
+        ('lambda', 'ses',     ''),
+        ('ses',    'user',    ''),
     ]
 
     clusters = [
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 0.4, 'y': 0.2, 'w': 11.0, 'h': 7.2,
+            'x': 0.4, 'y': 0.2, 'w': 10.5, 'h': 7.2,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
             'label': '通知先', 'icon': None,
-            'x': 10.8, 'y': 0.8, 'w': 2.4, 'h': 2.8,
+            'x': 11.8, 'y': 0.8, 'w': 2.4, 'h': 2.8,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
@@ -133,8 +133,8 @@ def draw():
         if not moved:
             break
 
-    fig, ax = plt.subplots(figsize=(13, 8), dpi=150)
-    ax.set_xlim(0, 13)
+    fig, ax = plt.subplots(figsize=(15, 8), dpi=150)
+    ax.set_xlim(0, 15)
     ax.set_ylim(0, 8)
     ax.set_aspect('equal')
     ax.axis('off')
