@@ -109,7 +109,7 @@ PROMPT_TEMPLATE = """あなたはバイクツーリングの専門家です。
 
 現在地: 緯度{lat:.4f}, 経度{lon:.4f}
 現在の天気: {weather}、気温{temp}℃
-生成ID（毎回異なるコースを選ぶために使用）: {seed}
+生成ID（毎回異なるコースを選ぶために使用）: {seed}{preferences_section}
 
 必ず以下のJSON形式のみで出力してください（説明文や前置き不要）:
 {{"courses": [
@@ -169,6 +169,16 @@ return_spotsのルール（最重要）:
 - outbound_spotsとは別ルート・別スポットを選ぶ（同じ道を往復しない）"""
 
 
+
+PREF_PROMPTS = {
+    '峠道':       '峠道・ワインディングロードを必ず含むルートにする',
+    '海沿い':     '海が見える海岸線ルートを優先する',
+    '温泉':       '温泉施設への立ち寄りを必ず含める（return_spotsに温泉を入れる）',
+    'グルメ':     '地元名物・グルメスポットへの立ち寄りを優先する',
+    '絶景':       '展望台・絶景スポットを優先して組み込む',
+    'ガッツリ走る': '立ち寄りを最小限にして走行距離・ドライブ時間を重視し、より遠方の目的地を選ぶ',
+    'のんびり':   'カフェ・道の駅での休憩を多めに組み込み、距離は短めでゆったりペースにする',
+}
 
 MAX_WAYPOINT_KM = 200  # 日帰り圏内（片道200km以内）を超える座標は誤ジオコーディングとして捨てる
 
@@ -443,6 +453,8 @@ def lambda_handler(event, context):
         lon = float(body["longitude"])
         temp = body.get("temperature", 20)
         weather = body.get("weather_condition", "晴れ")
+        raw_prefs = body.get("preferences", [])
+        preferences = [p for p in raw_prefs if isinstance(p, str) and p in PREF_PROMPTS]
     except (KeyError, ValueError, json.JSONDecodeError) as e:
         return {
             "statusCode": 400,
@@ -458,7 +470,12 @@ def lambda_handler(event, context):
         }
 
     seed = random.randint(100000, 999999)
-    prompt = PROMPT_TEMPLATE.format(lat=lat, lon=lon, weather=weather, temp=temp, seed=seed)
+    if preferences:
+        pref_lines = '\n'.join(f'- {PREF_PROMPTS[p]}' for p in preferences)
+        preferences_section = f"\n\nユーザーの希望スタイル（全3コースで優先すること）:\n{pref_lines}"
+    else:
+        preferences_section = ""
+    prompt = PROMPT_TEMPLATE.format(lat=lat, lon=lon, weather=weather, temp=temp, seed=seed, preferences_section=preferences_section)
 
     try:
         response = bedrock.invoke_model(
