@@ -205,6 +205,7 @@
         box-shadow: 0 4px 20px rgba(249,115,22,.35);
       }
       .btn-primary:active { opacity: .75; transform: scale(.97); }
+      .btn-primary:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
       .btn-outline {
         background: transparent; color: var(--accent);
         border: 1.5px solid var(--accent); border-radius: 9999px;
@@ -1394,6 +1395,9 @@
 
       document.getElementById('btn-start').addEventListener('click',findCourses);
       document.getElementById('btn-retry').addEventListener('click',findCourses);
+      document.getElementById('origin-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); findCourses(); }
+      });
       document.getElementById('btn-back').addEventListener('click', backFromDetail);
 
       // ブラウザ・iOS ネイティブ戻るジェスチャー対応
@@ -1487,6 +1491,8 @@
         text.textContent = `今日あと ${remaining} 回`;
         badge.classList.toggle('limit-reached', remaining === 0);
         badge.style.visibility = 'visible';
+        const btnStart = document.getElementById('btn-start');
+        if (btnStart) btnStart.disabled = remaining === 0;
       }
 
       async function fetchUsage() {
