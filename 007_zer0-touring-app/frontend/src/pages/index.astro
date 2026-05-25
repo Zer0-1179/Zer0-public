@@ -736,12 +736,12 @@
         font-size: .7rem; color: var(--muted); font-weight: 600;
         letter-spacing: .04em; text-align: center; text-transform: uppercase;
       }
-      .pref-tags { display: flex; flex-wrap: wrap; gap: .45rem; justify-content: center; }
+      .pref-tags { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; width: 100%; }
       .pref-tag {
         background: rgba(255,255,255,.06); border: 1.5px solid var(--border);
         color: var(--muted); border-radius: 9999px;
-        padding: .35rem .85rem; font-size: .82rem; font-weight: 500;
-        cursor: pointer; white-space: nowrap;
+        padding: .35rem .5rem; font-size: .82rem; font-weight: 500;
+        cursor: pointer; white-space: nowrap; text-align: center;
         transition: background .15s, border-color .15s, color .15s;
       }
       .pref-tag:hover { border-color: rgba(249,115,22,.4); color: var(--text); }
@@ -796,6 +796,8 @@
           <button class="pref-tag" data-tag="温泉">♨️ 温泉</button>
           <button class="pref-tag" data-tag="グルメ">🍜 グルメ</button>
           <button class="pref-tag" data-tag="絶景">🌅 絶景</button>
+          <button class="pref-tag" data-tag="自然">🌳 自然</button>
+          <button class="pref-tag" data-tag="歴史">🏯 歴史</button>
           <button class="pref-tag" data-tag="ガッツリ走る" data-exclusive="のんびり">🛣 ガッツリ走る</button>
           <button class="pref-tag" data-tag="のんびり" data-exclusive="ガッツリ走る">☕ のんびり</button>
         </div>
