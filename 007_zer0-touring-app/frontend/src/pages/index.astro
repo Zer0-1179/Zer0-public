@@ -1126,7 +1126,7 @@
         vp.querySelectorAll('.course-card').forEach(card => {
           card.querySelector('.card-btn-detail').addEventListener('click',()=>openDetail(+card.dataset.idx));
           card.querySelector('.card-btn-nav').addEventListener('click',()=>{
-            window.location.href = buildMapUrl(courses[+card.dataset.idx]);
+            window.open(buildMapUrl(courses[+card.dataset.idx]), '_blank', 'noopener,noreferrer');
           });
         });
 
