@@ -12,15 +12,15 @@ export type Template = {
 
 export const templates: Template[] = [
   {
-    slug: 'scheduled-lambda',
-    filename: 'cfn-scheduled-lambda.yaml',
-    nameJa: 'スケジュール実行Lambda',
-    nameEn: 'Scheduled Lambda',
-    descJa: 'EventBridgeで2スケジュール定期実行するLambda構成。SSM Parameter Store・Amazon Bedrockへのアクセス権限込み。ProjectNameを変えるだけで使い回せる汎用テンプレート。',
-    descEn: 'Lambda triggered by two EventBridge schedules. Includes IAM permissions for SSM Parameter Store and Amazon Bedrock. Ready to deploy by changing ProjectName.',
-    services: ['Lambda', 'EventBridge', 'SSM Parameter Store', 'Amazon Bedrock', 'CloudWatch Logs', 'IAM'],
-    tagsJa: ['サーバーレス', 'Bot', '定期実行'],
-    tagsEn: ['Serverless', 'Bot', 'Scheduled'],
+    slug: 's3-bucket',
+    filename: 'cfn-s3-bucket.yaml',
+    nameJa: 'S3バケット',
+    nameEn: 'S3 Bucket',
+    descJa: 'dev/prd環境に応じてバージョニング・ライフサイクル・DeletionPolicyを自動切替。パブリックアクセス完全ブロック済み。ProjectNameとEnvを指定するだけで即デプロイ可能。',
+    descEn: 'Auto-switches versioning, lifecycle, and DeletionPolicy based on dev/prd env. Full public access block enabled. Deploy instantly with just ProjectName and Env.',
+    services: ['S3'],
+    tagsJa: ['初級', 'ストレージ', 'env切替'],
+    tagsEn: ['Beginner', 'Storage', 'env switch'],
   },
 ];
 
