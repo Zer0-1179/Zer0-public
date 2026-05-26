@@ -209,8 +209,8 @@ SNS にシェア → /s/abc123 → Lambda が OGP HTML 返却 → SNS クロー�
 │   ├── lambda_function.py       # Bedrock コース提案 API
 │   └── deploy.sh                # Lambda デプロイ
 ├── infra/
-│   ├── cloudformation-certificate.yaml  # ACM（us-east-1）
-│   ├── cloudformation-touring.yaml      # メインリソース
+│   ├── cfn-certificate.yaml  # ACM（us-east-1）
+│   ├── cfn-touring.yaml      # メインリソース
 │   └── deploy-infra.sh                  # フルデプロイ
 ├── generate_diagram.py          # アーキテクチャ図生成
 └── images/

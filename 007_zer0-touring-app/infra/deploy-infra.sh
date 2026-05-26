@@ -25,7 +25,7 @@ if $DEPLOY_CERT; then
   echo "=== [1/4] ACM 証明書デプロイ (us-east-1) ==="
   aws cloudformation deploy \
     --stack-name "$CERT_STACK" \
-    --template-file cloudformation-certificate.yaml \
+    --template-file cfn-certificate.yaml \
     --region us-east-1 \
     --capabilities CAPABILITY_IAM
 
@@ -62,7 +62,7 @@ echo "=== [2/4] メインスタックデプロイ ($REGION) ==="
 PARAMS="ParameterKey=CertificateArn,ParameterValue=${CERT_ARN}"
 aws cloudformation deploy \
   --stack-name "$STACK" \
-  --template-file cloudformation-touring.yaml \
+  --template-file cfn-touring.yaml \
   --region "$REGION" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides "$PARAMS"

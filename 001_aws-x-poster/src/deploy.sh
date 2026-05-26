@@ -90,7 +90,7 @@ if [ "$MODE" = "--full" ]; then
     # ── 3. CloudFormation スタックをデプロイ ──────────────
     echo "[3/4] CloudFormation スタックをデプロイ..."
     aws cloudformation deploy \
-        --template-file cloudformation-x-poster.yaml \
+        --template-file cfn-x-poster.yaml \
         --stack-name "$STACK_NAME" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$REGION"

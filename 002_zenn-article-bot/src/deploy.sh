@@ -64,7 +64,7 @@ fi
 echo ""
 echo "[2/3] CloudFormationスタックをデプロイ中..."
 aws cloudformation deploy \
-  --template-file "${SCRIPT_DIR}/cloudformation-article-generator.yaml" \
+  --template-file "${SCRIPT_DIR}/cfn-article-generator.yaml" \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \

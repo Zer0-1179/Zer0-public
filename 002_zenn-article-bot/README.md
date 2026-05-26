@@ -93,7 +93,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 ├── scripts/
 │   ├── build_layer.sh        # Lambda Layer ビルド
 │   └── download_article.sh   # S3 から生成記事をローカルに取得
-├── cloudformation-article-generator.yaml
+├── cfn-article-generator.yaml
 └── images/
     └── 002_architecture.png
 ```
