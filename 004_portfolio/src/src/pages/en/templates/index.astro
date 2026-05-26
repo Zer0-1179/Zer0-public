@@ -27,9 +27,33 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
         </svg>
         <span class="text-sm text-slate-400 font-mono">README</span>
       </div>
-      <div class="px-6 py-5">
-        <p class="text-sm font-semibold text-slate-300 mb-3">{t('templates.readme')}</p>
-        <p class="text-sm text-slate-400 leading-relaxed">{t('templates.readme.body')}</p>
+      <div class="px-6 py-6 space-y-5 text-sm">
+        <div>
+          <p class="font-semibold text-slate-200 mb-1">{t('templates.readme')}</p>
+          <p class="text-slate-400 leading-relaxed">
+            CloudFormation templates extracted from real production projects and generalized for public use.
+            Each template is ready to deploy as-is — just supply your parameters.
+          </p>
+        </div>
+
+        <div>
+          <p class="font-semibold text-slate-300 mb-2">Design Principles</p>
+          <ul class="space-y-1 text-slate-400">
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>No hardcoding — all configurable values are exposed as <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Parameters</code></li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> parameter auto-switches dev / prd settings (retention, DeletionPolicy, etc.)</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Least-privilege IAM and optional KMS encryption pre-configured</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Cross-stack references via <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Outputs</code> + <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">ImportValue</code></li>
+          </ul>
+        </div>
+
+        <div>
+          <p class="font-semibold text-slate-300 mb-2">How to Deploy</p>
+          <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-slate-300 font-mono overflow-x-auto leading-relaxed">aws cloudformation deploy \
+  --stack-name &lt;stack-name&gt; \
+  --template-file &lt;template&gt;.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides ProjectName=&lt;name&gt; Env=prd</pre>
+        </div>
       </div>
     </div>
 
