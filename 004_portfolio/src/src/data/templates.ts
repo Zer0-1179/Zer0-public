@@ -22,6 +22,17 @@ export const templates: Template[] = [
     tagsJa: ['初級', 'ストレージ', 'env切替'],
     tagsEn: ['Beginner', 'Storage', 'env switch'],
   },
+  {
+    slug: 'kms-key',
+    filename: 'cfn-kms-key.yaml',
+    nameJa: 'KMSキー',
+    nameEn: 'KMS Key',
+    descJa: 'S3・EBS・RDS・EFS・CloudWatch Logs・SSM・SQS・Secrets Managerなど主要サービスで共用できる汎用KMSキー。エイリアス自動作成・年次自動ローテーション有効済み。他スタックからImportValueで参照可能。',
+    descEn: 'General-purpose KMS key reusable across S3, EBS, RDS, EFS, CloudWatch Logs, SSM, SQS, and Secrets Manager. Alias auto-created, annual key rotation enabled. Exportable ARN for cross-stack reference.',
+    services: ['KMS'],
+    tagsJa: ['初級', 'セキュリティ', '暗号化'],
+    tagsEn: ['Beginner', 'Security', 'Encryption'],
+  },
 ];
 
 export function getTemplateBySlug(slug: string) {
