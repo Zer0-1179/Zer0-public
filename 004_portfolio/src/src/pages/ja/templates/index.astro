@@ -27,9 +27,33 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
         </svg>
         <span class="text-sm text-slate-400 font-mono">README</span>
       </div>
-      <div class="px-6 py-5">
-        <p class="text-sm font-semibold text-slate-300 mb-3">{t('templates.readme')}</p>
-        <p class="text-sm text-slate-400 leading-relaxed">{t('templates.readme.body')}</p>
+      <div class="px-6 py-6 space-y-5 text-sm">
+        <div>
+          <p class="font-semibold text-slate-200 mb-1">{t('templates.readme')}</p>
+          <p class="text-slate-400 leading-relaxed">
+            実際の運用プロジェクトで使用している CloudFormation テンプレートを汎用化して公開しています。
+            パラメータを指定するだけでそのままデプロイできる状態に整備済みです。
+          </p>
+        </div>
+
+        <div>
+          <p class="font-semibold text-slate-300 mb-2">設計方針</p>
+          <ul class="space-y-1 text-slate-400">
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>ハードコードなし — 変更が想定される値はすべて <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Parameters</code> に外出し</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> パラメータで dev / prd 設定を自動切替（保持期間・DeletionPolicy など）</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>最小権限 IAM・KMS 暗号化オプション設定済み</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>スタック間参照は <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Outputs</code> + <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">ImportValue</code> で対応</li>
+          </ul>
+        </div>
+
+        <div>
+          <p class="font-semibold text-slate-300 mb-2">デプロイ方法</p>
+          <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-slate-300 font-mono overflow-x-auto leading-relaxed">aws cloudformation deploy \
+  --stack-name &lt;stack-name&gt; \
+  --template-file &lt;template&gt;.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides ProjectName=&lt;name&gt; Env=prd</pre>
+        </div>
       </div>
     </div>
 

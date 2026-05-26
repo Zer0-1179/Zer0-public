@@ -13,7 +13,7 @@ const CATEGORY_META: Category[] = [
   { slug: 'database',  labelJa: 'データベース',       labelEn: 'Database',   descJa: 'RDS・DynamoDB・ElastiCacheなど',         descEn: 'RDS, DynamoDB, ElastiCache, and more' },
   { slug: 'security',  labelJa: 'セキュリティ',       labelEn: 'Security',   descJa: 'KMS・IAM・WAF・Secrets Managerなど',    descEn: 'KMS, IAM, WAF, Secrets Manager, and more' },
   { slug: 'messaging', labelJa: 'メッセージング',     labelEn: 'Messaging',  descJa: 'SQS・SNS・EventBridgeなど',             descEn: 'SQS, SNS, EventBridge, and more' },
-  { slug: 'monitoring',labelJa: 'モニタリング',       labelEn: 'Monitoring', descJa: 'CloudWatch・X-Ray・CloudTrailなど',      descEn: 'CloudWatch, X-Ray, CloudTrail, and more' },
+  { slug: 'monitoring',labelJa: 'モニタリング',       labelEn: 'Monitoring', descJa: 'CloudWatch・CloudTrailなど',             descEn: 'CloudWatch, CloudTrail, and more' },
 ];
 
 export type Template = {
