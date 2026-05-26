@@ -1,3 +1,21 @@
+export type Category = {
+  slug: string;
+  labelJa: string;
+  labelEn: string;
+  descJa: string;
+  descEn: string;
+};
+
+const CATEGORY_META: Category[] = [
+  { slug: 'network',    labelJa: 'ネットワーク',      labelEn: 'Network',    descJa: 'VPC・サブネット・ALB・NLBなど',          descEn: 'VPC, Subnet, ALB, NLB, and more' },
+  { slug: 'compute',   labelJa: 'コンピューティング', labelEn: 'Compute',    descJa: 'Lambda・EC2・ECS・Batchなど',            descEn: 'Lambda, EC2, ECS, Batch, and more' },
+  { slug: 'storage',   labelJa: 'ストレージ',        labelEn: 'Storage',    descJa: 'S3・EFS・EBSなど',                      descEn: 'S3, EFS, EBS, and more' },
+  { slug: 'database',  labelJa: 'データベース',       labelEn: 'Database',   descJa: 'RDS・DynamoDB・ElastiCacheなど',         descEn: 'RDS, DynamoDB, ElastiCache, and more' },
+  { slug: 'security',  labelJa: 'セキュリティ',       labelEn: 'Security',   descJa: 'KMS・IAM・WAF・Secrets Managerなど',    descEn: 'KMS, IAM, WAF, Secrets Manager, and more' },
+  { slug: 'messaging', labelJa: 'メッセージング',     labelEn: 'Messaging',  descJa: 'SQS・SNS・EventBridgeなど',             descEn: 'SQS, SNS, EventBridge, and more' },
+  { slug: 'monitoring',labelJa: 'モニタリング',       labelEn: 'Monitoring', descJa: 'CloudWatch・X-Ray・CloudTrailなど',      descEn: 'CloudWatch, X-Ray, CloudTrail, and more' },
+];
+
 export type Template = {
   slug: string;
   filename: string;
@@ -113,6 +131,31 @@ export const templates: Template[] = [
     updatedAt: '2026-05-26',
   },
 ];
+
+export function categorySlug(template: Template): string {
+  return template.categoryEn.toLowerCase().replace(/\s+/g, '-');
+}
+
+export function getCategoryBySlug(slug: string): Category | undefined {
+  const fromMeta = CATEGORY_META.find((c) => c.slug === slug);
+  if (fromMeta) return fromMeta;
+  const tmpl = templates.find((t) => categorySlug(t) === slug);
+  if (!tmpl) return undefined;
+  return { slug, labelJa: tmpl.categoryJa, labelEn: tmpl.categoryEn, descJa: '', descEn: '' };
+}
+
+export function getTemplatesByCategory(slug: string): Template[] {
+  return templates.filter((t) => categorySlug(t) === slug);
+}
+
+export function getCategoriesWithTemplates(): Category[] {
+  const usedSlugs = [...new Set(templates.map(categorySlug))];
+  const ordered = CATEGORY_META.filter((c) => usedSlugs.includes(c.slug));
+  const extra = usedSlugs
+    .filter((s) => !CATEGORY_META.find((c) => c.slug === s))
+    .map((s) => getCategoryBySlug(s)!);
+  return [...ordered, ...extra];
+}
 
 export function getTemplateBySlug(slug: string) {
   return templates.find((t) => t.slug === slug);
