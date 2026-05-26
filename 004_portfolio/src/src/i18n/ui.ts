@@ -64,6 +64,8 @@ export const ui = {
     'templates.free': '無料',
     'templates.readme': 'このテンプレートについて',
     'templates.readme.body': 'CloudFormationテンプレートをそのまま使えるよう整備したファイル集です。ProjectName と Env パラメータを指定するだけで即デプロイ可能。dev/prd 環境の自動切替・KMS暗号化・最小権限IAM設定済み。スタック間参照は Outputs + ImportValue で対応。',
+    'templates.back': '← テンプレート一覧',
+    'templates.files': '件',
 
     'footer.copy': '© 2026 Zer0_Infra. All rights reserved.',
   },
@@ -125,6 +127,8 @@ export const ui = {
     'templates.free': 'Free',
     'templates.readme': 'About These Templates',
     'templates.readme.body': 'Production-ready CloudFormation templates you can deploy immediately. Just set ProjectName and Env parameters — dev/prd environment switching, KMS encryption, and least-privilege IAM are pre-configured. Cross-stack references via Outputs + ImportValue.',
+    'templates.back': '← All Templates',
+    'templates.files': 'files',
 
     'footer.copy': '© 2026 Zer0_Infra. All rights reserved.',
   },
