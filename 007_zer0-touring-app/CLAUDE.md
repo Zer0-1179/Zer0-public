@@ -11,7 +11,7 @@ CERT_ARN=$(aws cloudformation describe-stacks --stack-name zer0-touring-cert \
   --output text) && \
 aws cloudformation update-stack \
   --stack-name zer0-touring \
-  --template-body file:///root/Zer0/007_Zer0_TouringApp/infra/cloudformation-touring.yaml \
+  --template-body file:///root/Zer0/007_Zer0_TouringApp/infra/cfn-touring.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters ParameterKey=CertificateArn,ParameterValue="$CERT_ARN" \
   --region ap-northeast-1

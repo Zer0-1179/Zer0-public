@@ -12,7 +12,7 @@ CERT_ARN=$(aws cloudformation describe-stacks --stack-name Zer0-portfolio-cert \
 
 aws cloudformation update-stack \
   --stack-name Zer0-portfolio \
-  --template-body file://infra/cloudformation-portfolio.yaml \
+  --template-body file://infra/cfn-portfolio.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters ParameterKey=CertificateArn,ParameterValue="$CERT_ARN" \
   --region ap-northeast-1

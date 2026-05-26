@@ -88,7 +88,7 @@ EventBridge（毎月1日・15日 21:00 JST）
 │   ├── deploy.sh             # デプロイスクリプト
 │   └── tests/
 │       └── test_lambda.py    # ユニットテスト（5件）
-├── cloudformation-mid-article-generator.yaml
+├── cfn-mid-article-generator.yaml
 └── images/
     └── 005_architecture.png
 ```

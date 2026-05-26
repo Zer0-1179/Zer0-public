@@ -42,7 +42,7 @@ echo ""
 # [1/3] CloudFormationスタックをデプロイ（S3不使用）
 echo "[1/3] CloudFormationスタックをデプロイ中..."
 aws cloudformation deploy \
-  --template-file "${SCRIPT_DIR}/cloudformation-cryptobot.yaml" \
+  --template-file "${SCRIPT_DIR}/cfn-cryptobot.yaml" \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \

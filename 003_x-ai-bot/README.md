@@ -90,7 +90,7 @@ EventBridge Scheduler（22:00 JST / 日曜 10:00 JST）
 │   └── deploy.sh            # デプロイスクリプト
 ├── scripts/
 │   └── test_invoke.sh       # テストスクリプト（DRY_RUN対応）
-├── cloudformation-x-ai-bot.yaml
+├── cfn-x-ai-bot.yaml
 └── images/
     └── 003_architecture.png
 ```

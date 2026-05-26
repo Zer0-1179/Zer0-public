@@ -134,7 +134,7 @@ Executor が実行するたびに証拠金維持率を確認：
 │   ├── setup_ssm.sh     # SSM パラメータ初期化
 │   ├── deploy.sh        # デプロイスクリプト
 │   └── test_invoke.sh   # テストシナリオ（10種）
-├── cloudformation-cryptobot.yaml
+├── cfn-cryptobot.yaml
 └── images/
     └── 006_architecture.png
 ```

@@ -53,7 +53,7 @@ echo "  ✓ 証明書ARN: $CERT_ARN"
 echo ""
 echo "[2/3] メインスタックをデプロイ中 ($REGION)..."
 aws cloudformation deploy \
-  --template-file "${SCRIPT_DIR}/cloudformation-portfolio.yaml" \
+  --template-file "${SCRIPT_DIR}/cfn-portfolio.yaml" \
   --stack-name "$STACK_NAME" \
   --region "$REGION" \
   --capabilities CAPABILITY_NAMED_IAM \

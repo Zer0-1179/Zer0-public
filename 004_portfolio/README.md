@@ -92,7 +92,7 @@ Astro の `i18n` ルーティングを使用し、`/ja/` と `/en/` で全ペー
 │   ├── astro.config.mjs
 │   └── package.json
 ├── infra/
-│   ├── cloudformation-portfolio.yaml
+│   ├── cfn-portfolio.yaml
 │   ├── certificate.yaml         # ACM（us-east-1）
 │   └── deploy-infra.sh
 ├── scripts/
