@@ -65,6 +65,9 @@ export const ui = {
     'templates.readme': 'このテンプレートについて',
     'templates.back': '← テンプレート一覧',
     'templates.files': '件',
+    'templates.cta.title': 'CFnテンプレート無料公開中',
+    'templates.cta.sub': '実運用ベースのCloudFormationテンプレート集。パラメータを指定するだけで即デプロイ可能。',
+    'templates.cta.link': 'テンプレートを見る →',
 
     'footer.copy': '© 2026 Zer0_Infra. All rights reserved.',
   },
@@ -127,6 +130,9 @@ export const ui = {
     'templates.readme': 'About These Templates',
     'templates.back': '← All Templates',
     'templates.files': 'files',
+    'templates.cta.title': 'Free CFn Templates',
+    'templates.cta.sub': 'Production-based CloudFormation templates — deploy instantly with just your parameters.',
+    'templates.cta.link': 'Browse Templates →',
 
     'footer.copy': '© 2026 Zer0_Infra. All rights reserved.',
   },
