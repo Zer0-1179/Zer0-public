@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { templates } from '../../../data/templates';
+import { useTranslations } from '../../../i18n/utils';
+
+const t = useTranslations('en');
+const BASE_URL = 'https://www.zer0-infra.com/downloads';
+---
+
+<BaseLayout title={t('templates.title')}>
+  <div class="max-w-6xl mx-auto px-6 py-20">
+    <div class="mb-14">
+      <h1 class="text-4xl font-bold text-white mb-2">{t('templates.title')}</h1>
+      <div class="w-12 h-0.5 bg-accent mb-4"></div>
+      <p class="text-slate-400">{t('templates.sub')}</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      {templates.map((tmpl) => (
+        <article class="group bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden hover:border-accent/40 transition-all duration-200 flex flex-col">
+          <div class="p-5 flex flex-col flex-1">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="px-2 py-0.5 bg-accent/10 text-accent text-xs rounded border border-accent/20 font-mono">
+                {t('templates.free')}
+              </span>
+              {tmpl.tagsEn.map((tag) => (
+                <span class="px-2 py-0.5 bg-navy-700/60 text-slate-400 text-xs rounded">{tag}</span>
+              ))}
+            </div>
+
+            <h2 class="text-base font-bold text-white mb-2 group-hover:text-accent transition-colors">
+              {tmpl.nameEn}
+            </h2>
+            <p class="text-slate-400 text-sm leading-relaxed mb-4 flex-1">{tmpl.descEn}</p>
+
+            <div class="mb-5">
+              <p class="text-xs text-slate-500 mb-2">{t('templates.services')}</p>
+              <div class="flex flex-wrap gap-1.5">
+                {tmpl.services.map((svc) => (
+                  <span class="px-2 py-0.5 bg-navy-700/60 text-slate-400 text-xs rounded">{svc}</span>
+                ))}
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-500 font-mono">{tmpl.filename}</span>
+              <a
+                href={`${BASE_URL}/${tmpl.filename}`}
+                download={tmpl.filename}
+                class="flex items-center gap-1.5 px-4 py-2 bg-accent hover:bg-accent-light text-navy-950 text-xs font-semibold rounded transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+                {t('templates.download')}
+              </a>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

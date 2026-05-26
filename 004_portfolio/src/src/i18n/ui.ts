@@ -11,6 +11,7 @@ export const ui = {
     'nav.about': 'プロフィール',
     'nav.projects': '実績',
     'nav.articles': 'ブログ',
+    'nav.templates': 'テンプレート',
     'nav.contact': 'お問い合わせ',
 
     'hero.title': 'クラウドエンジニア',
@@ -56,6 +57,12 @@ export const ui = {
     'contact.qr': '名刺用QRコード',
     'contact.qr.sub': 'このポートフォリオサイトへのリンク',
 
+    'templates.title': 'CFnテンプレート',
+    'templates.sub': '無料ダウンロードできるCloudFormationテンプレート集',
+    'templates.download': 'ダウンロード',
+    'templates.services': '対象サービス',
+    'templates.free': '無料',
+
     'footer.copy': '© 2026 Zer0_Infra. All rights reserved.',
   },
   en: {
@@ -63,6 +70,7 @@ export const ui = {
     'nav.about': 'About',
     'nav.projects': 'Projects',
     'nav.articles': 'Articles',
+    'nav.templates': 'Templates',
     'nav.contact': 'Contact',
 
     'hero.title': 'Cloud Engineer',
@@ -107,6 +115,12 @@ export const ui = {
     'contact.inquiry': 'For freelance / contract inquiries, feel free to DM me on X.',
     'contact.qr': 'QR Code for Business Card',
     'contact.qr.sub': 'Link to this portfolio site',
+
+    'templates.title': 'CFn Templates',
+    'templates.sub': 'Free CloudFormation templates ready to deploy',
+    'templates.download': 'Download',
+    'templates.services': 'Services',
+    'templates.free': 'Free',
 
     'footer.copy': '© 2026 Zer0_Infra. All rights reserved.',
   },
