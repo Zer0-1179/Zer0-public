@@ -63,7 +63,7 @@ try {
     <div class="flex flex-wrap gap-3">
       {getCategoriesWithTemplates().map((cat) => (
         <a
-          href={`/en/templates/?category=${cat.slug}`}
+          href={`/en/templates/${cat.slug}/`}
           class="flex items-center gap-2 px-4 py-2.5 bg-navy-800/40 border border-navy-700/50 rounded-lg text-sm text-slate-300 hover:border-accent/50 hover:text-white transition-colors"
         >
           <span>{cat.labelEn}</span>
