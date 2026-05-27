@@ -5,7 +5,7 @@ import StatsBar from '../../components/StatsBar.astro';
 import ProjectCard from '../../components/ProjectCard.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import { projects } from '../../data/projects';
-import { templates } from '../../data/templates';
+import { templates, getCategoriesWithTemplates, getTemplatesByCategory } from '../../data/templates';
 import { useTranslations } from '../../i18n/utils';
 
 const t = useTranslations('en');
@@ -49,24 +49,30 @@ try {
     </div>
   </section>
 
-  <!-- Templates CTA -->
+  <!-- Templates -->
   <section class="max-w-6xl mx-auto px-6 py-12 border-t border-navy-700/30">
-    <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-      <div class="p-2.5 bg-accent/10 border border-accent/20 rounded-lg shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-accent" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-        </svg>
+    <div class="flex items-end justify-between mb-8">
+      <div>
+        <h2 class="text-2xl md:text-3xl font-bold text-white">{t('section.templates')}</h2>
+        <p class="text-slate-400 mt-1 text-sm">{t('section.templates.sub')}</p>
       </div>
-      <div class="flex-1 min-w-0">
-        <p class="text-white font-semibold text-sm">{t('templates.cta.title')}</p>
-        <p class="text-slate-400 text-xs mt-0.5">
-          {t('templates.cta.sub')}
-          <span class="text-slate-500 ml-1">{templates.length} templates available</span>
-        </p>
-      </div>
-      <a href="/en/templates/" class="px-4 py-2 border border-accent text-accent text-xs font-semibold rounded hover:bg-accent hover:text-navy-950 transition-colors shrink-0">
-        {t('templates.cta.link')}
+      <a href="/en/templates/" class="text-accent text-sm hover:text-accent-light transition-colors hidden md:block">
+        {t('section.templates.link')}
       </a>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      {getCategoriesWithTemplates().map((cat) => (
+        <a
+          href={`/en/templates/?category=${cat.slug}`}
+          class="flex items-center gap-2 px-4 py-2.5 bg-navy-800/40 border border-navy-700/50 rounded-lg text-sm text-slate-300 hover:border-accent/50 hover:text-white transition-colors"
+        >
+          <span>{cat.labelEn}</span>
+          <span class="text-xs text-slate-500 bg-navy-900/60 px-1.5 py-0.5 rounded">{getTemplatesByCategory(cat.slug).length}</span>
+        </a>
+      ))}
+    </div>
+    <div class="mt-6 md:hidden">
+      <a href="/en/templates/" class="text-accent text-sm hover:text-accent-light transition-colors">{t('section.templates.link')}</a>
     </div>
   </section>
 
