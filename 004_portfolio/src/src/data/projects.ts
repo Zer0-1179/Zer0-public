@@ -46,7 +46,7 @@ export const projects: Project[] = [
     tags: ['Serverless', 'Bedrock', 'EventBridge', 'X API'],
     services: ['Lambda', 'Amazon Bedrock', 'EventBridge', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '🤖',
-    featured: true,
+    featured: false,
     monthlyCost: '~$1.3',
   },
   {
@@ -75,7 +75,7 @@ export const projects: Project[] = [
     tags: ['CloudFormation', 'Bedrock', 'S3', 'SES', 'matplotlib'],
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '📝',
-    featured: true,
+    featured: false,
     monthlyCost: '~$0.16',
   },
   {
@@ -104,7 +104,7 @@ export const projects: Project[] = [
     tags: ['Serverless', 'Bedrock', 'EventBridge', 'X API'],
     services: ['Lambda', 'Amazon Bedrock', 'EventBridge Scheduler', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '💡',
-    featured: true,
+    featured: false,
     monthlyCost: '~$0.38',
   },
   {
@@ -162,7 +162,7 @@ export const projects: Project[] = [
     tags: ['CloudFormation', 'Bedrock', 'S3', 'SES', 'matplotlib'],
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '🏗️',
-    featured: true,
+    featured: false,
     monthlyCost: '~$2.8',
   },
   {
