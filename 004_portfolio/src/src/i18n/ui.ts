@@ -31,6 +31,9 @@ export const ui = {
     'section.projects.sub': 'AWSとAIを活用した自動化システムの開発実績',
     'section.articles': '最新ブログ',
     'section.articles.sub': 'Zenn・noteで発信中',
+    'section.templates': 'CFnテンプレート',
+    'section.templates.sub': '実運用ベースのCloudFormationテンプレート集。パラメータを指定するだけで即デプロイ可能。',
+    'section.templates.link': 'テンプレートをすべて見る →',
 
     'project.tech': '使用技術',
     'project.detail': '詳細を見る',
@@ -96,6 +99,9 @@ export const ui = {
     'section.projects.sub': 'Automated systems built with AWS and AI',
     'section.articles': 'Latest Articles',
     'section.articles.sub': 'Sharing on Zenn & note',
+    'section.templates': 'CFn Templates',
+    'section.templates.sub': 'Production-based CloudFormation templates — deploy instantly with just your parameters.',
+    'section.templates.link': 'Browse all templates →',
 
     'project.tech': 'Tech Stack',
     'project.detail': 'View Details',
