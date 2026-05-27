@@ -1,5 +1,6 @@
 ---
 import { getLangFromUrl, useTranslations } from '../i18n/utils';
+import { projects } from '../data/projects';
 
 const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
@@ -10,7 +11,7 @@ const diffDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60
 
 const stats = [
   { value: '10', label: t('stats.aws') },
-  { value: '7', label: t('stats.projects') },
+  { value: String(projects.length), label: t('stats.projects') },
   { value: '11', label: t('stats.aws-services') },
   { value: `${diffDays}+`, label: t('stats.autopost') },
   { value: '~$5.0', label: t('stats.cost') },
