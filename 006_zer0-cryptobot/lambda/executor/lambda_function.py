@@ -145,30 +145,20 @@ def _coin(pair: str) -> str:
     return pair.split("_")[0].upper()
 
 
-def notify_entry_order(pair: str, direction: str, price: float, amount: float,
-                       invest: float, current_price: float, remaining: float,
-                       is_test: bool = False):
+def notify_entry_order(pair: str, direction: str, amount: float,
+                       invest: float, market_price: float, remaining: float):
     dir_str = "ロング（買い）" if direction == "long" else "ショート（売り）"
     coin = _coin(pair)
-    prefix = "[TEST] " if is_test else ""
-    subject = f"【CryptoBot】{prefix}{dir_str}注文発注 - {coin}/JPY"
-    if is_test:
-        offset = "+0.5%" if direction == "long" else "-0.5%"
-        test_note = f"\n※ [TEST] 即時約定テスト：指値を意図的に現在価格{offset}に設定しています"
-    else:
-        test_note = ""
+    subject = f"【CryptoBot】{dir_str}注文発注 - {coin}/JPY"
     body = (
         f"■ {coin}/JPY  {dir_str}\n"
         f"\n"
-        f"現在価格：{current_price:,.0f}円\n"
-        f"指値　　：{price:,.0f}円\n"
+        f"注文種別：成行\n"
+        f"市場価格：{market_price:,.0f}円（参考）\n"
         f"数量　　：{amount:.4f} {coin}\n"
         f"購入金額：{invest:,.0f}円\n"
         f"証拠金　：{invest/2:,.0f}円（2倍レバレッジ）\n"
-        f"残り証拠金：{remaining/2:,.0f}円\n"
-        f"\n"
-        f"※ 24時間で未約定の場合は自動キャンセルします"
-        f"{test_note}"
+        f"残り証拠金：{remaining/2:,.0f}円"
     )
     send_email(subject, body)
 
@@ -806,9 +796,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
 def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict = {}) -> dict:
     # テスト用フラグ（本番では使用しない）
     # test_invest_jpy: 投資額を固定（例: 500）
-    # test_entry_above: True にすると現在価格+0.5%で発注し即時約定させる
-    test_invest_jpy  = event.get("test_invest_jpy")
-    test_entry_above = event.get("test_entry_above", False)
+    test_invest_jpy = event.get("test_invest_jpy")
 
     active_count = len(state["positions"])
     long_count   = sum(1 for p in state["positions"].values() if p.get("direction") == "long")
