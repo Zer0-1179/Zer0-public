@@ -158,6 +158,18 @@ Parameters:
     Description: "KMS key ARN for encryption at rest. Leave empty to use the AWS managed key (aws/dynamodb)."
 
 # -----------------------------------------------
+# Mappings
+# -----------------------------------------------
+Mappings:
+  Config:
+    dev:
+      DeletionProtectionEnabled: false
+    stg:
+      DeletionProtectionEnabled: false
+    prd:
+      DeletionProtectionEnabled: true
+
+# -----------------------------------------------
 # Conditions
 # -----------------------------------------------
 Conditions:
@@ -217,7 +229,7 @@ Resources:
           SSEType: KMS
           KMSMasterKeyId: !Ref KmsKeyArn
         - SSEEnabled: true
-      DeletionProtectionEnabled: !If [IsPrd, true, false]
+      DeletionProtectionEnabled: !FindInMap [Config, !Ref Env, DeletionProtectionEnabled]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-dynamodb-${TableSuffix}"
