@@ -4,21 +4,14 @@ Description: "General-purpose Lambda function with execution role and CloudWatch
 # -----------------------------------------------
 # DEPLOY
 # -----------------------------------------------
-# 1. Upload Lambda code to S3:
-#   zip lambda.zip lambda_function.py
-#   aws s3 cp lambda.zip s3://<CodeS3Bucket>/lambda.zip
-#
-# 2. Deploy stack:
-#   aws cloudformation deploy \
-#     --stack-name <ProjectName>-<Env>-lambda-<FunctionSuffix> \
-#     --template-file cfn-lambda.yaml \
-#     --capabilities CAPABILITY_NAMED_IAM \
-#     --parameter-overrides \
-#       ProjectName=my-project \
-#       Env=dev \
-#       FunctionSuffix=api \
-#       CodeS3Bucket=my-bucket \
-#       CodeS3Key=lambda.zip
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-lambda-<FunctionSuffix> \
+#   --template-file cfn-lambda.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     FunctionSuffix=api
 #
 # FunctionSuffix examples: api, worker, batch, notify, 01
 #
@@ -51,11 +44,6 @@ Metadata:
           - Handler
           - Timeout
           - MemorySize
-      - Label:
-          default: "Code"
-        Parameters:
-          - CodeS3Bucket
-          - CodeS3Key
       - Label:
           default: "Logs"
         Parameters:
@@ -103,8 +91,8 @@ Parameters:
 
   Handler:
     Type: String
-    Default: lambda_function.lambda_handler
-    Description: "Handler in the format filename.function_name (e.g. lambda_function.lambda_handler)."
+    Default: index.lambda_handler
+    Description: "Handler in the format filename.function_name. Use index.lambda_handler for inline ZipFile code."
 
   Timeout:
     Type: Number
@@ -139,15 +127,6 @@ Parameters:
       - 180
       - 365
     Description: "CloudWatch Logs retention period in days."
-
-  CodeS3Bucket:
-    Type: String
-    Description: "S3 bucket containing the Lambda deployment package ZIP."
-
-  CodeS3Key:
-    Type: String
-    Default: lambda.zip
-    Description: "S3 key for the Lambda deployment package (e.g. lambda.zip or v1/lambda.zip)."
 
   AdditionalPolicy1:
     Type: String
@@ -208,8 +187,14 @@ Resources:
       Timeout: !Ref Timeout
       MemorySize: !Ref MemorySize
       Code:
-        S3Bucket: !Ref CodeS3Bucket
-        S3Key: !Ref CodeS3Key
+        # Replace the inline code below with your own logic.
+        # After deploy, update with:
+        #   zip lambda.zip lambda_function.py
+        #   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
+        ZipFile: |
+          def lambda_handler(event, context):
+              print("Hello from Lambda")
+              return {"statusCode": 200, "body": "OK"}
       Tags:
         - Key: Project
           Value: !Ref ProjectName

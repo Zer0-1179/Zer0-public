@@ -57,6 +57,52 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
       </div>
     </div>
 
+    <!-- Naming Convention block -->
+    <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden mb-8">
+      <div class="px-4 py-2.5 border-b border-navy-700/50 bg-navy-800/60 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <span class="text-sm text-slate-400 font-mono">Naming Convention</span>
+      </div>
+      <div class="px-6 py-6 text-sm space-y-4">
+        <div>
+          <p class="text-slate-400 mb-2">Common format for stack names and resource names (Suffix is optional):</p>
+          <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-accent font-mono overflow-x-auto">{"{ProjectName}"}-{"{Env}"}-{"{Service}"}-{"{Suffix}"}</pre>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-navy-700/50 text-left">
+                <th class="pb-2 pr-6 text-slate-400 font-medium">Service</th>
+                <th class="pb-2 text-slate-400 font-medium">Example (ProjectName=pj / Env=dev)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-navy-700/20">
+              <tr><td class="py-1.5 pr-6 text-slate-300">VPC</td><td class="py-1.5 font-mono text-slate-400">pj-dev-vpc</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">Internet Gateway</td><td class="py-1.5 font-mono text-slate-400">pj-dev-igw</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">NAT Gateway</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nat</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">Security Group</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sg-web</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ALB</td><td class="py-1.5 font-mono text-slate-400">pj-dev-alb-01</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">NLB</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nlb-01</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">EC2</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ec2-web</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ECS Cluster</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-cluster</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ECS Service</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-api</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ECR</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecr-app</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">Lambda</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-api</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">S3</td><td class="py-1.5 font-mono text-slate-400">pj-dev-s3-assets</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">EFS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-efs-shared</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">EBS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ebs-data</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">RDS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-rds</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">DynamoDB</td><td class="py-1.5 font-mono text-slate-400">pj-dev-dynamodb-users</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">SQS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sqs-orders</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">KMS</td><td class="py-1.5 font-mono text-slate-400">alias/pj-dev-kms</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- Folder list -->
     <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden">
       {categoriesWithTemplates.map((cat, i) => (
