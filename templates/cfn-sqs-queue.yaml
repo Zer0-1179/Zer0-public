@@ -58,19 +58,6 @@ Metadata:
           default: "Optional"
         Parameters:
           - QueueSuffix
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      VisibilityTimeout:
-        default: "Visibility Timeout (seconds)"
-      MaxReceiveCount:
-        default: "Max Receive Count before moving to DLQ"
-      KmsKeyId:
-        default: "KMS Key ARN or ID (leave empty to use SQS managed SSE)"
-      QueueSuffix:
-        default: "Queue Name Suffix (optional)"
 
 # -----------------------------------------------
 # Parameters

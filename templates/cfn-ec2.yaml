@@ -57,29 +57,6 @@ Metadata:
         Parameters:
           - VolumeSize
           - VolumeType
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      SgSuffix:
-        default: "SG Suffix (e.g. web, bastion) — must match the SG stack"
-      SubnetType:
-        default: "Subnet Type (Public / Private)"
-      SubnetNumber:
-        default: "Subnet AZ (01 = AZ-a, 02 = AZ-c)"
-      OsType:
-        default: "OS Type (Linux / RHEL / Windows)"
-      AmiId:
-        default: "AMI ID — required only when OsType=RHEL"
-      InstanceType:
-        default: "Instance Type"
-      KeyName:
-        default: "Key Pair Name (leave empty to use SSM only)"
-      VolumeSize:
-        default: "Root Volume Size (GiB)"
-      VolumeType:
-        default: "Root Volume Type"
 
 # -----------------------------------------------
 # Parameters

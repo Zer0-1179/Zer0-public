@@ -49,15 +49,6 @@ Metadata:
         Parameters:
           - AdditionalPolicy1
           - AdditionalPolicy2
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      AdditionalPolicy1:
-        default: "Additional Managed Policy ARN 1 (optional)"
-      AdditionalPolicy2:
-        default: "Additional Managed Policy ARN 2 (optional)"
 
 # -----------------------------------------------
 # Parameters

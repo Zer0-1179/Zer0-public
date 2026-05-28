@@ -56,25 +56,6 @@ Metadata:
           default: "HTTPS (optional)"
         Parameters:
           - CertificateArn
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (must match VPC / SG stack)"
-      Env:
-        default: "Environment (must match VPC / SG stack)"
-      SgSuffix:
-        default: "SG Suffix (must match the SG stack)"
-      AlbSuffix:
-        default: "ALB Suffix — purpose or sequence (e.g. web, api, 01)"
-      Scheme:
-        default: "Scheme"
-      TargetType:
-        default: "Target Type"
-      TargetPort:
-        default: "Target Port (port your backend listens on)"
-      HealthCheckPath:
-        default: "Health Check Path"
-      CertificateArn:
-        default: "ACM Certificate ARN (leave empty to disable HTTPS)"
 
 # -----------------------------------------------
 # Parameters

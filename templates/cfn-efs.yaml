@@ -51,25 +51,6 @@ Metadata:
         Parameters:
           - BackupEnabled
           - KmsKeyArn
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (must match VPC / SG stack)"
-      Env:
-        default: "Environment (must match VPC / SG stack)"
-      SgSuffix:
-        default: "SG Suffix for EFS mount targets (must match the SG stack)"
-      EfsSuffix:
-        default: "EFS Suffix — purpose or sequence (e.g. shared, app, 01)"
-      PerformanceMode:
-        default: "Performance Mode"
-      ThroughputMode:
-        default: "Throughput Mode"
-      ProvisionedThroughputMibps:
-        default: "Provisioned Throughput (MiB/s) — required when ThroughputMode=provisioned"
-      BackupEnabled:
-        default: "Enable Automatic Backup"
-      KmsKeyArn:
-        default: "KMS Key ARN (leave empty to use AWS managed key)"
 
 # -----------------------------------------------
 # Parameters

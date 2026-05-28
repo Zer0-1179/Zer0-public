@@ -48,15 +48,6 @@ Metadata:
           default: "Optional"
         Parameters:
           - BucketSuffix
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      KmsKeyId:
-        default: "KMS Key ARN or ID (leave empty to use AES256)"
-      BucketSuffix:
-        default: "Bucket Name Suffix (optional)"
 
 # -----------------------------------------------
 # Parameters
