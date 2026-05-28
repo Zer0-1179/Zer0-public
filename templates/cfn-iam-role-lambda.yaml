@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "IAM execution role for Lambda with CloudWatch Logs permissions and optional additional policies"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-lambda-role \
+#   --template-file cfn-iam-role-lambda.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev
+#
+# Get the Role ARN for use in other stacks:
+# ROLE_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-lambda-role \
+#   --query "Stacks[0].Outputs[?OutputKey=='RoleArn'].OutputValue" \
+#   --output text)
+#
+# With additional managed policies (comma-separated ARNs):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-lambda-role \
+#   --template-file cfn-iam-role-lambda.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     AdditionalPolicy1=arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess \
+#     AdditionalPolicy2=arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# ParameterLabels overrides the display name shown to users.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Additional Policies (optional)"
+        Parameters:
+          - AdditionalPolicy1
+          - AdditionalPolicy2
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (lowercase, numbers, hyphens)"
+      Env:
+        default: "Environment"
+      AdditionalPolicy1:
+        default: "Additional Managed Policy ARN 1 (optional)"
+      AdditionalPolicy2:
+        default: "Additional Managed Policy ARN 2 (optional)"
+
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as part of the role name. Lowercase letters, numbers, and hyphens only."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+    Description: "Deployment environment. Used as part of the role name."
+
+  AdditionalPolicy1:
+    Type: String
+    Default: ""
+    Description: "ARN of an additional IAM managed policy to attach (e.g. arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess)."
+
+  AdditionalPolicy2:
+    Type: String
+    Default: ""
+    Description: "ARN of a second additional IAM managed policy to attach."
+
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
+Conditions:
+  HasPolicy1: !Not [!Equals [!Ref AdditionalPolicy1, ""]]
+  HasPolicy2: !Not [!Equals [!Ref AdditionalPolicy2, ""]]
+
+# -----------------------------------------------
+# Resources
+# CAPABILITY_NAMED_IAM is required when deploying IAM resources with custom names.
+# AssumeRolePolicyDocument defines which AWS service can assume this role.
+# AWSLambdaBasicExecutionRole grants permission to write logs to CloudWatch Logs.
+# ManagedPolicyArns attaches AWS managed policies; use inline policies for custom permissions.
+# -----------------------------------------------
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Env}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns: !If
+        - HasPolicy1
+        - !If
+          - HasPolicy2
+          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+            - !Ref AdditionalPolicy1
+            - !Ref AdditionalPolicy2
+          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+            - !Ref AdditionalPolicy1
+        - !If
+          - HasPolicy2
+          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+            - !Ref AdditionalPolicy2
+          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+        - Key: Region
+          Value: !Ref AWS::Region
+
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# -----------------------------------------------
+Outputs:
+  RoleArn:
+    Description: "Lambda execution role ARN"
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RoleArn"
+
+  RoleName:
+    Description: "Lambda execution role name"
+    Value: !Ref LambdaExecutionRole
+    Export:
+      Name: !Sub "${AWS::StackName}-RoleName"

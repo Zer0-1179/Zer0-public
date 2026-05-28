@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "NAT Gateway in a public subnet with a default route in the private route table. ~$33/month."
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-nat-gateway \
+#   --template-file cfn-nat-gateway.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev
+#
+# Prerequisite (stack name must follow convention):
+#   VPC: {ProjectName}-{Env}-vpc
+#
+# Deploy order:
+#   1. cfn-vpc.yaml          (VPC, subnets, route tables)
+#   2. cfn-igw.yaml          (internet access for public subnets)
+#   3. cfn-nat-gateway.yaml  (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (lowercase, numbers, hyphens)"
+      Env:
+        default: "Environment"
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as the Name tag prefix. Lowercase letters, numbers, and hyphens only."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+    Description: "Deployment environment. Used as part of the Name tag."
+
+# -----------------------------------------------
+# Resources
+# NAT Gateway is placed in PublicSubnet01.
+# EIP provides a static outbound IP address.
+# PrivateRoute sends all outbound traffic from private subnets through the NAT Gateway.
+# -----------------------------------------------
+Resources:
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-nat-eip"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIP.AllocationId
+      SubnetId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-ngw"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateRouteTableId"
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  NatGatewayId:
+    Description: "NAT Gateway ID"
+    Value: !Ref NatGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-NatGatewayId"
+
+  EipAddress:
+    Description: "Elastic IP address of the NAT Gateway"
+    Value: !Ref EIP
+    Export:
+      Name: !Sub "${AWS::StackName}-EipAddress"
