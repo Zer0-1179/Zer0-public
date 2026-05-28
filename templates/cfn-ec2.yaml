@@ -210,7 +210,7 @@ Resources:
             DeleteOnTermination: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}"
+          Value: !Sub "${ProjectName}-${Env}-ec2"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

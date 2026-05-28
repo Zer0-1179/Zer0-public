@@ -17,7 +17,7 @@ Description: "Internet Gateway attached to a VPC with a default route in the pub
 # Deploy order:
 #   1. cfn-vpc.yaml          (VPC, subnets, route tables)
 #   2. cfn-igw.yaml          (this template)
-#   3. cfn-nat-gateway.yaml  (optional: adds internet access to private subnets)
+#   3. cfn-nat.yaml          (optional: adds internet access to private subnets)
 # -----------------------------------------------
 
 # -----------------------------------------------
