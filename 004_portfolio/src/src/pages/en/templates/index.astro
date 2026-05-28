@@ -75,7 +75,7 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
           <p class="font-semibold text-slate-300 mb-2">Design Principles</p>
           <ul class="space-y-1 text-slate-400">
             <li class="flex gap-2"><span class="text-accent shrink-0">•</span>No hardcoding — all configurable values are exposed as <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Parameters</code></li>
-            <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> parameter auto-switches dev / prd settings (retention, DeletionPolicy, etc.)</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> parameter auto-switches dev / stg / prd settings (retention, DeletionPolicy, etc.)</li>
             <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Least-privilege IAM and optional KMS encryption pre-configured</li>
             <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Cross-stack references via <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Outputs</code> + <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">ImportValue</code></li>
           </ul>
@@ -88,6 +88,11 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
   --template-file &lt;template&gt;.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides ProjectName=&lt;name&gt; Env=prd</pre>
+        </div>
+
+        <div class="flex gap-2 text-slate-400">
+          <span class="text-yellow-500/80 shrink-0">⚠</span>
+          <p>Resources deployed with <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env=prd</code> have <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">DeletionPolicy: Retain</code> set. Deleting the stack does not delete the underlying resources — remove them manually via the AWS Console or CLI when no longer needed.</p>
         </div>
       </div>
     </div>
@@ -145,7 +150,7 @@ cfn-{"{Service}"}-{"{Type}"}.yaml　　 # e.g. cfn-ecs-cluster.yaml</pre>
               <tr><td class="py-1.5 pr-6 text-slate-300">DynamoDB</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-dynamodb.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-dynamodb-users</td></tr>
               <tr><td class="py-1.5 pr-6 text-slate-300">SQS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-sqs.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sqs-orders</td></tr>
               <tr><td class="py-1.5 pr-6 text-slate-300">KMS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-kms.yaml</td><td class="py-1.5 font-mono text-slate-400">alias/pj-dev-kms</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">IAM Role</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-iam-role.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-fn-role</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">IAM Role</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-iam-role.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-role</td></tr>
               <tr><td class="py-1.5 pr-6 text-slate-300">CloudWatch Logs</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-cw-logs.yaml</td><td class="py-1.5 font-mono text-slate-400">/aws/lambda/pj-dev-lambda-api</td></tr>
             </tbody>
           </table>
