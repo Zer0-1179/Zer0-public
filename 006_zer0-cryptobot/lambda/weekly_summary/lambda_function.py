@@ -79,8 +79,7 @@ def build_position_info(pair: str, pos: dict) -> dict:
                 "cost":          cost,
             })
     elif status == "buy_pending":
-        signal = pos.get("entry_price_signal")
-        info["entry_price"] = float(signal) if signal else None
+        pass  # 成行発注のため約定前は参考JPY価格なし（entry_price_signal はBinance USDT建て）
 
     return info
 
