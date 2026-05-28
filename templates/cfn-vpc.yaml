@@ -38,17 +38,6 @@ Metadata:
           - VpcCidr
           - PublicSubnetCidrs
           - PrivateSubnetCidrs
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      VpcCidr:
-        default: "VPC CIDR Block"
-      PublicSubnetCidrs:
-        default: "Public Subnet CIDRs (comma-separated, one per AZ)"
-      PrivateSubnetCidrs:
-        default: "Private Subnet CIDRs (comma-separated, one per AZ)"
 
 # -----------------------------------------------
 # Parameters

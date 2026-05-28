@@ -58,25 +58,6 @@ Metadata:
         Parameters:
           - Egress3Port
           - Egress3Cidr
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (must match the SG stack)"
-      Env:
-        default: "Environment (must match the SG stack)"
-      SgSuffix:
-        default: "Suffix (must match the SG stack, e.g. web, db)"
-      Egress1Port:
-        default: "Port"
-      Egress1Cidr:
-        default: "Destination CIDR"
-      Egress2Port:
-        default: "Port (leave empty to disable)"
-      Egress2Cidr:
-        default: "Destination CIDR"
-      Egress3Port:
-        default: "Port (leave empty to disable)"
-      Egress3Cidr:
-        default: "Destination CIDR"
 
 # -----------------------------------------------
 # Parameters

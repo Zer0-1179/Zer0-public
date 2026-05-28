@@ -60,29 +60,6 @@ Metadata:
           default: "Encryption (optional)"
         Parameters:
           - KmsKeyArn
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name"
-      Env:
-        default: "Environment"
-      EbsSuffix:
-        default: "EBS Suffix — purpose or sequence (e.g. data, logs, 01)"
-      VolumeType:
-        default: "Volume Type"
-      SizeGiB:
-        default: "Size (GiB)"
-      AvailabilityZone:
-        default: "Availability Zone (must match the EC2 instance AZ)"
-      Iops:
-        default: "IOPS (0 = use default: gp3→3000, io1/io2→required)"
-      Throughput:
-        default: "Throughput MiB/s (0 = use default: gp3→125)"
-      Ec2InstanceId:
-        default: "EC2 Instance ID to attach this volume to"
-      DeviceName:
-        default: "Device Name (e.g. /dev/sdf)"
-      KmsKeyArn:
-        default: "KMS Key ARN (leave empty to use AWS managed key)"
 
 # -----------------------------------------------
 # Parameters

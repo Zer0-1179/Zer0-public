@@ -66,31 +66,6 @@ Metadata:
         Parameters:
           - MultiAZ
           - DeletionProtection
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      SgSuffix:
-        default: "SG Suffix (e.g. db) — must match the SG stack"
-      DBEngine:
-        default: "Database Engine"
-      DBEngineVersion:
-        default: "Engine Version (e.g. 8.0.46 for MySQL, 17.10 for PostgreSQL)"
-      DBInstanceClass:
-        default: "DB Instance Class"
-      DBName:
-        default: "Initial Database Name"
-      DBUsername:
-        default: "Master Username"
-      DBPassword:
-        default: "Master Password"
-      AllocatedStorage:
-        default: "Allocated Storage (GiB)"
-      MultiAZ:
-        default: "Enable Multi-AZ (recommended for prd)"
-      DeletionProtection:
-        default: "Enable Deletion Protection"
 
 # -----------------------------------------------
 # Parameters

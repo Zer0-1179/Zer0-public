@@ -58,15 +58,6 @@ Metadata:
           default: "Optional"
         Parameters:
           - LogGroupName
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      KmsKeyId:
-        default: "KMS Key ARN (leave empty for no encryption)"
-      LogGroupName:
-        default: "Log Group Name (leave empty to auto-generate)"
 
 # -----------------------------------------------
 # Parameters

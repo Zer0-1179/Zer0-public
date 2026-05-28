@@ -64,27 +64,6 @@ Metadata:
           default: "TLS (required when Protocol=TLS)"
         Parameters:
           - CertificateArn
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (must match VPC / SG stack)"
-      Env:
-        default: "Environment (must match VPC / SG stack)"
-      SgSuffix:
-        default: "SG Suffix (must match the SG stack)"
-      NlbSuffix:
-        default: "NLB Suffix — purpose or sequence (e.g. tcp, udp, 01)"
-      Scheme:
-        default: "Scheme"
-      Protocol:
-        default: "Listener Protocol"
-      Port:
-        default: "Listener Port"
-      TargetType:
-        default: "Target Type"
-      TargetPort:
-        default: "Target Port (port your backend listens on)"
-      CertificateArn:
-        default: "ACM Certificate ARN (required when Protocol=TLS)"
 
 # -----------------------------------------------
 # Parameters

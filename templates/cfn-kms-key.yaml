@@ -43,11 +43,6 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
 
 # -----------------------------------------------
 # Parameters

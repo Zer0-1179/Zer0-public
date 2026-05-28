@@ -36,13 +36,6 @@ Metadata:
           - ProjectName
           - Env
           - SgSuffix
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (lowercase, numbers, hyphens)"
-      Env:
-        default: "Environment"
-      SgSuffix:
-        default: "Suffix (e.g. web, db, bastion) — also used in stack name"
 
 # -----------------------------------------------
 # Parameters

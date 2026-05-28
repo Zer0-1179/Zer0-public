@@ -53,25 +53,6 @@ Metadata:
         Parameters:
           - Ingress3Port
           - Ingress3Cidr
-    ParameterLabels:
-      ProjectName:
-        default: "Project Name (must match the SG stack)"
-      Env:
-        default: "Environment (must match the SG stack)"
-      SgSuffix:
-        default: "Suffix (must match the SG stack, e.g. web, db)"
-      Ingress1Port:
-        default: "Port"
-      Ingress1Cidr:
-        default: "Source CIDR"
-      Ingress2Port:
-        default: "Port (leave empty to disable)"
-      Ingress2Cidr:
-        default: "Source CIDR"
-      Ingress3Port:
-        default: "Port (leave empty to disable)"
-      Ingress3Cidr:
-        default: "Source CIDR"
 
 # -----------------------------------------------
 # Parameters
