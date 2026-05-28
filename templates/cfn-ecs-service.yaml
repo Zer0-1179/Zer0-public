@@ -58,6 +58,7 @@ Metadata:
       - Label:
           default: "Container"
         Parameters:
+          - SubnetType
           - ImageUri
           - ContainerPort
           - Cpu
@@ -110,10 +111,18 @@ Parameters:
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
     Description: "Must match the AlbSuffix used in cfn-alb.yaml. TargetGroupArn is imported from that stack."
 
+  SubnetType:
+    Type: String
+    Default: Private
+    AllowedValues:
+      - Private
+      - Public
+    Description: "Private: tasks in private subnets (requires NAT or VPC endpoints). Public: tasks in public subnets with public IP (for Docker Hub or dev use)."
+
   ImageUri:
     Type: String
     Default: ""
-    Description: "Full ECR image URI including tag (e.g. 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/my-project-dev-app:latest)."
+    Description: "Container image URI. ECR: 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/repo:tag. Docker Hub: nginx:alpine."
 
   ContainerPort:
     Type: Number
@@ -176,7 +185,8 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasTaskRole: !Not [!Equals [!Ref TaskRoleArn, ""]]
+  HasTaskRole:  !Not [!Equals [!Ref TaskRoleArn, ""]]
+  IsPublicSubnet: !Equals [!Ref SubnetType, Public]
 
 # -----------------------------------------------
 # Resources
@@ -256,11 +266,11 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
-            - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet01Id"
-            - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
+            - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-${SubnetType}Subnet01Id"
+            - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-${SubnetType}Subnet02Id"
           SecurityGroups:
             - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-          AssignPublicIp: DISABLED
+          AssignPublicIp: !If [IsPublicSubnet, ENABLED, DISABLED]
       LoadBalancers:
         - ContainerName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
           ContainerPort: !Ref ContainerPort
