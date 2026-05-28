@@ -5,29 +5,31 @@ Description: "SQS queue with Dead Letter Queue, SSE encryption, and env-based re
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-sqs \
-#   --template-file cfn-sqs-queue.yaml \
+#   --stack-name <ProjectName>-<Env>-sqs-<QueueSuffix> \
+#   --template-file cfn-sqs.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
-#     Env=dev
+#     Env=dev \
+#     QueueSuffix=orders
 #
 # Get Queue URL for use in other stacks:
 # QUEUE_URL=$(aws cloudformation describe-stacks \
-#   --stack-name <ProjectName>-<Env>-sqs \
+#   --stack-name <ProjectName>-<Env>-sqs-<QueueSuffix> \
 #   --query "Stacks[0].Outputs[?OutputKey=='QueueUrl'].OutputValue" \
 #   --output text)
 #
-# With customer-managed KMS key (from cfn-kms-key stack):
+# With customer-managed KMS key (from cfn-kms stack):
 # KMS_ARN=$(aws cloudformation describe-stacks \
 #   --stack-name <ProjectName>-<Env>-kms \
 #   --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArn'].OutputValue" \
 #   --output text)
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-sqs \
-#   --template-file cfn-sqs-queue.yaml \
+#   --stack-name <ProjectName>-<Env>-sqs-<QueueSuffix> \
+#   --template-file cfn-sqs.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
+#     QueueSuffix=orders \
 #     KmsKeyId=$KMS_ARN
 # -----------------------------------------------
 
@@ -78,6 +80,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. prd extends message retention to 14 days."
 
@@ -115,6 +118,9 @@ Mappings:
     dev:
       MessageRetentionPeriod:    3600   # 1 hour
       DlqMessageRetentionPeriod: 86400  # 1 day
+    stg:
+      MessageRetentionPeriod:    3600   # Same as dev
+      DlqMessageRetentionPeriod: 86400
     prd:
       MessageRetentionPeriod:    1209600  # 14 days (max)
       DlqMessageRetentionPeriod: 1209600  # 14 days (max)

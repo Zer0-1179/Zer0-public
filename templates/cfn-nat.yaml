@@ -5,8 +5,8 @@ Description: "NAT Gateway in a public subnet with a default route in the private
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-nat-gateway \
-#   --template-file cfn-nat-gateway.yaml \
+#   --stack-name <ProjectName>-<Env>-nat \
+#   --template-file cfn-nat.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev
@@ -15,9 +15,9 @@ Description: "NAT Gateway in a public subnet with a default route in the private
 #   VPC: {ProjectName}-{Env}-vpc
 #
 # Deploy order:
-#   1. cfn-vpc.yaml          (VPC, subnets, route tables)
-#   2. cfn-igw.yaml          (internet access for public subnets)
-#   3. cfn-nat-gateway.yaml  (this template)
+#   1. cfn-vpc.yaml   (VPC, subnets, route tables)
+#   2. cfn-igw.yaml   (internet access for public subnets)
+#   3. cfn-nat.yaml   (this template)
 # -----------------------------------------------
 
 # -----------------------------------------------
@@ -48,6 +48,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. Used as part of the Name tag."
 

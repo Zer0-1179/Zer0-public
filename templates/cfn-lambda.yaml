@@ -69,6 +69,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
 
   FunctionSuffix:

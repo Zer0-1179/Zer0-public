@@ -63,6 +63,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. prd sets DeletionPolicy to Retain and extends the pending deletion window to 30 days."
 

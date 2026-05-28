@@ -47,6 +47,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
 
   ContainerInsights:

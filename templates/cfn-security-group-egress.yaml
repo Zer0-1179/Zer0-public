@@ -75,6 +75,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
 
   SgSuffix:

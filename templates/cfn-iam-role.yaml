@@ -5,8 +5,8 @@ Description: "IAM execution role for Lambda with CloudWatch Logs permissions and
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-lambda-role \
-#   --template-file cfn-iam-role-lambda.yaml \
+#   --stack-name <ProjectName>-<Env>-iam-role \
+#   --template-file cfn-iam-role.yaml \
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --parameter-overrides \
 #     ProjectName=my-project \
@@ -14,14 +14,14 @@ Description: "IAM execution role for Lambda with CloudWatch Logs permissions and
 #
 # Get the Role ARN for use in other stacks:
 # ROLE_ARN=$(aws cloudformation describe-stacks \
-#   --stack-name <ProjectName>-<Env>-lambda-role \
+#   --stack-name <ProjectName>-<Env>-iam-role \
 #   --query "Stacks[0].Outputs[?OutputKey=='RoleArn'].OutputValue" \
 #   --output text)
 #
 # With additional managed policies (comma-separated ARNs):
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-lambda-role \
-#   --template-file cfn-iam-role-lambda.yaml \
+#   --stack-name <ProjectName>-<Env>-iam-role \
+#   --template-file cfn-iam-role.yaml \
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --parameter-overrides \
 #     ProjectName=my-project \
@@ -69,6 +69,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. Used as part of the role name."
 
