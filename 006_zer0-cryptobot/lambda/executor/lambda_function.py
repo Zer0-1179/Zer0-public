@@ -1,7 +1,7 @@
 """
 Zer0-CryptoBot Executor Lambda
 Phase A: 既存ポジション管理（約定確認 / TP1後トレーリングSL / 24h未約定キャンセル）
-Phase B: 新規シグナルの指値発注（動的ポジションサイズ）
+Phase B: 新規シグナルの成行発注（動的ポジションサイズ）
 
 v3変更: 信用取引（ロング＋ショート）対応 / ペア変更: BTC/ETH/SOL
 """
@@ -842,25 +842,14 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                 log(f"{pair}: 残高不足 ({available:.0f} < {invest_jpy}) → スキップ")
                 continue
 
-            # 現在価格を取得して指値を計算
-            bb_price = get_bitbank_price(pair)
-            if direction == "long":
-                entry_price = bb_price * (1.005 if test_entry_above else 0.99)
-                order_side  = "buy"
-            else:
-                entry_price = bb_price * (0.995 if test_entry_above else 1.01)
-                order_side  = "sell"
-            if test_entry_above:
-                log(f"[TEST] 即時約定モード: price={round_price(entry_price, PAIRS[pair]['price_prec'])}")
-
-            amount = invest_jpy / entry_price
-
-            price_str  = round_price(entry_price, cfg["price_prec"])
+            # 現在価格を取得して成行発注
+            bb_price   = get_bitbank_price(pair)
+            order_side = "buy" if direction == "long" else "sell"
+            amount     = invest_jpy / bb_price
             amount_str = round_amount(amount, cfg["amount_prec"])
 
-            log(f"{pair}({direction}): 指値発注 price={price_str} amount={amount_str} invest={invest_jpy:.0f}円")
-            order = bb.create_order(pair, amount_str, price_str, order_side,
-                                    position_side=direction)
+            log(f"{pair}({direction}): 成行発注 amount={amount_str} market={bb_price:.0f}円 invest={invest_jpy:.0f}円")
+            order = bb.create_market_order(pair, amount_str, order_side, position_side=direction)
             verify_order(bb, pair, order["order_id"], "エントリー注文")
 
             state["positions"][pair] = {
@@ -880,9 +869,8 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                 long_count += 1
             else:
                 short_count += 1
-            notify_entry_order(pair, direction, entry_price, amount, invest_jpy,
-                               bb_price, available - invest_jpy,
-                               is_test=bool(test_entry_above))
+            notify_entry_order(pair, direction, amount, invest_jpy,
+                               bb_price, available - invest_jpy)
 
         except OrderVerificationError:
             pass  # verify_order 内でメール送信済み
