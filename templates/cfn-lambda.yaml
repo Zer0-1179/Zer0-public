@@ -16,9 +16,9 @@ Description: "General-purpose Lambda function with execution role and CloudWatch
 # FunctionSuffix examples: api, worker, batch, notify, 01
 #
 # Update Lambda code after deploy:
-#   zip lambda.zip lambda_function.py
+#   zip lambda.zip index.py
 #   aws lambda update-function-code \
-#     --function-name my-project-dev-api \
+#     --function-name my-project-dev-lambda-api \
 #     --zip-file fileb://lambda.zip
 #
 # Deploy order:
