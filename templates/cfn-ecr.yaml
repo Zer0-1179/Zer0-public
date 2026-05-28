@@ -62,8 +62,8 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues:
-      - dev
       - stg
+      - dev
       - prd
     Description: "dev: DeletionPolicy=Delete. prd: DeletionPolicy=Retain."
 

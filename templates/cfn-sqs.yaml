@@ -79,8 +79,8 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues:
-      - dev
       - stg
+      - dev
       - prd
     Description: "Deployment environment. prd extends message retention to 14 days."
 
