@@ -103,6 +103,7 @@ Parameters:
 
   EbsSuffix:
     Type: String
+    Default: data
     Description: "Purpose or sequence identifier for this volume (e.g. data, logs, 01)."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
@@ -128,6 +129,7 @@ Parameters:
 
   AvailabilityZone:
     Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-northeast-1a
     Description: "Must match the Availability Zone of the EC2 instance."
 
   Iops:
@@ -145,8 +147,9 @@ Parameters:
     Description: "Throughput in MiB/s. 0 = use default (gp3: 125). Only applies to gp3."
 
   Ec2InstanceId:
-    Type: AWS::EC2::Instance::Id
-    Description: "EC2 instance ID to attach this volume to."
+    Type: String
+    Default: ""
+    Description: "EC2 instance ID to attach this volume to (e.g. i-0123456789abcdef0). Required."
 
   DeviceName:
     Type: String
