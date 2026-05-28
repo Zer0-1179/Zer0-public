@@ -145,23 +145,6 @@ def _coin(pair: str) -> str:
     return pair.split("_")[0].upper()
 
 
-def notify_entry_order(pair: str, direction: str, amount: float,
-                       invest: float, market_price: float, remaining: float):
-    dir_str = "ロング（買い）" if direction == "long" else "ショート（売り）"
-    coin = _coin(pair)
-    subject = f"【CryptoBot】{dir_str}注文発注 - {coin}/JPY"
-    body = (
-        f"■ {coin}/JPY  {dir_str}\n"
-        f"\n"
-        f"注文種別：成行\n"
-        f"市場価格：{market_price:,.0f}円（参考）\n"
-        f"数量　　：{amount:.4f} {coin}\n"
-        f"購入金額：{invest:,.0f}円\n"
-        f"証拠金　：{invest/2:,.0f}円（2倍レバレッジ）\n"
-        f"残り証拠金：{remaining/2:,.0f}円"
-    )
-    send_email(subject, body)
-
 
 def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
                       sl: float, tp1: float, remaining_margin: float):
@@ -869,9 +852,6 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                 long_count += 1
             else:
                 short_count += 1
-            notify_entry_order(pair, direction, amount, invest_jpy,
-                               bb_price, available - invest_jpy)
-
         except OrderVerificationError:
             pass  # verify_order 内でメール送信済み
         except Exception as e:
