@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Log Group with env-based retention period and optional KMS encryption"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-logs \
+#   --template-file cfn-cloudwatch-logs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev
+#
+# With a custom log group name (e.g. for Lambda):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-logs \
+#   --template-file cfn-cloudwatch-logs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     LogGroupName=/aws/lambda/my-function
+#
+# With customer-managed KMS key:
+# NOTE: the KMS key policy must grant kms:Encrypt/Decrypt permissions
+#       to logs.<region>.amazonaws.com before attaching it here.
+# KMS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-kms \
+#   --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-logs \
+#   --template-file cfn-cloudwatch-logs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     KmsKeyId=$KMS_ARN
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# ParameterLabels overrides the display name shown to users.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Encryption (optional)"
+        Parameters:
+          - KmsKeyId
+      - Label:
+          default: "Optional"
+        Parameters:
+          - LogGroupName
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (lowercase, numbers, hyphens)"
+      Env:
+        default: "Environment"
+      KmsKeyId:
+        default: "KMS Key ARN (leave empty for no encryption)"
+      LogGroupName:
+        default: "Log Group Name (leave empty to auto-generate)"
+
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as part of the log group name. Lowercase letters, numbers, and hyphens only."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+    Description: "Deployment environment. prd sets retention to 365 days and DeletionPolicy to Retain."
+
+  KmsKeyId:
+    Type: String
+    Default: ""
+    Description: "KMS Key ARN for log encryption. The key policy must include logs.<region>.amazonaws.com as a principal."
+
+  LogGroupName:
+    Type: String
+    Default: ""
+    Description: "Custom log group name (e.g. /aws/lambda/my-function). Leave empty to use /<ProjectName>/<Env>."
+
+# -----------------------------------------------
+# Mappings
+# Static lookup table for env-specific values.
+# Reference with: !FindInMap [TableName, Key, Item]
+# -----------------------------------------------
+Mappings:
+  Config:
+    dev:
+      RetentionInDays: 7    # 1 week
+    prd:
+      RetentionInDays: 365  # 1 year
+
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
+Conditions:
+  IsPrd:          !Equals [!Ref Env, prd]
+  HasKmsKey:      !Not [!Equals [!Ref KmsKeyId, ""]]
+  HasCustomName:  !Not [!Equals [!Ref LogGroupName, ""]]
+
+# -----------------------------------------------
+# Resources
+# DeletionPolicy: Retain (prd) keeps the log group after stack deletion.
+#                 Delete (dev) removes the log group with the stack.
+# RetentionInDays: CloudWatch charges for stored log data.
+#                  Always set a retention period to avoid unbounded costs.
+# -----------------------------------------------
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy:      !If [IsPrd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
+    Properties:
+      LogGroupName: !If
+        - HasCustomName
+        - !Ref LogGroupName
+        - !Sub "/${ProjectName}/${Env}"
+      RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+        - Key: Region
+          Value: !Ref AWS::Region
+
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# -----------------------------------------------
+Outputs:
+  LogGroupName:
+    Description: "Log group name"
+    Value: !Ref LogGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroupName"
+
+  LogGroupArn:
+    Description: "Log group ARN"
+    Value: !GetAtt LogGroup.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroupArn"

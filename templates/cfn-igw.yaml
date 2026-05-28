@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Internet Gateway attached to a VPC with a default route in the public route table."
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-igw \
+#   --template-file cfn-igw.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev
+#
+# Prerequisite (stack name must follow convention):
+#   VPC: {ProjectName}-{Env}-vpc
+#
+# Deploy order:
+#   1. cfn-vpc.yaml          (VPC, subnets, route tables)
+#   2. cfn-igw.yaml          (this template)
+#   3. cfn-nat-gateway.yaml  (optional: adds internet access to private subnets)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (lowercase, numbers, hyphens)"
+      Env:
+        default: "Environment"
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as the Name tag prefix. Lowercase letters, numbers, and hyphens only."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+    Description: "Deployment environment. Used as part of the Name tag."
+
+# -----------------------------------------------
+# Resources
+# DependsOn is required for PublicRoute because the route needs the IGW
+# to be attached to the VPC before it can be created.
+# -----------------------------------------------
+Resources:
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-igw"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-VpcId"
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicRouteTableId"
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  InternetGatewayId:
+    Description: "Internet Gateway ID"
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-InternetGatewayId"

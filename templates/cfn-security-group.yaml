@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Security Group (empty shell). Add rules with cfn-security-group-rules.yaml after deploy."
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sg-<SgSuffix> \
+#   --template-file cfn-security-group.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SgSuffix=web
+#
+# Naming convention (stack name must match):
+#   {ProjectName}-{Env}-sg-{SgSuffix}
+#   e.g. my-project-dev-sg-web / my-project-dev-sg-db
+#
+# Deploy order:
+#   1. cfn-vpc.yaml                          (VPC must exist: {ProjectName}-{Env}-vpc)
+#   2. cfn-security-group.yaml               (this template)
+#   3. cfn-security-group-ingress.yaml       (add ingress rules)
+#   4. cfn-security-group-egress.yaml        (optional: only when restricting outbound)
+#   5. cfn-ec2.yaml / cfn-rds.yaml
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - SgSuffix
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (lowercase, numbers, hyphens)"
+      Env:
+        default: "Environment"
+      SgSuffix:
+        default: "Suffix (e.g. web, db, bastion) — also used in stack name"
+
+# -----------------------------------------------
+# Parameters
+# VpcId is imported from {ProjectName}-{Env}-vpc stack automatically.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as the Name tag prefix. Lowercase letters, numbers, and hyphens only."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  SgSuffix:
+    Type: String
+    Description: "Purpose identifier used in the name and stack name (e.g. web, db, bastion)."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${ProjectName}-${Env}-sg-${SgSuffix} security group"
+      GroupName: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}"
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-VpcId"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  SecurityGroupId:
+    Description: "Security Group ID"
+    Value: !Ref SecurityGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"

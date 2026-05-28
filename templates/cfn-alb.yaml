@@ -1,0 +1,258 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Application Load Balancer with Target Group. Supports HTTP and optional HTTPS."
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alb-<AlbSuffix> \
+#   --template-file cfn-alb.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SgSuffix=web \
+#     AlbSuffix=web
+#
+# With HTTPS (ACM certificate ARN required):
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SgSuffix=web \
+#     AlbSuffix=web \
+#     CertificateArn=arn:aws:acm:ap-northeast-1:123456789012:certificate/xxxx
+#
+# AlbSuffix examples: web, api, admin, 01, 02
+# NOTE: ALB name and Target Group name are limited to 32 characters.
+#
+# Deploy order:
+#   1. cfn-vpc.yaml
+#   2. cfn-igw.yaml                    (internet-facing only)
+#   3. cfn-security-group.yaml
+#   4. cfn-security-group-ingress.yaml (open port 80 / 443)
+#   5. cfn-alb.yaml                    (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - SgSuffix
+          - AlbSuffix
+          - Scheme
+      - Label:
+          default: "Target Group"
+        Parameters:
+          - TargetType
+          - TargetPort
+          - HealthCheckPath
+      - Label:
+          default: "HTTPS (optional)"
+        Parameters:
+          - CertificateArn
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (must match VPC / SG stack)"
+      Env:
+        default: "Environment (must match VPC / SG stack)"
+      SgSuffix:
+        default: "SG Suffix (must match the SG stack)"
+      AlbSuffix:
+        default: "ALB Suffix — purpose or sequence (e.g. web, api, 01)"
+      Scheme:
+        default: "Scheme"
+      TargetType:
+        default: "Target Type"
+      TargetPort:
+        default: "Target Port (port your backend listens on)"
+      HealthCheckPath:
+        default: "Health Check Path"
+      CertificateArn:
+        default: "ACM Certificate ARN (leave empty to disable HTTPS)"
+
+# -----------------------------------------------
+# Parameters
+# VpcId and SubnetIds are imported from {ProjectName}-{Env}-vpc stack automatically.
+# SecurityGroupId is imported from {ProjectName}-{Env}-sg-{SgSuffix} stack automatically.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+
+  SgSuffix:
+    Type: String
+    Description: "Must match the SgSuffix used in cfn-security-group.yaml (e.g. web)."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  AlbSuffix:
+    Type: String
+    Description: "Purpose or sequence identifier for this ALB (e.g. web, api, 01). Used in resource names and stack exports."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Scheme:
+    Type: String
+    Default: internet-facing
+    AllowedValues:
+      - internet-facing
+      - internal
+    Description: "internet-facing uses public subnets. internal uses private subnets."
+
+  TargetType:
+    Type: String
+    Default: instance
+    AllowedValues:
+      - instance
+      - ip
+    Description: "instance: target by EC2 instance ID. ip: target by IP address (e.g. ECS Fargate)."
+
+  TargetPort:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 65535
+    Description: "Port your backend (EC2 / container) listens on."
+
+  HealthCheckPath:
+    Type: String
+    Default: "/"
+    Description: "HTTP path for ALB health checks."
+
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: "ACM certificate ARN for HTTPS. Leave empty to use HTTP only."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  IsInternetFacing: !Equals [!Ref Scheme, "internet-facing"]
+  HasHttps: !Not [!Equals [!Ref CertificateArn, ""]]
+
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
+Resources:
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-tg"
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-VpcId"
+      Protocol: HTTP
+      Port: !Ref TargetPort
+      TargetType: !Ref TargetType
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-tg"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}"
+      Type: application
+      Scheme: !Ref Scheme
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
+      Subnets:
+        - !If
+          - IsInternetFacing
+          - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
+          - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet01Id"
+        - !If
+          - IsInternetFacing
+          - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet02Id"
+          - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  # HTTP:80 — forwards to TG when HTTP-only, redirects to HTTPS when certificate is set
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: !If [HasHttps, redirect, forward]
+          RedirectConfig: !If
+            - HasHttps
+            - Protocol: HTTPS
+              Port: "443"
+              StatusCode: HTTP_301
+            - !Ref AWS::NoValue
+          TargetGroupArn: !If
+            - HasHttps
+            - !Ref AWS::NoValue
+            - !Ref TargetGroup
+
+  # HTTPS:443 — created only when CertificateArn is provided
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasHttps
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  LoadBalancerArn:
+    Description: "ALB ARN"
+    Value: !Ref LoadBalancer
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-LoadBalancerArn"
+
+  LoadBalancerDnsName:
+    Description: "ALB DNS name"
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-LoadBalancerDnsName"
+
+  TargetGroupArn:
+    Description: "Target Group ARN"
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-TargetGroupArn"

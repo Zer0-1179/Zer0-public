@@ -1,0 +1,182 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Ingress rules for an existing Security Group. Deploy after cfn-security-group.yaml."
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sg-<SgSuffix>-ingress \
+#   --template-file cfn-security-group-ingress.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SgSuffix=web \
+#     Ingress1Port=80 \
+#     Ingress2Port=443
+#
+# Common port examples:
+#   HTTP:       80    HTTPS: 443
+#   MySQL:    3306    PostgreSQL: 5432
+#   SSH:        22    RDP: 3389
+#
+# Deploy order:
+#   1. cfn-vpc.yaml
+#   2. cfn-security-group.yaml         ({ProjectName}-{Env}-sg-{SgSuffix})
+#   3. cfn-security-group-ingress.yaml (this template)
+#   4. cfn-security-group-egress.yaml  (optional: only when restricting outbound)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - SgSuffix
+      - Label:
+          default: "Ingress Rule 1 (required)"
+        Parameters:
+          - Ingress1Port
+          - Ingress1Cidr
+      - Label:
+          default: "Ingress Rule 2 (optional)"
+        Parameters:
+          - Ingress2Port
+          - Ingress2Cidr
+      - Label:
+          default: "Ingress Rule 3 (optional)"
+        Parameters:
+          - Ingress3Port
+          - Ingress3Cidr
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (must match the SG stack)"
+      Env:
+        default: "Environment (must match the SG stack)"
+      SgSuffix:
+        default: "Suffix (must match the SG stack, e.g. web, db)"
+      Ingress1Port:
+        default: "Port"
+      Ingress1Cidr:
+        default: "Source CIDR"
+      Ingress2Port:
+        default: "Port (leave empty to disable)"
+      Ingress2Cidr:
+        default: "Source CIDR"
+      Ingress3Port:
+        default: "Port (leave empty to disable)"
+      Ingress3Cidr:
+        default: "Source CIDR"
+
+# -----------------------------------------------
+# Parameters
+# SecurityGroupId is imported from {ProjectName}-{Env}-sg-{SgSuffix} stack automatically.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+
+  SgSuffix:
+    Type: String
+    Description: "Must match the SgSuffix used in cfn-security-group.yaml."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Ingress1Port:
+    Type: Number
+    Default: 80
+    MinValue: 0
+    MaxValue: 65535
+    Description: "TCP port for ingress rule 1."
+
+  Ingress1Cidr:
+    Type: String
+    Default: "0.0.0.0/0"
+    Description: "Source CIDR for ingress rule 1."
+
+  Ingress2Port:
+    Type: String
+    Default: "443"
+    Description: "TCP port for ingress rule 2. Leave empty to disable."
+    AllowedPattern: "^([0-9]{1,5})?$"
+    ConstraintDescription: "Port number (0-65535) or empty to disable."
+
+  Ingress2Cidr:
+    Type: String
+    Default: "0.0.0.0/0"
+    Description: "Source CIDR for ingress rule 2."
+
+  Ingress3Port:
+    Type: String
+    Default: ""
+    Description: "TCP port for ingress rule 3. Leave empty to disable."
+    AllowedPattern: "^([0-9]{1,5})?$"
+    ConstraintDescription: "Port number (0-65535) or empty to disable."
+
+  Ingress3Cidr:
+    Type: String
+    Default: "0.0.0.0/0"
+    Description: "Source CIDR for ingress rule 3."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  HasIngress2: !Not [!Equals [!Ref Ingress2Port, ""]]
+  HasIngress3: !Not [!Equals [!Ref Ingress3Port, ""]]
+
+# -----------------------------------------------
+# Resources
+# AWS::EC2::SecurityGroupIngress adds rules to an existing SG without modifying it.
+# Conditional resources (IngressRule2 / IngressRule3) are skipped when port is empty.
+# -----------------------------------------------
+Resources:
+  IngressRule1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
+      IpProtocol: tcp
+      FromPort: !Ref Ingress1Port
+      ToPort: !Ref Ingress1Port
+      CidrIp: !Ref Ingress1Cidr
+      Description: !Sub "Rule 1: port ${Ingress1Port} from ${Ingress1Cidr}"
+
+  IngressRule2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasIngress2
+    Properties:
+      GroupId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
+      IpProtocol: tcp
+      FromPort: !Ref Ingress2Port
+      ToPort: !Ref Ingress2Port
+      CidrIp: !Ref Ingress2Cidr
+      Description: !Sub "Rule 2: port ${Ingress2Port} from ${Ingress2Cidr}"
+
+  IngressRule3:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasIngress3
+    Properties:
+      GroupId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
+      IpProtocol: tcp
+      FromPort: !Ref Ingress3Port
+      ToPort: !Ref Ingress3Port
+      CidrIp: !Ref Ingress3Cidr
+      Description: !Sub "Rule 3: port ${Ingress3Port} from ${Ingress3Cidr}"

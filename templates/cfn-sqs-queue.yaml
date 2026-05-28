@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "SQS queue with Dead Letter Queue, SSE encryption, and env-based retention period"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sqs \
+#   --template-file cfn-sqs-queue.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev
+#
+# Get Queue URL for use in other stacks:
+# QUEUE_URL=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-sqs \
+#   --query "Stacks[0].Outputs[?OutputKey=='QueueUrl'].OutputValue" \
+#   --output text)
+#
+# With customer-managed KMS key (from cfn-kms-key stack):
+# KMS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-kms \
+#   --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sqs \
+#   --template-file cfn-sqs-queue.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     KmsKeyId=$KMS_ARN
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# ParameterLabels overrides the display name shown to users.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Queue Settings"
+        Parameters:
+          - VisibilityTimeout
+          - MaxReceiveCount
+      - Label:
+          default: "Encryption (optional)"
+        Parameters:
+          - KmsKeyId
+      - Label:
+          default: "Optional"
+        Parameters:
+          - QueueSuffix
+    ParameterLabels:
+      ProjectName:
+        default: "Project Name (lowercase, numbers, hyphens)"
+      Env:
+        default: "Environment"
+      VisibilityTimeout:
+        default: "Visibility Timeout (seconds)"
+      MaxReceiveCount:
+        default: "Max Receive Count before moving to DLQ"
+      KmsKeyId:
+        default: "KMS Key ARN or ID (leave empty to use SQS managed SSE)"
+      QueueSuffix:
+        default: "Queue Name Suffix (optional)"
+
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as the queue name prefix. Lowercase letters, numbers, and hyphens only."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+    Description: "Deployment environment. prd extends message retention to 14 days."
+
+  VisibilityTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 0
+    MaxValue: 43200
+    Description: "Seconds a message is hidden after being received. Set higher than your Lambda timeout."
+
+  MaxReceiveCount:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 1000
+    Description: "Number of times a message can be received before being moved to the DLQ."
+
+  KmsKeyId:
+    Type: String
+    Default: ""
+    Description: "KMS Key ARN or ID. Leave empty to use SQS managed SSE (free)."
+
+  QueueSuffix:
+    Type: String
+    Default: ""
+    Description: "Optional suffix appended to the queue name (e.g. orders, events)."
+
+# -----------------------------------------------
+# Mappings
+# Static lookup table for env-specific values.
+# Reference with: !FindInMap [TableName, Key, Item]
+# -----------------------------------------------
+Mappings:
+  Config:
+    dev:
+      MessageRetentionPeriod:    3600   # 1 hour
+      DlqMessageRetentionPeriod: 86400  # 1 day
+    prd:
+      MessageRetentionPeriod:    1209600  # 14 days (max)
+      DlqMessageRetentionPeriod: 1209600  # 14 days (max)
+
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
+Conditions:
+  IsPrd:     !Equals [!Ref Env, prd]
+  HasSuffix: !Not [!Equals [!Ref QueueSuffix, ""]]
+  HasKmsKey: !Not [!Equals [!Ref KmsKeyId, ""]]
+
+# -----------------------------------------------
+# Resources
+# DeadLetterQueue is created first; MainQueue references its ARN.
+# SqsManagedSseEnabled enables free SSE using SQS-managed keys.
+# KmsMasterKeyId overrides SqsManagedSseEnabled when a KMS key is provided.
+# AWS::NoValue removes the property when the condition is false.
+# -----------------------------------------------
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !If
+        - HasSuffix
+        - !Sub "${ProjectName}-${Env}-${QueueSuffix}-dlq"
+        - !Sub "${ProjectName}-${Env}-dlq"
+      MessageRetentionPeriod: !FindInMap [Config, !Ref Env, DlqMessageRetentionPeriod]
+      SqsManagedSseEnabled: !If [HasKmsKey, !Ref AWS::NoValue, true]
+      KmsMasterKeyId:        !If [HasKmsKey, !Ref KmsKeyId,   !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+        - Key: Region
+          Value: !Ref AWS::Region
+
+  MainQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !If
+        - HasSuffix
+        - !Sub "${ProjectName}-${Env}-${QueueSuffix}"
+        - !Sub "${ProjectName}-${Env}"
+      MessageRetentionPeriod: !FindInMap [Config, !Ref Env, MessageRetentionPeriod]
+      VisibilityTimeout: !Ref VisibilityTimeout
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: !Ref MaxReceiveCount
+      SqsManagedSseEnabled: !If [HasKmsKey, !Ref AWS::NoValue, true]
+      KmsMasterKeyId:        !If [HasKmsKey, !Ref KmsKeyId,   !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+        - Key: Region
+          Value: !Ref AWS::Region
+
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# -----------------------------------------------
+Outputs:
+  QueueUrl:
+    Description: "Main queue URL"
+    Value: !GetAtt MainQueue.QueueUrl
+    Export:
+      Name: !Sub "${AWS::StackName}-QueueUrl"
+
+  QueueArn:
+    Description: "Main queue ARN"
+    Value: !GetAtt MainQueue.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-QueueArn"
+
+  QueueName:
+    Description: "Main queue name"
+    Value: !GetAtt MainQueue.QueueName
+    Export:
+      Name: !Sub "${AWS::StackName}-QueueName"
+
+  DlqUrl:
+    Description: "Dead Letter Queue URL"
+    Value: !GetAtt DeadLetterQueue.QueueUrl
+    Export:
+      Name: !Sub "${AWS::StackName}-DlqUrl"
+
+  DlqArn:
+    Description: "Dead Letter Queue ARN"
+    Value: !GetAtt DeadLetterQueue.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DlqArn"
