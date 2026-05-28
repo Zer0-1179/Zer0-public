@@ -45,9 +45,11 @@ app.get('/api/templates/download/:zipname', async (req, res) => {
       zip.file(fn, await r.text());
     }));
     const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
-    res.send(buf);
+    res.status(200)
+      .set('Content-Type', 'application/zip')
+      .set('Content-Disposition', `attachment; filename="${downloadName}"`)
+      .set('Content-Length', buf.length);
+    res.end(buf);
   } catch {
     res.status(500).send('Internal Server Error');
   }
@@ -77,4 +79,6 @@ app.get('/', (req, res) => res.redirect(302, '/ja/'));
 
 app.use(astroMiddleware);
 
-export const handler = serverlessHttp(app);
+export const handler = serverlessHttp(app, {
+  binary: ['application/zip'],
+});
