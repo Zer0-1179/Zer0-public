@@ -100,38 +100,53 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
         </svg>
         <span class="text-sm text-slate-400 font-mono">命名規則</span>
       </div>
-      <div class="px-6 py-6 text-sm space-y-4">
+      <div class="px-6 py-6 text-sm space-y-6">
+
+        <!-- yaml ファイル名 -->
         <div>
-          <p class="text-slate-400 mb-2">スタック名・リソース名の共通フォーマット（Suffix は省略可）：</p>
+          <p class="font-semibold text-slate-300 mb-2">テンプレートファイル名</p>
+          <p class="text-slate-400 mb-2">単一の場合は Type を省略：</p>
+          <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-accent font-mono overflow-x-auto">cfn-{"{Service}"}.yaml　　　　　 # 例: cfn-s3.yaml
+cfn-{"{Service}"}-{"{Type}"}.yaml　　 # 例: cfn-ecs-cluster.yaml</pre>
+        </div>
+
+        <!-- リソース名 -->
+        <div>
+          <p class="font-semibold text-slate-300 mb-2">スタック名・リソース名（Suffix は省略可）</p>
           <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-accent font-mono overflow-x-auto">{"{ProjectName}"}-{"{Env}"}-{"{Service}"}-{"{Suffix}"}</pre>
         </div>
+
+        <!-- テーブル -->
         <div class="overflow-x-auto">
           <table class="w-full text-xs border-collapse">
             <thead>
               <tr class="border-b border-navy-700/50 text-left">
                 <th class="pb-2 pr-6 text-slate-400 font-medium">サービス</th>
-                <th class="pb-2 text-slate-400 font-medium">命名例（ProjectName=pj / Env=dev）</th>
+                <th class="pb-2 pr-6 text-slate-400 font-medium">ファイル名</th>
+                <th class="pb-2 text-slate-400 font-medium">リソース名例（pj / dev）</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-navy-700/20">
-              <tr><td class="py-1.5 pr-6 text-slate-300">VPC</td><td class="py-1.5 font-mono text-slate-400">pj-dev-vpc</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">インターネットゲートウェイ</td><td class="py-1.5 font-mono text-slate-400">pj-dev-igw</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">NAT ゲートウェイ</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nat</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">セキュリティグループ</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sg-web</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">ALB</td><td class="py-1.5 font-mono text-slate-400">pj-dev-alb-01</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">NLB</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nlb-01</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">EC2</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ec2-web</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">ECS クラスター</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-cluster</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">ECS サービス</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-api</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">ECR</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecr-app</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">Lambda</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-api</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">S3</td><td class="py-1.5 font-mono text-slate-400">pj-dev-s3-assets</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">EFS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-efs-shared</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">EBS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ebs-data</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">RDS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-rds</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">DynamoDB</td><td class="py-1.5 font-mono text-slate-400">pj-dev-dynamodb-users</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">SQS</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sqs-orders</td></tr>
-              <tr><td class="py-1.5 pr-6 text-slate-300">KMS</td><td class="py-1.5 font-mono text-slate-400">alias/pj-dev-kms</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">VPC</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-vpc.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-vpc</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">Internet Gateway</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-igw.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-igw</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">NAT Gateway</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-nat.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nat</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">Security Group</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-security-group.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sg-web</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ALB</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-alb.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-alb-01</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">NLB</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-nlb.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nlb-01</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">EC2</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ec2.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ec2-web</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ECS クラスター</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ecs-cluster.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-cluster</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ECS サービス</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ecs-service.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-api</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">ECR</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ecr.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecr-app</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">Lambda</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-lambda.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-api</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">S3</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-s3.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-s3-assets</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">EFS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-efs.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-efs-shared</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">EBS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ebs.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ebs-data</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">RDS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-rds.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-rds</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">DynamoDB</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-dynamodb.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-dynamodb-users</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">SQS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-sqs.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sqs-orders</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">KMS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-kms.yaml</td><td class="py-1.5 font-mono text-slate-400">alias/pj-dev-kms</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">IAM ロール</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-iam-role.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-fn-role</td></tr>
+              <tr><td class="py-1.5 pr-6 text-slate-300">CloudWatch Logs</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-cw-logs.yaml</td><td class="py-1.5 font-mono text-slate-400">/aws/lambda/pj-dev-lambda-api</td></tr>
             </tbody>
           </table>
         </div>

@@ -68,7 +68,7 @@ export const templates: Template[] = [
   },
   {
     slug: 'nat-gateway',
-    filename: 'cfn-nat-gateway.yaml',
+    filename: 'cfn-nat.yaml',
     nameJa: 'NATゲートウェイ',
     nameEn: 'NAT Gateway',
     descJa: 'プライベートサブネットからインターネットへのアウトバウンド通信を可能にするNATゲートウェイ。ElasticIPを自動作成し、AZ-aのパブリックサブネットに配置。約$33/月。',
@@ -212,7 +212,7 @@ export const templates: Template[] = [
   },
   {
     slug: 's3-bucket',
-    filename: 'cfn-s3-bucket.yaml',
+    filename: 'cfn-s3.yaml',
     nameJa: 'S3バケット',
     nameEn: 'S3 Bucket',
     descJa: 'dev/prd環境に応じてバージョニング・ライフサイクル・DeletionPolicyを自動切替。パブリックアクセス完全ブロック済み。ProjectNameとEnvを指定するだけで即デプロイ可能。',
@@ -228,7 +228,7 @@ export const templates: Template[] = [
   },
   {
     slug: 'kms-key',
-    filename: 'cfn-kms-key.yaml',
+    filename: 'cfn-kms.yaml',
     nameJa: 'KMSキー',
     nameEn: 'KMS Key',
     descJa: 'S3・EBS・RDS・EFS・CloudWatch Logs・SSM・SQS・Secrets Managerなど主要サービスで共用できる汎用KMSキー。エイリアス自動作成・年次自動ローテーション有効済み。他スタックからImportValueで参照可能。',
@@ -244,7 +244,7 @@ export const templates: Template[] = [
   },
   {
     slug: 'sqs-queue',
-    filename: 'cfn-sqs-queue.yaml',
+    filename: 'cfn-sqs.yaml',
     nameJa: 'SQSキュー + DLQ',
     nameEn: 'SQS Queue + DLQ',
     descJa: 'メインキューとDead Letter Queueをセットで作成。env別保持期間・可視性タイムアウト・最大受信回数を設定済み。SQS管理SSEをデフォルト有効、カスタムKMSキーにも対応。',
@@ -260,7 +260,7 @@ export const templates: Template[] = [
   },
   {
     slug: 'cloudwatch-logs',
-    filename: 'cfn-cloudwatch-logs.yaml',
+    filename: 'cfn-cw-logs.yaml',
     nameJa: 'CloudWatch ロググループ',
     nameEn: 'CloudWatch Log Group',
     descJa: 'env別の保持期間設定済みロググループ。カスタム名にも対応し、Lambda・EC2・ECSなど任意のサービスのログ出力先として利用可能。KMS暗号化オプション付き。',
@@ -276,7 +276,7 @@ export const templates: Template[] = [
   },
   {
     slug: 'iam-role-lambda',
-    filename: 'cfn-iam-role-lambda.yaml',
+    filename: 'cfn-iam-role.yaml',
     nameJa: 'IAMロール（Lambda用）',
     nameEn: 'IAM Role for Lambda',
     descJa: 'Lambda実行ロールの単体テンプレート。CloudWatch Logsへの書き込み権限を標準装備。追加マネージドポリシーを2つまでパラメータで指定可能。他スタックからImportValueで参照できる。',
