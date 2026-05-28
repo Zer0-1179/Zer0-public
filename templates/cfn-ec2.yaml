@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "EC2 instance with IAM role (SSM + CloudWatch), configurable subnet placement and optional key pair"
+Description: "EC2 instance with IAM role (SSM + CloudWatch), configurable OS, subnet placement and optional key pair"
 
 # -----------------------------------------------
 # DEPLOY
@@ -21,7 +21,7 @@ Description: "EC2 instance with IAM role (SSM + CloudWatch), configurable subnet
 #   1. cfn-vpc.yaml
 #   2. cfn-igw.yaml                   (if SubnetType=Public)
 #   3. cfn-security-group.yaml
-#   4. cfn-security-group-rules.yaml
+#   4. cfn-security-group-ingress.yaml
 #   5. cfn-ec2.yaml                   (this template)
 #
 # Connect via SSM Session Manager (no SSH key needed):
@@ -48,8 +48,9 @@ Metadata:
       - Label:
           default: "Instance"
         Parameters:
-          - InstanceType
+          - OsType
           - AmiId
+          - InstanceType
           - KeyName
       - Label:
           default: "Storage"
@@ -67,10 +68,12 @@ Metadata:
         default: "Subnet Type (Public / Private)"
       SubnetNumber:
         default: "Subnet AZ (01 = AZ-a, 02 = AZ-c)"
+      OsType:
+        default: "OS Type (Linux / RHEL / Windows)"
+      AmiId:
+        default: "AMI ID — required only when OsType=RHEL"
       InstanceType:
         default: "Instance Type"
-      AmiId:
-        default: "AMI (SSM path for latest Amazon Linux 2023)"
       KeyName:
         default: "Key Pair Name (leave empty to use SSM only)"
       VolumeSize:
@@ -121,15 +124,24 @@ Parameters:
       - "02"
     Description: "AZ selector. 01 = first AZ (ap-northeast-1a), 02 = second AZ (ap-northeast-1c)."
 
+  OsType:
+    Type: String
+    Default: Linux
+    AllowedValues:
+      - Linux
+      - RHEL
+      - Windows
+    Description: "Linux: latest Amazon Linux 2023. RHEL: specify AmiId. Windows: latest Windows Server 2022."
+
+  AmiId:
+    Type: String
+    Default: ""
+    Description: "AMI ID (required when OsType=RHEL, e.g. ami-xxxxxxxxxxxxxxxxx). Ignored for Linux and Windows."
+
   InstanceType:
     Type: String
     Default: t3.micro
     Description: "EC2 instance type."
-
-  AmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
-    Description: "SSM parameter path for the AMI. Default resolves to the latest Amazon Linux 2023 x86_64."
 
   KeyName:
     Type: String
@@ -141,7 +153,7 @@ Parameters:
     Default: 20
     MinValue: 8
     MaxValue: 16384
-    Description: "Root EBS volume size in GiB."
+    Description: "Root EBS volume size in GiB. Windows Server requires 30 GiB minimum."
 
   VolumeType:
     Type: String
@@ -155,6 +167,8 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
+  IsLinux:   !Equals [!Ref OsType, "Linux"]
+  IsWindows: !Equals [!Ref OsType, "Windows"]
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
 
 # -----------------------------------------------
@@ -196,7 +210,13 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
-      ImageId: !Ref AmiId
+      ImageId: !If
+        - IsLinux
+        - "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+        - !If
+          - IsWindows
+          - "{{resolve:ssm:/aws/service/ami-windows-latest/Windows_Server-2022-English-Full-Base}}"
+          - !Ref AmiId
       SubnetId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-${SubnetType}Subnet${SubnetNumber}Id"
       SecurityGroupIds:
@@ -204,7 +224,7 @@ Resources:
       IamInstanceProfile: !Ref InstanceProfile
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref AWS::NoValue]
       BlockDeviceMappings:
-        - DeviceName: /dev/xvda
+        - DeviceName: !If [IsLinux, /dev/xvda, /dev/sda1]
           Ebs:
             VolumeSize: !Ref VolumeSize
             VolumeType: !Ref VolumeType
