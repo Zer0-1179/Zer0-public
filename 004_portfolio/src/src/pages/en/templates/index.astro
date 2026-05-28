@@ -7,8 +7,11 @@ const t = useTranslations('en');
 
 const categories = getCategoriesWithTemplates().map((cat) => ({
   ...cat,
-  templates: getTemplatesByCategory(cat.slug),
+  count: getTemplatesByCategory(cat.slug).length,
+  updatedAt: '2026-05-28',
 }));
+
+const totalFiles = categories.reduce((s, c) => s + c.count, 0);
 ---
 
 <BaseLayout title={t('templates.title')}>
@@ -20,339 +23,99 @@ const categories = getCategoriesWithTemplates().map((cat) => ({
       <p class="text-slate-400">{t('templates.sub')}</p>
     </div>
 
-    <!-- Explorer: left tree + right content -->
-    <div class="flex border border-navy-700/50 rounded-xl overflow-hidden bg-navy-800/40" style="height:700px">
+    <!-- File browser -->
+    <div class="border border-navy-700/50 rounded-xl overflow-hidden mb-8">
 
-      <!-- Left pane: folder tree -->
-      <div class="w-60 shrink-0 border-r border-navy-700/50 overflow-y-auto bg-navy-900/20 flex flex-col">
-
-        <!-- Tree header -->
-        <div class="px-3 py-2 border-b border-navy-700/40 bg-navy-900/40 flex items-center gap-2 shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
+      <!-- Browser header bar -->
+      <div class="px-4 py-2.5 bg-navy-800/60 border-b border-navy-700/50 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent/70" viewBox="0 0 20 20" fill="currentColor">
             <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
           </svg>
-          <span class="text-xs text-slate-500 font-mono">Templates</span>
+          <span class="font-mono text-sm text-white">templates</span>
         </div>
-
-        <!-- Category list -->
-        <div class="flex-1 overflow-y-auto py-1">
-          {categories.map((cat) => (
-            <div class="folder-group">
-              <!-- Folder toggle -->
-              <button
-                class="folder-toggle flex items-center gap-1.5 w-full px-2 py-2 text-left hover:bg-navy-700/30 transition-colors"
-                aria-expanded="false"
-              >
-                <svg class="chevron w-3 h-3 text-slate-600 shrink-0 transition-transform duration-150" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                </svg>
-                <svg class="w-4 h-4 text-accent/60 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                </svg>
-                <span class="text-xs text-slate-300 flex-1 truncate">{cat.labelEn}</span>
-                <span class="text-xs text-slate-600 shrink-0 pr-1">{cat.templates.length}</span>
-              </button>
-
-              <!-- File list (collapsed by default) -->
-              <div class="folder-files hidden">
-                {cat.templates.map((tmpl) => (
-                  <button
-                    class="file-btn flex items-center gap-2 w-full px-2 pl-7 py-1.5 text-left hover:bg-navy-700/30 transition-colors group"
-                    data-filename={tmpl.filename}
-                    data-name={tmpl.nameEn}
-                    data-short={tmpl.descShortEn}
-                    data-desc={tmpl.descEn}
-                    data-services={tmpl.services.join(',')}
-                  >
-                    <svg class="w-3.5 h-3.5 text-slate-600 shrink-0 group-hover:text-slate-400 transition-colors" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="file-label font-mono text-xs text-slate-400 group-hover:text-slate-200 transition-colors truncate leading-relaxed">
-                      {tmpl.filename}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-slate-500">{totalFiles} files</span>
+          <a
+            href="/api/templates/download/all.zip"
+            download="cfn-templates-all.zip"
+            class="flex items-center gap-1.5 px-2.5 py-1 bg-accent hover:bg-accent-light text-navy-950 text-xs font-semibold rounded transition-colors"
+          >
+            <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+            Download All
+          </a>
         </div>
       </div>
 
-      <!-- Right pane -->
-      <div class="flex-1 overflow-y-auto">
+      <!-- Folder rows -->
+      {categories.map((cat) => (
+        <a
+          href={`/en/templates/${cat.slug}/`}
+          class="flex items-center gap-3 px-4 py-2.5 bg-navy-800/30 hover:bg-navy-700/30 transition-colors group border-b border-navy-700/20 last:border-b-0"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent/60 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+          </svg>
 
-        <!-- Default view: README + Naming Convention -->
-        <div id="default-view" class="p-6 space-y-5">
+          <span class="font-mono text-sm text-slate-200 group-hover:text-accent transition-colors shrink-0 w-36">
+            {cat.slug}
+          </span>
 
-          <!-- README block -->
-          <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-navy-700/50 bg-navy-800/60 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
-              </svg>
-              <span class="text-sm text-slate-400 font-mono">README</span>
-            </div>
-            <div class="px-5 py-5 space-y-4 text-sm">
-              <div>
-                <p class="font-semibold text-slate-200 mb-1">{t('templates.readme')}</p>
-                <p class="text-slate-400 leading-relaxed">
-                  CloudFormation templates extracted from real production projects and generalized for public use.
-                  Each template is ready to deploy as-is — just supply your parameters.
-                </p>
-              </div>
-              <div>
-                <p class="font-semibold text-slate-300 mb-2">Design Principles</p>
-                <ul class="space-y-1 text-slate-400">
-                  <li class="flex gap-2"><span class="text-accent shrink-0">•</span>No hardcoding — all configurable values are exposed as <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Parameters</code></li>
-                  <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> parameter auto-switches stg / dev / prd settings (retention, DeletionPolicy, etc.)</li>
-                  <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Least-privilege IAM and optional KMS encryption pre-configured</li>
-                  <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Cross-stack references via <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Outputs</code> + <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">ImportValue</code></li>
-                </ul>
-              </div>
-              <div>
-                <p class="font-semibold text-slate-300 mb-2">How to Deploy</p>
-                <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-slate-300 font-mono overflow-x-auto leading-relaxed">aws cloudformation deploy \
+          <span class="text-slate-500 text-xs flex-1 truncate hidden sm:block">
+            {cat.descEn}
+          </span>
+
+          <span class="text-slate-600 text-xs shrink-0">{cat.count} files</span>
+          <span class="text-slate-600 text-xs shrink-0 ml-4 hidden md:block">{cat.updatedAt}</span>
+
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-500 transition-colors shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+          </svg>
+        </a>
+      ))}
+    </div>
+
+    <!-- README -->
+    <div class="border border-navy-700/50 rounded-xl overflow-hidden mb-6">
+      <div class="px-4 py-2.5 border-b border-navy-700/50 bg-navy-800/60 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+        </svg>
+        <span class="text-sm text-slate-400 font-mono">README.md</span>
+      </div>
+      <div class="px-6 py-6 bg-navy-800/20 space-y-5 text-sm">
+        <div>
+          <p class="font-semibold text-slate-200 mb-1">{t('templates.readme')}</p>
+          <p class="text-slate-400 leading-relaxed">
+            CloudFormation templates extracted from real production projects and generalized for public use.
+            Each template is ready to deploy as-is — just supply your parameters.
+          </p>
+        </div>
+        <div>
+          <p class="font-semibold text-slate-300 mb-2">Design Principles</p>
+          <ul class="space-y-1 text-slate-400">
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>No hardcoding — all configurable values are exposed as <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Parameters</code></li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> parameter auto-switches stg / dev / prd settings (retention, DeletionPolicy, etc.)</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Least-privilege IAM and optional KMS encryption pre-configured</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span>Cross-stack references via <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Outputs</code> + <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">ImportValue</code></li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold text-slate-300 mb-2">How to Deploy</p>
+          <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-slate-300 font-mono overflow-x-auto leading-relaxed">aws cloudformation deploy \
   --stack-name &lt;stack-name&gt; \
   --template-file &lt;template&gt;.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides ProjectName=&lt;name&gt; Env=prd</pre>
-              </div>
-              <div class="flex gap-2 text-slate-400">
-                <span class="text-yellow-500/80 shrink-0">⚠</span>
-                <p>Resources deployed with <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env=prd</code> have <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">DeletionPolicy: Retain</code> set. Deleting the stack does not delete the underlying resources — remove them manually via the AWS Console or CLI when no longer needed.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Naming Convention block -->
-          <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-navy-700/50 bg-navy-800/60 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-              </svg>
-              <span class="text-sm text-slate-400 font-mono">Naming Convention</span>
-            </div>
-            <div class="px-5 py-5 text-sm space-y-5">
-              <div>
-                <p class="font-semibold text-slate-300 mb-2">Template File Names</p>
-                <p class="text-slate-400 mb-2">Omit Type when only one template exists for the service:</p>
-                <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-accent font-mono overflow-x-auto">cfn-{"{Service}"}.yaml　　　　　 # e.g. cfn-s3.yaml
-cfn-{"{Service}"}-{"{Type}"}.yaml　　 # e.g. cfn-ecs-cluster.yaml</pre>
-              </div>
-              <div>
-                <p class="font-semibold text-slate-300 mb-2">Resource Names (Suffix is optional)</p>
-                <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-accent font-mono overflow-x-auto">{"{ProjectName}"}-{"{Env}"}-{"{Service}"}-{"{Suffix}"}</pre>
-              </div>
-              <div class="overflow-x-auto">
-                <table class="w-full text-xs border-collapse">
-                  <thead>
-                    <tr class="border-b border-navy-700/50 text-left">
-                      <th class="pb-2 pr-6 text-slate-400 font-medium">Service</th>
-                      <th class="pb-2 pr-6 text-slate-400 font-medium">File Name</th>
-                      <th class="pb-2 text-slate-400 font-medium">Resource Name Example (pj / dev)</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-navy-700/20">
-                    <tr><td class="py-1.5 pr-6 text-slate-300">VPC</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-vpc.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-vpc</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">Internet Gateway</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-igw.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-igw</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">NAT Gateway</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-nat.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nat</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">Security Group</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-security-group.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sg-web</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">ALB</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-alb.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-alb-01</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">NLB</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-nlb.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-nlb-01</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">EC2</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ec2.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ec2-web</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">ECS Cluster</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ecs-cluster.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-cluster</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">ECS Service</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ecs-service.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecs-api</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">ECR</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ecr.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ecr-app</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">Lambda</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-lambda.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-api</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">S3</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-s3.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-s3-assets</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">EFS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-efs.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-efs-shared</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">EBS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-ebs.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-ebs-data</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">RDS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-rds.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-rds</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">DynamoDB</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-dynamodb.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-dynamodb-users</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">SQS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-sqs.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-sqs-orders</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">KMS</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-kms.yaml</td><td class="py-1.5 font-mono text-slate-400">alias/pj-dev-kms</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">IAM Role</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-iam-role.yaml</td><td class="py-1.5 font-mono text-slate-400">pj-dev-lambda-role</td></tr>
-                    <tr><td class="py-1.5 pr-6 text-slate-300">CloudWatch Logs</td><td class="py-1.5 pr-6 font-mono text-slate-500">cfn-cw-logs.yaml</td><td class="py-1.5 font-mono text-slate-400">/aws/lambda/pj-dev-lambda-api</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
         </div>
-
-        <!-- File view: shown when a file is selected -->
-        <div id="file-view" class="hidden p-6">
-
-          <!-- File header -->
-          <div class="flex items-start justify-between mb-4 gap-4">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <svg class="w-4 h-4 text-slate-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-                </svg>
-                <span id="fv-name" class="font-mono text-accent text-sm font-medium truncate"></span>
-              </div>
-              <p id="fv-short" class="text-slate-400 text-xs ml-6 leading-relaxed"></p>
-              <div id="fv-services" class="flex gap-1 flex-wrap mt-1.5 ml-6"></div>
-            </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <button id="back-btn" class="px-3 py-1.5 border border-navy-700/50 text-slate-400 text-xs rounded hover:text-white hover:border-navy-600 transition-colors">
-                ← Back
-              </button>
-              <a id="dl-link" href="#" download class="flex items-center gap-1.5 px-3 py-1.5 bg-accent hover:bg-accent-light text-navy-950 text-xs font-semibold rounded transition-colors">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
-                </svg>
-                Download
-              </a>
-            </div>
-          </div>
-
-          <!-- Description -->
-          <div class="mb-4 px-4 py-3 bg-navy-900/40 border border-navy-700/30 rounded-lg">
-            <p id="fv-desc" class="text-slate-400 text-xs leading-relaxed"></p>
-          </div>
-
-          <!-- YAML viewer -->
-          <div class="bg-navy-900/60 border border-navy-700/50 rounded-lg overflow-hidden">
-            <div class="px-4 py-2 border-b border-navy-700/40 bg-navy-900/60 flex items-center justify-between">
-              <span id="fv-name-bar" class="text-xs text-slate-500 font-mono"></span>
-              <button id="copy-btn" class="px-2.5 py-1 border border-navy-700/50 text-slate-400 text-xs rounded hover:text-white hover:border-navy-600 transition-colors font-mono">
-                Copy
-              </button>
-            </div>
-            <pre id="yaml-content" class="text-xs font-mono text-slate-300 p-4 leading-relaxed overflow-x-auto whitespace-pre"></pre>
-          </div>
-
+        <div class="flex gap-2 text-slate-400 text-xs">
+          <span class="text-yellow-500/80 shrink-0">⚠</span>
+          <p>Resources deployed with <code class="text-accent/80 bg-navy-700/60 px-1 rounded">Env=prd</code> have <code class="text-accent/80 bg-navy-700/60 px-1 rounded">DeletionPolicy: Retain</code> set. Deleting the stack does not delete the underlying resources — remove them manually via the AWS Console or CLI when no longer needed.</p>
         </div>
       </div>
     </div>
+
   </div>
 </BaseLayout>
-
-<script is:inline>
-(function () {
-  // Folder toggle
-  document.querySelectorAll('.folder-toggle').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var group = btn.closest('.folder-group');
-      var files = group.querySelector('.folder-files');
-      var chevron = btn.querySelector('.chevron');
-      var isOpen = !files.classList.contains('hidden');
-      files.classList.toggle('hidden', isOpen);
-      chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
-    });
-  });
-
-  var defaultView = document.getElementById('default-view');
-  var fileView = document.getElementById('file-view');
-  var fvName = document.getElementById('fv-name');
-  var fvNameBar = document.getElementById('fv-name-bar');
-  var fvShort = document.getElementById('fv-short');
-  var fvDesc = document.getElementById('fv-desc');
-  var fvServices = document.getElementById('fv-services');
-  var yamlContent = document.getElementById('yaml-content');
-  var dlLink = document.getElementById('dl-link');
-  var copyBtn = document.getElementById('copy-btn');
-  var backBtn = document.getElementById('back-btn');
-  var activeBtn = null;
-
-  function setActiveFile(btn) {
-    if (activeBtn) {
-      activeBtn.classList.remove('bg-accent/10');
-      activeBtn.querySelector('.file-label').classList.remove('text-accent');
-    }
-    btn.classList.add('bg-accent/10');
-    btn.querySelector('.file-label').classList.add('text-accent');
-    activeBtn = btn;
-  }
-
-  function clearActiveFile() {
-    if (activeBtn) {
-      activeBtn.classList.remove('bg-accent/10');
-      activeBtn.querySelector('.file-label').classList.remove('text-accent');
-      activeBtn = null;
-    }
-  }
-
-  // File click
-  document.querySelectorAll('.file-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var filename = btn.dataset.filename;
-      var short = btn.dataset.short;
-      var desc = btn.dataset.desc;
-      var services = btn.dataset.services ? btn.dataset.services.split(',') : [];
-
-      setActiveFile(btn);
-
-      // Switch view
-      defaultView.classList.add('hidden');
-      fileView.classList.remove('hidden');
-
-      // Scroll right pane to top
-      fileView.closest('.overflow-y-auto').scrollTop = 0;
-
-      // Populate header
-      fvName.textContent = filename;
-      fvNameBar.textContent = filename;
-      fvShort.textContent = short;
-      fvDesc.textContent = desc;
-      dlLink.href = '/api/templates/' + filename;
-      dlLink.download = filename;
-
-      // Service tags
-      fvServices.innerHTML = '';
-      services.forEach(function (svc) {
-        var span = document.createElement('span');
-        span.className = 'px-1.5 py-0.5 bg-navy-700/60 text-slate-500 text-xs rounded';
-        span.textContent = svc;
-        fvServices.appendChild(span);
-      });
-
-      // Fetch YAML
-      yamlContent.textContent = 'Loading...';
-      fetch('/api/templates/' + filename)
-        .then(function (res) {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          return res.text();
-        })
-        .then(function (text) {
-          yamlContent.textContent = text;
-        })
-        .catch(function (e) {
-          yamlContent.textContent = 'Error: ' + e.message;
-        });
-    });
-  });
-
-  // Back button
-  backBtn.addEventListener('click', function () {
-    fileView.classList.add('hidden');
-    defaultView.classList.remove('hidden');
-    clearActiveFile();
-  });
-
-  // Copy button
-  copyBtn.addEventListener('click', function () {
-    var text = yamlContent.textContent;
-    if (!text || text === 'Loading...') return;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function () {
-        copyBtn.textContent = 'Copied!';
-        setTimeout(function () { copyBtn.textContent = 'Copy'; }, 2000);
-      });
-    } else {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      copyBtn.textContent = 'Copied!';
-      setTimeout(function () { copyBtn.textContent = 'Copy'; }, 2000);
-    }
-  });
-})();
-</script>
