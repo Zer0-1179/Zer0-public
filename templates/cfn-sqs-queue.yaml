@@ -142,8 +142,8 @@ Resources:
     Properties:
       QueueName: !If
         - HasSuffix
-        - !Sub "${ProjectName}-${Env}-${QueueSuffix}-dlq"
-        - !Sub "${ProjectName}-${Env}-dlq"
+        - !Sub "${ProjectName}-${Env}-sqs-${QueueSuffix}-dlq"
+        - !Sub "${ProjectName}-${Env}-sqs-dlq"
       MessageRetentionPeriod: !FindInMap [Config, !Ref Env, DlqMessageRetentionPeriod]
       SqsManagedSseEnabled: !If [HasKmsKey, !Ref AWS::NoValue, true]
       KmsMasterKeyId:        !If [HasKmsKey, !Ref KmsKeyId,   !Ref AWS::NoValue]
@@ -160,8 +160,8 @@ Resources:
     Properties:
       QueueName: !If
         - HasSuffix
-        - !Sub "${ProjectName}-${Env}-${QueueSuffix}"
-        - !Sub "${ProjectName}-${Env}"
+        - !Sub "${ProjectName}-${Env}-sqs-${QueueSuffix}"
+        - !Sub "${ProjectName}-${Env}-sqs"
       MessageRetentionPeriod: !FindInMap [Config, !Ref Env, MessageRetentionPeriod]
       VisibilityTimeout: !Ref VisibilityTimeout
       RedrivePolicy:

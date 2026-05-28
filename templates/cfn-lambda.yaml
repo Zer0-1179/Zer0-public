@@ -179,7 +179,7 @@ Resources:
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "${ProjectName}-${Env}-${FunctionSuffix}"
+      FunctionName: !Sub "${ProjectName}-${Env}-lambda-${FunctionSuffix}"
       Description: !Sub "Lambda function for ${ProjectName}-${Env}-${FunctionSuffix}"
       Runtime: !Ref Runtime
       Handler: !Ref Handler

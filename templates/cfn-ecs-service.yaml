@@ -216,7 +216,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
-      LogGroupName: !Sub "/ecs/${ProjectName}-${Env}-${ServiceSuffix}"
+      LogGroupName: !Sub "/ecs/${ProjectName}-${Env}-ecs-${ServiceSuffix}"
       RetentionInDays: !Ref LogRetentionDays
       Tags:
         - Key: Project
@@ -227,7 +227,7 @@ Resources:
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
+      Family: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}"
       RequiresCompatibilities:
         - FARGATE
       NetworkMode: awsvpc
@@ -236,7 +236,7 @@ Resources:
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       TaskRoleArn: !If [HasTaskRole, !Ref TaskRoleArn, !Ref AWS::NoValue]
       ContainerDefinitions:
-        - Name: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
+        - Name: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}"
           Image: !Ref ImageUri
           PortMappings:
             - ContainerPort: !Ref ContainerPort
@@ -257,7 +257,7 @@ Resources:
   ECSService:
     Type: AWS::ECS::Service
     Properties:
-      ServiceName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
+      ServiceName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}"
       Cluster:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-ecs-cluster-ClusterName"
       LaunchType: FARGATE
@@ -272,7 +272,7 @@ Resources:
             - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
           AssignPublicIp: !If [IsPublicSubnet, ENABLED, DISABLED]
       LoadBalancers:
-        - ContainerName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
+        - ContainerName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}"
           ContainerPort: !Ref ContainerPort
           TargetGroupArn:
             Fn::ImportValue: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-TargetGroupArn"

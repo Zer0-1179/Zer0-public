@@ -176,7 +176,7 @@ Resources:
     DeletionPolicy: !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      TableName: !Sub "${ProjectName}-${Env}-${TableSuffix}"
+      TableName: !Sub "${ProjectName}-${Env}-dynamodb-${TableSuffix}"
       BillingMode: !Ref BillingMode
       ProvisionedThroughput: !If
         - IsProvisioned
@@ -219,7 +219,7 @@ Resources:
       DeletionProtectionEnabled: !If [IsPrd, true, false]
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-${TableSuffix}"
+          Value: !Sub "${ProjectName}-${Env}-dynamodb-${TableSuffix}"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

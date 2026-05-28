@@ -117,7 +117,7 @@ Resources:
     DeletionPolicy: !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      RepositoryName: !Sub "${ProjectName}-${Env}-${RepoSuffix}"
+      RepositoryName: !Sub "${ProjectName}-${Env}-ecr-${RepoSuffix}"
       ImageTagMutability: !Ref ImageTagMutability
       ImageScanningConfiguration:
         ScanOnPush: !If [HasKmsKey, !Ref ScanOnPush, !Ref ScanOnPush]
@@ -147,7 +147,7 @@ Resources:
             }
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-${RepoSuffix}"
+          Value: !Sub "${ProjectName}-${Env}-ecr-${RepoSuffix}"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

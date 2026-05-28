@@ -124,8 +124,8 @@ Resources:
     Properties:
       BucketName: !If
         - HasSuffix
-        - !Sub "${ProjectName}-${Env}-${BucketSuffix}"
-        - !Sub "${ProjectName}-${Env}"
+        - !Sub "${ProjectName}-${Env}-s3-${BucketSuffix}"
+        - !Sub "${ProjectName}-${Env}-s3"
       VersioningConfiguration:
         Status: !FindInMap [Config, !Ref Env, VersioningStatus]
       BucketEncryption:
