@@ -23,7 +23,7 @@ Description: "ECS Fargate service with task definition, execution role, and ALB 
 #   VPC:     {ProjectName}-{Env}-vpc
 #   SG:      {ProjectName}-{Env}-sg-{SgSuffix}
 #   ALB:     {ProjectName}-{Env}-alb-{AlbSuffix}
-#   Cluster: {ProjectName}-{Env}-cluster
+#   Cluster: {ProjectName}-{Env}-ecs-cluster
 #
 # NOTE: Tasks run in private subnets.
 #   To pull ECR images and write CloudWatch Logs, one of the following is required:
@@ -259,7 +259,7 @@ Resources:
     Properties:
       ServiceName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
       Cluster:
-        Fn::ImportValue: !Sub "${ProjectName}-${Env}-cluster-ClusterName"
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-ecs-cluster-ClusterName"
       LaunchType: FARGATE
       DesiredCount: !Ref DesiredCount
       TaskDefinition: !Ref TaskDefinition

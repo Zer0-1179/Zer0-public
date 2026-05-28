@@ -5,7 +5,7 @@ Description: "ECS Fargate cluster with Container Insights and FARGATE/FARGATE_SP
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-cluster \
+#   --stack-name <ProjectName>-<Env>-ecs-cluster \
 #   --template-file cfn-ecs-cluster.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
