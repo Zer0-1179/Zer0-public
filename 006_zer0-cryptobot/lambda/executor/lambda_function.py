@@ -161,8 +161,8 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
     body = (
         f"■ {coin}/JPY  {dir_str}  約定\n"
         f"\n"
-        f"現在価格　：{entry:,.0f}円\n"
-        f"購入金額　：{position_jpy:,.0f}円（{amount} {coin}）\n"
+        f"約定価格　：{entry:,.0f}円\n"
+        f"購入金額　：{position_jpy:,.0f}円（{amount:.4f} {coin}）\n"
         f"残り証拠金：{remaining_margin/2:,.0f}円\n"
         f"\n"
         f"損切り（70%）：{sl:,.0f}円（{sl_pct:+.1f}%）\n"
@@ -225,7 +225,7 @@ def notify_close(pair: str, direction: str, reason: str, price: float,
         f"現在価格　：{price:,.0f}円\n"
         f"エントリー：{entry:,.0f}円\n"
         f"変動　　　：{price_diff_pct:+.1f}%\n"
-        f"購入金額　：{entry * amount:,.0f}円（{amount} {coin}）\n"
+        f"購入金額　：{entry * amount:,.0f}円（{amount:.4f} {coin}）\n"
         f"損益　　　：{pnl:+,.1f}円\n"
         f"残り証拠金：{remaining_margin/2:,.0f}円"
     )
