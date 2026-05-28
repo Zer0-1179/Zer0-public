@@ -71,8 +71,8 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues:
-      - dev
       - stg
+      - dev
       - prd
     Description: "Deployment environment. prd enables versioning and sets DeletionPolicy to Retain."
 

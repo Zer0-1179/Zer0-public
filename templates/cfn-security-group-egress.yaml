@@ -74,8 +74,8 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues:
-      - dev
       - stg
+      - dev
       - prd
 
   SgSuffix:
