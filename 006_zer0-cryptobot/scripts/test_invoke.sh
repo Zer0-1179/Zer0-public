@@ -9,8 +9,8 @@
 #   ./test_invoke.sh clear        # SSM state のクリア
 #
 # フルフローテスト（全フェーズ順番に実行）:
-#   ./test_invoke.sh fulltest        # Phase B: SOLロング 500円で即時約定注文
-#   ./test_invoke.sh short_fulltest  # Phase B: SOLショート 500円で即時約定注文
+#   ./test_invoke.sh fulltest        # Phase B: SOLロング 500円で成行注文（即時約定）
+#   ./test_invoke.sh short_fulltest  # Phase B: SOLショート 500円で成行注文（即時約定）
 #   ./test_invoke.sh phase_a         # Phase A: 既存ポジション管理を手動トリガー
 #                                    # （fulltest後: TP1/SL発注確認 → trailing確認 → close確認）
 #
@@ -76,18 +76,17 @@ case "${MODE}" in
     ;;
 
   fulltest)
-    echo "=== フルフローテスト Step1: SOL ロング 500円 即時約定 ==="
+    echo "=== フルフローテスト Step1: SOL ロング 500円 成行注文（即時約定）==="
     SOL_PRICE=$(curl -sf "https://public.bitbank.cc/sol_jpy/ticker" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['last'])")
     ATR=$(python3 -c "print(round(float('${SOL_PRICE}') * 0.02, 0))")
     echo "SOL現在価格: ${SOL_PRICE}円  ATR: ${ATR}円"
-    echo "投資額: 500円（テスト固定）/ 即時約定モード（現在価格+0.5%で発注）"
+    echo "投資額: 500円（テスト固定）/ 成行注文（市場価格で即時約定）"
     echo ""
 
     PAYLOAD=$(python3 -c "
 import json
 payload = {
     'test_invest_jpy': 500,
-    'test_entry_above': True,
     'signals': [{
         'pair': 'sol_jpy',
         'side': 'long',
@@ -147,8 +146,7 @@ print(json.dumps(payload))
     ;;
 
   signal)
-    echo "=== Step2: SOL ロング シグナル注入テスト ==="
-    # 現在価格を取得して ATR を設定（ATR = 価格 × 2% 程度）
+    echo "=== Step2: SOL ロング シグナル注入テスト（成行 = 即時約定）==="
     SOL_PRICE=$(curl -sf "https://public.bitbank.cc/sol_jpy/ticker" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['last'])")
     ATR=$(python3 -c "print(round(float('${SOL_PRICE}') * 0.02, 0))")
 
@@ -184,18 +182,17 @@ print(json.dumps(payload))
     ;;
 
   short_fulltest)
-    echo "=== フルフローテスト (SHORT) Step1: SOL ショート 500円 即時約定 ==="
+    echo "=== フルフローテスト (SHORT) Step1: SOL ショート 500円 成行注文（即時約定）==="
     SOL_PRICE=$(curl -sf "https://public.bitbank.cc/sol_jpy/ticker" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['last'])")
     ATR=$(python3 -c "print(round(float('${SOL_PRICE}') * 0.02, 0))")
     echo "SOL現在価格: ${SOL_PRICE}円  ATR: ${ATR}円"
-    echo "投資額: 500円（テスト固定）/ 即時約定モード（現在価格-0.5%で発注）"
+    echo "投資額: 500円（テスト固定）/ 成行注文（市場価格で即時約定）"
     echo ""
 
     PAYLOAD=$(python3 -c "
 import json
 payload = {
     'test_invest_jpy': 500,
-    'test_entry_above': True,
     'signals': [{
         'pair': 'sol_jpy',
         'side': 'short',
@@ -228,11 +225,10 @@ print(json.dumps(payload))
     ;;
 
   short_signal)
-    echo "=== SOL ショート シグナル注入テスト（約定なし・cancel_test 用）==="
+    echo "=== SOL ショート シグナル注入テスト（成行 = 即時約定）==="
     SOL_PRICE=$(curl -sf "https://public.bitbank.cc/sol_jpy/ticker" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['last'])")
     ATR=$(python3 -c "print(round(float('${SOL_PRICE}') * 0.02, 0))")
     echo "SOL現在価格: ${SOL_PRICE}円  ATR: ${ATR}円"
-    echo "指値: 現在価格 × 1.01（1%上 = 絶対に約定しない）"
 
     PAYLOAD=$(python3 -c "
 import json
