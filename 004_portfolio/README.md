@@ -114,6 +114,14 @@ bash infra/deploy-infra.sh
 bash scripts/deploy.sh
 ```
 
+## CFnテンプレート機能
+
+実運用プロジェクトで使用している CloudFormation テンプレートを汎用化して公開。
+
+- **22テンプレート** / 7カテゴリ（ネットワーク・コンピューティング・ストレージ・データベース・セキュリティ・モニタリング・メッセージング）
+- **Env パラメータ**: `stg / dev / prd` の3環境対応。`prd` のみ DeletionPolicy=Retain・削除保護が有効
+- **配信**: GitHub raw URL（AWS インフラ非経由）— `sync_to_public.sh` で自動 push
+
 ## AWSリソース一覧
 
 | リソース    | 名前/ID                                                 |
