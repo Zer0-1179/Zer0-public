@@ -15,7 +15,7 @@ Description: "VPC with public and private subnets across 2 AZs and route tables.
 # Deploy order:
 #   1. cfn-vpc.yaml          (this template)
 #   2. cfn-igw.yaml          (adds internet access to public subnets)
-#   3. cfn-nat-gateway.yaml  (optional: adds internet access to private subnets, ~$33/month per AZ)
+#   3. cfn-nat.yaml          (optional: adds internet access to private subnets, ~$33/month per AZ)
 # -----------------------------------------------
 
 # -----------------------------------------------

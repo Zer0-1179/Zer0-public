@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Security Group (empty shell). Add rules with cfn-security-group-rules.yaml after deploy."
+Description: "Security Group (empty shell). Add rules with cfn-security-group-ingress.yaml / cfn-security-group-egress.yaml after deploy."
 
 # -----------------------------------------------
 # DEPLOY

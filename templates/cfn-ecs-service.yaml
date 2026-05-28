@@ -27,13 +27,13 @@ Description: "ECS Fargate service with task definition, execution role, and ALB 
 #
 # NOTE: Tasks run in private subnets.
 #   To pull ECR images and write CloudWatch Logs, one of the following is required:
-#   - NAT Gateway (cfn-nat-gateway.yaml)
+#   - NAT Gateway (cfn-nat.yaml)
 #   - VPC Endpoints: com.amazonaws.{region}.ecr.api, ecr.dkr, s3, logs
 #
 # Deploy order:
 #   1. cfn-vpc.yaml
 #   2. cfn-igw.yaml
-#   3. cfn-nat-gateway.yaml       (or VPC endpoints for ECR/Logs)
+#   3. cfn-nat.yaml               (or VPC endpoints for ECR/Logs)
 #   4. cfn-security-group.yaml    (SgSuffix=app — allow traffic from ALB SG on ContainerPort)
 #   5. cfn-alb.yaml               (AlbSuffix=01 — TargetGroupArn is imported by this stack)
 #   6. cfn-ecs-cluster.yaml

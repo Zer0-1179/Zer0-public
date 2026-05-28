@@ -6,7 +6,7 @@ Description: "Customer-managed KMS key for S3, EBS, RDS, EFS, CloudWatch Logs, S
 # -----------------------------------------------
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-kms \
-#   --template-file cfn-kms-key.yaml \
+#   --template-file cfn-kms.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev
@@ -72,6 +72,15 @@ Parameters:
 # Boolean flags derived from parameter values.
 # Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
+Mappings:
+  Config:
+    dev:
+      PendingWindowInDays: 7
+    stg:
+      PendingWindowInDays: 7
+    prd:
+      PendingWindowInDays: 30
+
 Conditions:
   IsPrd: !Equals [!Ref Env, prd]
 
@@ -96,7 +105,7 @@ Resources:
       EnableKeyRotation: true
       KeySpec: SYMMETRIC_DEFAULT
       KeyUsage: ENCRYPT_DECRYPT
-      PendingWindowInDays: !If [IsPrd, 30, 7]
+      PendingWindowInDays: !FindInMap [Config, !Ref Env, PendingWindowInDays]
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
