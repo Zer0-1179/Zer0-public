@@ -4,7 +4,7 @@ import { getCategoryBySlug, getTemplatesByCategory } from '../../../../data/temp
 import { useTranslations } from '../../../../i18n/utils';
 
 const t = useTranslations('ja');
-const BASE_URL = 'https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates';
+const BASE_URL = '/api/templates';
 
 const { category } = Astro.params;
 const cat = getCategoryBySlug(category!);
