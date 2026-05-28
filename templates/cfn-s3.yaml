@@ -6,23 +6,25 @@ Description: "S3 Bucket with environment-based configuration (versioning, encryp
 # -----------------------------------------------
 # Using AWS managed key (default):
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-s3 \
-#   --template-file cfn-s3-bucket.yaml \
+#   --stack-name <ProjectName>-<Env>-s3-<BucketSuffix> \
+#   --template-file cfn-s3.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
-#     Env=dev
+#     Env=dev \
+#     BucketSuffix=data
 #
-# Using a customer-managed KMS key (from cfn-kms-key stack):
+# Using a customer-managed KMS key (from cfn-kms stack):
 # KMS_ARN=$(aws cloudformation describe-stacks \
 #   --stack-name <ProjectName>-<Env>-kms \
 #   --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArn'].OutputValue" \
 #   --output text)
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-s3 \
-#   --template-file cfn-s3-bucket.yaml \
+#   --stack-name <ProjectName>-<Env>-s3-<BucketSuffix> \
+#   --template-file cfn-s3.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
+#     BucketSuffix=data \
 #     KmsKeyId=$KMS_ARN
 # -----------------------------------------------
 
@@ -70,6 +72,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. prd enables versioning and sets DeletionPolicy to Retain."
 
@@ -93,6 +96,9 @@ Mappings:
     dev:
       VersioningStatus: Suspended  # Versioning disabled for dev
       ExpirationDays:   90         # Auto-delete objects after 90 days
+    stg:
+      VersioningStatus: Suspended  # Same as dev
+      ExpirationDays:   90
     prd:
       VersioningStatus: Enabled    # Versioning enabled for prd
       ExpirationDays:   365        # Auto-delete objects after 365 days

@@ -5,16 +5,16 @@ Description: "CloudWatch Log Group with env-based retention period and optional 
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-logs \
-#   --template-file cfn-cloudwatch-logs.yaml \
+#   --stack-name <ProjectName>-<Env>-cw-logs \
+#   --template-file cfn-cw-logs.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev
 #
 # With a custom log group name (e.g. for Lambda):
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-logs \
-#   --template-file cfn-cloudwatch-logs.yaml \
+#   --stack-name <ProjectName>-<Env>-cw-logs \
+#   --template-file cfn-cw-logs.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
@@ -28,8 +28,8 @@ Description: "CloudWatch Log Group with env-based retention period and optional 
 #   --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArn'].OutputValue" \
 #   --output text)
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-logs \
-#   --template-file cfn-cloudwatch-logs.yaml \
+#   --stack-name <ProjectName>-<Env>-cw-logs \
+#   --template-file cfn-cw-logs.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
@@ -78,6 +78,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. prd sets retention to 365 days and DeletionPolicy to Retain."
 
@@ -100,6 +101,8 @@ Mappings:
   Config:
     dev:
       RetentionInDays: 7    # 1 week
+    stg:
+      RetentionInDays: 7    # Same as dev
     prd:
       RetentionInDays: 365  # 1 year
 

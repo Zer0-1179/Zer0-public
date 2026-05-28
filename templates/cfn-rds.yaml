@@ -84,6 +84,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. prd sets DeletionPolicy to Retain and increases backup retention."
 

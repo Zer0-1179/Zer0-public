@@ -59,6 +59,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment. Used as part of the Name tag."
 

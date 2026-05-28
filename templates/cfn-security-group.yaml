@@ -54,6 +54,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "Deployment environment."
 

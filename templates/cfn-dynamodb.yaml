@@ -80,6 +80,7 @@ Parameters:
     Default: dev
     AllowedValues:
       - dev
+      - stg
       - prd
     Description: "dev: DeletionPolicy=Delete. prd: DeletionPolicy=Retain."
 
