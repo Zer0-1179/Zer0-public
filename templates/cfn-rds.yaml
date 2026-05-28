@@ -167,6 +167,13 @@ Mappings:
       Port: 3306
     postgres:
       Port: 5432
+  Config:
+    dev:
+      BackupRetentionPeriod: 1
+    stg:
+      BackupRetentionPeriod: 1
+    prd:
+      BackupRetentionPeriod: 7
 
 # -----------------------------------------------
 # Conditions
@@ -218,7 +225,7 @@ Resources:
       DBSubnetGroupName:   !Ref DBSubnetGroup
       VPCSecurityGroups:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      BackupRetentionPeriod: !If [IsPrd, 7, 1]
+      BackupRetentionPeriod: !FindInMap [Config, !Ref Env, BackupRetentionPeriod]
       DeletionProtection:    !Ref DeletionProtection
       PubliclyAccessible:    false
       Tags:
