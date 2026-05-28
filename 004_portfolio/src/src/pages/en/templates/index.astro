@@ -19,6 +19,41 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
       <p class="text-slate-400">{t('templates.sub')}</p>
     </div>
 
+    <!-- Folder list -->
+    <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden mb-8">
+      {categoriesWithTemplates.map((cat, i) => (
+        <a
+          href={`/en/templates/${cat.slug}/`}
+          class={`flex items-center gap-3 px-4 py-3.5 hover:bg-navy-700/20 transition-colors group ${i < categoriesWithTemplates.length - 1 ? 'border-b border-navy-700/30' : ''}`}
+        >
+          <!-- folder icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent/70 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+          </svg>
+
+          <!-- folder name -->
+          <span class="font-mono text-sm text-white shrink-0 w-44 group-hover:text-accent transition-colors">
+            {cat.labelEn}
+          </span>
+
+          <!-- description -->
+          <span class="text-slate-400 text-sm flex-1 truncate hidden sm:block">
+            {cat.descEn}
+          </span>
+
+          <!-- file count -->
+          <span class="text-slate-500 text-xs shrink-0">
+            {cat.count} {t('templates.files')}
+          </span>
+
+          <!-- chevron -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+          </svg>
+        </a>
+      ))}
+    </div>
+
     <!-- README block -->
     <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden mb-8">
       <div class="px-4 py-2.5 border-b border-navy-700/50 bg-navy-800/60 flex items-center gap-2">
@@ -58,7 +93,7 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
     </div>
 
     <!-- Naming Convention block -->
-    <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden mb-8">
+    <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden">
       <div class="px-4 py-2.5 border-b border-navy-700/50 bg-navy-800/60 flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
@@ -101,41 +136,6 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
           </table>
         </div>
       </div>
-    </div>
-
-    <!-- Folder list -->
-    <div class="bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden">
-      {categoriesWithTemplates.map((cat, i) => (
-        <a
-          href={`/en/templates/${cat.slug}/`}
-          class={`flex items-center gap-3 px-4 py-3.5 hover:bg-navy-700/20 transition-colors group ${i < categoriesWithTemplates.length - 1 ? 'border-b border-navy-700/30' : ''}`}
-        >
-          <!-- folder icon -->
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent/70 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-          </svg>
-
-          <!-- folder name -->
-          <span class="font-mono text-sm text-white shrink-0 w-44 group-hover:text-accent transition-colors">
-            {cat.labelEn}
-          </span>
-
-          <!-- description -->
-          <span class="text-slate-400 text-sm flex-1 truncate hidden sm:block">
-            {cat.descEn}
-          </span>
-
-          <!-- file count -->
-          <span class="text-slate-500 text-xs shrink-0">
-            {cat.count} {t('templates.files')}
-          </span>
-
-          <!-- chevron -->
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-          </svg>
-        </a>
-      ))}
     </div>
 
   </div>
