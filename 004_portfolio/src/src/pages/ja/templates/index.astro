@@ -75,7 +75,7 @@ const categoriesWithTemplates = getCategoriesWithTemplates().map((cat) => ({
           <p class="font-semibold text-slate-300 mb-2">設計方針</p>
           <ul class="space-y-1 text-slate-400">
             <li class="flex gap-2"><span class="text-accent shrink-0">•</span>ハードコードなし — 変更が想定される値はすべて <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Parameters</code> に外出し</li>
-            <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> パラメータで dev / stg / prd 設定を自動切替（保持期間・DeletionPolicy など）</li>
+            <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Env</code> パラメータで stg / dev / prd 設定を自動切替（保持期間・DeletionPolicy など）</li>
             <li class="flex gap-2"><span class="text-accent shrink-0">•</span>最小権限 IAM・KMS 暗号化オプション設定済み</li>
             <li class="flex gap-2"><span class="text-accent shrink-0">•</span>スタック間参照は <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">Outputs</code> + <code class="text-accent/80 bg-navy-700/60 px-1 rounded text-xs">ImportValue</code> で対応</li>
           </ul>
