@@ -92,12 +92,14 @@ Parameters:
 
   SgSuffix:
     Type: String
+    Default: efs
     Description: "Must match the SgSuffix used in cfn-security-group.yaml (e.g. efs)."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
   EfsSuffix:
     Type: String
+    Default: shared
     Description: "Purpose or sequence identifier for this EFS (e.g. shared, app, 01)."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."

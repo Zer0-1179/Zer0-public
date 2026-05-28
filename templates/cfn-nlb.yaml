@@ -107,12 +107,14 @@ Parameters:
 
   SgSuffix:
     Type: String
+    Default: web
     Description: "Must match the SgSuffix used in cfn-security-group.yaml (e.g. web)."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
   NlbSuffix:
     Type: String
+    Default: "01"
     Description: "Purpose or sequence identifier for this NLB (e.g. tcp, udp, 01). Used in resource names and stack exports."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."

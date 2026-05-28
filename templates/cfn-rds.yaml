@@ -129,7 +129,8 @@ Parameters:
 
   DBEngineVersion:
     Type: String
-    Description: "Engine version. Examples: 8.0.46 (MySQL 8.0), 8.4.9 (MySQL 8.4), 17.10 (PostgreSQL 17)."
+    Default: "8.0.40"
+    Description: "Engine version. Examples: 8.0.40 (MySQL 8.0), 8.4.4 (MySQL 8.4), 17.4 (PostgreSQL 17)."
 
   DBInstanceClass:
     Type: String
