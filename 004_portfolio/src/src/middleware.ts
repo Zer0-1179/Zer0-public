@@ -1,10 +1,16 @@
 import { defineMiddleware } from 'astro:middleware';
 import crypto from 'node:crypto';
 
-// SHA-256 hash of the minified Nav hamburger script (inlined by Astro's SSR build).
-// Update this value by running: node scripts/hash-nav-script.mjs
-// after changing src/components/Nav.astro's <script> block.
-const NAV_SCRIPT_HASH = "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='";
+// SHA-256 hashes of all inlined scripts. Recompute after any script change:
+//   node --input-type=module -e "..."  (see scripts/hash-nav-script.mjs pattern)
+const SCRIPT_HASHES = [
+  "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='", // Nav.astro
+  "'sha256-2mZe1216qSfXhWjWW7LgH/iaMAXbV60fBI2HwiXJGpM='", // BaseLayout font
+  "'sha256-nBkbTataBdvlgdlOt3Vr4oQNmEXlYljqccazFHtA2hA='", // ja/templates/index
+  "'sha256-BbdfFf3SSABC2MwBjewRJNNNcEXAwOv3cfNu4BwCln0='", // en/templates/index
+  "'sha256-x1Br5NBxUF3JwdXihhDg0g0e6FgOtXi9m7c1kV32WKA='", // ja/templates/[category]
+  "'sha256-rJYFB/xhPE/QUzeEC6WdbzuXBcVe5qlhGG89I/C9OC8='", // en/templates/[category]
+].join(' ');
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64').replace(/=+$/, '');
@@ -20,7 +26,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     [
       "default-src 'self'",
       "connect-src 'self'",
-      `script-src 'self' 'nonce-${nonce}' ${NAV_SCRIPT_HASH}`,
+      `script-src 'self' 'nonce-${nonce}' ${SCRIPT_HASHES}`,
       `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
       `font-src https://fonts.gstatic.com`,
       "img-src 'self' data:",
