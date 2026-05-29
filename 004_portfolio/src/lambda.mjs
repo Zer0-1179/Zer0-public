@@ -16,8 +16,14 @@ const CATEGORY_FILES = {
   database:   ['cfn-dynamodb.yaml', 'cfn-rds.yaml'],
   security:   ['cfn-kms.yaml', 'cfn-iam-role.yaml'],
   messaging:  ['cfn-sqs.yaml'],
-  monitoring: ['cfn-cw-logs.yaml'],
+  monitoring: ['cfn-cw-logs.yaml', 'cfn-cw-alarm-ec2.yaml', 'cfn-cw-alarm-rds.yaml', 'cfn-cw-alarm-efs.yaml', 'cfn-cw-alarm-lambda.yaml', 'cfn-cw-alarm-sqs.yaml', 'cfn-cw-alarm-alb.yaml'],
 };
+
+// Reverse lookup: filename → category (for subdirectory path construction)
+const FILE_CATEGORY = {};
+for (const [cat, files] of Object.entries(CATEGORY_FILES)) {
+  for (const f of files) FILE_CATEGORY[f] = cat;
+}
 
 // ZIP一括ダウンロード: /api/templates/download/all.zip or /{category}.zip
 app.get('/api/templates/download/:zipname', async (req, res) => {
@@ -40,7 +46,8 @@ app.get('/api/templates/download/:zipname', async (req, res) => {
   try {
     const zip = new JSZip();
     await Promise.all(filenames.map(async (fn) => {
-      const r = await fetch(`${GITHUB_RAW_BASE}/${fn}`);
+      const cat = FILE_CATEGORY[fn];
+      const r = await fetch(`${GITHUB_RAW_BASE}/${cat}/${fn}`);
       if (!r.ok) throw new Error(`fetch failed: ${fn}`);
       zip.file(fn, await r.text());
     }));
@@ -62,8 +69,10 @@ app.get('/api/templates/:filename', async (req, res) => {
   if (!filename || !/^cfn-[a-z0-9-]+\.yaml$/.test(filename)) {
     return res.status(404).send('Not Found');
   }
+  const category = FILE_CATEGORY[filename];
+  if (!category) return res.status(404).send('Not Found');
   try {
-    const response = await fetch(`${GITHUB_RAW_BASE}/${filename}`);
+    const response = await fetch(`${GITHUB_RAW_BASE}/${category}/${filename}`);
     if (!response.ok) return res.status(404).send('Not Found');
     const content = await response.text();
     res.setHeader('Content-Type', 'application/octet-stream');
