@@ -1,9 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudWatch Log Group with env-based retention period and optional KMS encryption"
+Description: "CloudWatch Log Groups with env-based retention and optional KMS encryption (up to 5 groups per stack)"
 
 # -----------------------------------------------
 # DEPLOY
 # -----------------------------------------------
+# 1 log group (auto name /<ProjectName>/<Env>):
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-cw-logs \
 #   --template-file cfn-cw-logs.yaml \
@@ -11,16 +12,18 @@ Description: "CloudWatch Log Group with env-based retention period and optional 
 #     ProjectName=my-project \
 #     Env=dev
 #
-# With a custom log group name (e.g. for Lambda):
+# Multiple log groups (e.g. Lambda functions):
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-cw-logs \
 #   --template-file cfn-cw-logs.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
-#     LogGroupName=/aws/lambda/my-function
+#     LogGroupName1=/aws/lambda/my-api \
+#     LogGroupName2=/aws/lambda/my-worker \
+#     LogGroupName3=/aws/lambda/my-scheduler
 #
-# With customer-managed KMS key:
+# With customer-managed KMS key (all groups share the same key):
 # NOTE: the KMS key policy must grant kms:Encrypt/Decrypt permissions
 #       to logs.<region>.amazonaws.com before attaching it here.
 # KMS_ARN=$(aws cloudformation describe-stacks \
@@ -33,14 +36,13 @@ Description: "CloudWatch Log Group with env-based retention period and optional 
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
+#     LogGroupName1=/aws/lambda/my-api \
+#     LogGroupName2=/aws/lambda/my-worker \
 #     KmsKeyId=$KMS_ARN
 # -----------------------------------------------
 
 # -----------------------------------------------
 # Metadata
-# Organizes the parameter input UI in the CloudFormation console.
-# ParameterGroups groups parameters visually.
-# ParameterLabels overrides the display name shown to users.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -51,25 +53,26 @@ Metadata:
           - ProjectName
           - Env
       - Label:
-          default: "Encryption (optional)"
+          default: "Log Group Names (1 is required; 2-5 are optional)"
+        Parameters:
+          - LogGroupName1
+          - LogGroupName2
+          - LogGroupName3
+          - LogGroupName4
+          - LogGroupName5
+      - Label:
+          default: "Encryption (optional - applies to all groups)"
         Parameters:
           - KmsKeyId
-      - Label:
-          default: "Optional"
-        Parameters:
-          - LogGroupName
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
-# AllowedValues restricts accepted input.
-# Default sets the fallback value when omitted.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
-    Description: "Used as part of the log group name. Lowercase letters, numbers, and hyphens only."
+    Description: "Used in auto-generated group name when LogGroupName1 is omitted."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -80,58 +83,78 @@ Parameters:
       - stg
       - dev
       - prd
-    Description: "Deployment environment. prd sets retention to 365 days and DeletionPolicy to Retain."
+    Description: "prd: RetentionInDays=365 and DeletionPolicy=Retain."
+
+  LogGroupName1:
+    Type: String
+    Default: ""
+    Description: "Log group 1. Leave empty to auto-generate /<ProjectName>/<Env>."
+
+  LogGroupName2:
+    Type: String
+    Default: ""
+    Description: "Log group 2 (optional). Leave empty to skip."
+
+  LogGroupName3:
+    Type: String
+    Default: ""
+    Description: "Log group 3 (optional). Leave empty to skip."
+
+  LogGroupName4:
+    Type: String
+    Default: ""
+    Description: "Log group 4 (optional). Leave empty to skip."
+
+  LogGroupName5:
+    Type: String
+    Default: ""
+    Description: "Log group 5 (optional). Leave empty to skip."
 
   KmsKeyId:
     Type: String
     Default: ""
-    Description: "KMS Key ARN for log encryption. The key policy must include logs.<region>.amazonaws.com as a principal."
-
-  LogGroupName:
-    Type: String
-    Default: ""
-    Description: "Custom log group name (e.g. /aws/lambda/my-function). Leave empty to use /<ProjectName>/<Env>."
+    Description: "KMS Key ARN for log encryption. Applied to all created groups."
 
 # -----------------------------------------------
 # Mappings
-# Static lookup table for env-specific values.
-# Reference with: !FindInMap [TableName, Key, Item]
 # -----------------------------------------------
 Mappings:
   Config:
     dev:
-      RetentionInDays: 7    # 1 week
+      RetentionInDays: 7
     stg:
-      RetentionInDays: 7    # Same as dev
+      RetentionInDays: 7
     prd:
-      RetentionInDays: 365  # 1 year
+      RetentionInDays: 365
 
 # -----------------------------------------------
 # Conditions
-# Boolean flags derived from parameter values.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
   IsPrd:          !Equals [!Ref Env, prd]
   HasKmsKey:      !Not [!Equals [!Ref KmsKeyId, ""]]
-  HasCustomName:  !Not [!Equals [!Ref LogGroupName, ""]]
+  HasCustomName1: !Not [!Equals [!Ref LogGroupName1, ""]]
+  HasGroup2:      !Not [!Equals [!Ref LogGroupName2, ""]]
+  HasGroup3:      !Not [!Equals [!Ref LogGroupName3, ""]]
+  HasGroup4:      !Not [!Equals [!Ref LogGroupName4, ""]]
+  HasGroup5:      !Not [!Equals [!Ref LogGroupName5, ""]]
 
 # -----------------------------------------------
 # Resources
-# DeletionPolicy: Retain (prd) keeps the log group after stack deletion.
-#                 Delete (dev) removes the log group with the stack.
-# RetentionInDays: CloudWatch charges for stored log data.
-#                  Always set a retention period to avoid unbounded costs.
+# LogGroup1 is always created.
+# LogGroup2-5 are created only when their name parameter is non-empty.
+# All groups share the same RetentionInDays, KmsKeyId, and Tags.
 # -----------------------------------------------
 Resources:
-  LogGroup:
+
+  LogGroup1:
     Type: AWS::Logs::LogGroup
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
       LogGroupName: !If
-        - HasCustomName
-        - !Ref LogGroupName
+        - HasCustomName1
+        - !Ref LogGroupName1
         - !Sub "/${ProjectName}/${Env}"
       RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
       KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
@@ -140,23 +163,136 @@ Resources:
           Value: !Ref ProjectName
         - Key: Env
           Value: !Ref Env
-        - Key: Region
-          Value: !Ref AWS::Region
+
+  LogGroup2:
+    Condition: HasGroup2
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy:      !If [IsPrd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
+    Properties:
+      LogGroupName:      !Ref LogGroupName2
+      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  LogGroup3:
+    Condition: HasGroup3
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy:      !If [IsPrd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
+    Properties:
+      LogGroupName:      !Ref LogGroupName3
+      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  LogGroup4:
+    Condition: HasGroup4
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy:      !If [IsPrd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
+    Properties:
+      LogGroupName:      !Ref LogGroupName4
+      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  LogGroup5:
+    Condition: HasGroup5
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy:      !If [IsPrd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
+    Properties:
+      LogGroupName:      !Ref LogGroupName5
+      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
 # -----------------------------------------------
 Outputs:
-  LogGroupName:
-    Description: "Log group name"
-    Value: !Ref LogGroup
-    Export:
-      Name: !Sub "${AWS::StackName}-LogGroupName"
 
-  LogGroupArn:
-    Description: "Log group ARN"
-    Value: !GetAtt LogGroup.Arn
+  LogGroup1Name:
+    Description: "Log group 1 name"
+    Value: !Ref LogGroup1
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroupArn"
+      Name: !Sub "${AWS::StackName}-LogGroup1Name"
+
+  LogGroup1Arn:
+    Description: "Log group 1 ARN"
+    Value: !GetAtt LogGroup1.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup1Arn"
+
+  LogGroup2Name:
+    Condition: HasGroup2
+    Description: "Log group 2 name"
+    Value: !Ref LogGroup2
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup2Name"
+
+  LogGroup2Arn:
+    Condition: HasGroup2
+    Description: "Log group 2 ARN"
+    Value: !GetAtt LogGroup2.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup2Arn"
+
+  LogGroup3Name:
+    Condition: HasGroup3
+    Description: "Log group 3 name"
+    Value: !Ref LogGroup3
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup3Name"
+
+  LogGroup3Arn:
+    Condition: HasGroup3
+    Description: "Log group 3 ARN"
+    Value: !GetAtt LogGroup3.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup3Arn"
+
+  LogGroup4Name:
+    Condition: HasGroup4
+    Description: "Log group 4 name"
+    Value: !Ref LogGroup4
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup4Name"
+
+  LogGroup4Arn:
+    Condition: HasGroup4
+    Description: "Log group 4 ARN"
+    Value: !GetAtt LogGroup4.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup4Arn"
+
+  LogGroup5Name:
+    Condition: HasGroup5
+    Description: "Log group 5 name"
+    Value: !Ref LogGroup5
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup5Name"
+
+  LogGroup5Arn:
+    Condition: HasGroup5
+    Description: "Log group 5 ARN"
+    Value: !GetAtt LogGroup5.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup5Arn"
