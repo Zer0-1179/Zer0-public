@@ -120,16 +120,16 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasIngress2: !Not [!Equals [!Ref Ingress2Port, ""]]
-  HasIngress3: !Not [!Equals [!Ref Ingress3Port, ""]]
+  HasIngress02: !Not [!Equals [!Ref Ingress2Port, ""]]
+  HasIngress03: !Not [!Equals [!Ref Ingress3Port, ""]]
 
 # -----------------------------------------------
 # Resources
 # AWS::EC2::SecurityGroupIngress adds rules to an existing SG without modifying it.
-# Conditional resources (IngressRule2 / IngressRule3) are skipped when port is empty.
+# Conditional resources (IngressRule02 / IngressRule03) are skipped when port is empty.
 # -----------------------------------------------
 Resources:
-  IngressRule1:
+  IngressRule01:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId:
@@ -140,9 +140,9 @@ Resources:
       CidrIp: !Ref Ingress1Cidr
       Description: !Sub "Rule 1: port ${Ingress1Port} from ${Ingress1Cidr}"
 
-  IngressRule2:
+  IngressRule02:
     Type: AWS::EC2::SecurityGroupIngress
-    Condition: HasIngress2
+    Condition: HasIngress02
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
@@ -152,9 +152,9 @@ Resources:
       CidrIp: !Ref Ingress2Cidr
       Description: !Sub "Rule 2: port ${Ingress2Port} from ${Ingress2Cidr}"
 
-  IngressRule3:
+  IngressRule03:
     Type: AWS::EC2::SecurityGroupIngress
-    Condition: HasIngress3
+    Condition: HasIngress03
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"

@@ -51,8 +51,8 @@ Metadata:
       - Label:
           default: "Permissions (optional)"
         Parameters:
-          - AdditionalPolicy1
-          - AdditionalPolicy2
+          - AdditionalPolicy01
+          - AdditionalPolicy02
 
 # -----------------------------------------------
 # Parameters
@@ -129,12 +129,12 @@ Parameters:
       - 365
     Description: "CloudWatch Logs retention period in days."
 
-  AdditionalPolicy1:
+  AdditionalPolicy01:
     Type: String
     Default: ""
     Description: "Optional managed policy ARN to attach to the execution role (e.g. arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess)."
 
-  AdditionalPolicy2:
+  AdditionalPolicy02:
     Type: String
     Default: ""
     Description: "Optional second managed policy ARN to attach to the execution role."
@@ -143,8 +143,8 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasPolicy1: !Not [!Equals [!Ref AdditionalPolicy1, ""]]
-  HasPolicy2: !Not [!Equals [!Ref AdditionalPolicy2, ""]]
+  HasPolicy01: !Not [!Equals [!Ref AdditionalPolicy01, ""]]
+  HasPolicy02: !Not [!Equals [!Ref AdditionalPolicy02, ""]]
 
 # -----------------------------------------------
 # Resources
@@ -162,14 +162,14 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns: !If
-        - HasPolicy1
+        - HasPolicy01
         - !If
-          - HasPolicy2
+          - HasPolicy02
           - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-            - !Ref AdditionalPolicy1
-            - !Ref AdditionalPolicy2
+            - !Ref AdditionalPolicy01
+            - !Ref AdditionalPolicy02
           - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-            - !Ref AdditionalPolicy1
+            - !Ref AdditionalPolicy01
         - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
         - Key: Project
