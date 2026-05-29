@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudWatch Alarms for EFS - burst credit balance and I/O limit with WARNING/CRITICAL severity levels"
+Description: "CloudWatch Alarms for EFS - I/O limit with WARNING/CRITICAL severity levels"
 
 # -----------------------------------------------
 # DEPLOY
@@ -23,9 +23,6 @@ Description: "CloudWatch Alarms for EFS - burst credit balance and I/O limit wit
 #     WarningActionArn=$SLACK_SNS_ARN \
 #     CriticalActionArn=$PAGERDUTY_SNS_ARN
 #
-# BurstCredit thresholds are in bytes (alarm triggers when BELOW threshold).
-# Default: Warning=2 TB, Critical=1 TB
-#
 # PercentIOLimit applies to General Purpose performance mode only.
 # For Elastic Throughput, this metric is not reported (alarm stays INSUFFICIENT_DATA).
 # -----------------------------------------------
@@ -41,10 +38,10 @@ Metadata:
         Parameters: [FileSystemId]
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [BurstCreditWarningThreshold, PercentIOLimitWarningThreshold]
+        Parameters: [PercentIOLimitWarningThreshold]
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [BurstCreditCriticalThreshold, PercentIOLimitCriticalThreshold]
+        Parameters: [PercentIOLimitCriticalThreshold]
       - Label:
           default: "Common"
         Parameters: [EvaluationPeriods]
@@ -69,18 +66,6 @@ Parameters:
     Description: "EFS file system ID (e.g. fs-0123456789abcdef0)."
     AllowedPattern: "^fs-[0-9a-f]+$"
     ConstraintDescription: "Must be a valid EFS file system ID (fs-xxxxxxxx)."
-
-  BurstCreditWarningThreshold:
-    Type: Number
-    Default: 2199023255552
-    MinValue: 1
-    Description: "Burst credit balance WARNING threshold in bytes. Triggers when BELOW this value. Default: 2 TB."
-
-  BurstCreditCriticalThreshold:
-    Type: Number
-    Default: 1099511627776
-    MinValue: 1
-    Description: "Burst credit balance CRITICAL threshold in bytes. Triggers when BELOW this value. Default: 1 TB."
 
   PercentIOLimitWarningThreshold:
     Type: Number
@@ -117,44 +102,6 @@ Conditions:
   HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
 
 Resources:
-
-  BurstCreditWarningAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-burst-credit-warning"
-      AlarmDescription: !Sub "EFS burst credits < ${BurstCreditWarningThreshold} bytes for ${EvaluationPeriods} x 1 min. [WARNING]"
-      Namespace: AWS/EFS
-      MetricName: BurstCreditBalance
-      Dimensions:
-        - Name: FileSystemId
-          Value: !Ref FileSystemId
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref BurstCreditWarningThreshold
-      ComparisonOperator: LessThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
-      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
-
-  BurstCreditCriticalAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-burst-credit-critical"
-      AlarmDescription: !Sub "EFS burst credits < ${BurstCreditCriticalThreshold} bytes for ${EvaluationPeriods} x 1 min. [CRITICAL]"
-      Namespace: AWS/EFS
-      MetricName: BurstCreditBalance
-      Dimensions:
-        - Name: FileSystemId
-          Value: !Ref FileSystemId
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref BurstCreditCriticalThreshold
-      ComparisonOperator: LessThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
-      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
   PercentIOLimitWarningAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -195,18 +142,6 @@ Resources:
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
 Outputs:
-
-  BurstCreditWarningAlarmArn:
-    Description: "Burst credit WARNING alarm ARN"
-    Value: !GetAtt BurstCreditWarningAlarm.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-BurstCreditWarningAlarmArn"
-
-  BurstCreditCriticalAlarmArn:
-    Description: "Burst credit CRITICAL alarm ARN"
-    Value: !GetAtt BurstCreditCriticalAlarm.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-BurstCreditCriticalAlarmArn"
 
   PercentIOLimitWarningAlarmArn:
     Description: "I/O limit WARNING alarm ARN"
