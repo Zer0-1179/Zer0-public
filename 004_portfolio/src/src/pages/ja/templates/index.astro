@@ -4,7 +4,6 @@ import { getCategoriesWithTemplates, getTemplatesByCategory } from '../../../dat
 import { useTranslations } from '../../../i18n/utils';
 
 const t = useTranslations('ja');
-const cspNonce = Astro.locals.cspNonce;
 
 const categories = getCategoriesWithTemplates().map((cat) => ({
   ...cat,
@@ -26,6 +25,8 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
 
     <!-- Explorer: left nav tree + right content -->
     <div
+      id="templates-explorer"
+      data-lang="ja"
       class="flex border border-navy-700/50 rounded-xl overflow-hidden"
       style="height:680px"
     >
@@ -210,98 +211,108 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
   </div>
 </BaseLayout>
 
-<script nonce={cspNonce} is:inline>
-(function () {
-  var readmePanel = document.getElementById('readme-panel');
-  var yamlViewer  = document.getElementById('yaml-viewer');
-  var yvName      = document.getElementById('yv-name');
-  var yvShort     = document.getElementById('yv-short');
-  var yvDesc      = document.getElementById('yv-desc');
-  var yvServices  = document.getElementById('yv-services');
-  var yvFilename  = document.getElementById('yv-filename');
-  var yvDl        = document.getElementById('yv-dl');
-  var yvContent   = document.getElementById('yv-content');
-  var yvCopy      = document.getElementById('yv-copy');
-  var activeFileBtn = null;
+<script>
+  const explorer = document.getElementById('templates-explorer');
+  const lang = explorer?.dataset.lang || 'ja';
+  const i18n = {
+    loading: lang === 'ja' ? '読み込み中...' : 'Loading...',
+    error:   lang === 'ja' ? 'エラー: '     : 'Error: ',
+    copy:    lang === 'ja' ? 'コピー'        : 'Copy',
+    copied:  lang === 'ja' ? 'コピーしました！' : 'Copied!',
+  };
+
+  const readmePanel = document.getElementById('readme-panel');
+  const yamlViewer  = document.getElementById('yaml-viewer');
+  const yvName      = document.getElementById('yv-name');
+  const yvShort     = document.getElementById('yv-short');
+  const yvDesc      = document.getElementById('yv-desc');
+  const yvServices  = document.getElementById('yv-services');
+  const yvFilename  = document.getElementById('yv-filename');
+  const yvDl        = document.getElementById('yv-dl');
+  const yvContent   = document.getElementById('yv-content');
+  const yvCopy      = document.getElementById('yv-copy');
+  let activeFileBtn: Element | null = null;
 
   // Folder row click → expand/collapse
-  document.querySelectorAll('.folder-toggle-row').forEach(function (row) {
-    row.addEventListener('click', function () {
-      var group = row.closest('.folder-group');
-      var files = group.querySelector('.folder-files');
-      var chevron = group.querySelector('.chevron');
-      var isOpen = !files.classList.contains('hidden');
+  document.querySelectorAll('.folder-toggle-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const group = row.closest('.folder-group');
+      if (!group) return;
+      const files   = group.querySelector('.folder-files') as HTMLElement;
+      const chevron = group.querySelector('.chevron') as HTMLElement;
+      const isOpen  = !files.classList.contains('hidden');
       files.classList.toggle('hidden', isOpen);
       chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
     });
   });
 
-  function setNavActive(filename) {
+  function setNavActive(filename: string) {
     if (activeFileBtn) {
       activeFileBtn.classList.remove('bg-accent/10');
-      activeFileBtn.querySelector('.file-label').classList.remove('text-accent');
+      activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
     }
-    var btn = document.querySelector('.file-btn[data-filename="' + filename + '"]');
+    const btn = document.querySelector(`.file-btn[data-filename="${filename}"]`);
     if (btn) {
       btn.classList.add('bg-accent/10');
-      btn.querySelector('.file-label').classList.add('text-accent');
-      var group = btn.closest('.folder-group');
-      var files = group.querySelector('.folder-files');
-      var chevron = group.querySelector('.chevron');
-      if (files.classList.contains('hidden')) {
+      btn.querySelector('.file-label')?.classList.add('text-accent');
+      const group  = btn.closest('.folder-group');
+      const files  = group?.querySelector('.folder-files') as HTMLElement | null;
+      const chev   = group?.querySelector('.chevron') as HTMLElement | null;
+      if (files?.classList.contains('hidden')) {
         files.classList.remove('hidden');
-        if (chevron) chevron.style.transform = 'rotate(90deg)';
+        if (chev) chev.style.transform = 'rotate(90deg)';
       }
     }
     activeFileBtn = btn;
   }
 
-  function showYaml(filename, name, short, desc, services) {
-    readmePanel.classList.add('hidden');
-    yamlViewer.classList.remove('hidden');
-    yamlViewer.closest('.overflow-y-auto').scrollTop = 0;
+  function showYaml(filename: string, short: string, desc: string, services: string) {
+    readmePanel!.classList.add('hidden');
+    yamlViewer!.classList.remove('hidden');
+    (yamlViewer!.closest('.overflow-y-auto') as HTMLElement).scrollTop = 0;
 
-    yvName.textContent = filename;
-    yvFilename.textContent = filename;
-    yvShort.textContent = short;
-    yvDesc.textContent = desc;
-    yvDl.href = '/api/templates/' + filename;
-    yvDl.download = filename;
+    yvName!.textContent     = filename;
+    yvFilename!.textContent = filename;
+    yvShort!.textContent    = short;
+    yvDesc!.textContent     = desc;
+    (yvDl as HTMLAnchorElement).href     = '/api/templates/' + filename;
+    (yvDl as HTMLAnchorElement).download = filename;
 
-    yvServices.innerHTML = '';
-    (services || '').split(',').filter(Boolean).forEach(function (svc) {
-      var span = document.createElement('span');
+    yvServices!.innerHTML = '';
+    (services || '').split(',').filter(Boolean).forEach((svc) => {
+      const span = document.createElement('span');
       span.className = 'px-1.5 py-0.5 bg-navy-700/60 text-slate-500 text-xs rounded';
       span.textContent = svc;
-      yvServices.appendChild(span);
+      yvServices!.appendChild(span);
     });
 
     setNavActive(filename);
 
-    yvContent.textContent = '読み込み中...';
+    yvContent!.textContent = i18n.loading;
     fetch('/api/templates/' + filename)
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(function (txt) { yvContent.textContent = txt; })
-      .catch(function (e) { yvContent.textContent = 'エラー: ' + e.message; });
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then((txt) => { yvContent!.textContent = txt; })
+      .catch((e) => { yvContent!.textContent = i18n.error + e.message; });
   }
 
-  document.querySelectorAll('.file-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      showYaml(btn.dataset.filename, btn.dataset.name, btn.dataset.short, btn.dataset.desc, btn.dataset.services);
+  document.querySelectorAll('.file-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const el = btn as HTMLElement;
+      showYaml(el.dataset.filename!, el.dataset.short!, el.dataset.desc!, el.dataset.services!);
     });
   });
 
-  yvCopy.addEventListener('click', function () {
-    var text = yvContent.textContent;
-    if (!text || text === '読み込み中...') return;
-    var done = function () {
-      yvCopy.textContent = 'コピーしました！';
-      setTimeout(function () { yvCopy.textContent = 'コピー'; }, 2000);
+  yvCopy!.addEventListener('click', () => {
+    const text = yvContent!.textContent;
+    if (!text || text === i18n.loading) return;
+    const done = () => {
+      yvCopy!.textContent = i18n.copied;
+      setTimeout(() => { yvCopy!.textContent = i18n.copy; }, 2000);
     };
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(done);
     } else {
-      var ta = document.createElement('textarea');
+      const ta = document.createElement('textarea');
       ta.value = text;
       ta.style.cssText = 'position:fixed;opacity:0';
       document.body.appendChild(ta);
@@ -311,5 +322,4 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
       done();
     }
   });
-})();
 </script>
