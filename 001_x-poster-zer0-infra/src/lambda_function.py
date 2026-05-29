@@ -98,6 +98,8 @@ def pick_mainstream_article(articles: list) -> dict:
     """王道サービスへの言及数でスコアリングし、最もスコアの高い記事を返す。
     zenn・qiita はスコア1未満の記事を除外する。除外後に候補が0件の場合は
     aws_news・aws_blog のみにフォールバックする。"""
+    if not articles:
+        raise RuntimeError("全RSSフィードから記事が取得できませんでした")
     def score(article):
         text = (article.get("title", "") + " " + article.get("desc", "")).upper()
         return sum(1 for kw in MAINSTREAM_KEYWORDS if kw.upper() in text)
