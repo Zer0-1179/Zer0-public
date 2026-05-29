@@ -212,7 +212,11 @@ def draw():
         if label:
             mx = (n1['x'] + n2['x']) / 2
             my = (n1['y'] + n2['y']) / 2
-            ax.text(mx, my + 0.2, label, ha='center', va='bottom',
+            # 縦矢印はラベルをノードラベルと重ならないよう右にずらす
+            is_vertical = (n1['x'] == n2['x'])
+            lx = mx + (0.45 if is_vertical else 0)
+            ly = my + (0.0  if is_vertical else 0.2)
+            ax.text(lx, ly, label, ha='left' if is_vertical else 'center', va='center' if is_vertical else 'bottom',
                     fontsize=7, color='#666666',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
                               edgecolor='none', alpha=0.9),
