@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "SNS Topic with optional email and HTTPS subscriptions"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# Basic (topic only, no subscriptions):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sns-warning \
+#   --template-file cfn-sns.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     TopicSuffix=warning \
+#     DisplayName="My Project Warnings"
+#
+# With email and HTTPS subscriptions:
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sns-critical \
+#   --template-file cfn-sns.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     TopicSuffix=critical \
+#     DisplayName="My Project Critical Alerts" \
+#     EmailEndpoint01=ops@example.com \
+#     HttpsEndpoint=https://events.pagerduty.com/integration/xxxx/enqueue
+#
+# IMPORTANT: Email subscriptions require confirmation.
+# After deploy, each email address receives a confirmation link from AWS.
+# The subscription is inactive until confirmed.
+#
+# Typical usage with alarm templates:
+# SNS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-sns-warning \
+#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
+#   --output text)
+# Then pass $SNS_ARN as WarningActionArn in cfn-cw-alarm-*.yaml
+#
+# With KMS encryption (key must allow sns.amazonaws.com as principal):
+# KMS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-kms \
+#   --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy ... --parameter-overrides KmsKeyId=$KMS_ARN
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Topic"
+        Parameters:
+          - TopicSuffix
+          - DisplayName
+      - Label:
+          default: "Email Subscriptions (optional)"
+        Parameters:
+          - EmailEndpoint01
+          - EmailEndpoint02
+          - EmailEndpoint03
+      - Label:
+          default: "HTTPS Subscription (optional)"
+        Parameters:
+          - HttpsEndpoint
+      - Label:
+          default: "Encryption (optional)"
+        Parameters:
+          - KmsKeyId
+
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as part of the topic name."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  TopicSuffix:
+    Type: String
+    Default: alerts
+    Description: "Suffix appended to the topic name (e.g. warning, critical, alerts). Used to distinguish multiple topics."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  DisplayName:
+    Type: String
+    Default: ""
+    Description: "Display name shown as the sender in email notifications (max 100 chars). Leave empty to use the topic name."
+    MaxLength: 100
+
+  EmailEndpoint01:
+    Type: String
+    Default: ""
+    Description: "Email address for subscription 01 (optional). Requires confirmation after deploy."
+
+  EmailEndpoint02:
+    Type: String
+    Default: ""
+    Description: "Email address for subscription 02 (optional). Requires confirmation after deploy."
+
+  EmailEndpoint03:
+    Type: String
+    Default: ""
+    Description: "Email address for subscription 03 (optional). Requires confirmation after deploy."
+
+  HttpsEndpoint:
+    Type: String
+    Default: ""
+    Description: "HTTPS endpoint for subscription (optional). Used for PagerDuty, webhook integrations, etc."
+
+  KmsKeyId:
+    Type: String
+    Default: ""
+    Description: "KMS Key ARN for topic encryption (optional). The key policy must allow sns.amazonaws.com as a principal."
+
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
+Conditions:
+  HasDisplayName:    !Not [!Equals [!Ref DisplayName, ""]]
+  HasKmsKey:         !Not [!Equals [!Ref KmsKeyId, ""]]
+  HasEmail01:        !Not [!Equals [!Ref EmailEndpoint01, ""]]
+  HasEmail02:        !Not [!Equals [!Ref EmailEndpoint02, ""]]
+  HasEmail03:        !Not [!Equals [!Ref EmailEndpoint03, ""]]
+  HasHttpsEndpoint:  !Not [!Equals [!Ref HttpsEndpoint, ""]]
+
+# -----------------------------------------------
+# Resources
+# Topic name: {ProjectName}-{Env}-{TopicSuffix}
+# Email subscriptions require manual confirmation via the link sent by AWS.
+# -----------------------------------------------
+Resources:
+
+  Topic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectName}-${Env}-${TopicSuffix}"
+      DisplayName: !If [HasDisplayName, !Ref DisplayName, !Ref AWS::NoValue]
+      KmsMasterKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  EmailSubscription01:
+    Condition: HasEmail01
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref Topic
+      Protocol: email
+      Endpoint: !Ref EmailEndpoint01
+
+  EmailSubscription02:
+    Condition: HasEmail02
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref Topic
+      Protocol: email
+      Endpoint: !Ref EmailEndpoint02
+
+  EmailSubscription03:
+    Condition: HasEmail03
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref Topic
+      Protocol: email
+      Endpoint: !Ref EmailEndpoint03
+
+  HttpsSubscription:
+    Condition: HasHttpsEndpoint
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref Topic
+      Protocol: https
+      Endpoint: !Ref HttpsEndpoint
+
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# -----------------------------------------------
+Outputs:
+
+  TopicArn:
+    Description: "SNS topic ARN. Pass this to WarningActionArn or CriticalActionArn in alarm templates."
+    Value: !Ref Topic
+    Export:
+      Name: !Sub "${AWS::StackName}-TopicArn"
+
+  TopicName:
+    Description: "SNS topic name"
+    Value: !GetAtt Topic.TopicName
+    Export:
+      Name: !Sub "${AWS::StackName}-TopicName"
