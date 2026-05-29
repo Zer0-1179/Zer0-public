@@ -435,7 +435,7 @@ def fetch_rss(sources):
 
 def lambda_handler(event, context):
     now      = datetime.now(JST)
-    slot_key = os.environ.get("FORCE_SLOT") or ("morning" if now.hour < 15 else "evening")
+    slot_key = os.environ.get("FORCE_SLOT") or "evening"
     if slot_key not in SLOTS:
         print(f"[Warning] 無効なFORCE_SLOT値: '{slot_key}' → evening にフォールバック")
         slot_key = "evening"
