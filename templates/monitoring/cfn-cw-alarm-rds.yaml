@@ -35,22 +35,33 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters: [ProjectName, Env]
+        Parameters:
+          - ProjectName
+          - Env
       - Label:
           default: "Target DB Instance"
-        Parameters: [DBInstanceIdentifier, DBInstanceClass]
+        Parameters:
+          - DBInstanceIdentifier
+          - DBInstanceClass
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [CpuWarningThreshold, MemoryWarningPercent]
+        Parameters:
+          - CpuWarningThreshold
+          - MemoryWarningPercent
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [CpuCriticalThreshold, MemoryCriticalPercent]
+        Parameters:
+          - CpuCriticalThreshold
+          - MemoryCriticalPercent
       - Label:
           default: "Common"
-        Parameters: [EvaluationPeriods]
+        Parameters:
+          - EvaluationPeriods
       - Label:
           default: "Notifications (optional)"
-        Parameters: [WarningActionArn, CriticalActionArn]
+        Parameters:
+          - WarningActionArn
+          - CriticalActionArn
 
 Parameters:
   ProjectName:

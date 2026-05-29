@@ -29,22 +29,32 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters: [ProjectName, Env]
+        Parameters:
+          - ProjectName
+          - Env
       - Label:
           default: "Target Function"
-        Parameters: [FunctionName]
+        Parameters:
+          - FunctionName
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [ErrorWarningThreshold, ThrottleWarningThreshold]
+        Parameters:
+          - ErrorWarningThreshold
+          - ThrottleWarningThreshold
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [ErrorCriticalThreshold, ThrottleCriticalThreshold]
+        Parameters:
+          - ErrorCriticalThreshold
+          - ThrottleCriticalThreshold
       - Label:
           default: "Common"
-        Parameters: [EvaluationPeriods]
+        Parameters:
+          - EvaluationPeriods
       - Label:
           default: "Notifications (optional)"
-        Parameters: [WarningActionArn, CriticalActionArn]
+        Parameters:
+          - WarningActionArn
+          - CriticalActionArn
 
 Parameters:
   ProjectName:

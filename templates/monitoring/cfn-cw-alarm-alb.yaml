@@ -43,22 +43,33 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters: [ProjectName, Env]
+        Parameters:
+          - ProjectName
+          - Env
       - Label:
           default: "Target Load Balancer"
-        Parameters: [AlbArn, TargetGroupArn]
+        Parameters:
+          - AlbArn
+          - TargetGroupArn
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [UnhealthyHostWarningThreshold, LatencyWarningThreshold]
+        Parameters:
+          - UnhealthyHostWarningThreshold
+          - LatencyWarningThreshold
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [UnhealthyHostCriticalThreshold, LatencyCriticalThreshold]
+        Parameters:
+          - UnhealthyHostCriticalThreshold
+          - LatencyCriticalThreshold
       - Label:
           default: "Common"
-        Parameters: [EvaluationPeriods]
+        Parameters:
+          - EvaluationPeriods
       - Label:
           default: "Notifications (optional)"
-        Parameters: [WarningActionArn, CriticalActionArn]
+        Parameters:
+          - WarningActionArn
+          - CriticalActionArn
 
 Parameters:
   ProjectName:

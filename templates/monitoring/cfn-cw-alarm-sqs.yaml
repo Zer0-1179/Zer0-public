@@ -35,22 +35,32 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters: [ProjectName, Env]
+        Parameters:
+          - ProjectName
+          - Env
       - Label:
           default: "Target Queue"
-        Parameters: [QueueName]
+        Parameters:
+          - QueueName
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [MessageCountWarningThreshold, MessageAgeWarningThreshold]
+        Parameters:
+          - MessageCountWarningThreshold
+          - MessageAgeWarningThreshold
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [MessageCountCriticalThreshold, MessageAgeCriticalThreshold]
+        Parameters:
+          - MessageCountCriticalThreshold
+          - MessageAgeCriticalThreshold
       - Label:
           default: "Common"
-        Parameters: [EvaluationPeriods]
+        Parameters:
+          - EvaluationPeriods
       - Label:
           default: "Notifications (optional)"
-        Parameters: [WarningActionArn, CriticalActionArn]
+        Parameters:
+          - WarningActionArn
+          - CriticalActionArn
 
 Parameters:
   ProjectName:
