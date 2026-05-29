@@ -30,6 +30,11 @@ Description: "CloudWatch Alarms for RDS - CPU and freeable memory (as % of total
 # When you scale the instance up/down, update DBInstanceClass to keep thresholds accurate.
 # -----------------------------------------------
 
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -63,6 +68,12 @@ Metadata:
           - WarningActionArn
           - CriticalActionArn
 
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
@@ -152,7 +163,9 @@ Parameters:
     Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
 
 # -----------------------------------------------
-# Mappings: DB instance class → total memory in bytes
+# Mappings
+# DB instance class → total memory in bytes lookup.
+# Reference with: !FindInMap [DBInstanceMemory, !Ref DBInstanceClass, Bytes]
 # -----------------------------------------------
 Mappings:
   DBInstanceMemory:
@@ -176,10 +189,18 @@ Mappings:
     db.r6g.4xlarge: {Bytes: "137438953472"}  # 128 GB
     db.r6g.8xlarge: {Bytes: "274877906944"}  # 256 GB
 
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
 Conditions:
   HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
   HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
 
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
 Resources:
 
   CpuWarningAlarm:
@@ -280,6 +301,11 @@ Resources:
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# -----------------------------------------------
 Outputs:
 
   CpuWarningAlarmArn:

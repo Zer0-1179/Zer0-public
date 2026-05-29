@@ -27,6 +27,11 @@ Description: "CloudWatch Alarms for EFS - I/O limit with WARNING/CRITICAL severi
 # For Elastic Throughput, this metric is not reported (alarm stays INSUFFICIENT_DATA).
 # -----------------------------------------------
 
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -57,6 +62,12 @@ Metadata:
           - WarningActionArn
           - CriticalActionArn
 
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
@@ -108,10 +119,18 @@ Parameters:
     Default: ""
     Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
 
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
 Conditions:
   HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
   HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
 
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
 Resources:
 
   PercentIOLimitWarningAlarm:
@@ -152,6 +171,11 @@ Resources:
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# -----------------------------------------------
 Outputs:
 
   PercentIOLimitWarningAlarmArn:
