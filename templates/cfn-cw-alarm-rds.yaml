@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for RDS - CPU utilization and freeable memory"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-rds-<Suffix> \
+#   --template-file cfn-cw-alarm-rds.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     DBInstanceIdentifier=my-project-prd-rds
+#
+# With custom thresholds and SNS:
+# SNS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-sns \
+#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-rds \
+#   --template-file cfn-cw-alarm-rds.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     DBInstanceIdentifier=my-project-prd-rds \
+#     CpuThreshold=70 \
+#     FreeableMemoryThreshold=524288000 \
+#     AlarmActionArn=$SNS_ARN
+#
+# FreeableMemoryThreshold is in bytes.
+# Alarm triggers when freeable memory FALLS BELOW this value.
+# Common values:
+#   db.t3.micro  (1 GB RAM)  → 256 MB = 268435456
+#   db.t3.medium (4 GB RAM)  → 512 MB = 536870912
+#   db.r6g.large (16 GB RAM) → 2 GB   = 2147483648
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target DB Instance"
+        Parameters:
+          - DBInstanceIdentifier
+      - Label:
+          default: "Thresholds"
+        Parameters:
+          - CpuThreshold
+          - FreeableMemoryThreshold
+          - EvaluationPeriods
+      - Label:
+          default: "Notifications (optional)"
+        Parameters:
+          - AlarmActionArn
+          - OKActionArn
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  DBInstanceIdentifier:
+    Type: String
+    Description: "RDS DB instance identifier."
+
+  CpuThreshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: "CPU utilization alarm threshold (%). Triggers when average exceeds this value."
+
+  FreeableMemoryThreshold:
+    Type: Number
+    Default: 536870912
+    MinValue: 1
+    Description: "Freeable memory threshold in bytes. Triggers when memory falls BELOW this value. Default: 512 MB (536870912)."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
+
+  AlarmActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+
+  OKActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+
+Conditions:
+  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
+  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+
+Resources:
+
+  CpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-cpu"
+      AlarmDescription: !Sub "RDS CPU utilization > ${CpuThreshold}% for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DBInstanceIdentifier
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref CpuThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  FreeableMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-memory"
+      AlarmDescription: !Sub "RDS freeable memory < ${FreeableMemoryThreshold} bytes for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/RDS
+      MetricName: FreeableMemory
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DBInstanceIdentifier
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref FreeableMemoryThreshold
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+Outputs:
+
+  CpuAlarmArn:
+    Description: "CPU alarm ARN"
+    Value: !GetAtt CpuAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CpuAlarmArn"
+
+  FreeableMemoryAlarmArn:
+    Description: "Freeable memory alarm ARN"
+    Value: !GetAtt FreeableMemoryAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-FreeableMemoryAlarmArn"

@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for EC2 - CPU utilization and memory usage (requires CloudWatch Agent for memory)"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# Basic (CPU only - no SNS):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-ec2-<Suffix> \
+#   --template-file cfn-cw-alarm-ec2.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     InstanceId=i-0123456789abcdef0 \
+#     InstanceAlias=web-01
+#
+# With SNS notification:
+# SNS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-sns \
+#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-ec2-web-01 \
+#   --template-file cfn-cw-alarm-ec2.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     InstanceId=i-0123456789abcdef0 \
+#     InstanceAlias=web-01 \
+#     AlarmActionArn=$SNS_ARN
+#
+# NOTE: mem_used_percent requires CloudWatch Agent to be installed and
+#       configured on the instance. Without it, the memory alarm remains
+#       in INSUFFICIENT_DATA state (no false triggers due to TreatMissingData).
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target Instance"
+        Parameters:
+          - InstanceId
+          - InstanceAlias
+      - Label:
+          default: "Thresholds"
+        Parameters:
+          - CpuThreshold
+          - MemoryThreshold
+          - EvaluationPeriods
+      - Label:
+          default: "Notifications (optional)"
+        Parameters:
+          - AlarmActionArn
+          - OKActionArn
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  InstanceId:
+    Type: String
+    Description: "EC2 instance ID to monitor (e.g. i-0123456789abcdef0)."
+    AllowedPattern: "^i-[0-9a-f]+$"
+    ConstraintDescription: "Must be a valid EC2 instance ID (i-xxxxxxxx)."
+
+  InstanceAlias:
+    Type: String
+    Default: ""
+    Description: "Short name for the instance used in alarm names (e.g. web-01). Leave empty to use InstanceId."
+
+  CpuThreshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: "CPU utilization alarm threshold (%). Triggers when average exceeds this value."
+
+  MemoryThreshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: "Memory usage alarm threshold (%). Requires CloudWatch Agent (mem_used_percent metric)."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 5-minute periods that must exceed the threshold before alarming."
+
+  AlarmActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+
+  OKActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+
+Conditions:
+  HasAlias:       !Not [!Equals [!Ref InstanceAlias, ""]]
+  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
+  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+
+Resources:
+
+  CpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - "${ProjectName}-${Env}-ec2-${Label}-cpu"
+        - Label: !If [HasAlias, !Ref InstanceAlias, !Ref InstanceId]
+      AlarmDescription: !Sub "EC2 CPU utilization > ${CpuThreshold}% for ${EvaluationPeriods} consecutive 5-min periods."
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref CpuThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  MemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - "${ProjectName}-${Env}-ec2-${Label}-memory"
+        - Label: !If [HasAlias, !Ref InstanceAlias, !Ref InstanceId]
+      AlarmDescription: !Sub "EC2 memory usage > ${MemoryThreshold}% for ${EvaluationPeriods} consecutive 5-min periods. (Requires CloudWatch Agent)"
+      Namespace: CWAgent
+      MetricName: mem_used_percent
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref MemoryThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+Outputs:
+
+  CpuAlarmArn:
+    Description: "CPU alarm ARN"
+    Value: !GetAtt CpuAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CpuAlarmArn"
+
+  MemoryAlarmArn:
+    Description: "Memory alarm ARN"
+    Value: !GetAtt MemoryAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MemoryAlarmArn"
