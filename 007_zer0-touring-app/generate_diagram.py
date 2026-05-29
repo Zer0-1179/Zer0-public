@@ -205,7 +205,7 @@ def draw():
                 ha='center', va='top', fontsize=7.5,
                 color='#232F3E', fontweight='bold', zorder=5)
 
-    out = os.path.join(_BASE, '..', 'images', '007_architecture.png')
+    out = os.path.join(_BASE, 'images', '007_architecture.png')
     plt.tight_layout()
     plt.savefig(out, dpi=150, bbox_inches='tight', facecolor='white', format='png')
     plt.close(fig)
