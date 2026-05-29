@@ -91,6 +91,7 @@ Parameters:
 
   DBInstanceIdentifier:
     Type: String
+    Default: ""
     Description: "RDS DB instance identifier."
 
   DBInstanceClass:

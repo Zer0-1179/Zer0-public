@@ -99,10 +99,12 @@ Parameters:
 
   AlbArn:
     Type: String
+    Default: ""
     Description: "ALB full ARN. Used to extract the CloudWatch dimension (app/<name>/<id>)."
 
   TargetGroupArn:
     Type: String
+    Default: ""
     Description: "Target group full ARN. Used for the UnHealthyHostCount dimension."
 
   UnhealthyHostWarningThreshold:

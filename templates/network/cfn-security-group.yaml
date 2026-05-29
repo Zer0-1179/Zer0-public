@@ -60,9 +60,10 @@ Parameters:
 
   SgSuffix:
     Type: String
+    Default: ""
     Description: "Purpose identifier used in the name and stack name (e.g. web, db, bastion)."
-    AllowedPattern: "^[a-z0-9-]+$"
-    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    AllowedPattern: "^([a-z0-9-]+)?$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only, or empty."
 
 # -----------------------------------------------
 # Resources
