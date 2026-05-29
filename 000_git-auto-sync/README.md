@@ -7,22 +7,26 @@
 ```text
 /root/Zer0/  (プライベート・WSL)
     │
-    ├── 001_aws-x-poster/
+    ├── 001_x-poster_zer0-infra/
     ├── 002_Zenn_Auto_Article_Bot/
-    ├── 003_X_AI_Bot/
+    ├── 003_x-poster_zer0-0326/
     ├── 004_portfolio/
     ├── 005_Zenn_Mid_Article_Bot/
+    ├── 006_Zer0_CryptoBot/
+    ├── 007_Zer0_TouringApp/
     └── sync_to_public.sh  ← このスクリプト
               │
               │  rsync（機密除外）
               ▼
 /mnt/c/.../Zer0-public/  (公開・Git管理)
     │
-    ├── 001_aws-x-poster/
+    ├── 001_x-poster-zer0-infra/
     ├── 002_zenn-article-bot/
-    ├── 003_x-ai-bot/
+    ├── 003_x-poster-zer0-0326/
     ├── 004_portfolio/
     ├── 005_zenn-mid-article-bot/
+    ├── 006_zer0-cryptobot/
+    ├── 007_zer0-touring-app/
     └── README.md
               │
               │  git add / commit / push
@@ -80,8 +84,10 @@ rsync 後・push 前に公開先ディレクトリをスキャンし、機密情
 
 | プライベート名              | 公開名                     |
 | --------------------------- | -------------------------- |
-| `001_aws-x-poster`          | `001_aws-x-poster`         |
+| `001_x-poster_zer0-infra`   | `001_x-poster-zer0-infra`  |
 | `002_Zenn_Auto_Article_Bot` | `002_zenn-article-bot`     |
-| `003_X_AI_Bot`              | `003_x-ai-bot`             |
+| `003_x-poster_zer0-0326`    | `003_x-poster-zer0-0326`   |
 | `004_portfolio`             | `004_portfolio`            |
 | `005_Zenn_Mid_Article_Bot`  | `005_zenn-mid-article-bot` |
+| `006_Zer0_CryptoBot`        | `006_zer0-cryptobot`       |
+| `007_Zer0_TouringApp`       | `007_zer0-touring-app`     |

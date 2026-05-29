@@ -149,6 +149,7 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | サービス                               | 月額                 |
 | -------------------------------------- | -------------------- |
 | Lambda 実行（~35回/月）                | ~$0.001              |
-| Bedrock Claude Haiku（~400 tokens/回） | ~$0.35               |
+| Bedrock Claude Haiku（~400 tokens/回） | ~$0.04               |
+| X API（$0.01/件 × 34件/月）            | ~$0.34               |
 | EventBridge・SSM                       | ~$0                  |
 | **合計**                               | **~$0.38（約57円）** |
