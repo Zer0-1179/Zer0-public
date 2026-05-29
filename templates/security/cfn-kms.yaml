@@ -68,9 +68,9 @@ Parameters:
     Description: "Deployment environment. prd sets DeletionPolicy to Retain and extends the pending deletion window to 30 days."
 
 # -----------------------------------------------
-# Conditions
-# Boolean flags derived from parameter values.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# Mappings
+# Static lookup table for env-specific values.
+# Reference with: !FindInMap [TableName, Key, Item]
 # -----------------------------------------------
 Mappings:
   Config:
@@ -81,6 +81,11 @@ Mappings:
     prd:
       PendingWindowInDays: 30
 
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
 Conditions:
   IsPrd: !Equals [!Ref Env, prd]
 
