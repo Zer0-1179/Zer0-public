@@ -6,8 +6,8 @@ import crypto from 'node:crypto';
 const SCRIPT_HASHES = [
   "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='", // Nav.astro
   "'sha256-2mZe1216qSfXhWjWW7LgH/iaMAXbV60fBI2HwiXJGpM='", // BaseLayout font
-  "'sha256-nBkbTataBdvlgdlOt3Vr4oQNmEXlYljqccazFHtA2hA='", // ja/templates/index
-  "'sha256-BbdfFf3SSABC2MwBjewRJNNNcEXAwOv3cfNu4BwCln0='", // en/templates/index
+  "'sha256-niKHV+YTbqklezEFoEZLX/NQLZ2yIPOVVSlw35XsvR0='", // ja/templates/index
+  "'sha256-6ZPZuo7NvqjVcqzcDGzlQSKg578jYHzY68J0OWE+6hY='", // en/templates/index
   "'sha256-x1Br5NBxUF3JwdXihhDg0g0e6FgOtXi9m7c1kV32WKA='", // ja/templates/[category]
   "'sha256-rJYFB/xhPE/QUzeEC6WdbzuXBcVe5qlhGG89I/C9OC8='", // en/templates/[category]
 ].join(' ');
