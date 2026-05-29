@@ -102,6 +102,60 @@ SAM は使用しません。Lambda のコードデプロイは `aws lambda updat
 
 ---
 
+## コーディング規則
+
+### セクションコメント（必須）
+
+使用する全セクションの直前に以下の形式でコメントを記載する。
+
+```yaml
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+```
+
+| セクション | コメントに含める内容 |
+|---|---|
+| Metadata | ParameterGroups による視覚的グループ化・ParameterLabels による表示名変更 |
+| Parameters | デプロイ時に渡す値・AllowedValues・Default の説明 |
+| Mappings | 静的参照テーブル・`!FindInMap [Table, Key, Item]` の使い方 |
+| Conditions | パラメータから導出した Boolean フラグ・`!If [Condition, IfTrue, IfFalse]` の使い方 |
+| Resources | DeletionPolicy・主要プロパティの補足説明 |
+| Outputs | スタック作成後の参照値・Export/ImportValue でのクロススタック参照 |
+
+### AllowedValues の書き方（ブロック記法に統一）
+
+```yaml
+# 正しい（ブロック記法）
+AllowedValues:
+  - stg
+  - dev
+  - prd
+
+# NG（フロー記法）
+AllowedValues: [stg, dev, prd]
+```
+
+Metadata の `ParameterGroups` > `Parameters` リストも同様にブロック記法を使う。
+
+### 論理名の数字サフィックス（ゼロパディング必須）
+
+リソース名・Condition 名・Output 名など数字を含む論理名はゼロパディングする。
+
+```yaml
+# 正しい
+LogGroup01:
+HasLogGroup02:
+
+# NG
+LogGroup1:
+HasGroup2:
+```
+
+---
+
 ## Env による自動切替
 
 `Env` パラメータ（`dev` / `stg` / `prd`）で環境ごとの設定を自動切替。  
