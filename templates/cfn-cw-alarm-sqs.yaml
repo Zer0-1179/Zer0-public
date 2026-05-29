@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for SQS - visible message count and oldest message age"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-sqs-<QueueAlias> \
+#   --template-file cfn-cw-alarm-sqs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     QueueName=my-project-prd-orders
+#
+# With SNS notification:
+# SNS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-sns \
+#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-sqs-orders \
+#   --template-file cfn-cw-alarm-sqs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     QueueName=my-project-prd-orders \
+#     MessageCountThreshold=100 \
+#     MessageAgeThreshold=300 \
+#     AlarmActionArn=$SNS_ARN
+#
+# NOTE: QueueName is the SQS queue name, not the URL or ARN.
+#       For FIFO queues, include the .fifo suffix (e.g. my-queue.fifo).
+#
+# MessageAgeThreshold is in seconds.
+# Tune it to match your expected consumer processing time.
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target Queue"
+        Parameters:
+          - QueueName
+      - Label:
+          default: "Thresholds"
+        Parameters:
+          - MessageCountThreshold
+          - MessageAgeThreshold
+          - EvaluationPeriods
+      - Label:
+          default: "Notifications (optional)"
+        Parameters:
+          - AlarmActionArn
+          - OKActionArn
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  QueueName:
+    Type: String
+    Description: "SQS queue name (not URL or ARN). For FIFO queues, include the .fifo suffix."
+
+  MessageCountThreshold:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    Description: "Visible message count threshold. Triggers when the queue depth exceeds this value, indicating consumer lag."
+
+  MessageAgeThreshold:
+    Type: Number
+    Default: 300
+    MinValue: 1
+    Description: "Oldest message age threshold in seconds. Triggers when the oldest visible message exceeds this age. Default: 300 s (5 min)."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
+
+  AlarmActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+
+  OKActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+
+Conditions:
+  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
+  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+
+Resources:
+
+  MessageCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-depth"
+      AlarmDescription: !Sub "SQS visible messages > ${MessageCountThreshold} for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref MessageCountThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  MessageAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-age"
+      AlarmDescription: !Sub "SQS oldest message age > ${MessageAgeThreshold} s for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref MessageAgeThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+Outputs:
+
+  MessageCountAlarmArn:
+    Description: "Message count (queue depth) alarm ARN"
+    Value: !GetAtt MessageCountAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MessageCountAlarmArn"
+
+  MessageAgeAlarmArn:
+    Description: "Message age alarm ARN"
+    Value: !GetAtt MessageAgeAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MessageAgeAlarmArn"

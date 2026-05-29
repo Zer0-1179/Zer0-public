@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for Lambda - errors, throttles, and duration"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-lambda-<FunctionAlias> \
+#   --template-file cfn-cw-alarm-lambda.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     FunctionName=my-project-prd-api \
+#     DurationThreshold=25000
+#
+# With SNS notification:
+# SNS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-sns \
+#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-lambda-api \
+#   --template-file cfn-cw-alarm-lambda.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     FunctionName=my-project-prd-api \
+#     DurationThreshold=25000 \
+#     AlarmActionArn=$SNS_ARN
+#
+# DurationThreshold guide:
+#   Set to ~80% of the function's configured timeout.
+#   e.g. timeout=30s → DurationThreshold=24000 (ms)
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target Function"
+        Parameters:
+          - FunctionName
+      - Label:
+          default: "Thresholds"
+        Parameters:
+          - ErrorThreshold
+          - ThrottleThreshold
+          - DurationThreshold
+          - EvaluationPeriods
+      - Label:
+          default: "Notifications (optional)"
+        Parameters:
+          - AlarmActionArn
+          - OKActionArn
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  FunctionName:
+    Type: String
+    Description: "Lambda function name (not ARN)."
+
+  ErrorThreshold:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: "Error count threshold per 1-minute period. Default 0 = alarm on any error."
+
+  ThrottleThreshold:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: "Throttle count threshold per 1-minute period. Default 0 = alarm on any throttle."
+
+  DurationThreshold:
+    Type: Number
+    Default: 25000
+    MinValue: 1
+    Description: "Execution duration threshold in milliseconds. Recommended: ~80% of the function timeout. Default: 25000 ms (25 s)."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
+
+  AlarmActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+
+  OKActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+
+Conditions:
+  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
+  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+
+Resources:
+
+  ErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-errors"
+      AlarmDescription: !Sub "Lambda errors > ${ErrorThreshold} for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref ErrorThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  ThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-throttles"
+      AlarmDescription: !Sub "Lambda throttles > ${ThrottleThreshold} for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref ThrottleThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  DurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-duration"
+      AlarmDescription: !Sub "Lambda max duration > ${DurationThreshold} ms for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref DurationThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+Outputs:
+
+  ErrorAlarmArn:
+    Description: "Error alarm ARN"
+    Value: !GetAtt ErrorAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ErrorAlarmArn"
+
+  ThrottleAlarmArn:
+    Description: "Throttle alarm ARN"
+    Value: !GetAtt ThrottleAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ThrottleAlarmArn"
+
+  DurationAlarmArn:
+    Description: "Duration alarm ARN"
+    Value: !GetAtt DurationAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DurationAlarmArn"
