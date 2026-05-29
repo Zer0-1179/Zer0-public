@@ -4,6 +4,7 @@ import { getCategoriesWithTemplates, getTemplatesByCategory } from '../../../dat
 import { useTranslations } from '../../../i18n/utils';
 
 const t = useTranslations('en');
+const cspNonce = Astro.locals.cspNonce;
 
 const categories = getCategoriesWithTemplates().map((cat) => ({
   ...cat,
@@ -209,7 +210,7 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
   </div>
 </BaseLayout>
 
-<script is:inline>
+<script nonce={cspNonce} is:inline>
 (function () {
   var readmePanel = document.getElementById('readme-panel');
   var yamlViewer  = document.getElementById('yaml-viewer');
