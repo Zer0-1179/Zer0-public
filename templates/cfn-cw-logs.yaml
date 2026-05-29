@@ -19,9 +19,9 @@ Description: "CloudWatch Log Groups with env-based retention and optional KMS en
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
-#     LogGroupName1=/aws/lambda/my-api \
-#     LogGroupName2=/aws/lambda/my-worker \
-#     LogGroupName3=/aws/lambda/my-scheduler
+#     LogGroupName01=/aws/lambda/my-api \
+#     LogGroupName02=/aws/lambda/my-worker \
+#     LogGroupName03=/aws/lambda/my-scheduler
 #
 # With customer-managed KMS key (all groups share the same key):
 # NOTE: the KMS key policy must grant kms:Encrypt/Decrypt permissions
@@ -36,8 +36,8 @@ Description: "CloudWatch Log Groups with env-based retention and optional KMS en
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
-#     LogGroupName1=/aws/lambda/my-api \
-#     LogGroupName2=/aws/lambda/my-worker \
+#     LogGroupName01=/aws/lambda/my-api \
+#     LogGroupName02=/aws/lambda/my-worker \
 #     KmsKeyId=$KMS_ARN
 # -----------------------------------------------
 
@@ -53,13 +53,13 @@ Metadata:
           - ProjectName
           - Env
       - Label:
-          default: "Log Group Names (1 is required; 2-5 are optional)"
+          default: "Log Group Names (01 is required; 02-05 are optional)"
         Parameters:
-          - LogGroupName1
-          - LogGroupName2
-          - LogGroupName3
-          - LogGroupName4
-          - LogGroupName5
+          - LogGroupName01
+          - LogGroupName02
+          - LogGroupName03
+          - LogGroupName04
+          - LogGroupName05
       - Label:
           default: "Encryption (optional - applies to all groups)"
         Parameters:
@@ -72,7 +72,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: my-project
-    Description: "Used in auto-generated group name when LogGroupName1 is omitted."
+    Description: "Used in auto-generated group name when LogGroupName01 is omitted."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -85,30 +85,30 @@ Parameters:
       - prd
     Description: "prd: RetentionInDays=365 and DeletionPolicy=Retain."
 
-  LogGroupName1:
+  LogGroupName01:
     Type: String
     Default: ""
-    Description: "Log group 1. Leave empty to auto-generate /<ProjectName>/<Env>."
+    Description: "Log group 01. Leave empty to auto-generate /<ProjectName>/<Env>."
 
-  LogGroupName2:
+  LogGroupName02:
     Type: String
     Default: ""
-    Description: "Log group 2 (optional). Leave empty to skip."
+    Description: "Log group 02 (optional). Leave empty to skip."
 
-  LogGroupName3:
+  LogGroupName03:
     Type: String
     Default: ""
-    Description: "Log group 3 (optional). Leave empty to skip."
+    Description: "Log group 03 (optional). Leave empty to skip."
 
-  LogGroupName4:
+  LogGroupName04:
     Type: String
     Default: ""
-    Description: "Log group 4 (optional). Leave empty to skip."
+    Description: "Log group 04 (optional). Leave empty to skip."
 
-  LogGroupName5:
+  LogGroupName05:
     Type: String
     Default: ""
-    Description: "Log group 5 (optional). Leave empty to skip."
+    Description: "Log group 05 (optional). Leave empty to skip."
 
   KmsKeyId:
     Type: String
@@ -131,30 +131,30 @@ Mappings:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsPrd:          !Equals [!Ref Env, prd]
-  HasKmsKey:      !Not [!Equals [!Ref KmsKeyId, ""]]
-  HasCustomName1: !Not [!Equals [!Ref LogGroupName1, ""]]
-  HasGroup2:      !Not [!Equals [!Ref LogGroupName2, ""]]
-  HasGroup3:      !Not [!Equals [!Ref LogGroupName3, ""]]
-  HasGroup4:      !Not [!Equals [!Ref LogGroupName4, ""]]
-  HasGroup5:      !Not [!Equals [!Ref LogGroupName5, ""]]
+  IsPrd:             !Equals [!Ref Env, prd]
+  HasKmsKey:         !Not [!Equals [!Ref KmsKeyId, ""]]
+  HasCustomName01:   !Not [!Equals [!Ref LogGroupName01, ""]]
+  HasLogGroup02:     !Not [!Equals [!Ref LogGroupName02, ""]]
+  HasLogGroup03:     !Not [!Equals [!Ref LogGroupName03, ""]]
+  HasLogGroup04:     !Not [!Equals [!Ref LogGroupName04, ""]]
+  HasLogGroup05:     !Not [!Equals [!Ref LogGroupName05, ""]]
 
 # -----------------------------------------------
 # Resources
-# LogGroup1 is always created.
-# LogGroup2-5 are created only when their name parameter is non-empty.
+# LogGroup01 is always created.
+# LogGroup02-05 are created only when their name parameter is non-empty.
 # All groups share the same RetentionInDays, KmsKeyId, and Tags.
 # -----------------------------------------------
 Resources:
 
-  LogGroup1:
+  LogGroup01:
     Type: AWS::Logs::LogGroup
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
       LogGroupName: !If
-        - HasCustomName1
-        - !Ref LogGroupName1
+        - HasCustomName01
+        - !Ref LogGroupName01
         - !Sub "/${ProjectName}/${Env}"
       RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
       KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
@@ -164,60 +164,60 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LogGroup2:
-    Condition: HasGroup2
+  LogGroup02:
+    Condition: HasLogGroup02
     Type: AWS::Logs::LogGroup
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      LogGroupName:      !Ref LogGroupName2
-      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
-      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      LogGroupName:    !Ref LogGroupName02
+      RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:        !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
           Value: !Ref Env
 
-  LogGroup3:
-    Condition: HasGroup3
+  LogGroup03:
+    Condition: HasLogGroup03
     Type: AWS::Logs::LogGroup
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      LogGroupName:      !Ref LogGroupName3
-      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
-      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      LogGroupName:    !Ref LogGroupName03
+      RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:        !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
           Value: !Ref Env
 
-  LogGroup4:
-    Condition: HasGroup4
+  LogGroup04:
+    Condition: HasLogGroup04
     Type: AWS::Logs::LogGroup
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      LogGroupName:      !Ref LogGroupName4
-      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
-      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      LogGroupName:    !Ref LogGroupName04
+      RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:        !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
           Value: !Ref Env
 
-  LogGroup5:
-    Condition: HasGroup5
+  LogGroup05:
+    Condition: HasLogGroup05
     Type: AWS::Logs::LogGroup
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      LogGroupName:      !Ref LogGroupName5
-      RetentionInDays:   !FindInMap [Config, !Ref Env, RetentionInDays]
-      KmsKeyId:          !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      LogGroupName:    !Ref LogGroupName05
+      RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
+      KmsKeyId:        !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -229,70 +229,70 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  LogGroup1Name:
-    Description: "Log group 1 name"
-    Value: !Ref LogGroup1
+  LogGroup01Name:
+    Description: "Log group 01 name"
+    Value: !Ref LogGroup01
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup1Name"
+      Name: !Sub "${AWS::StackName}-LogGroup01Name"
 
-  LogGroup1Arn:
-    Description: "Log group 1 ARN"
-    Value: !GetAtt LogGroup1.Arn
+  LogGroup01Arn:
+    Description: "Log group 01 ARN"
+    Value: !GetAtt LogGroup01.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup1Arn"
+      Name: !Sub "${AWS::StackName}-LogGroup01Arn"
 
-  LogGroup2Name:
-    Condition: HasGroup2
-    Description: "Log group 2 name"
-    Value: !Ref LogGroup2
+  LogGroup02Name:
+    Condition: HasLogGroup02
+    Description: "Log group 02 name"
+    Value: !Ref LogGroup02
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup2Name"
+      Name: !Sub "${AWS::StackName}-LogGroup02Name"
 
-  LogGroup2Arn:
-    Condition: HasGroup2
-    Description: "Log group 2 ARN"
-    Value: !GetAtt LogGroup2.Arn
+  LogGroup02Arn:
+    Condition: HasLogGroup02
+    Description: "Log group 02 ARN"
+    Value: !GetAtt LogGroup02.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup2Arn"
+      Name: !Sub "${AWS::StackName}-LogGroup02Arn"
 
-  LogGroup3Name:
-    Condition: HasGroup3
-    Description: "Log group 3 name"
-    Value: !Ref LogGroup3
+  LogGroup03Name:
+    Condition: HasLogGroup03
+    Description: "Log group 03 name"
+    Value: !Ref LogGroup03
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup3Name"
+      Name: !Sub "${AWS::StackName}-LogGroup03Name"
 
-  LogGroup3Arn:
-    Condition: HasGroup3
-    Description: "Log group 3 ARN"
-    Value: !GetAtt LogGroup3.Arn
+  LogGroup03Arn:
+    Condition: HasLogGroup03
+    Description: "Log group 03 ARN"
+    Value: !GetAtt LogGroup03.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup3Arn"
+      Name: !Sub "${AWS::StackName}-LogGroup03Arn"
 
-  LogGroup4Name:
-    Condition: HasGroup4
-    Description: "Log group 4 name"
-    Value: !Ref LogGroup4
+  LogGroup04Name:
+    Condition: HasLogGroup04
+    Description: "Log group 04 name"
+    Value: !Ref LogGroup04
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup4Name"
+      Name: !Sub "${AWS::StackName}-LogGroup04Name"
 
-  LogGroup4Arn:
-    Condition: HasGroup4
-    Description: "Log group 4 ARN"
-    Value: !GetAtt LogGroup4.Arn
+  LogGroup04Arn:
+    Condition: HasLogGroup04
+    Description: "Log group 04 ARN"
+    Value: !GetAtt LogGroup04.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup4Arn"
+      Name: !Sub "${AWS::StackName}-LogGroup04Arn"
 
-  LogGroup5Name:
-    Condition: HasGroup5
-    Description: "Log group 5 name"
-    Value: !Ref LogGroup5
+  LogGroup05Name:
+    Condition: HasLogGroup05
+    Description: "Log group 05 name"
+    Value: !Ref LogGroup05
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup5Name"
+      Name: !Sub "${AWS::StackName}-LogGroup05Name"
 
-  LogGroup5Arn:
-    Condition: HasGroup5
-    Description: "Log group 5 ARN"
-    Value: !GetAtt LogGroup5.Arn
+  LogGroup05Arn:
+    Condition: HasLogGroup05
+    Description: "Log group 05 ARN"
+    Value: !GetAtt LogGroup05.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-LogGroup5Arn"
+      Name: !Sub "${AWS::StackName}-LogGroup05Arn"
