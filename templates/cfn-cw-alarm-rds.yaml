@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudWatch Alarms for RDS - CPU and freeable memory with WARNING/CRITICAL severity levels"
+Description: "CloudWatch Alarms for RDS - CPU and freeable memory (as % of total) with WARNING/CRITICAL severity levels"
 
 # -----------------------------------------------
 # DEPLOY
@@ -10,7 +10,8 @@ Description: "CloudWatch Alarms for RDS - CPU and freeable memory with WARNING/C
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
-#     DBInstanceIdentifier=my-project-prd-rds
+#     DBInstanceIdentifier=my-project-prd-rds \
+#     DBInstanceClass=db.t3.medium
 #
 # With SNS notification (WARNING → Slack, CRITICAL → PagerDuty):
 # aws cloudformation deploy \
@@ -20,13 +21,13 @@ Description: "CloudWatch Alarms for RDS - CPU and freeable memory with WARNING/C
 #     ProjectName=my-project \
 #     Env=prd \
 #     DBInstanceIdentifier=my-project-prd-rds \
+#     DBInstanceClass=db.r6g.large \
 #     WarningActionArn=$SLACK_SNS_ARN \
 #     CriticalActionArn=$PAGERDUTY_SNS_ARN
 #
-# FreeableMemory thresholds are in bytes (alarm triggers when BELOW threshold).
-# Common values:
-#   db.t3.medium (4 GB RAM):  Warning=1 GB=1073741824 / Critical=512 MB=536870912
-#   db.r6g.large (16 GB RAM): Warning=4 GB=4294967296 / Critical=2 GB=2147483648
+# FreeableMemory is monitored as a percentage of the instance's total memory.
+# The total memory is looked up automatically from DBInstanceClass via Mappings.
+# When you scale the instance up/down, update DBInstanceClass to keep thresholds accurate.
 # -----------------------------------------------
 
 Metadata:
@@ -37,13 +38,13 @@ Metadata:
         Parameters: [ProjectName, Env]
       - Label:
           default: "Target DB Instance"
-        Parameters: [DBInstanceIdentifier]
+        Parameters: [DBInstanceIdentifier, DBInstanceClass]
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [CpuWarningThreshold, FreeableMemoryWarningThreshold]
+        Parameters: [CpuWarningThreshold, MemoryWarningPercent]
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [CpuCriticalThreshold, FreeableMemoryCriticalThreshold]
+        Parameters: [CpuCriticalThreshold, MemoryCriticalPercent]
       - Label:
           default: "Common"
         Parameters: [EvaluationPeriods]
@@ -67,6 +68,31 @@ Parameters:
     Type: String
     Description: "RDS DB instance identifier."
 
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.medium
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+      - db.t3.xlarge
+      - db.t3.2xlarge
+      - db.m5.large
+      - db.m5.xlarge
+      - db.m5.2xlarge
+      - db.m5.4xlarge
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r6g.large
+      - db.r6g.xlarge
+      - db.r6g.2xlarge
+      - db.r6g.4xlarge
+      - db.r6g.8xlarge
+    Description: "DB instance class. Used to look up total memory for the FreeableMemory % calculation."
+
   CpuWarningThreshold:
     Type: Number
     Default: 70
@@ -81,17 +107,19 @@ Parameters:
     MaxValue: 100
     Description: "CPU utilization CRITICAL threshold (%)."
 
-  FreeableMemoryWarningThreshold:
+  MemoryWarningPercent:
     Type: Number
-    Default: 1073741824
+    Default: 30
     MinValue: 1
-    Description: "Freeable memory WARNING threshold in bytes. Triggers when memory FALLS BELOW this value. Default: 1 GB."
+    MaxValue: 100
+    Description: "Freeable memory WARNING threshold (% of total). Alarms when free memory FALLS BELOW this percentage."
 
-  FreeableMemoryCriticalThreshold:
+  MemoryCriticalPercent:
     Type: Number
-    Default: 536870912
+    Default: 15
     MinValue: 1
-    Description: "Freeable memory CRITICAL threshold in bytes. Triggers when memory FALLS BELOW this value. Default: 512 MB."
+    MaxValue: 100
+    Description: "Freeable memory CRITICAL threshold (% of total). Alarms when free memory FALLS BELOW this percentage."
 
   EvaluationPeriods:
     Type: Number
@@ -108,6 +136,31 @@ Parameters:
     Type: String
     Default: ""
     Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
+
+# -----------------------------------------------
+# Mappings: DB instance class → total memory in bytes
+# -----------------------------------------------
+Mappings:
+  DBInstanceMemory:
+    db.t3.micro:    {Bytes: "1073741824"}    # 1 GB
+    db.t3.small:    {Bytes: "2147483648"}    # 2 GB
+    db.t3.medium:   {Bytes: "4294967296"}    # 4 GB
+    db.t3.large:    {Bytes: "8589934592"}    # 8 GB
+    db.t3.xlarge:   {Bytes: "17179869184"}   # 16 GB
+    db.t3.2xlarge:  {Bytes: "34359738368"}   # 32 GB
+    db.m5.large:    {Bytes: "8589934592"}    # 8 GB
+    db.m5.xlarge:   {Bytes: "17179869184"}   # 16 GB
+    db.m5.2xlarge:  {Bytes: "34359738368"}   # 32 GB
+    db.m5.4xlarge:  {Bytes: "68719476736"}   # 64 GB
+    db.r5.large:    {Bytes: "17179869184"}   # 16 GB
+    db.r5.xlarge:   {Bytes: "34359738368"}   # 32 GB
+    db.r5.2xlarge:  {Bytes: "68719476736"}   # 64 GB
+    db.r5.4xlarge:  {Bytes: "137438953472"}  # 128 GB
+    db.r6g.large:   {Bytes: "17179869184"}   # 16 GB
+    db.r6g.xlarge:  {Bytes: "34359738368"}   # 32 GB
+    db.r6g.2xlarge: {Bytes: "68719476736"}   # 64 GB
+    db.r6g.4xlarge: {Bytes: "137438953472"}  # 128 GB
+    db.r6g.8xlarge: {Bytes: "274877906944"}  # 256 GB
 
 Conditions:
   HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
@@ -157,16 +210,27 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-memory-warning"
-      AlarmDescription: !Sub "RDS freeable memory < ${FreeableMemoryWarningThreshold} bytes for ${EvaluationPeriods} x 1 min. [WARNING]"
-      Namespace: AWS/RDS
-      MetricName: FreeableMemory
-      Dimensions:
-        - Name: DBInstanceIdentifier
-          Value: !Ref DBInstanceIdentifier
-      Statistic: Average
-      Period: 60
+      AlarmDescription: !Sub "RDS free memory < ${MemoryWarningPercent}% of total for ${EvaluationPeriods} x 1 min. [WARNING] (${DBInstanceClass})"
+      Metrics:
+        - Id: m1
+          MetricStat:
+            Metric:
+              Namespace: AWS/RDS
+              MetricName: FreeableMemory
+              Dimensions:
+                - Name: DBInstanceIdentifier
+                  Value: !Ref DBInstanceIdentifier
+            Period: 60
+            Stat: Average
+          ReturnData: false
+        - Id: free_pct
+          Expression: !Sub
+            - "(m1 / ${TotalBytes}) * 100"
+            - TotalBytes: !FindInMap [DBInstanceMemory, !Ref DBInstanceClass, Bytes]
+          Label: FreeableMemoryPercent
+          ReturnData: true
       EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref FreeableMemoryWarningThreshold
+      Threshold: !Ref MemoryWarningPercent
       ComparisonOperator: LessThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
@@ -176,16 +240,27 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-memory-critical"
-      AlarmDescription: !Sub "RDS freeable memory < ${FreeableMemoryCriticalThreshold} bytes for ${EvaluationPeriods} x 1 min. [CRITICAL]"
-      Namespace: AWS/RDS
-      MetricName: FreeableMemory
-      Dimensions:
-        - Name: DBInstanceIdentifier
-          Value: !Ref DBInstanceIdentifier
-      Statistic: Average
-      Period: 60
+      AlarmDescription: !Sub "RDS free memory < ${MemoryCriticalPercent}% of total for ${EvaluationPeriods} x 1 min. [CRITICAL] (${DBInstanceClass})"
+      Metrics:
+        - Id: m1
+          MetricStat:
+            Metric:
+              Namespace: AWS/RDS
+              MetricName: FreeableMemory
+              Dimensions:
+                - Name: DBInstanceIdentifier
+                  Value: !Ref DBInstanceIdentifier
+            Period: 60
+            Stat: Average
+          ReturnData: false
+        - Id: free_pct
+          Expression: !Sub
+            - "(m1 / ${TotalBytes}) * 100"
+            - TotalBytes: !FindInMap [DBInstanceMemory, !Ref DBInstanceClass, Bytes]
+          Label: FreeableMemoryPercent
+          ReturnData: true
       EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref FreeableMemoryCriticalThreshold
+      Threshold: !Ref MemoryCriticalPercent
       ComparisonOperator: LessThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
@@ -206,13 +281,13 @@ Outputs:
       Name: !Sub "${AWS::StackName}-CpuCriticalAlarmArn"
 
   FreeableMemoryWarningAlarmArn:
-    Description: "Freeable memory WARNING alarm ARN"
+    Description: "Freeable memory WARNING alarm ARN (% of total)"
     Value: !GetAtt FreeableMemoryWarningAlarm.Arn
     Export:
       Name: !Sub "${AWS::StackName}-FreeableMemoryWarningAlarmArn"
 
   FreeableMemoryCriticalAlarmArn:
-    Description: "Freeable memory CRITICAL alarm ARN"
+    Description: "Freeable memory CRITICAL alarm ARN (% of total)"
     Value: !GetAtt FreeableMemoryCriticalAlarm.Arn
     Export:
       Name: !Sub "${AWS::StackName}-FreeableMemoryCriticalAlarmArn"

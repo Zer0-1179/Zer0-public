@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudWatch Alarms for Lambda - errors, throttles, and duration with WARNING/CRITICAL severity levels"
+Description: "CloudWatch Alarms for Lambda - errors and throttles with WARNING/CRITICAL severity levels"
 
 # -----------------------------------------------
 # DEPLOY
@@ -10,9 +10,7 @@ Description: "CloudWatch Alarms for Lambda - errors, throttles, and duration wit
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
-#     FunctionName=my-project-prd-api \
-#     DurationWarningThreshold=20000 \
-#     DurationCriticalThreshold=25000
+#     FunctionName=my-project-prd-api
 #
 # With SNS notification (WARNING → Slack, CRITICAL → PagerDuty):
 # aws cloudformation deploy \
@@ -22,14 +20,8 @@ Description: "CloudWatch Alarms for Lambda - errors, throttles, and duration wit
 #     ProjectName=my-project \
 #     Env=prd \
 #     FunctionName=my-project-prd-api \
-#     DurationWarningThreshold=20000 \
-#     DurationCriticalThreshold=25000 \
 #     WarningActionArn=$SLACK_SNS_ARN \
 #     CriticalActionArn=$PAGERDUTY_SNS_ARN
-#
-# Duration thresholds guide:
-#   Set Warning to ~65% and Critical to ~85% of the function timeout.
-#   e.g. timeout=30s → Warning=20000 ms, Critical=25000 ms
 # -----------------------------------------------
 
 Metadata:
@@ -43,10 +35,10 @@ Metadata:
         Parameters: [FunctionName]
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [ErrorWarningThreshold, ThrottleWarningThreshold, DurationWarningThreshold]
+        Parameters: [ErrorWarningThreshold, ThrottleWarningThreshold]
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [ErrorCriticalThreshold, ThrottleCriticalThreshold, DurationCriticalThreshold]
+        Parameters: [ErrorCriticalThreshold, ThrottleCriticalThreshold]
       - Label:
           default: "Common"
         Parameters: [EvaluationPeriods]
@@ -93,18 +85,6 @@ Parameters:
     Default: 10
     MinValue: 0
     Description: "Throttle count CRITICAL threshold per 1-minute period."
-
-  DurationWarningThreshold:
-    Type: Number
-    Default: 20000
-    MinValue: 1
-    Description: "Max execution duration WARNING threshold in milliseconds. Recommended: ~65% of function timeout."
-
-  DurationCriticalThreshold:
-    Type: Number
-    Default: 25000
-    MinValue: 1
-    Description: "Max execution duration CRITICAL threshold in milliseconds. Recommended: ~85% of function timeout."
 
   EvaluationPeriods:
     Type: Number
@@ -204,44 +184,6 @@ Resources:
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
-  DurationWarningAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-duration-warning"
-      AlarmDescription: !Sub "Lambda max duration > ${DurationWarningThreshold} ms for ${EvaluationPeriods} x 1 min. [WARNING]"
-      Namespace: AWS/Lambda
-      MetricName: Duration
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref FunctionName
-      Statistic: Maximum
-      Period: 60
-      EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref DurationWarningThreshold
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
-      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
-
-  DurationCriticalAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-duration-critical"
-      AlarmDescription: !Sub "Lambda max duration > ${DurationCriticalThreshold} ms for ${EvaluationPeriods} x 1 min. [CRITICAL]"
-      Namespace: AWS/Lambda
-      MetricName: Duration
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref FunctionName
-      Statistic: Maximum
-      Period: 60
-      EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref DurationCriticalThreshold
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
-      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
-
 Outputs:
 
   ErrorWarningAlarmArn:
@@ -267,15 +209,3 @@ Outputs:
     Value: !GetAtt ThrottleCriticalAlarm.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ThrottleCriticalAlarmArn"
-
-  DurationWarningAlarmArn:
-    Description: "Duration WARNING alarm ARN"
-    Value: !GetAtt DurationWarningAlarm.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-DurationWarningAlarmArn"
-
-  DurationCriticalAlarmArn:
-    Description: "Duration CRITICAL alarm ARN"
-    Value: !GetAtt DurationCriticalAlarm.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-DurationCriticalAlarmArn"
