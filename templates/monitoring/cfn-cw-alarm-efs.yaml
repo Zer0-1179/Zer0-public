@@ -32,22 +32,30 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters: [ProjectName, Env]
+        Parameters:
+          - ProjectName
+          - Env
       - Label:
           default: "Target File System"
-        Parameters: [FileSystemId]
+        Parameters:
+          - FileSystemId
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [PercentIOLimitWarningThreshold]
+        Parameters:
+          - PercentIOLimitWarningThreshold
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [PercentIOLimitCriticalThreshold]
+        Parameters:
+          - PercentIOLimitCriticalThreshold
       - Label:
           default: "Common"
-        Parameters: [EvaluationPeriods]
+        Parameters:
+          - EvaluationPeriods
       - Label:
           default: "Notifications (optional)"
-        Parameters: [WarningActionArn, CriticalActionArn]
+        Parameters:
+          - WarningActionArn
+          - CriticalActionArn
 
 Parameters:
   ProjectName:

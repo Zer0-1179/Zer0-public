@@ -34,22 +34,33 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters: [ProjectName, Env]
+        Parameters:
+          - ProjectName
+          - Env
       - Label:
           default: "Target Instance"
-        Parameters: [InstanceId, InstanceAlias]
+        Parameters:
+          - InstanceId
+          - InstanceAlias
       - Label:
           default: "WARNING Thresholds"
-        Parameters: [CpuWarningThreshold, MemoryWarningThreshold]
+        Parameters:
+          - CpuWarningThreshold
+          - MemoryWarningThreshold
       - Label:
           default: "CRITICAL Thresholds"
-        Parameters: [CpuCriticalThreshold, MemoryCriticalThreshold]
+        Parameters:
+          - CpuCriticalThreshold
+          - MemoryCriticalThreshold
       - Label:
           default: "Common"
-        Parameters: [EvaluationPeriods]
+        Parameters:
+          - EvaluationPeriods
       - Label:
           default: "Notifications (optional)"
-        Parameters: [WarningActionArn, CriticalActionArn]
+        Parameters:
+          - WarningActionArn
+          - CriticalActionArn
 
 Parameters:
   ProjectName:
