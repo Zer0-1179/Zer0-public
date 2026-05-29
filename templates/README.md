@@ -185,6 +185,44 @@ SG スタック名:   {ProjectName}-{Env}-sg-{SgSuffix}
 ALB スタック名:  {ProjectName}-{Env}-alb-{AlbSuffix}
 ```
 
+### 運用上の注意
+
+`!ImportValue` を使用しているスタックが存在する間、参照元スタックは削除・変更できません。  
+必ず **依存されているスタックを先に削除** してから参照元を削除してください。
+
+```text
+削除順の例:
+  ec2 → igw → vpc   （子スタックから先に削除）
+```
+
+また、スタック間で**相互参照（A が B を参照、かつ B が A を参照）は絶対に作らない**ことでデッドロックを防止できます。
+
+### 上級者向け：SSM Parameter Store によるクロススタック参照
+
+`!ImportValue` の削除制約を避けたい場合は、SSM Parameter Store を使う方法があります。
+
+```yaml
+# Producer 側（例: cfn-vpc.yaml に追加）
+VpcIdParam:
+  Type: AWS::SSM::Parameter
+  Properties:
+    Name: !Sub "/${ProjectName}/${Env}/vpc-id"
+    Type: String
+    Value: !Ref VPC
+
+# Consumer 側（cfn-ec2.yaml などで参照）
+VpcId: "{{resolve:ssm:/my-project/prd/vpc-id}}"
+```
+
+| 比較 | ImportValue | SSM |
+| ---- | ----------- | --- |
+| 削除の自由度 | 順序依存 | 自由 |
+| デッドロック | 相互参照で発生 | 発生しない |
+| 参照切れ検知 | デプロイ時に検知 | 削除後に気づく |
+| 向いている用途 | 安定した基盤層 | 変更頻度の高いリソース |
+
+> **注意:** SSM パラメータはスタック削除後も残ります。不要になったら手動で削除してください。
+
 ---
 
 ## CloudWatch アラーム 閾値設定ガイド
