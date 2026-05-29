@@ -98,12 +98,51 @@ EventBridge Scheduler（22:00 JST / 日曜 10:00 JST）
 ## デプロイ
 
 ```bash
-# デプロイ（SSMパラメータは別途設定が必要）
+# 初回: X APIキーをSSMに登録 → CFn + コードを一括デプロイ
+bash src/setup_ssm.sh
+bash src/deploy.sh
+
+# コードのみ更新
 bash src/deploy.sh
 
 # DRY_RUN テスト（実投稿なし）
 bash scripts/test_invoke.sh
+# mode指定（random / trend）
+bash scripts/test_invoke.sh trend
 ```
+
+## 運用コマンド
+
+```bash
+# 最新ログ確認
+aws logs tail /aws/lambda/x-poster-zer0-0326 --follow --region ap-northeast-1
+
+# カテゴリ履歴リセット（同カテゴリ連続投稿が起きた場合）
+aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-northeast-1
+```
+
+## SSMパラメータ
+
+| パラメータ名                          | 種別         | 管理          |
+| ------------------------------------- | ------------ | ------------- |
+| `/ai_bot/twitter_api_key`             | SecureString | setup_ssm.sh  |
+| `/ai_bot/twitter_api_secret`          | SecureString | setup_ssm.sh  |
+| `/ai_bot/twitter_access_token`        | SecureString | setup_ssm.sh  |
+| `/ai_bot/twitter_access_token_secret` | SecureString | setup_ssm.sh  |
+| `/ai_bot/history/used_categories`     | String       | Lambda自動更新 |
+| `/ai_bot/history/{category}`          | String       | Lambda自動更新 |
+| `/ai_bot/history/url_reaction_urls`   | String       | Lambda自動更新 |
+
+## トラブルシューティング
+
+| 症状                   | 原因                            | 対処                                                      |
+| ---------------------- | ------------------------------- | --------------------------------------------------------- |
+| 投稿されない           | DRY_RUN=true のまま             | Lambda 環境変数 `DRY_RUN` を `false` に更新               |
+| 同カテゴリが連続投稿   | SSM履歴破損                     | `/ai_bot/history/used_categories` を削除してリセット      |
+| X API 403 Forbidden    | APIクレジット不足               | developer.x.com でクレジット残高確認・チャージ            |
+| X API 401 Unauthorized | アクセストークン期限切れ        | `bash src/setup_ssm.sh` で4キーを再登録                   |
+| Bedrock エラー         | モデルアクセス未承認            | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化 |
+| url_reaction 記事が0件 | Zenn/Qiita RSSフィード取得失敗  | CloudWatch Logs で HTTP ステータス確認                    |
 
 ## コスト内訳
 

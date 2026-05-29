@@ -92,8 +92,23 @@ bash src/deploy.sh --test
 # 最新ログ確認
 aws logs tail /aws/lambda/x-poster-zer0-infra --follow --region ap-northeast-1
 
-# EventBridge 一時停止
+# EventBridge 一時停止・再開
 aws events disable-rule --name x-poster-zer0-infra-evening --region ap-northeast-1
+aws events enable-rule  --name x-poster-zer0-infra-evening --region ap-northeast-1
+
+# 投稿履歴リセット（重複投稿が起きた場合）
+aws ssm delete-parameter --name "/xposter/posted-history" --region ap-northeast-1
+```
+
+## ロールバック
+
+```bash
+# デプロイ済みバージョン一覧確認
+aws lambda list-versions-by-function --function-name x-poster-zer0-infra \
+  --region ap-northeast-1 --query "Versions[-5:].[Version,LastModified]" --output table
+
+# 前バージョンに戻す（GitHub から該当コミットを checkout → 再デプロイ）
+bash src/deploy.sh
 ```
 
 ## コスト内訳
