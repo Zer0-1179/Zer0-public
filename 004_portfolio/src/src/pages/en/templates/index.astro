@@ -164,6 +164,52 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
             </ul>
           </div>
           <div>
+            <p class="font-semibold text-slate-300 mb-2">Naming Conventions</p>
+            <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-slate-300 font-mono overflow-x-auto leading-relaxed">Template filename:
+  cfn-&#123;Service&#125;.yaml            # e.g., cfn-s3.yaml
+  cfn-&#123;Service&#125;-&#123;Type&#125;.yaml     # e.g., cfn-ecs-cluster.yaml
+
+Stack name:
+  &#123;ProjectName&#125;-&#123;Env&#125;-&#123;Service&#125;
+  &#123;ProjectName&#125;-&#123;Env&#125;-&#123;Service&#125;-&#123;Suffix&#125;
+
+Resource name:
+  &#123;ProjectName&#125;-&#123;Env&#125;-&#123;Service&#125;-&#123;Suffix&#125;</pre>
+            <div class="mt-2 overflow-x-auto">
+              <table class="text-xs w-full border-collapse">
+                <thead>
+                  <tr class="border-b border-navy-700/50">
+                    <th class="text-left text-slate-400 font-normal py-1 pr-4">Service</th>
+                    <th class="text-left text-slate-400 font-normal py-1">Resource name example (pj-dev-...)</th>
+                  </tr>
+                </thead>
+                <tbody class="text-slate-500">
+                  {[
+                    ['VPC', 'pj-dev-vpc'],
+                    ['NAT Gateway', 'pj-dev-ngw'],
+                    ['Security Group', 'pj-dev-sg-web'],
+                    ['ALB', 'pj-dev-alb-01'],
+                    ['EC2', 'pj-dev-ec2'],
+                    ['Lambda', 'pj-dev-lambda-api'],
+                    ['ECS Cluster', 'pj-dev-ecs-cluster'],
+                    ['ECS Service', 'pj-dev-ecs-api'],
+                    ['S3', 'pj-dev-s3-assets'],
+                    ['RDS', 'pj-dev-rds'],
+                    ['DynamoDB', 'pj-dev-dynamodb-users'],
+                    ['SQS', 'pj-dev-sqs-orders'],
+                    ['KMS', 'alias/pj-dev-kms'],
+                    ['IAM Role', 'pj-dev-lambda-role'],
+                  ].map(([svc, ex]) => (
+                    <tr class="border-b border-navy-700/20">
+                      <td class="py-1 pr-4 text-slate-400">{svc}</td>
+                      <td class="py-1 font-mono text-accent/70">{ex}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
             <p class="font-semibold text-slate-300 mb-2">How to Deploy</p>
             <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-slate-300 font-mono overflow-x-auto leading-relaxed">aws cloudformation deploy \
   --stack-name &lt;stack-name&gt; \
