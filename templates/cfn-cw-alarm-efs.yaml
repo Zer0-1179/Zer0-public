@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for EFS - burst credit balance and I/O limit"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-efs \
+#   --template-file cfn-cw-alarm-efs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     FileSystemId=fs-0123456789abcdef0
+#
+# With custom thresholds and SNS:
+# SNS_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-sns \
+#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
+#   --output text)
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-efs \
+#   --template-file cfn-cw-alarm-efs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     FileSystemId=fs-0123456789abcdef0 \
+#     BurstCreditThreshold=2199023255552 \
+#     AlarmActionArn=$SNS_ARN
+#
+# BurstCreditThreshold is in bytes.
+# EFS earns burst credits at 50 KB/s per GB of stored data.
+# Alarm triggers when credits FALL BELOW this value.
+# Rule of thumb: set threshold = (max burst throughput in MB/s) * 3600 * 1000000
+#   e.g. 100 MB/s burst: 100 * 3600 * 1000000 = 360000000000 (~335 GB of credits)
+#
+# PercentIOLimitAlarm applies to General Purpose performance mode only.
+# For Elastic Throughput, this metric is not reported (alarm stays INSUFFICIENT_DATA).
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target File System"
+        Parameters:
+          - FileSystemId
+      - Label:
+          default: "Thresholds"
+        Parameters:
+          - BurstCreditThreshold
+          - PercentIOLimitThreshold
+          - EvaluationPeriods
+      - Label:
+          default: "Notifications (optional)"
+        Parameters:
+          - AlarmActionArn
+          - OKActionArn
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  FileSystemId:
+    Type: String
+    Description: "EFS file system ID (e.g. fs-0123456789abcdef0)."
+    AllowedPattern: "^fs-[0-9a-f]+$"
+    ConstraintDescription: "Must be a valid EFS file system ID (fs-xxxxxxxx)."
+
+  BurstCreditThreshold:
+    Type: Number
+    Default: 1099511627776
+    MinValue: 1
+    Description: "Burst credit balance threshold in bytes. Triggers when balance FALLS BELOW this value. Default: 1 TB (1099511627776)."
+
+  PercentIOLimitThreshold:
+    Type: Number
+    Default: 95
+    MinValue: 1
+    MaxValue: 100
+    Description: "I/O limit usage alarm threshold (%). General Purpose mode only. Triggers when average exceeds this value."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
+
+  AlarmActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+
+  OKActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+
+Conditions:
+  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
+  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+
+Resources:
+
+  BurstCreditAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-burst-credit"
+      AlarmDescription: !Sub "EFS burst credit balance < ${BurstCreditThreshold} bytes for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/EFS
+      MetricName: BurstCreditBalance
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystemId
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref BurstCreditThreshold
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  PercentIOLimitAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-io-limit"
+      AlarmDescription: !Sub "EFS I/O limit usage > ${PercentIOLimitThreshold}% for ${EvaluationPeriods} consecutive 1-min periods. (General Purpose mode only)"
+      Namespace: AWS/EFS
+      MetricName: PercentIOLimit
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystemId
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref PercentIOLimitThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+Outputs:
+
+  BurstCreditAlarmArn:
+    Description: "Burst credit balance alarm ARN"
+    Value: !GetAtt BurstCreditAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BurstCreditAlarmArn"
+
+  PercentIOLimitAlarmArn:
+    Description: "I/O limit alarm ARN"
+    Value: !GetAtt PercentIOLimitAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PercentIOLimitAlarmArn"
