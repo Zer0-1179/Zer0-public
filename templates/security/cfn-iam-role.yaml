@@ -1,40 +1,76 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "IAM execution role for Lambda with CloudWatch Logs permissions and optional additional policies"
+Description: "IAM execution role for Lambda, EC2, ECS task, or ECS execution with optional additional policies"
 
 # -----------------------------------------------
 # DEPLOY
 # -----------------------------------------------
+# Lambda execution role (default):
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-iam-role \
 #   --template-file cfn-iam-role.yaml \
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --parameter-overrides \
 #     ProjectName=my-project \
-#     Env=dev
+#     Env=dev \
+#     RoleType=lambda
 #
-# Get the Role ARN for use in other stacks:
+# EC2 instance role (SSM Session Manager + CloudWatch Agent):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-iam-role \
+#   --template-file cfn-iam-role.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     RoleType=ec2
+#
+# ECS task execution role (pull ECR image, write logs):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-iam-exec-role \
+#   --template-file cfn-iam-role.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     RoleType=ecs-exec
+#
+# ECS task role (application permissions - add via AdditionalPolicy):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-iam-task-role \
+#   --template-file cfn-iam-role.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     RoleType=ecs-task \
+#     AdditionalPolicy01=arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess
+#
+# Get role ARN for use in other stacks:
 # ROLE_ARN=$(aws cloudformation describe-stacks \
 #   --stack-name <ProjectName>-<Env>-iam-role \
 #   --query "Stacks[0].Outputs[?OutputKey=='RoleArn'].OutputValue" \
 #   --output text)
 #
-# With additional managed policies (comma-separated ARNs):
-# aws cloudformation deploy \
+# Get instance profile ARN (ec2 RoleType only):
+# PROFILE_ARN=$(aws cloudformation describe-stacks \
 #   --stack-name <ProjectName>-<Env>-iam-role \
-#   --template-file cfn-iam-role.yaml \
-#   --capabilities CAPABILITY_NAMED_IAM \
-#   --parameter-overrides \
-#     ProjectName=my-project \
-#     Env=prd \
-#     AdditionalPolicy01=arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess \
-#     AdditionalPolicy02=arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+#   --query "Stacks[0].Outputs[?OutputKey=='InstanceProfileArn'].OutputValue" \
+#   --output text)
+#
+# RoleType vs base managed policy:
+#   lambda   -> lambda.amazonaws.com  -> AWSLambdaBasicExecutionRole
+#   ec2      -> ec2.amazonaws.com     -> AmazonSSMManagedInstanceCore
+#   ecs-task -> ecs-tasks.amazonaws.com -> (none; add permissions via AdditionalPolicy)
+#   ecs-exec -> ecs-tasks.amazonaws.com -> AmazonECSTaskExecutionRolePolicy
+#
+# ecs-task:  role assumed by container code  (what your app can do)
+# ecs-exec:  role assumed by ECS agent       (pull ECR images, push logs)
 # -----------------------------------------------
 
 # -----------------------------------------------
 # Metadata
 # Organizes the parameter input UI in the CloudFormation console.
 # ParameterGroups groups parameters visually.
-# ParameterLabels overrides the display name shown to users.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -45,8 +81,9 @@ Metadata:
           - ProjectName
           - Env
       - Label:
-          default: "Additional Policies (optional)"
+          default: "Role"
         Parameters:
+          - RoleType
           - AdditionalPolicy01
           - AdditionalPolicy02
 
@@ -73,6 +110,16 @@ Parameters:
       - prd
     Description: "Deployment environment. Used as part of the role name."
 
+  RoleType:
+    Type: String
+    Default: lambda
+    AllowedValues:
+      - lambda
+      - ec2
+      - ecs-task
+      - ecs-exec
+    Description: "Service that assumes this role. Determines the service principal and base managed policy."
+
   AdditionalPolicy01:
     Type: String
     Default: ""
@@ -84,54 +131,78 @@ Parameters:
     Description: "ARN of a second additional IAM managed policy to attach."
 
 # -----------------------------------------------
+# Mappings
+# Static reference tables for service principal and role name suffix per RoleType.
+# Usage: !FindInMap [RoleConfig, !Ref RoleType, Principal]
+# -----------------------------------------------
+Mappings:
+  RoleConfig:
+    lambda:
+      Principal: lambda.amazonaws.com
+      NameSuffix: lambda-role
+    ec2:
+      Principal: ec2.amazonaws.com
+      NameSuffix: ec2-role
+    ecs-task:
+      Principal: ecs-tasks.amazonaws.com
+      NameSuffix: ecs-task-role
+    ecs-exec:
+      Principal: ecs-tasks.amazonaws.com
+      NameSuffix: ecs-exec-role
+
+# -----------------------------------------------
 # Conditions
 # Boolean flags derived from parameter values.
 # Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
+  IsLambda:   !Equals [!Ref RoleType, lambda]
+  IsEC2:      !Equals [!Ref RoleType, ec2]
+  IsECSExec:  !Equals [!Ref RoleType, ecs-exec]
   HasPolicy01: !Not [!Equals [!Ref AdditionalPolicy01, ""]]
   HasPolicy02: !Not [!Equals [!Ref AdditionalPolicy02, ""]]
 
 # -----------------------------------------------
 # Resources
 # CAPABILITY_NAMED_IAM is required when deploying IAM resources with custom names.
-# AssumeRolePolicyDocument defines which AWS service can assume this role.
-# AWSLambdaBasicExecutionRole grants permission to write logs to CloudWatch Logs.
-# ManagedPolicyArns attaches AWS managed policies; use inline policies for custom permissions.
+# ManagedPolicyArns: base policy is selected by RoleType; additional policies are optional.
+# !Ref AWS::NoValue inside a list removes that element from the list.
+# EC2 RoleType also creates an InstanceProfile required for EC2 instance association.
 # -----------------------------------------------
 Resources:
-  LambdaExecutionRole:
+
+  ExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${Env}-lambda-role"
+      RoleName: !Sub
+        - "${ProjectName}-${Env}-${Suffix}"
+        - Suffix: !FindInMap [RoleConfig, !Ref RoleType, NameSuffix]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
+              Service: !FindInMap [RoleConfig, !Ref RoleType, Principal]
             Action: sts:AssumeRole
-      ManagedPolicyArns: !If
-        - HasPolicy01
-        - !If
-          - HasPolicy02
-          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-            - !Ref AdditionalPolicy01
-            - !Ref AdditionalPolicy02
-          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-            - !Ref AdditionalPolicy01
-        - !If
-          - HasPolicy02
-          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-            - !Ref AdditionalPolicy02
-          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns:
+        - !If [IsLambda,  "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",    !Ref AWS::NoValue]
+        - !If [IsEC2,     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",                !Ref AWS::NoValue]
+        - !If [IsECSExec, "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy", !Ref AWS::NoValue]
+        - !If [HasPolicy01, !Ref AdditionalPolicy01, !Ref AWS::NoValue]
+        - !If [HasPolicy02, !Ref AdditionalPolicy02, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
           Value: !Ref Env
-        - Key: Region
-          Value: !Ref AWS::Region
+
+  InstanceProfile:
+    Condition: IsEC2
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-instance-profile"
+      Roles:
+        - !Ref ExecutionRole
 
 # -----------------------------------------------
 # Outputs
@@ -139,14 +210,22 @@ Resources:
 # Export allows other stacks to reference via !ImportValue.
 # -----------------------------------------------
 Outputs:
+
   RoleArn:
-    Description: "Lambda execution role ARN"
-    Value: !GetAtt LambdaExecutionRole.Arn
+    Description: "Execution role ARN"
+    Value: !GetAtt ExecutionRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RoleArn"
 
   RoleName:
-    Description: "Lambda execution role name"
-    Value: !Ref LambdaExecutionRole
+    Description: "Execution role name"
+    Value: !Ref ExecutionRole
     Export:
       Name: !Sub "${AWS::StackName}-RoleName"
+
+  InstanceProfileArn:
+    Condition: IsEC2
+    Description: "EC2 instance profile ARN. Pass this to IamInstanceProfile in cfn-ec2.yaml."
+    Value: !GetAtt InstanceProfile.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-InstanceProfileArn"

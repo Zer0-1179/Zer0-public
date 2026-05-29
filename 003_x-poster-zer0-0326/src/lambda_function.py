@@ -29,7 +29,7 @@ SSM_PREFIX           = os.environ.get("SSM_PREFIX", "/ai_bot")
 DRY_RUN              = os.environ.get("DRY_RUN", "false").lower() == "true"
 JST                  = timezone(timedelta(hours=9))
 
-CATEGORIES           = ["shigoto", "fukugyo", "jitsuwa", "question", "suji"]
+CATEGORIES           = ["shigoto", "fukugyo", "jitsuwa", "question", "suji", "nichijo"]
 MAX_CATEGORY_HISTORY = 7
 MAX_USED_URLS        = 28
 URL_HISTORY_DAYS     = 90   # 使用済みURLの保持期間（日）
@@ -43,6 +43,7 @@ HASHTAGS = {
     "suji":         ["#生成AI", "#AI活用", "#ChatGPT"],
     "trend":        "#AI活用",
     "url_reaction": "#AI活用",
+    "nichijo":      "",
 }
 
 # url_reaction 用ハッシュタグプール（文章に合うものをピック）
@@ -955,6 +956,73 @@ AIに慣れてきた人がよくやる失敗3つ
 末尾に「{hashtag}」を1行で付ける。URLは含めない。ツイート本文のみ出力。"""
 
 
+def build_nichijo_prompt(history: list) -> str:
+    avoid = _past_keywords_hint(history)
+    return f"""普通の会社員がX（旧Twitter）にふと思ったことをつぶやきます。AIや副業とは無関係でOK。
+日常のどうでもいいこと・会社・通勤・食事・天気・疲れ・眠さ・謎のルール・あるある感など。
+ターゲット：会社員全般・「わかる」「あるある」「自分も」と思わせる内容
+{avoid}
+【テーマ例（これ以外でもOK）】
+コンビニ / 昼飯 / 通勤電車 / 会議室のエアコン / コピー機 / 職場の謎ルール /
+月曜朝の憂鬱 / 金曜の開放感 / 眠さ / 休憩室 / 天気 / 帰り道 / 夕飯何食べるか
+
+【良い例（構成・長さはバラバラでOK）】
+---
+月曜の朝9時の会議
+なんでこの時間なんだろうっていつも思う
+
+誰も元気ないのに
+---
+---
+コンビニで迷って結局いつも同じもの買ってる
+
+選んでる時間が一番楽しいかもしれない
+---
+---
+帰り道にコンビニ寄るつもりだったのに
+気づいたら通り過ぎてた
+
+今日も疲れてたらしい
+---
+---
+昼飯何食べるか10分くらい悩んで
+結局近くの定食屋
+
+昨日も行ってた
+---
+---
+会議室のエアコン
+夏は寒すぎて冬は暑すぎる
+
+なんで逆なんだろ
+---
+---
+金曜の18時
+この解放感
+月曜にまた消えると思うとちょっとせつない
+---
+---
+職場の人が急に異動になった
+
+仲よかったわけじゃないけど
+なんか寂しい感じがある
+---
+---
+今日電車でずっと立ってたら
+降りる駅で座席が空いた
+
+このタイミングの無意味さ笑
+---
+
+【ルール】
+- AIの話は一切しない
+- ハッシュタグは付けない
+- 100文字以内
+- 綺麗にまとめない・余韻で終わる
+
+ツイート本文のみ出力。"""
+
+
 # ─────────────────────────────────────────────────────
 # ツイート処理
 # ─────────────────────────────────────────────────────
@@ -1125,6 +1193,7 @@ def lambda_handler(event, context):
         "jitsuwa":  lambda h: build_jitsuwa_prompt(h, cat_hashtag),
         "question": lambda h: build_question_prompt(h, cat_hashtag),
         "suji":     lambda h: build_suji_prompt(h, cat_hashtag),
+        "nichijo":  lambda h: build_nichijo_prompt(h),
     }
     if category == "trend":
         prompt = build_trend_prompt(trend_kw, history)
