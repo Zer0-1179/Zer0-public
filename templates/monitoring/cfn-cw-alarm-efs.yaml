@@ -67,7 +67,10 @@ Parameters:
   Env:
     Type: String
     Default: dev
-    AllowedValues: [stg, dev, prd]
+    AllowedValues:
+      - stg
+      - dev
+      - prd
 
   FileSystemId:
     Type: String
