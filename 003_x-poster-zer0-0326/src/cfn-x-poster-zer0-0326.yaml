@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  X Poster Bot (zer0-0326) - AI topic auto-posting bot for @Zer0_0326
+  Lambda + EventBridge Scheduler + Bedrock (Claude Haiku) + SSM Parameter Store
+  - Daily 22:00 JST: random category post (1/day)
+  - Every Sunday 10:00 JST: Google Trends post
+
+# ---- Parameters ----
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model ID (Claude Haiku 4.5 recommended)
+
+  SsmPrefix:
+    Type: String
+    Default: /ai_bot
+    Description: SSM parameter prefix (e.g. /ai_bot)
+
+# ---- Resources ----
+Resources:
+
+  # Lambda execution role
+  PosterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: x-poster-zer0-0326-role
+      Description: Lambda execution role for x-poster-zer0-0326 (CloudWatch Logs, Bedrock, SSM)
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: x-poster-zer0-0326-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                  - !Sub arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0
+                  - !Sub arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:ap-northeast-1:${AWS::AccountId}:parameter/ai_bot/*
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                Resource:
+                  - !Sub arn:aws:ssm:ap-northeast-1:${AWS::AccountId}:parameter/ai_bot/history/*
+
+  # Lambda function (code deployed separately via update-function-code)
+  PosterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: x-poster-zer0-0326
+      Runtime: python3.14
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt PosterRole.Arn
+      Description: "BedrockでAI関連ツイートを生成し@Zer0_0326へ自動投稿するBot（カテゴリ: shigoto/fukugyo/jitsuwa/question/suji/url_reaction/trend）"
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          SSM_PREFIX: !Ref SsmPrefix
+          DRY_RUN: "false"
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder - deploy.sh will update this"}
+
+  # CloudWatch log group
+  PosterLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${PosterFunction}"
+      RetentionInDays: 7
+
+  # IAM role for EventBridge Scheduler
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: x-poster-zer0-0326-scheduler-role
+      Description: IAM role for EventBridge Scheduler to invoke x-poster-zer0-0326 Lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt PosterFunction.Arn
+
+  # EventBridge: 22:00 JST (UTC 13:00)
+  EveningSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: x-poster-zer0-0326-evening
+      Description: "毎日22:00 JSTにランダムカテゴリでAI関連ツイートを1件投稿"
+      ScheduleExpression: "cron(0 13 * * ? *)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt PosterFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"mode": "random"}'
+
+  # EventBridge: 日曜10:00 JST (UTC 日曜01:00)
+  TrendSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: x-poster-zer0-0326-trend
+      Description: "毎週日曜10:00 JSTにGoogleトレンドを取得してAIトレンド投稿を1件生成"
+      ScheduleExpression: "cron(0 1 ? * SUN *)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt PosterFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"mode": "trend"}'
+
+# ---- Outputs ----
+Outputs:
+  LambdaFunctionArn:
+    Description: X Poster Bot (zer0-0326) Lambda ARN
+    Value: !GetAtt PosterFunction.Arn
+
+  LambdaFunctionName:
+    Description: X Poster Bot (zer0-0326) Lambda function name
+    Value: !Ref PosterFunction
+
+  EveningScheduleName:
+    Description: 毎日投稿スケジュール名（毎日22:00 JST）
+    Value: !Ref EveningSchedule
+
+  TrendScheduleName:
+    Description: 週次トレンド投稿スケジュール名（毎週日曜10:00 JST）
+    Value: !Ref TrendSchedule
