@@ -8,8 +8,8 @@ const SCRIPT_HASHES = [
   "'sha256-2mZe1216qSfXhWjWW7LgH/iaMAXbV60fBI2HwiXJGpM='", // BaseLayout font
   "'sha256-zcbm4FJaWWCwAgnJ0yCOTvXZkKYxVl/I4ORIl10vIXA='", // ja/templates/index
   "'sha256-1oCXA/UY7N5q7PEDNBJJHymj0ckybtkBsJ9dAnnhQ9s='", // en/templates/index
-  "'sha256-x1Br5NBxUF3JwdXihhDg0g0e6FgOtXi9m7c1kV32WKA='", // ja/templates/[category]
-  "'sha256-rJYFB/xhPE/QUzeEC6WdbzuXBcVe5qlhGG89I/C9OC8='", // en/templates/[category]
+  "'sha256-iHmrsk23cnkNmaXiQoIcxqwOp2m/wDYT0TyA8jixISs='", // ja/templates/[category]
+  "'sha256-30cQFjkZyd3AUeYigBcz8I/DwYAu0c3KpNoS//mOLuI='", // en/templates/[category]
 ].join(' ');
 
 export const onRequest = defineMiddleware(async (context, next) => {

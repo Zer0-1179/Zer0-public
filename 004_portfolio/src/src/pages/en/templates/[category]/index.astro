@@ -225,56 +225,55 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
 </BaseLayout>
 
 <script>
-(function () {
-  var navTree = document.getElementById('nav-tree');
-  var currentSlug = navTree.dataset.current;
+  const navTree = document.getElementById('nav-tree') as HTMLElement;
+  const currentSlug = navTree.dataset.current!;
 
-  var currentGroup = navTree.querySelector('.folder-group[data-slug="' + currentSlug + '"]');
+  const currentGroup = navTree.querySelector(`.folder-group[data-slug="${currentSlug}"]`);
   if (currentGroup) {
-    currentGroup.querySelector('.folder-files').classList.remove('hidden');
-    var chev = currentGroup.querySelector('.chevron');
+    (currentGroup.querySelector('.folder-files') as HTMLElement).classList.remove('hidden');
+    const chev = currentGroup.querySelector('.chevron') as HTMLElement | null;
     if (chev) chev.style.transform = 'rotate(90deg)';
   }
 
-  navTree.querySelectorAll('.folder-toggle').forEach(function (btn) {
-    btn.addEventListener('click', function (e) {
+  navTree.querySelectorAll('.folder-toggle').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
       e.preventDefault();
-      var group = btn.closest('.folder-group');
-      var files = group.querySelector('.folder-files');
-      var chevron = group.querySelector('.chevron');
-      var isOpen = !files.classList.contains('hidden');
+      const group = (btn as HTMLElement).closest('.folder-group')!;
+      const files   = group.querySelector('.folder-files') as HTMLElement;
+      const chevron = group.querySelector('.chevron') as HTMLElement;
+      const isOpen  = !files.classList.contains('hidden');
       files.classList.toggle('hidden', isOpen);
       chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
     });
   });
 
-  var fileTable   = document.getElementById('file-table');
-  var yamlViewer  = document.getElementById('yaml-viewer');
-  var bcCat       = document.getElementById('bc-cat');
-  var bcSep       = document.getElementById('bc-sep');
-  var bcFile      = document.getElementById('bc-file');
-  var yvName      = document.getElementById('yv-name');
-  var yvShort     = document.getElementById('yv-short');
-  var yvDesc      = document.getElementById('yv-desc');
-  var yvServices  = document.getElementById('yv-services');
-  var yvFilename  = document.getElementById('yv-filename');
-  var yvDl        = document.getElementById('yv-dl');
-  var yvContent   = document.getElementById('yv-content');
-  var yvCopy      = document.getElementById('yv-copy');
-  var activeFileBtn = null;
+  const fileTable  = document.getElementById('file-table')!;
+  const yamlViewer = document.getElementById('yaml-viewer')!;
+  const bcCat      = document.getElementById('bc-cat')!;
+  const bcSep      = document.getElementById('bc-sep')!;
+  const bcFile     = document.getElementById('bc-file')!;
+  const yvName     = document.getElementById('yv-name')!;
+  const yvShort    = document.getElementById('yv-short')!;
+  const yvDesc     = document.getElementById('yv-desc')!;
+  const yvServices = document.getElementById('yv-services')!;
+  const yvFilename = document.getElementById('yv-filename')!;
+  const yvDl       = document.getElementById('yv-dl') as HTMLAnchorElement;
+  const yvContent  = document.getElementById('yv-content')!;
+  const yvCopy     = document.getElementById('yv-copy')!;
+  let activeFileBtn: Element | null = null;
 
-  function setNavActive(filename) {
+  function setNavActive(filename: string) {
     if (activeFileBtn) {
       activeFileBtn.classList.remove('bg-accent/10');
-      activeFileBtn.querySelector('.file-label').classList.remove('text-accent');
+      activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
     }
-    var btn = navTree.querySelector('.file-btn[data-filename="' + filename + '"]');
+    const btn = navTree.querySelector(`.file-btn[data-filename="${filename}"]`);
     if (btn) {
       btn.classList.add('bg-accent/10');
-      btn.querySelector('.file-label').classList.add('text-accent');
-      var group = btn.closest('.folder-group');
-      var files = group.querySelector('.folder-files');
-      var chevron = group.querySelector('.chevron');
+      btn.querySelector('.file-label')?.classList.add('text-accent');
+      const group   = btn.closest('.folder-group')!;
+      const files   = group.querySelector('.folder-files') as HTMLElement;
+      const chevron = group.querySelector('.chevron') as HTMLElement | null;
       if (files.classList.contains('hidden')) {
         files.classList.remove('hidden');
         if (chevron) chevron.style.transform = 'rotate(90deg)';
@@ -283,32 +282,32 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
     activeFileBtn = btn;
   }
 
-  function showYaml(filename, name, short, desc, services) {
+  function showYaml(filename: string, name: string, short: string, desc: string, services: string) {
     bcSep.classList.remove('hidden');
     bcFile.classList.remove('hidden');
     bcFile.textContent = filename;
     fileTable.classList.add('hidden');
     yamlViewer.classList.remove('hidden');
-    yvName.textContent = filename;
+    yvName.textContent     = filename;
     yvFilename.textContent = filename;
-    yvShort.textContent = short;
-    yvDesc.textContent = desc;
-    yvDl.href = '/api/templates/' + filename;
+    yvShort.textContent    = short;
+    yvDesc.textContent     = desc;
+    yvDl.href     = '/api/templates/' + filename;
     yvDl.download = filename;
     yvServices.innerHTML = '';
-    (services || '').split(',').filter(Boolean).forEach(function (svc) {
-      var span = document.createElement('span');
+    (services || '').split(',').filter(Boolean).forEach((svc) => {
+      const span = document.createElement('span');
       span.className = 'px-1.5 py-0.5 bg-navy-700/60 text-slate-500 text-xs rounded';
       span.textContent = svc;
       yvServices.appendChild(span);
     });
     setNavActive(filename);
-    yamlViewer.closest('.overflow-y-auto').scrollTop = 0;
+    (yamlViewer.closest('.overflow-y-auto') as HTMLElement).scrollTop = 0;
     yvContent.textContent = 'Loading...';
     fetch('/api/templates/' + filename)
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(function (txt) { yvContent.textContent = txt; })
-      .catch(function (e) { yvContent.textContent = 'Error: ' + e.message; });
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then((txt) => { yvContent.textContent = txt; })
+      .catch((e) => { yvContent.textContent = 'Error: ' + e.message; });
   }
 
   function showFileTable() {
@@ -319,36 +318,38 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
     bcFile.textContent = '';
     if (activeFileBtn) {
       activeFileBtn.classList.remove('bg-accent/10');
-      activeFileBtn.querySelector('.file-label').classList.remove('text-accent');
+      activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
       activeFileBtn = null;
     }
   }
 
-  document.querySelectorAll('.file-row').forEach(function (row) {
-    row.addEventListener('click', function () {
-      showYaml(row.dataset.filename, row.dataset.name, row.dataset.short, row.dataset.desc, row.dataset.services);
+  document.querySelectorAll('.file-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const el = row as HTMLElement;
+      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!);
     });
   });
 
-  navTree.querySelectorAll('.file-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      showYaml(btn.dataset.filename, btn.dataset.name, btn.dataset.short, btn.dataset.desc, btn.dataset.services);
+  navTree.querySelectorAll('.file-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const el = btn as HTMLElement;
+      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!);
     });
   });
 
   bcCat.addEventListener('click', showFileTable);
 
-  yvCopy.addEventListener('click', function () {
-    var text = yvContent.textContent;
+  yvCopy.addEventListener('click', () => {
+    const text = yvContent.textContent;
     if (!text || text === 'Loading...') return;
-    var done = function () {
+    const done = () => {
       yvCopy.textContent = 'Copied!';
-      setTimeout(function () { yvCopy.textContent = 'Copy'; }, 2000);
+      setTimeout(() => { yvCopy.textContent = 'Copy'; }, 2000);
     };
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(done);
     } else {
-      var ta = document.createElement('textarea');
+      const ta = document.createElement('textarea');
       ta.value = text;
       ta.style.cssText = 'position:fixed;opacity:0';
       document.body.appendChild(ta);
@@ -358,5 +359,4 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
       done();
     }
   });
-})();
 </script>
