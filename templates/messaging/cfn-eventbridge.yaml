@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EventBridge Rule - scheduled or event-driven Lambda invocation"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# Rate-based schedule (every 5 minutes):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-eventbridge-<RuleSuffix> \
+#   --template-file cfn-eventbridge.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     RuleSuffix=batch \
+#     ScheduleExpression="rate(5 minutes)" \
+#     TargetLambdaArn=arn:aws:lambda:ap-northeast-1:123456789012:function:my-function
+#
+# Cron-based schedule (weekdays at 09:00 JST = 00:00 UTC):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-eventbridge-daily \
+#   --template-file cfn-eventbridge.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     RuleSuffix=daily \
+#     ScheduleExpression="cron(0 0 ? * MON-FRI *)" \
+#     TargetLambdaArn=arn:aws:lambda:ap-northeast-1:123456789012:function:my-function \
+#     InputJson='{"key":"value"}'
+#
+# Common schedule expressions:
+#   rate(5 minutes)          Every 5 minutes
+#   rate(1 hour)             Every hour
+#   rate(1 day)              Every day
+#   cron(0 0 * * ? *)        Every day at 00:00 UTC (09:00 JST)
+#   cron(0 0 ? * MON-FRI *)  Weekdays at 00:00 UTC (09:00 JST)
+#   cron(0 0 1 * ? *)        1st of every month at 00:00 UTC
+#
+# NOTE: Lambda must exist before deploying this stack.
+#       This stack also creates the Lambda permission for EventBridge to invoke it.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Rule"
+        Parameters:
+          - RuleSuffix
+          - ScheduleExpression
+          - RuleState
+      - Label:
+          default: "Target Lambda"
+        Parameters:
+          - TargetLambdaArn
+          - InputJson
+
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as part of the rule name."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  RuleSuffix:
+    Type: String
+    Default: schedule
+    Description: "Suffix appended to the rule name to distinguish multiple rules (e.g. daily, hourly, batch)."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  ScheduleExpression:
+    Type: String
+    Default: "rate(1 hour)"
+    Description: "Schedule expression. Use rate() or cron() format. e.g. rate(5 minutes) / cron(0 0 * * ? *)"
+
+  RuleState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+    Description: "ENABLED to activate the rule immediately. DISABLED to deploy without triggering."
+
+  TargetLambdaArn:
+    Type: String
+    Default: ""
+    Description: "ARN of the Lambda function to invoke. The function must exist before deploying."
+    AllowedPattern: "^(arn:aws:lambda:[a-z0-9-]+:[0-9]+:function:.+)?$"
+    ConstraintDescription: "Must be a valid Lambda function ARN or empty."
+
+  InputJson:
+    Type: String
+    Default: ""
+    Description: "Optional JSON string to pass as the event payload to the Lambda function. e.g. {\"key\":\"value\"}"
+
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
+Conditions:
+  HasLambdaTarget: !Not [!Equals [!Ref TargetLambdaArn, ""]]
+  HasInput:        !Not [!Equals [!Ref InputJson, ""]]
+
+# -----------------------------------------------
+# Resources
+# Rule name: {ProjectName}-{Env}-{RuleSuffix}
+# LambdaPermission grants EventBridge the right to invoke the target function.
+# -----------------------------------------------
+Resources:
+
+  Rule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-${RuleSuffix}"
+      Description: !Sub "${ProjectName} ${Env} - ${RuleSuffix} scheduled rule"
+      ScheduleExpression: !Ref ScheduleExpression
+      State: !Ref RuleState
+      Targets: !If
+        - HasLambdaTarget
+        - - Id: LambdaTarget
+            Arn: !Ref TargetLambdaArn
+            Input: !If [HasInput, !Ref InputJson, !Ref AWS::NoValue]
+        - !Ref AWS::NoValue
+
+  LambdaPermission:
+    Condition: HasLambdaTarget
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TargetLambdaArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt Rule.Arn
+
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# -----------------------------------------------
+Outputs:
+
+  RuleArn:
+    Description: "EventBridge rule ARN"
+    Value: !GetAtt Rule.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RuleArn"
+
+  RuleName:
+    Description: "EventBridge rule name"
+    Value: !Ref Rule
+    Export:
+      Name: !Sub "${AWS::StackName}-RuleName"
