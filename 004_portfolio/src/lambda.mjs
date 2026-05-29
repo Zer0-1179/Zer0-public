@@ -86,8 +86,8 @@ const STATIC_CSP = [
     "script-src 'self'",
     "'sha256-2mZe1216qSfXhWjWW7LgH/iaMAXbV60fBI2HwiXJGpM='", // BaseLayout font
     "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='", // Nav menu
-    "'sha256-niKHV+YTbqklezEFoEZLX/NQLZ2yIPOVVSlw35XsvR0='", // ja/templates/index
-    "'sha256-6ZPZuo7NvqjVcqzcDGzlQSKg578jYHzY68J0OWE+6hY='", // en/templates/index
+    "'sha256-zcbm4FJaWWCwAgnJ0yCOTvXZkKYxVl/I4ORIl10vIXA='", // ja/templates/index
+    "'sha256-1oCXA/UY7N5q7PEDNBJJHymj0ckybtkBsJ9dAnnhQ9s='", // en/templates/index
     "'sha256-x1Br5NBxUF3JwdXihhDg0g0e6FgOtXi9m7c1kV32WKA='", // ja/templates/[category]
     "'sha256-rJYFB/xhPE/QUzeEC6WdbzuXBcVe5qlhGG89I/C9OC8='", // en/templates/[category]
   ].join(' '),

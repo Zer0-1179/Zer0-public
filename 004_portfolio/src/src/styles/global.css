@@ -11,3 +11,23 @@
 
   --font-family-sans: "Noto Sans JP", Inter, system-ui, sans-serif;
 }
+
+/* Scrollbar - navy theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1e3a5f transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #1e3a5f;
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #2d5282;
+}
