@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for EFS - burst credit balance and I/O limit with WARNING/CRITICAL severity levels"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-efs \
+#   --template-file cfn-cw-alarm-efs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     FileSystemId=fs-0123456789abcdef0
+#
+# With SNS notification (WARNING → Slack, CRITICAL → PagerDuty):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-efs \
+#   --template-file cfn-cw-alarm-efs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     FileSystemId=fs-0123456789abcdef0 \
+#     WarningActionArn=$SLACK_SNS_ARN \
+#     CriticalActionArn=$PAGERDUTY_SNS_ARN
+#
+# BurstCredit thresholds are in bytes (alarm triggers when BELOW threshold).
+# Default: Warning=2 TB, Critical=1 TB
+#
+# PercentIOLimit applies to General Purpose performance mode only.
+# For Elastic Throughput, this metric is not reported (alarm stays INSUFFICIENT_DATA).
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters: [ProjectName, Env]
+      - Label:
+          default: "Target File System"
+        Parameters: [FileSystemId]
+      - Label:
+          default: "WARNING Thresholds"
+        Parameters: [BurstCreditWarningThreshold, PercentIOLimitWarningThreshold]
+      - Label:
+          default: "CRITICAL Thresholds"
+        Parameters: [BurstCreditCriticalThreshold, PercentIOLimitCriticalThreshold]
+      - Label:
+          default: "Common"
+        Parameters: [EvaluationPeriods]
+      - Label:
+          default: "Notifications (optional)"
+        Parameters: [WarningActionArn, CriticalActionArn]
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues: [stg, dev, prd]
+
+  FileSystemId:
+    Type: String
+    Description: "EFS file system ID (e.g. fs-0123456789abcdef0)."
+    AllowedPattern: "^fs-[0-9a-f]+$"
+    ConstraintDescription: "Must be a valid EFS file system ID (fs-xxxxxxxx)."
+
+  BurstCreditWarningThreshold:
+    Type: Number
+    Default: 2199023255552
+    MinValue: 1
+    Description: "Burst credit balance WARNING threshold in bytes. Triggers when BELOW this value. Default: 2 TB."
+
+  BurstCreditCriticalThreshold:
+    Type: Number
+    Default: 1099511627776
+    MinValue: 1
+    Description: "Burst credit balance CRITICAL threshold in bytes. Triggers when BELOW this value. Default: 1 TB."
+
+  PercentIOLimitWarningThreshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: "I/O limit usage WARNING threshold (%). General Purpose mode only."
+
+  PercentIOLimitCriticalThreshold:
+    Type: Number
+    Default: 95
+    MinValue: 1
+    MaxValue: 100
+    Description: "I/O limit usage CRITICAL threshold (%). General Purpose mode only."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
+
+  WarningActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for WARNING severity (e.g. Slack). Used for both ALARM and OK notifications."
+
+  CriticalActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
+
+Conditions:
+  HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
+  HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
+
+Resources:
+
+  BurstCreditWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-burst-credit-warning"
+      AlarmDescription: !Sub "EFS burst credits < ${BurstCreditWarningThreshold} bytes for ${EvaluationPeriods} x 1 min. [WARNING]"
+      Namespace: AWS/EFS
+      MetricName: BurstCreditBalance
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystemId
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref BurstCreditWarningThreshold
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  BurstCreditCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-burst-credit-critical"
+      AlarmDescription: !Sub "EFS burst credits < ${BurstCreditCriticalThreshold} bytes for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/EFS
+      MetricName: BurstCreditBalance
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystemId
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref BurstCreditCriticalThreshold
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+  PercentIOLimitWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-io-limit-warning"
+      AlarmDescription: !Sub "EFS I/O limit > ${PercentIOLimitWarningThreshold}% for ${EvaluationPeriods} x 1 min. [WARNING] (General Purpose mode only)"
+      Namespace: AWS/EFS
+      MetricName: PercentIOLimit
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystemId
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref PercentIOLimitWarningThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  PercentIOLimitCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-io-limit-critical"
+      AlarmDescription: !Sub "EFS I/O limit > ${PercentIOLimitCriticalThreshold}% for ${EvaluationPeriods} x 1 min. [CRITICAL] (General Purpose mode only)"
+      Namespace: AWS/EFS
+      MetricName: PercentIOLimit
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystemId
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref PercentIOLimitCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+Outputs:
+
+  BurstCreditWarningAlarmArn:
+    Description: "Burst credit WARNING alarm ARN"
+    Value: !GetAtt BurstCreditWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BurstCreditWarningAlarmArn"
+
+  BurstCreditCriticalAlarmArn:
+    Description: "Burst credit CRITICAL alarm ARN"
+    Value: !GetAtt BurstCreditCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BurstCreditCriticalAlarmArn"
+
+  PercentIOLimitWarningAlarmArn:
+    Description: "I/O limit WARNING alarm ARN"
+    Value: !GetAtt PercentIOLimitWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PercentIOLimitWarningAlarmArn"
+
+  PercentIOLimitCriticalAlarmArn:
+    Description: "I/O limit CRITICAL alarm ARN"
+    Value: !GetAtt PercentIOLimitCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PercentIOLimitCriticalAlarmArn"
