@@ -1,0 +1,213 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for ALB - 5xx errors, unhealthy hosts, and response latency"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# ALB_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-alb-<Suffix> \
+#   --query "Stacks[0].Outputs[?OutputKey=='AlbArn'].OutputValue" \
+#   --output text)
+# TG_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-alb-<Suffix> \
+#   --query "Stacks[0].Outputs[?OutputKey=='TargetGroupArn'].OutputValue" \
+#   --output text)
+#
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-alb \
+#   --template-file cfn-cw-alarm-alb.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     AlbArn=$ALB_ARN \
+#     TargetGroupArn=$TG_ARN
+#
+# With SNS notification and custom thresholds:
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-alb \
+#   --template-file cfn-cw-alarm-alb.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     AlbArn=$ALB_ARN \
+#     TargetGroupArn=$TG_ARN \
+#     Error5xxThreshold=5 \
+#     LatencyThreshold=1 \
+#     AlarmActionArn=$SNS_ARN
+#
+# NOTE: AlbArn and TargetGroupArn are the full ARNs.
+#       CloudWatch dimension values are extracted automatically.
+#       e.g. AlbArn = arn:aws:...:loadbalancer/app/my-alb/abc123
+#            → dimension "app/my-alb/abc123"
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target Load Balancer"
+        Parameters:
+          - AlbArn
+          - TargetGroupArn
+      - Label:
+          default: "Thresholds"
+        Parameters:
+          - Error5xxThreshold
+          - UnhealthyHostThreshold
+          - LatencyThreshold
+          - EvaluationPeriods
+      - Label:
+          default: "Notifications (optional)"
+        Parameters:
+          - AlarmActionArn
+          - OKActionArn
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  AlbArn:
+    Type: String
+    Description: "ALB full ARN. Used to extract the CloudWatch dimension (app/<name>/<id>)."
+
+  TargetGroupArn:
+    Type: String
+    Description: "Target group full ARN. Used for the UnHealthyHostCount dimension (targetgroup/<name>/<id>)."
+
+  Error5xxThreshold:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: "5xx error count threshold per 1-minute period. Default 0 = alarm on any 5xx."
+
+  UnhealthyHostThreshold:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: "Unhealthy host count threshold. Default 0 = alarm when any target is unhealthy."
+
+  LatencyThreshold:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: "Average target response time threshold in seconds. Default: 1 s."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
+
+  AlarmActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+
+  OKActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+
+Conditions:
+  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
+  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+
+Resources:
+
+  Error5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-5xx"
+      AlarmDescription: !Sub "ALB target 5xx errors > ${Error5xxThreshold} for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref Error5xxThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  UnhealthyHostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-unhealthy-host"
+      AlarmDescription: !Sub "ALB unhealthy host count > ${UnhealthyHostThreshold} for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+        - Name: TargetGroup
+          Value: !Join
+            - ""
+            - - "targetgroup"
+              - !Select [1, !Split [":targetgroup", !Ref TargetGroupArn]]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref UnhealthyHostThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+  LatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-latency"
+      AlarmDescription: !Sub "ALB average target response time > ${LatencyThreshold} s for ${EvaluationPeriods} consecutive 1-min periods."
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetResponseTime
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref LatencyThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+
+Outputs:
+
+  Error5xxAlarmArn:
+    Description: "5xx error alarm ARN"
+    Value: !GetAtt Error5xxAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-Error5xxAlarmArn"
+
+  UnhealthyHostAlarmArn:
+    Description: "Unhealthy host alarm ARN"
+    Value: !GetAtt UnhealthyHostAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-UnhealthyHostAlarmArn"
+
+  LatencyAlarmArn:
+    Description: "Latency alarm ARN"
+    Value: !GetAtt LatencyAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LatencyAlarmArn"

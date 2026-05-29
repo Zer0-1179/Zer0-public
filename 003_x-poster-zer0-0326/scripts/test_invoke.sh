@@ -1,5 +1,5 @@
 #!/bin/bash
-# XAiBot テスト実行スクリプト
+# x-poster-zer0-0326 テスト実行スクリプト
 # DRY_RUN=true に切り替えて実行し、X投稿をスキップ
 
 set -euo pipefail
