@@ -4,7 +4,6 @@ import { getCategoriesWithTemplates, getTemplatesByCategory } from '../../../../
 import { useTranslations } from '../../../../i18n/utils';
 
 const t = useTranslations('ja');
-const cspNonce = Astro.locals.cspNonce;
 
 const { category } = Astro.params;
 
@@ -225,7 +224,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
   </div>
 </BaseLayout>
 
-<script nonce={cspNonce} is:inline>
+<script>
 (function () {
   var navTree = document.getElementById('nav-tree');
   var currentSlug = navTree.dataset.current;
