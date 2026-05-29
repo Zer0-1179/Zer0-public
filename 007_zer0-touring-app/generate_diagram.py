@@ -1,4 +1,4 @@
-"""007_Zer0_TouringApp アーキテクチャ図生成スクリプト（generate_project_diagrams.py の gen_007 を呼び出す）"""
+"""007_Zer0_TouringApp アーキテクチャ図生成スクリプト"""
 import os
 import matplotlib
 matplotlib.use('Agg')
@@ -7,7 +7,6 @@ import matplotlib.image as mpimg
 from matplotlib import font_manager
 from matplotlib.patches import FancyBboxPatch
 
-# ── 日本語フォント設定 ──
 for _fp in [
     '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
     '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
@@ -17,25 +16,23 @@ for _fp in [
         matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
         break
 
-# ── アイコンパス ──
-_BASE = os.path.dirname(os.path.abspath(__file__))
+_BASE     = os.path.dirname(os.path.abspath(__file__))
 _ICON_DIR = os.path.join(_BASE, '..', 'images', 'AWS-icon')
 _SVC = 'Architecture-Service-Icons_07312025'
 _GRP = 'Architecture-Group-Icons_07312025'
 
 ICONS = {
-    'cloudfront':  f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
-    's3':          f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
-    'api_gw':      f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
-    'lambda':      f'{_SVC}/Arch_Compute/64/Arch_AWS-Lambda_64.png',
-    'bedrock':     f'{_SVC}/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock_64.png',
-    'acm':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
-    'cloudwatch':  f'{_SVC}/Arch_Management-Governance/64/Arch_Amazon-CloudWatch_64.png',
-    'ssm':         f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Systems-Manager_64.png',
-    'dynamodb':    f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
-    'region':      f'{_GRP}/Region_32.png',
-    'aws_cloud':   f'{_GRP}/AWS-Cloud_32.png',
-    'user':        None,  # ローカル aws_icons/user.png
+    'cloudfront': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
+    's3':         f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
+    'api_gw':     f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
+    'lambda':     f'{_SVC}/Arch_Compute/64/Arch_AWS-Lambda_64.png',
+    'bedrock':    f'{_SVC}/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock_64.png',
+    'acm':        f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
+    'cloudwatch': f'{_SVC}/Arch_Management-Governance/64/Arch_Amazon-CloudWatch_64.png',
+    'ssm':        f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Systems-Manager_64.png',
+    'dynamodb':   f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
+    'region':     f'{_GRP}/Region_32.png',
+    'aws_cloud':  f'{_GRP}/AWS-Cloud_32.png',
 }
 
 _USER_PNG = os.path.join(_BASE, '..', '002_Zenn_Auto_Article_Bot', 'src', 'aws_icons', 'user.png')
@@ -48,72 +45,81 @@ def _load(key):
     return mpimg.imread(path) if os.path.exists(path) else None
 
 
-def _cluster_icon(key):
-    path = os.path.join(_ICON_DIR, ICONS[key])
-    return mpimg.imread(path) if os.path.exists(path) else None
-
-
 def draw():
-    # ── レイアウト ──
-    # xlim=15, ylim=8  figsize=(15,8)
-    # 外部サービス: OpenMeteo(1.5,6.0)  Browser(1.5,3.5)  Wikipedia(1.5,1.5)
-    # Edge/Global:  ACM(4.5,5.5)  CF(4.5,3.5)
-    # ap-northeast-1: S3(7.5,5.5)  SSM(13.5,5.5)
-    #                 APIGW(7.5,3.5)  Lambda(10.5,3.5)  Bedrock(13.5,3.5)
-    #                 CW(10.5,1.5)    DynamoDB(13.5,1.5)
+    # ── レイアウト (xlim=18, ylim=9, figsize=(18,9)) ──
+    #
+    # 外部サービス         Edge/Global        ap-northeast-1
+    # x=1.5               x=5.5              x=9~16
+    #
+    # ブラウザ(1.5,4.5) → CloudFront(5.5,4.5) → API Gateway(9,4.5) → Lambda(12.5,4.5)
+    #                    ACM(5.5,6.5)↓CF      → S3(9,6.5)           →Bedrock(16,6.5)
+    #                    HTTPS↓               /* 静的HTML↑            →SSM(16,4.5)
+    #                                                                 ↓CW(12.5,2.5)
+    #                                                                 →DynamoDB(16,2.5)
+    #
+    # クラスター間ギャップ:
+    #   外部 right=2.9 → Edge left=4.5  → gap=1.6 ✓
+    #   Edge right=6.9 → region left=8.0 → gap=1.1 ✓
+    #
+    # 垂直間隔 (2-lineラベル ≥2.0):
+    #   ACM(6.5)→CF(4.5): 2.0 ✓
+    #   S3(6.5)→APIGW(4.5): 2.0 ✓
+    #   Bedrock(6.5)→SSM(4.5): 2.0 ✓
+    #   SSM(4.5)→DynamoDB(2.5): 2.0 ✓
+    #   Lambda(4.5)→CW(2.5): 2.0 ✓
+    #
+    # 矢印交差なし・クラスター枠とノードの重なりなし
     HALF = 0.55
 
     nodes = [
-        {'id': 'openmeteo', 'icon': 'user',       'label': 'Open-Meteo\n（天気API）',              'x': 1.5,  'y': 6.0},
-        {'id': 'browser',   'icon': 'user',       'label': 'スマホ\n（ブラウザ）',                 'x': 1.5,  'y': 3.5},
-        {'id': 'wikipedia', 'icon': 'user',       'label': 'Wikipedia\n（写真API）',               'x': 1.5,  'y': 1.5},
-        {'id': 'acm',       'icon': 'acm',        'label': 'ACM\n(SSL証明書)',                     'x': 4.5,  'y': 5.5},
-        {'id': 'cf',        'icon': 'cloudfront', 'label': 'CloudFront\ntouring.zer0-infra.com',   'x': 4.5,  'y': 3.5},
-        {'id': 's3',        'icon': 's3',         'label': 'S3\nzer0-touring-s3',                 'x': 7.5,  'y': 5.5},
-        {'id': 'ssm',       'icon': 'ssm',        'label': 'SSM\nGMaps使用カウント',               'x': 13.5, 'y': 5.5},
-        {'id': 'apigw',     'icon': 'api_gw',     'label': 'API Gateway\n(HTTP API)',              'x': 7.5,  'y': 3.5},
-        {'id': 'lambda',    'icon': 'lambda',     'label': 'Lambda\nzer0-touring-suggest',         'x': 10.5, 'y': 3.5},
-        {'id': 'bedrock',   'icon': 'bedrock',    'label': 'Bedrock\nClaude Haiku',               'x': 13.5, 'y': 3.5},
-        {'id': 'cw',        'icon': 'cloudwatch', 'label': 'CloudWatch\nLogs',                    'x': 10.5, 'y': 1.5},
-        {'id': 'dynamodb',  'icon': 'dynamodb',   'label': 'DynamoDB\nratelimit / share',          'x': 13.5, 'y': 1.5},
+        {'id': 'browser',  'icon': 'user',       'label': 'スマホ\n（ブラウザ）',              'x': 1.5,  'y': 4.5},
+        {'id': 'acm',      'icon': 'acm',        'label': 'ACM\n(SSL証明書)',                  'x': 5.5,  'y': 6.5},
+        {'id': 'cf',       'icon': 'cloudfront', 'label': 'CloudFront\ntouring.zer0-infra.com', 'x': 5.5,  'y': 4.5},
+        {'id': 's3',       'icon': 's3',         'label': 'S3\nzer0-touring-s3',               'x': 9.0,  'y': 6.5},
+        {'id': 'apigw',    'icon': 'api_gw',     'label': 'API Gateway\n(HTTP API)',            'x': 9.0,  'y': 4.5},
+        {'id': 'lambda',   'icon': 'lambda',     'label': 'Lambda\nzer0-touring-suggest',       'x': 12.5, 'y': 4.5},
+        {'id': 'bedrock',  'icon': 'bedrock',    'label': 'Bedrock\nClaude Haiku',              'x': 16.0, 'y': 6.5},
+        {'id': 'ssm',      'icon': 'ssm',        'label': 'SSM\nGMaps使用カウント',             'x': 16.0, 'y': 4.5},
+        {'id': 'cw',       'icon': 'cloudwatch', 'label': 'CloudWatch\nLogs',                  'x': 12.5, 'y': 2.5},
+        {'id': 'dynamodb', 'icon': 'dynamodb',   'label': 'DynamoDB\nratelimit / share',        'x': 16.0, 'y': 2.5},
     ]
 
     edges = [
-        ('browser',  'openmeteo', '天気取得'),
-        ('browser',  'wikipedia', ''),
-        ('browser',  'cf',        ''),
-        ('acm',      'cf',        'HTTPS'),
-        ('cf',       's3',        '/* 静的HTML'),
-        ('cf',       'apigw',     '/api/* /s/*'),
-        ('apigw',    'lambda',    ''),
-        ('lambda',   'bedrock',   ''),
-        ('lambda',   'ssm',       ''),
-        ('lambda',   'cw',        ''),
-        ('lambda',   'dynamodb',  ''),
+        ('browser', 'cf',       ''),
+        ('acm',     'cf',       'HTTPS'),
+        ('cf',      's3',       '/* 静的HTML'),
+        ('cf',      'apigw',    '/api/* /s/*'),
+        ('apigw',   'lambda',   ''),
+        ('lambda',  'bedrock',  ''),
+        ('lambda',  'ssm',      ''),
+        ('lambda',  'cw',       ''),
+        ('lambda',  'dynamodb', ''),
     ]
 
+    # クラスター座標は auto-padding が発火しないよう事前計算済み
+    # PAD_H=1.0, PAD_TOP=1.1, PAD_BOT=1.6
     clusters = [
         {
             'label': '外部サービス', 'icon': None,
-            'x': 0.4, 'y': 0.5, 'w': 2.3, 'h': 6.2,
+            'x': 0.4, 'y': 2.9, 'w': 2.5, 'h': 2.9,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
         {
             'label': 'Edge / Global', 'icon': 'aws_cloud',
-            'x': 3.3, 'y': 2.3, 'w': 2.6, 'h': 4.1,
+            'x': 4.5, 'y': 2.9, 'w': 2.4, 'h': 4.8,
             'color': '#EAF4FB', 'edgecolor': '#8AAFCC',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 6.2, 'y': 0.3, 'w': 8.5, 'h': 6.5,
+            'x': 8.0, 'y': 0.4, 'w': 9.2, 'h': 7.5,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
     ]
 
-    # ── 自動パディング調整 ──
+    # ── 自動パディング調整（念のため） ──
     _PAD_H   = HALF + 0.45
     _PAD_TOP = HALF + 0.55
     _PAD_BOT = HALF + 1.05
@@ -132,9 +138,26 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
-    fig, ax = plt.subplots(figsize=(15, 8), dpi=150)
-    ax.set_xlim(0, 15)
-    ax.set_ylim(0, 8)
+    # ── クラスター間重複解消 ──
+    _MIN_GAP = 0.8
+    for _ in range(20):
+        moved = False
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                ca, cb = clusters[i], clusters[j]
+                if ca['y'] < cb['y'] + cb['h'] and cb['y'] < ca['y'] + ca['h']:
+                    if ca['x'] + ca['w'] + _MIN_GAP > cb['x'] and ca['x'] < cb['x']:
+                        push = ca['x'] + ca['w'] + _MIN_GAP - cb['x']
+                        cb['x'] += push; moved = True
+                    elif cb['x'] + cb['w'] + _MIN_GAP > ca['x'] and cb['x'] < ca['x']:
+                        push = cb['x'] + cb['w'] + _MIN_GAP - ca['x']
+                        ca['x'] += push; moved = True
+        if not moved:
+            break
+
+    fig, ax = plt.subplots(figsize=(18, 9), dpi=150)
+    ax.set_xlim(0, 18)
+    ax.set_ylim(0, 9)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')
@@ -156,11 +179,11 @@ def draw():
         )
         ax.add_patch(rect)
         if has_icon:
-            img = _cluster_icon(cl['icon'])
+            img_c = _load(cl['icon'])
             ix = cl['x'] + 0.15
             iy = cl['y'] + cl['h'] - ICON_SZ - 0.05
-            if img is not None:
-                ax.imshow(img, extent=[ix, ix + ICON_SZ, iy, iy + ICON_SZ],
+            if img_c is not None:
+                ax.imshow(img_c, extent=[ix, ix + ICON_SZ, iy, iy + ICON_SZ],
                           aspect='auto', zorder=6, interpolation='bilinear')
             tx = ix + ICON_SZ + 0.12
             ty = cl['y'] + cl['h'] - ICON_SZ / 2 - 0.05
@@ -189,11 +212,11 @@ def draw():
         if label:
             mx = (n1['x'] + n2['x']) / 2
             my = (n1['y'] + n2['y']) / 2
-            ax.text(mx, my + 0.18, label, ha='center', va='bottom',
+            ax.text(mx, my + 0.2, label, ha='center', va='bottom',
                     fontsize=7, color='#666666',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
-                              edgecolor='none', alpha=0.85),
-                    zorder=4)
+                              edgecolor='none', alpha=0.9),
+                    zorder=5)
 
     for n in nodes:
         x, y = n['x'], n['y']
