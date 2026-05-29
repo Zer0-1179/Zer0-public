@@ -77,8 +77,9 @@ app.get('/api/templates/:filename', async (req, res) => {
 // Astro i18n redirect (prefixDefaultLocale:true) loses Location header via serverless-http
 app.get('/', (req, res) => res.redirect(302, '/ja/'));
 
-// CSP: Astro middleware sets headers on its Response object but those don't reach API GW.
-// Intercept writeHead to inject the static hash-based CSP into the actual HTTP response.
+// CSP fallback: Astro middleware's Response headers need writeHead to be intercepted
+// to reach serverless-http. The STATIC_CSP is injected only when Astro doesn't set one
+// (e.g., API routes). For page routes, Astro's dynamic nonce+hash CSP takes precedence.
 const STATIC_CSP = [
   "default-src 'self'",
   "connect-src 'self'",
@@ -88,8 +89,8 @@ const STATIC_CSP = [
     "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='", // Nav menu
     "'sha256-zcbm4FJaWWCwAgnJ0yCOTvXZkKYxVl/I4ORIl10vIXA='", // ja/templates/index
     "'sha256-1oCXA/UY7N5q7PEDNBJJHymj0ckybtkBsJ9dAnnhQ9s='", // en/templates/index
-    "'sha256-x1Br5NBxUF3JwdXihhDg0g0e6FgOtXi9m7c1kV32WKA='", // ja/templates/[category]
-    "'sha256-rJYFB/xhPE/QUzeEC6WdbzuXBcVe5qlhGG89I/C9OC8='", // en/templates/[category]
+    "'sha256-iHmrsk23cnkNmaXiQoIcxqwOp2m/wDYT0TyA8jixISs='", // ja/templates/[category]
+    "'sha256-30cQFjkZyd3AUeYigBcz8I/DwYAu0c3KpNoS//mOLuI='", // en/templates/[category]
   ].join(' '),
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src https://fonts.gstatic.com",
