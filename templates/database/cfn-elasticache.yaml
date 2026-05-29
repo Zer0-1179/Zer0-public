@@ -1,0 +1,274 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ElastiCache Redis replication group with optional Multi-AZ replica"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# Single node (dev - no replica):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-elasticache \
+#   --template-file cfn-elasticache.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SubnetId01=subnet-xxxxxx \
+#     SubnetId02=subnet-yyyyyy \
+#     SecurityGroupId=sg-xxxxxx
+#
+# Multi-node with replica (prd - primary + 1 replica in different AZ):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-elasticache \
+#   --template-file cfn-elasticache.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     SubnetId01=subnet-xxxxxx \
+#     SubnetId02=subnet-yyyyyy \
+#     SecurityGroupId=sg-xxxxxx \
+#     NumCacheClusters=2 \
+#     NodeType=cache.r6g.large
+#
+# Get primary endpoint after deploy:
+# ENDPOINT=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-elasticache \
+#   --query "Stacks[0].Outputs[?OutputKey=='PrimaryEndpoint'].OutputValue" \
+#   --output text)
+#
+# PREREQUISITES:
+#   - cfn-vpc.yaml deployed (for subnet IDs)
+#   - cfn-security-group.yaml deployed (for SG ID; allow inbound TCP 6379 from app SG)
+#
+# NOTES:
+#   - NumCacheClusters=1: single primary node, no failover
+#   - NumCacheClusters>=2: primary + replicas, automatic failover and Multi-AZ enabled
+#   - SubnetId01 and SubnetId02 must be in different AZs (required for Multi-AZ)
+#   - Snapshot retention: dev=1 day, stg=3 days, prd=7 days (auto-set by Env)
+#   - KMS encryption requires at-rest encryption to be enabled
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups parameters visually.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Cluster"
+        Parameters:
+          - NodeType
+          - EngineVersion
+          - NumCacheClusters
+      - Label:
+          default: "Network"
+        Parameters:
+          - SubnetId01
+          - SubnetId02
+          - SecurityGroupId
+      - Label:
+          default: "Encryption (optional)"
+        Parameters:
+          - AtRestEncryption
+          - TransitEncryption
+          - KmsKeyId
+
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# AllowedValues restricts accepted input.
+# Default sets the fallback value when omitted.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: "Used as part of the replication group ID and subnet group name."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment. Affects snapshot retention limit."
+
+  NodeType:
+    Type: String
+    Default: cache.t3.micro
+    AllowedValues:
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
+      - cache.r6g.large
+      - cache.r6g.xlarge
+    Description: "Cache node instance type. Use cache.r6g.* for production workloads."
+
+  EngineVersion:
+    Type: String
+    Default: "7.1"
+    AllowedValues:
+      - "7.1"
+      - "7.0"
+      - "6.2"
+    Description: "Redis engine version."
+
+  NumCacheClusters:
+    Type: Number
+    Default: 1
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+    Description: "Total number of nodes (1=single, 2=primary+1 replica, 3=primary+2 replicas). NumCacheClusters>=2 enables automatic failover and Multi-AZ."
+
+  SubnetId01:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Private subnet ID in AZ-a. Deploy after cfn-vpc.yaml."
+
+  SubnetId02:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Private subnet ID in AZ-c. Must be in a different AZ from SubnetId01."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security Group ID for the Redis cluster. Must allow inbound TCP 6379 from the application security group."
+
+  AtRestEncryption:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable at-rest encryption for data stored on disk."
+
+  TransitEncryption:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable in-transit encryption (TLS). Clients must connect via TLS when enabled."
+
+  KmsKeyId:
+    Type: String
+    Default: ""
+    Description: "KMS Key ARN for at-rest encryption (optional). AtRestEncryption must be true. The key policy must allow elasticache.amazonaws.com as a principal."
+
+# -----------------------------------------------
+# Mappings
+# Static reference tables for snapshot retention per environment.
+# Usage: !FindInMap [EnvConfig, !Ref Env, SnapshotRetentionLimit]
+# -----------------------------------------------
+Mappings:
+  EnvConfig:
+    dev:
+      SnapshotRetentionLimit: 1
+    stg:
+      SnapshotRetentionLimit: 3
+    prd:
+      SnapshotRetentionLimit: 7
+
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from parameter values.
+# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# -----------------------------------------------
+Conditions:
+  IsMultiNode:              !Not  [!Equals [!Ref NumCacheClusters, "1"]]
+  EnableAtRestEncryption:   !Equals [!Ref AtRestEncryption,  "true"]
+  EnableTransitEncryption:  !Equals [!Ref TransitEncryption, "true"]
+  HasKmsKey:                !Not  [!Equals [!Ref KmsKeyId, ""]]
+
+# -----------------------------------------------
+# Resources
+# SubnetGroup must reference subnets in at least 2 AZs for Multi-AZ support.
+# AutomaticFailoverEnabled and MultiAZEnabled require NumCacheClusters >= 2.
+# KmsKeyId is only applied when AtRestEncryptionEnabled is true.
+# Snapshot window: 18:00-19:00 UTC (03:00-04:00 JST).
+# Maintenance window: Sunday 19:00-20:00 UTC (04:00-05:00 JST).
+# -----------------------------------------------
+Resources:
+
+  SubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet-group"
+      Description: !Sub "${ProjectName} ${Env} Redis subnet group"
+      SubnetIds:
+        - !Ref SubnetId01
+        - !Ref SubnetId02
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  ReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: !Sub "${ProjectName}-${Env}"
+      ReplicationGroupDescription: !Sub "${ProjectName} ${Env} Redis cluster"
+      CacheNodeType: !Ref NodeType
+      Engine: redis
+      EngineVersion: !Ref EngineVersion
+      NumCacheClusters: !Ref NumCacheClusters
+      CacheSubnetGroupName: !Ref SubnetGroup
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      AtRestEncryptionEnabled: !If [EnableAtRestEncryption,  true, false]
+      TransitEncryptionEnabled: !If [EnableTransitEncryption, true, false]
+      KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      AutomaticFailoverEnabled: !If [IsMultiNode, true, false]
+      MultiAZEnabled:           !If [IsMultiNode, true, false]
+      AutoMinorVersionUpgrade: true
+      SnapshotRetentionLimit: !FindInMap [EnvConfig, !Ref Env, SnapshotRetentionLimit]
+      SnapshotWindow: "18:00-19:00"
+      PreferredMaintenanceWindow: "sun:19:00-sun:20:00"
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# Export allows other stacks to reference via !ImportValue.
+# PrimaryEndpoint: use for both reads and writes (single node) or writes only (multi-node).
+# ReaderEndpoint: available only when NumCacheClusters >= 2; use for read-only operations.
+# -----------------------------------------------
+Outputs:
+
+  PrimaryEndpoint:
+    Description: "Redis primary endpoint (host:port). Use for writes or all operations in single-node."
+    Value: !Sub
+      - "${Addr}:${Port}"
+      - Addr: !GetAtt ReplicationGroup.PrimaryEndPoint.Address
+        Port: !GetAtt ReplicationGroup.PrimaryEndPoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-PrimaryEndpoint"
+
+  ReaderEndpoint:
+    Condition: IsMultiNode
+    Description: "Redis reader endpoint (host:port). Use for read-only operations when NumCacheClusters >= 2."
+    Value: !Sub
+      - "${Addr}:${Port}"
+      - Addr: !GetAtt ReplicationGroup.ReaderEndPoint.Address
+        Port: !GetAtt ReplicationGroup.ReaderEndPoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-ReaderEndpoint"
+
+  SubnetGroupName:
+    Description: "ElastiCache subnet group name"
+    Value: !Ref SubnetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-SubnetGroupName"
