@@ -90,6 +90,7 @@ Parameters:
 
   QueueName:
     Type: String
+    Default: ""
     Description: "SQS queue name (not URL or ARN). For FIFO queues, include the .fifo suffix."
 
   MessageCountWarningThreshold:

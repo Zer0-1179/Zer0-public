@@ -132,7 +132,7 @@ Parameters:
     NoEcho: true
     MinLength: 8
     MaxLength: 41
-    Description: "Master password (8-41 characters)."
+    Description: "Master password (8-41 characters). NOTE: No default is set intentionally. Always specify a strong password at deploy time."
     ConstraintDescription: "Must be 8 to 41 characters."
 
   AllocatedStorage:

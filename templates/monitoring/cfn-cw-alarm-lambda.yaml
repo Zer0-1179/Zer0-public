@@ -84,6 +84,7 @@ Parameters:
 
   FunctionName:
     Type: String
+    Default: ""
     Description: "Lambda function name (not ARN)."
 
   ErrorWarningThreshold:

@@ -86,8 +86,9 @@ Parameters:
   FileSystemId:
     Type: String
     Description: "EFS file system ID (e.g. fs-0123456789abcdef0)."
-    AllowedPattern: "^fs-[0-9a-f]+$"
-    ConstraintDescription: "Must be a valid EFS file system ID (fs-xxxxxxxx)."
+    Default: ""
+    AllowedPattern: "^(fs-[0-9a-f]+)?$"
+    ConstraintDescription: "Must be a valid EFS file system ID (fs-xxxxxxxx) or empty."
 
   PercentIOLimitWarningThreshold:
     Type: Number
