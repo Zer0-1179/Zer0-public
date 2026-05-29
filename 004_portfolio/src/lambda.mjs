@@ -77,6 +77,38 @@ app.get('/api/templates/:filename', async (req, res) => {
 // Astro i18n redirect (prefixDefaultLocale:true) loses Location header via serverless-http
 app.get('/', (req, res) => res.redirect(302, '/ja/'));
 
+// CSP: Astro middleware sets headers on its Response object but those don't reach API GW.
+// Intercept writeHead to inject the static hash-based CSP into the actual HTTP response.
+const STATIC_CSP = [
+  "default-src 'self'",
+  "connect-src 'self'",
+  [
+    "script-src 'self'",
+    "'sha256-2mZe1216qSfXhWjWW7LgH/iaMAXbV60fBI2HwiXJGpM='", // BaseLayout font
+    "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='", // Nav menu
+    "'sha256-nBkbTataBdvlgdlOt3Vr4oQNmEXlYljqccazFHtA2hA='", // ja/templates/index
+    "'sha256-BbdfFf3SSABC2MwBjewRJNNNcEXAwOv3cfNu4BwCln0='", // en/templates/index
+    "'sha256-x1Br5NBxUF3JwdXihhDg0g0e6FgOtXi9m7c1kV32WKA='", // ja/templates/[category]
+    "'sha256-rJYFB/xhPE/QUzeEC6WdbzuXBcVe5qlhGG89I/C9OC8='", // en/templates/[category]
+  ].join(' '),
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "object-src 'none'",
+  "base-uri 'self'",
+].join('; ');
+
+app.use((req, res, next) => {
+  const origWriteHead = res.writeHead.bind(res);
+  res.writeHead = function(statusCode, ...args) {
+    if (!res.getHeader('Content-Security-Policy')) {
+      res.setHeader('Content-Security-Policy', STATIC_CSP);
+    }
+    return origWriteHead(statusCode, ...args);
+  };
+  next();
+});
+
 app.use(astroMiddleware);
 
 export const handler = serverlessHttp(app, {
