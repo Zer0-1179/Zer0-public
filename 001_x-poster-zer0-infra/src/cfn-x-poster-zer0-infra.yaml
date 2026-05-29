@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: X Poster Bot (zer0-infra) - Lambda + EventBridge Rules (posts AWS tips to @Zer0_Infra twice daily)
+Description: X Poster Bot (zer0-infra) - Lambda + EventBridge Rule (posts AWS tips to @Zer0_Infra once daily at 20:00 JST)
 
 Resources:
 
@@ -47,7 +47,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: x-poster-zer0-infra
-      Description: BedrockでAWS技術情報ツイートを生成し、毎朝9時・毎夜20時に@Zer0_InfraへXへ自動投稿するLambda関数
+      Description: BedrockでAWS技術情報ツイートを生成し、毎夜20時に@Zer0_InfraへXへ自動投稿するLambda関数
       Runtime: python3.14
       Handler: lambda_function.lambda_handler
       Role: !GetAtt PosterRole.Arn
@@ -61,26 +61,6 @@ Resources:
         ZipFile: |
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "placeholder"}
-
-  # ── EventBridge: 毎朝9時 JST (= UTC 0時) ───────────
-  MorningRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: x-poster-zer0-infra-morning
-      Description: 毎朝9時（JST）にURLなし・ひとこと感想系を投稿
-      ScheduleExpression: "cron(0 0 * * ? *)"
-      State: ENABLED
-      Targets:
-        - Id: MorningTarget
-          Arn: !GetAtt PosterFunction.Arn
-
-  MorningPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref PosterFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt MorningRule.Arn
 
   # ── EventBridge: 毎夜20時 JST (= UTC 11時) ──────────
   EveningRule:
