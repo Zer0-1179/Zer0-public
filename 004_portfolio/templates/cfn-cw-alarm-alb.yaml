@@ -1,0 +1,295 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for ALB - 5xx errors, unhealthy hosts, and response latency with WARNING/CRITICAL severity levels"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# ALB_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-alb-<Suffix> \
+#   --query "Stacks[0].Outputs[?OutputKey=='AlbArn'].OutputValue" \
+#   --output text)
+# TG_ARN=$(aws cloudformation describe-stacks \
+#   --stack-name <ProjectName>-<Env>-alb-<Suffix> \
+#   --query "Stacks[0].Outputs[?OutputKey=='TargetGroupArn'].OutputValue" \
+#   --output text)
+#
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-alb \
+#   --template-file cfn-cw-alarm-alb.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     AlbArn=$ALB_ARN \
+#     TargetGroupArn=$TG_ARN
+#
+# With SNS notification (WARNING → Slack, CRITICAL → PagerDuty):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-alb \
+#   --template-file cfn-cw-alarm-alb.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     AlbArn=$ALB_ARN \
+#     TargetGroupArn=$TG_ARN \
+#     WarningActionArn=$SLACK_SNS_ARN \
+#     CriticalActionArn=$PAGERDUTY_SNS_ARN
+#
+# NOTE: AlbArn and TargetGroupArn are the full ARNs.
+#       CloudWatch dimension values are extracted automatically.
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters: [ProjectName, Env]
+      - Label:
+          default: "Target Load Balancer"
+        Parameters: [AlbArn, TargetGroupArn]
+      - Label:
+          default: "WARNING Thresholds"
+        Parameters: [Error5xxWarningThreshold, UnhealthyHostWarningThreshold, LatencyWarningThreshold]
+      - Label:
+          default: "CRITICAL Thresholds"
+        Parameters: [Error5xxCriticalThreshold, UnhealthyHostCriticalThreshold, LatencyCriticalThreshold]
+      - Label:
+          default: "Common"
+        Parameters: [EvaluationPeriods]
+      - Label:
+          default: "Notifications (optional)"
+        Parameters: [WarningActionArn, CriticalActionArn]
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues: [stg, dev, prd]
+
+  AlbArn:
+    Type: String
+    Description: "ALB full ARN. Used to extract the CloudWatch dimension (app/<name>/<id>)."
+
+  TargetGroupArn:
+    Type: String
+    Description: "Target group full ARN. Used for the UnHealthyHostCount dimension."
+
+  Error5xxWarningThreshold:
+    Type: Number
+    Default: 5
+    MinValue: 0
+    Description: "Target 5xx error count WARNING threshold per 1-minute period."
+
+  Error5xxCriticalThreshold:
+    Type: Number
+    Default: 20
+    MinValue: 0
+    Description: "Target 5xx error count CRITICAL threshold per 1-minute period."
+
+  UnhealthyHostWarningThreshold:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: "Unhealthy host count WARNING threshold. Default 0 = any unhealthy host."
+
+  UnhealthyHostCriticalThreshold:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: "Unhealthy host count CRITICAL threshold. Default 1 = multiple unhealthy hosts."
+
+  LatencyWarningThreshold:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: "Average target response time WARNING threshold in seconds."
+
+  LatencyCriticalThreshold:
+    Type: Number
+    Default: 3
+    MinValue: 0
+    Description: "Average target response time CRITICAL threshold in seconds."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
+
+  WarningActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for WARNING severity (e.g. Slack). Used for both ALARM and OK notifications."
+
+  CriticalActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
+
+Conditions:
+  HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
+  HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
+
+Resources:
+
+  Error5xxWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-5xx-warning"
+      AlarmDescription: !Sub "ALB target 5xx > ${Error5xxWarningThreshold} for ${EvaluationPeriods} x 1 min. [WARNING]"
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref Error5xxWarningThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  Error5xxCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-5xx-critical"
+      AlarmDescription: !Sub "ALB target 5xx > ${Error5xxCriticalThreshold} for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref Error5xxCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+  UnhealthyHostWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-unhealthy-host-warning"
+      AlarmDescription: !Sub "ALB unhealthy hosts > ${UnhealthyHostWarningThreshold} for ${EvaluationPeriods} x 1 min. [WARNING]"
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+        - Name: TargetGroup
+          Value: !Join ["", ["targetgroup", !Select [1, !Split [":targetgroup", !Ref TargetGroupArn]]]]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref UnhealthyHostWarningThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  UnhealthyHostCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-unhealthy-host-critical"
+      AlarmDescription: !Sub "ALB unhealthy hosts > ${UnhealthyHostCriticalThreshold} for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+        - Name: TargetGroup
+          Value: !Join ["", ["targetgroup", !Select [1, !Split [":targetgroup", !Ref TargetGroupArn]]]]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref UnhealthyHostCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+  LatencyWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-latency-warning"
+      AlarmDescription: !Sub "ALB avg response time > ${LatencyWarningThreshold} s for ${EvaluationPeriods} x 1 min. [WARNING]"
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetResponseTime
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref LatencyWarningThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  LatencyCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-latency-critical"
+      AlarmDescription: !Sub "ALB avg response time > ${LatencyCriticalThreshold} s for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetResponseTime
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Select [1, !Split ["loadbalancer/", !Ref AlbArn]]
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref LatencyCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+Outputs:
+
+  Error5xxWarningAlarmArn:
+    Description: "5xx WARNING alarm ARN"
+    Value: !GetAtt Error5xxWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-Error5xxWarningAlarmArn"
+
+  Error5xxCriticalAlarmArn:
+    Description: "5xx CRITICAL alarm ARN"
+    Value: !GetAtt Error5xxCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-Error5xxCriticalAlarmArn"
+
+  UnhealthyHostWarningAlarmArn:
+    Description: "Unhealthy host WARNING alarm ARN"
+    Value: !GetAtt UnhealthyHostWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-UnhealthyHostWarningAlarmArn"
+
+  UnhealthyHostCriticalAlarmArn:
+    Description: "Unhealthy host CRITICAL alarm ARN"
+    Value: !GetAtt UnhealthyHostCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-UnhealthyHostCriticalAlarmArn"
+
+  LatencyWarningAlarmArn:
+    Description: "Latency WARNING alarm ARN"
+    Value: !GetAtt LatencyWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LatencyWarningAlarmArn"
+
+  LatencyCriticalAlarmArn:
+    Description: "Latency CRITICAL alarm ARN"
+    Value: !GetAtt LatencyCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LatencyCriticalAlarmArn"

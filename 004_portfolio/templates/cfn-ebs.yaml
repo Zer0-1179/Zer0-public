@@ -1,0 +1,198 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EBS Volume with attachment to an existing EC2 instance."
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ebs-<EbsSuffix> \
+#   --template-file cfn-ebs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     EbsSuffix=data \
+#     AvailabilityZone=ap-northeast-1a \
+#     Ec2InstanceId=i-0123456789abcdef0
+#
+# EbsSuffix examples: data, logs, backup, 01, 02
+#
+# IMPORTANT — deletion order:
+#   Delete this stack BEFORE deleting the EC2 stack.
+#   CloudFormation will automatically detach the volume from EC2
+#   and then delete the volume when this stack is deleted.
+#
+# Device name examples (Linux):
+#   /dev/sdf  /dev/sdg  /dev/sdh  (shown as /dev/xvdf etc. inside the OS)
+#
+# Deploy order:
+#   1. cfn-vpc.yaml
+#   2. cfn-security-group.yaml
+#   3. cfn-ec2.yaml                 (get the InstanceId from Outputs)
+#   4. cfn-ebs.yaml                 (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - EbsSuffix
+      - Label:
+          default: "Volume"
+        Parameters:
+          - VolumeType
+          - SizeGiB
+          - AvailabilityZone
+          - Iops
+          - Throughput
+      - Label:
+          default: "Attachment"
+        Parameters:
+          - Ec2InstanceId
+          - DeviceName
+      - Label:
+          default: "Encryption (optional)"
+        Parameters:
+          - KmsKeyArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  EbsSuffix:
+    Type: String
+    Default: data
+    Description: "Purpose or sequence identifier for this volume (e.g. data, logs, 01)."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  VolumeType:
+    Type: String
+    Default: gp3
+    AllowedValues:
+      - gp3
+      - gp2
+      - io1
+      - io2
+      - st1
+      - sc1
+    Description: "gp3: recommended general purpose. io1/io2: high IOPS. st1: throughput HDD. sc1: cold HDD."
+
+  SizeGiB:
+    Type: Number
+    Default: 20
+    MinValue: 1
+    MaxValue: 16384
+    Description: "Volume size in GiB. gp3/gp2: 1-16384. io1/io2: 4-16384. st1/sc1: 125-16384."
+
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-northeast-1a
+    Description: "Must match the Availability Zone of the EC2 instance."
+
+  Iops:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 256000
+    Description: "Provisioned IOPS. 0 = use default (gp3: 3000). Required for io1 (100-64000) and io2 (100-256000)."
+
+  Throughput:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 1000
+    Description: "Throughput in MiB/s. 0 = use default (gp3: 125). Only applies to gp3."
+
+  Ec2InstanceId:
+    Type: String
+    Default: ""
+    Description: "EC2 instance ID to attach this volume to (e.g. i-0123456789abcdef0). Required."
+
+  DeviceName:
+    Type: String
+    Default: "/dev/sdf"
+    Description: "Device name on the EC2 instance. Linux: /dev/sdf to /dev/sdp."
+
+  KmsKeyArn:
+    Type: String
+    Default: ""
+    Description: "KMS key ARN for encryption at rest. Leave empty to use the AWS managed key (aws/ebs)."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  HasIops: !Not [!Equals [!Ref Iops, 0]]
+  HasThroughput: !Not [!Equals [!Ref Throughput, 0]]
+  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
+
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
+Resources:
+  Volume:
+    Type: AWS::EC2::Volume
+    # DeletionPolicy: Delete ensures the volume is deleted when this stack is deleted.
+    # Delete this stack BEFORE deleting the EC2 stack so CloudFormation detaches
+    # and deletes the volume cleanly.
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      VolumeType: !Ref VolumeType
+      Size: !Ref SizeGiB
+      Iops: !If [HasIops, !Ref Iops, !Ref AWS::NoValue]
+      Throughput: !If [HasThroughput, !Ref Throughput, !Ref AWS::NoValue]
+      Encrypted: true
+      KmsKeyId: !If [HasKmsKey, !Ref KmsKeyArn, !Ref AWS::NoValue]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-ebs-${EbsSuffix}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  VolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref Ec2InstanceId
+      VolumeId: !Ref Volume
+      Device: !Ref DeviceName
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  VolumeId:
+    Description: "EBS Volume ID"
+    Value: !Ref Volume
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-ebs-${EbsSuffix}-VolumeId"
+
+  DeviceName:
+    Description: "Device name on the EC2 instance"
+    Value: !Ref DeviceName
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-ebs-${EbsSuffix}-DeviceName"

@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EFS File System with Mount Targets across 2 AZs (private subnets)."
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-efs-<EfsSuffix> \
+#   --template-file cfn-efs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SgSuffix=efs \
+#     EfsSuffix=shared
+#
+# EfsSuffix examples: shared, app, logs, 01, 02
+#
+# NOTE:
+#   The Security Group specified by SgSuffix is applied to the mount targets.
+#   Add an ingress rule for NFS (TCP port 2049) from EC2 instances to that SG
+#   using cfn-security-group-ingress.yaml before mounting.
+#
+# Deploy order:
+#   1. cfn-vpc.yaml
+#   2. cfn-security-group.yaml         (SgSuffix=efs)
+#   3. cfn-security-group-ingress.yaml (open TCP 2049 from EC2 CIDR or SG)
+#   4. cfn-efs.yaml                    (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - SgSuffix
+          - EfsSuffix
+      - Label:
+          default: "Performance"
+        Parameters:
+          - PerformanceMode
+          - ThroughputMode
+          - ProvisionedThroughputMibps
+      - Label:
+          default: "Options"
+        Parameters:
+          - BackupEnabled
+          - KmsKeyArn
+
+# -----------------------------------------------
+# Parameters
+# VpcId and SubnetIds are imported from {ProjectName}-{Env}-vpc stack automatically.
+# SecurityGroupId is imported from {ProjectName}-{Env}-sg-{SgSuffix} stack automatically.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+
+  SgSuffix:
+    Type: String
+    Default: efs
+    Description: "Must match the SgSuffix used in cfn-security-group.yaml (e.g. efs)."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  EfsSuffix:
+    Type: String
+    Default: shared
+    Description: "Purpose or sequence identifier for this EFS (e.g. shared, app, 01)."
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  PerformanceMode:
+    Type: String
+    Default: generalPurpose
+    AllowedValues:
+      - generalPurpose
+      - maxIO
+    Description: "generalPurpose: low latency (recommended). maxIO: high throughput for many clients."
+
+  ThroughputMode:
+    Type: String
+    Default: elastic
+    AllowedValues:
+      - bursting
+      - provisioned
+      - elastic
+    Description: "elastic: auto-scales (recommended). bursting: scales with storage size. provisioned: fixed throughput."
+
+  ProvisionedThroughputMibps:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 1024
+    Description: "Required when ThroughputMode=provisioned. Ignored otherwise. Min 1, Max 1024."
+
+  BackupEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable AWS Backup for this file system."
+
+  KmsKeyArn:
+    Type: String
+    Default: ""
+    Description: "KMS key ARN for encryption at rest. Leave empty to use the AWS managed key (aws/elasticfilesystem)."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  IsProvisioned: !Equals [!Ref ThroughputMode, "provisioned"]
+  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
+  IsBackupEnabled: !Equals [!Ref BackupEnabled, "true"]
+
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
+Resources:
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      KmsKeyId: !If [HasKmsKey, !Ref KmsKeyArn, !Ref AWS::NoValue]
+      PerformanceMode: !Ref PerformanceMode
+      ThroughputMode: !Ref ThroughputMode
+      ProvisionedThroughputInMibps: !If [IsProvisioned, !Ref ProvisionedThroughputMibps, !Ref AWS::NoValue]
+      BackupPolicy:
+        Status: !If [IsBackupEnabled, ENABLED, DISABLED]
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-efs-${EfsSuffix}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  MountTarget01:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet01Id"
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
+
+  MountTarget02:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  FileSystemId:
+    Description: "EFS File System ID"
+    Value: !Ref FileSystem
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-efs-${EfsSuffix}-FileSystemId"
+
+  FileSystemArn:
+    Description: "EFS File System ARN"
+    Value: !GetAtt FileSystem.Arn
+    Export:
+      Name: !Sub "${ProjectName}-${Env}-efs-${EfsSuffix}-FileSystemArn"

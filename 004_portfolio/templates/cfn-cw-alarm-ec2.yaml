@@ -1,0 +1,236 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Alarms for EC2 - CPU and memory with WARNING/CRITICAL severity levels"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-ec2-<InstanceAlias> \
+#   --template-file cfn-cw-alarm-ec2.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     InstanceId=i-0123456789abcdef0 \
+#     InstanceAlias=web-01
+#
+# With SNS notification (WARNING → Slack, CRITICAL → PagerDuty):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alarm-ec2-web-01 \
+#   --template-file cfn-cw-alarm-ec2.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     InstanceId=i-0123456789abcdef0 \
+#     InstanceAlias=web-01 \
+#     WarningActionArn=$SLACK_SNS_ARN \
+#     CriticalActionArn=$PAGERDUTY_SNS_ARN
+#
+# NOTE: mem_used_percent requires CloudWatch Agent on the instance.
+#       Without it, memory alarms stay INSUFFICIENT_DATA (no false triggers).
+# -----------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters: [ProjectName, Env]
+      - Label:
+          default: "Target Instance"
+        Parameters: [InstanceId, InstanceAlias]
+      - Label:
+          default: "WARNING Thresholds"
+        Parameters: [CpuWarningThreshold, MemoryWarningThreshold]
+      - Label:
+          default: "CRITICAL Thresholds"
+        Parameters: [CpuCriticalThreshold, MemoryCriticalThreshold]
+      - Label:
+          default: "Common"
+        Parameters: [EvaluationPeriods]
+      - Label:
+          default: "Notifications (optional)"
+        Parameters: [WarningActionArn, CriticalActionArn]
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues: [stg, dev, prd]
+
+  InstanceId:
+    Type: String
+    Description: "EC2 instance ID (e.g. i-0123456789abcdef0)."
+    AllowedPattern: "^i-[0-9a-f]+$"
+    ConstraintDescription: "Must be a valid EC2 instance ID (i-xxxxxxxx)."
+
+  InstanceAlias:
+    Type: String
+    Default: ""
+    Description: "Short name for the instance used in alarm names (e.g. web-01). Leave empty to use InstanceId."
+
+  CpuWarningThreshold:
+    Type: Number
+    Default: 70
+    MinValue: 1
+    MaxValue: 100
+    Description: "CPU utilization WARNING threshold (%)."
+
+  CpuCriticalThreshold:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    MaxValue: 100
+    Description: "CPU utilization CRITICAL threshold (%)."
+
+  MemoryWarningThreshold:
+    Type: Number
+    Default: 70
+    MinValue: 1
+    MaxValue: 100
+    Description: "Memory usage WARNING threshold (%). Requires CloudWatch Agent."
+
+  MemoryCriticalThreshold:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    MaxValue: 100
+    Description: "Memory usage CRITICAL threshold (%). Requires CloudWatch Agent."
+
+  EvaluationPeriods:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: "Number of consecutive 5-minute periods that must breach the threshold before alarming."
+
+  WarningActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for WARNING severity (e.g. Slack). Used for both ALARM and OK notifications."
+
+  CriticalActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
+
+Conditions:
+  HasAlias:          !Not [!Equals [!Ref InstanceAlias, ""]]
+  HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
+  HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
+
+Resources:
+
+  CpuWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - "${ProjectName}-${Env}-ec2-${Label}-cpu-warning"
+        - Label: !If [HasAlias, !Ref InstanceAlias, !Ref InstanceId]
+      AlarmDescription: !Sub "EC2 CPU > ${CpuWarningThreshold}% for ${EvaluationPeriods} x 5 min. [WARNING]"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref CpuWarningThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  CpuCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - "${ProjectName}-${Env}-ec2-${Label}-cpu-critical"
+        - Label: !If [HasAlias, !Ref InstanceAlias, !Ref InstanceId]
+      AlarmDescription: !Sub "EC2 CPU > ${CpuCriticalThreshold}% for ${EvaluationPeriods} x 5 min. [CRITICAL]"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref CpuCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+  MemoryWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - "${ProjectName}-${Env}-ec2-${Label}-memory-warning"
+        - Label: !If [HasAlias, !Ref InstanceAlias, !Ref InstanceId]
+      AlarmDescription: !Sub "EC2 memory > ${MemoryWarningThreshold}% for ${EvaluationPeriods} x 5 min. [WARNING] (Requires CloudWatch Agent)"
+      Namespace: CWAgent
+      MetricName: mem_used_percent
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref MemoryWarningThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  MemoryCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - "${ProjectName}-${Env}-ec2-${Label}-memory-critical"
+        - Label: !If [HasAlias, !Ref InstanceAlias, !Ref InstanceId]
+      AlarmDescription: !Sub "EC2 memory > ${MemoryCriticalThreshold}% for ${EvaluationPeriods} x 5 min. [CRITICAL] (Requires CloudWatch Agent)"
+      Namespace: CWAgent
+      MetricName: mem_used_percent
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref MemoryCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+Outputs:
+
+  CpuWarningAlarmArn:
+    Description: "CPU WARNING alarm ARN"
+    Value: !GetAtt CpuWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CpuWarningAlarmArn"
+
+  CpuCriticalAlarmArn:
+    Description: "CPU CRITICAL alarm ARN"
+    Value: !GetAtt CpuCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CpuCriticalAlarmArn"
+
+  MemoryWarningAlarmArn:
+    Description: "Memory WARNING alarm ARN"
+    Value: !GetAtt MemoryWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MemoryWarningAlarmArn"
+
+  MemoryCriticalAlarmArn:
+    Description: "Memory CRITICAL alarm ARN"
+    Value: !GetAtt MemoryCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MemoryCriticalAlarmArn"

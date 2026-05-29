@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECR repository with image scanning, lifecycle policy, and env-based deletion policy"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ecr-<RepoSuffix> \
+#   --template-file cfn-ecr.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     RepoSuffix=app
+#
+# RepoSuffix examples: app, api, worker, batch, 01
+#
+# Push image after deploy:
+#   aws ecr get-login-password --region ap-northeast-1 \
+#     | docker login --username AWS \
+#       --password-stdin <AccountId>.dkr.ecr.ap-northeast-1.amazonaws.com
+#   docker tag <image>:latest <AccountId>.dkr.ecr.ap-northeast-1.amazonaws.com/<repo>:latest
+#   docker push <AccountId>.dkr.ecr.ap-northeast-1.amazonaws.com/<repo>:latest
+#
+# Deploy order:
+#   1. cfn-ecr.yaml (this template — no dependencies)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - RepoSuffix
+      - Label:
+          default: "Image Settings"
+        Parameters:
+          - ImageTagMutability
+          - ScanOnPush
+          - LifecycleKeepCount
+      - Label:
+          default: "Encryption (optional)"
+        Parameters:
+          - KmsKeyArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "dev: DeletionPolicy=Delete. prd: DeletionPolicy=Retain."
+
+  RepoSuffix:
+    Type: String
+    Default: app
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose identifier for this repository (e.g. app, api, worker, 01)."
+
+  ImageTagMutability:
+    Type: String
+    Default: IMMUTABLE
+    AllowedValues:
+      - IMMUTABLE
+      - MUTABLE
+    Description: "IMMUTABLE: prevents overwriting existing tags (recommended). MUTABLE: allows tag overwrites."
+
+  ScanOnPush:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Scan images for vulnerabilities on push."
+
+  LifecycleKeepCount:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 1000
+    Description: "Number of images to retain. Older images are expired automatically."
+
+  KmsKeyArn:
+    Type: String
+    Default: ""
+    Description: "KMS key ARN for encryption at rest. Leave empty to use AES256 (AWS managed)."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  IsPrd:     !Equals [!Ref Env, prd]
+  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
+
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
+Resources:
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: !If [IsPrd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-${Env}-ecr-${RepoSuffix}"
+      ImageTagMutability: !Ref ImageTagMutability
+      ImageScanningConfiguration:
+        ScanOnPush: !If [HasKmsKey, !Ref ScanOnPush, !Ref ScanOnPush]
+      EncryptionConfiguration: !If
+        - HasKmsKey
+        - EncryptionType: KMS
+          KmsKey: !Ref KmsKeyArn
+        - EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText:
+          Fn::Sub: |
+            {
+              "rules": [
+                {
+                  "rulePriority": 1,
+                  "description": "Keep last ${LifecycleKeepCount} images",
+                  "selection": {
+                    "tagStatus": "any",
+                    "countType": "imageCountMoreThan",
+                    "countNumber": ${LifecycleKeepCount}
+                  },
+                  "action": {
+                    "type": "expire"
+                  }
+                }
+              ]
+            }
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-ecr-${RepoSuffix}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  RepositoryName:
+    Description: "ECR repository name"
+    Value: !Ref ECRRepository
+    Export:
+      Name: !Sub "${AWS::StackName}-RepositoryName"
+
+  RepositoryUri:
+    Description: "ECR repository URI"
+    Value: !GetAtt ECRRepository.RepositoryUri
+    Export:
+      Name: !Sub "${AWS::StackName}-RepositoryUri"
