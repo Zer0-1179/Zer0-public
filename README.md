@@ -12,7 +12,8 @@
 ├── 003_x-poster_zer0-0326/        # AI活用術 X自動投稿ボット（@Zer0_0326）
 ├── 004_portfolio/                 # Astro SSR ポートフォリオサイト
 ├── 005_Zenn_Mid_Article_Bot/      # Zenn中級者向け技術記事自動生成ボット（毎月2回）
-└── 006_Zer0_CryptoBot/            # 仮想通貨自動売買Bot（BTC/ETH/SOL・信用取引・30分毎ポジション管理）
+├── 006_Zer0_CryptoBot/            # 仮想通貨自動売買Bot（BTC/ETH/SOL・信用取引・30分毎ポジション管理）
+└── 007_Zer0_TouringApp/           # 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）
 ```
 
 ## 運用ルール
@@ -31,3 +32,4 @@
 | `004_portfolio`             | Astro SSR ポートフォリオサイト（CloudFront + Lambda + S3）                                      | 稼働中     |
 | `005_Zenn_Mid_Article_Bot`  | 毎月1日・15日21時にAWS中級者向けZenn技術記事を自動生成・S3保存                                  | 稼働中     |
 | `006_Zer0_CryptoBot`        | BTC/ETH/SOLをBinanceシグナル+bitbank信用取引で自動売買（4時間毎シグナル・30分毎ポジション管理） | 稼働中     |
+| `007_Zer0_TouringApp`       | 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）                                   | 稼働中     |

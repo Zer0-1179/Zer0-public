@@ -1,22 +1,18 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudWatch Alarms for RDS - CPU utilization and freeable memory"
+Description: "CloudWatch Alarms for RDS - CPU and freeable memory with WARNING/CRITICAL severity levels"
 
 # -----------------------------------------------
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-alarm-rds-<Suffix> \
+#   --stack-name <ProjectName>-<Env>-alarm-rds \
 #   --template-file cfn-cw-alarm-rds.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=prd \
 #     DBInstanceIdentifier=my-project-prd-rds
 #
-# With custom thresholds and SNS:
-# SNS_ARN=$(aws cloudformation describe-stacks \
-#   --stack-name <ProjectName>-<Env>-sns \
-#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
-#   --output text)
+# With SNS notification (WARNING → Slack, CRITICAL → PagerDuty):
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-alarm-rds \
 #   --template-file cfn-cw-alarm-rds.yaml \
@@ -24,16 +20,13 @@ Description: "CloudWatch Alarms for RDS - CPU utilization and freeable memory"
 #     ProjectName=my-project \
 #     Env=prd \
 #     DBInstanceIdentifier=my-project-prd-rds \
-#     CpuThreshold=70 \
-#     FreeableMemoryThreshold=524288000 \
-#     AlarmActionArn=$SNS_ARN
+#     WarningActionArn=$SLACK_SNS_ARN \
+#     CriticalActionArn=$PAGERDUTY_SNS_ARN
 #
-# FreeableMemoryThreshold is in bytes.
-# Alarm triggers when freeable memory FALLS BELOW this value.
+# FreeableMemory thresholds are in bytes (alarm triggers when BELOW threshold).
 # Common values:
-#   db.t3.micro  (1 GB RAM)  → 256 MB = 268435456
-#   db.t3.medium (4 GB RAM)  → 512 MB = 536870912
-#   db.r6g.large (16 GB RAM) → 2 GB   = 2147483648
+#   db.t3.medium (4 GB RAM):  Warning=1 GB=1073741824 / Critical=512 MB=536870912
+#   db.r6g.large (16 GB RAM): Warning=4 GB=4294967296 / Critical=2 GB=2147483648
 # -----------------------------------------------
 
 Metadata:
@@ -41,24 +34,22 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters:
-          - ProjectName
-          - Env
+        Parameters: [ProjectName, Env]
       - Label:
           default: "Target DB Instance"
-        Parameters:
-          - DBInstanceIdentifier
+        Parameters: [DBInstanceIdentifier]
       - Label:
-          default: "Thresholds"
-        Parameters:
-          - CpuThreshold
-          - FreeableMemoryThreshold
-          - EvaluationPeriods
+          default: "WARNING Thresholds"
+        Parameters: [CpuWarningThreshold, FreeableMemoryWarningThreshold]
+      - Label:
+          default: "CRITICAL Thresholds"
+        Parameters: [CpuCriticalThreshold, FreeableMemoryCriticalThreshold]
+      - Label:
+          default: "Common"
+        Parameters: [EvaluationPeriods]
       - Label:
           default: "Notifications (optional)"
-        Parameters:
-          - AlarmActionArn
-          - OKActionArn
+        Parameters: [WarningActionArn, CriticalActionArn]
 
 Parameters:
   ProjectName:
@@ -70,27 +61,37 @@ Parameters:
   Env:
     Type: String
     Default: dev
-    AllowedValues:
-      - stg
-      - dev
-      - prd
+    AllowedValues: [stg, dev, prd]
 
   DBInstanceIdentifier:
     Type: String
     Description: "RDS DB instance identifier."
 
-  CpuThreshold:
+  CpuWarningThreshold:
     Type: Number
-    Default: 80
+    Default: 70
     MinValue: 1
     MaxValue: 100
-    Description: "CPU utilization alarm threshold (%). Triggers when average exceeds this value."
+    Description: "CPU utilization WARNING threshold (%)."
 
-  FreeableMemoryThreshold:
+  CpuCriticalThreshold:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    MaxValue: 100
+    Description: "CPU utilization CRITICAL threshold (%)."
+
+  FreeableMemoryWarningThreshold:
+    Type: Number
+    Default: 1073741824
+    MinValue: 1
+    Description: "Freeable memory WARNING threshold in bytes. Triggers when memory FALLS BELOW this value. Default: 1 GB."
+
+  FreeableMemoryCriticalThreshold:
     Type: Number
     Default: 536870912
     MinValue: 1
-    Description: "Freeable memory threshold in bytes. Triggers when memory falls BELOW this value. Default: 512 MB (536870912)."
+    Description: "Freeable memory CRITICAL threshold in bytes. Triggers when memory FALLS BELOW this value. Default: 512 MB."
 
   EvaluationPeriods:
     Type: Number
@@ -98,27 +99,27 @@ Parameters:
     MinValue: 1
     Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
 
-  AlarmActionArn:
+  WarningActionArn:
     Type: String
     Default: ""
-    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+    Description: "SNS topic ARN for WARNING severity (e.g. Slack). Used for both ALARM and OK notifications."
 
-  OKActionArn:
+  CriticalActionArn:
     Type: String
     Default: ""
-    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+    Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
 
 Conditions:
-  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
-  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+  HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
+  HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
 
 Resources:
 
-  CpuAlarm:
+  CpuWarningAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-cpu"
-      AlarmDescription: !Sub "RDS CPU utilization > ${CpuThreshold}% for ${EvaluationPeriods} consecutive 1-min periods."
+      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-cpu-warning"
+      AlarmDescription: !Sub "RDS CPU > ${CpuWarningThreshold}% for ${EvaluationPeriods} x 1 min. [WARNING]"
       Namespace: AWS/RDS
       MetricName: CPUUtilization
       Dimensions:
@@ -127,17 +128,36 @@ Resources:
       Statistic: Average
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref CpuThreshold
+      Threshold: !Ref CpuWarningThreshold
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
-      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  FreeableMemoryAlarm:
+  CpuCriticalAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-memory"
-      AlarmDescription: !Sub "RDS freeable memory < ${FreeableMemoryThreshold} bytes for ${EvaluationPeriods} consecutive 1-min periods."
+      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-cpu-critical"
+      AlarmDescription: !Sub "RDS CPU > ${CpuCriticalThreshold}% for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DBInstanceIdentifier
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref CpuCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+  FreeableMemoryWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-memory-warning"
+      AlarmDescription: !Sub "RDS freeable memory < ${FreeableMemoryWarningThreshold} bytes for ${EvaluationPeriods} x 1 min. [WARNING]"
       Namespace: AWS/RDS
       MetricName: FreeableMemory
       Dimensions:
@@ -146,22 +166,53 @@ Resources:
       Statistic: Average
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref FreeableMemoryThreshold
+      Threshold: !Ref FreeableMemoryWarningThreshold
       ComparisonOperator: LessThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions:    !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
-      OKActions:       !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  FreeableMemoryCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-rds-${DBInstanceIdentifier}-memory-critical"
+      AlarmDescription: !Sub "RDS freeable memory < ${FreeableMemoryCriticalThreshold} bytes for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/RDS
+      MetricName: FreeableMemory
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DBInstanceIdentifier
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref FreeableMemoryCriticalThreshold
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
 Outputs:
 
-  CpuAlarmArn:
-    Description: "CPU alarm ARN"
-    Value: !GetAtt CpuAlarm.Arn
+  CpuWarningAlarmArn:
+    Description: "CPU WARNING alarm ARN"
+    Value: !GetAtt CpuWarningAlarm.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-CpuAlarmArn"
+      Name: !Sub "${AWS::StackName}-CpuWarningAlarmArn"
 
-  FreeableMemoryAlarmArn:
-    Description: "Freeable memory alarm ARN"
-    Value: !GetAtt FreeableMemoryAlarm.Arn
+  CpuCriticalAlarmArn:
+    Description: "CPU CRITICAL alarm ARN"
+    Value: !GetAtt CpuCriticalAlarm.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-FreeableMemoryAlarmArn"
+      Name: !Sub "${AWS::StackName}-CpuCriticalAlarmArn"
+
+  FreeableMemoryWarningAlarmArn:
+    Description: "Freeable memory WARNING alarm ARN"
+    Value: !GetAtt FreeableMemoryWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-FreeableMemoryWarningAlarmArn"
+
+  FreeableMemoryCriticalAlarmArn:
+    Description: "Freeable memory CRITICAL alarm ARN"
+    Value: !GetAtt FreeableMemoryCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-FreeableMemoryCriticalAlarmArn"

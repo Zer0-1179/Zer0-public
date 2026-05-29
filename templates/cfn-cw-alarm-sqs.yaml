@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudWatch Alarms for SQS - visible message count and oldest message age"
+Description: "CloudWatch Alarms for SQS - visible message count and oldest message age with WARNING/CRITICAL severity levels"
 
 # -----------------------------------------------
 # DEPLOY
@@ -12,11 +12,7 @@ Description: "CloudWatch Alarms for SQS - visible message count and oldest messa
 #     Env=prd \
 #     QueueName=my-project-prd-orders
 #
-# With SNS notification:
-# SNS_ARN=$(aws cloudformation describe-stacks \
-#   --stack-name <ProjectName>-<Env>-sns \
-#   --query "Stacks[0].Outputs[?OutputKey=='TopicArn'].OutputValue" \
-#   --output text)
+# With SNS notification (WARNING → Slack, CRITICAL → PagerDuty):
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-alarm-sqs-orders \
 #   --template-file cfn-cw-alarm-sqs.yaml \
@@ -24,15 +20,14 @@ Description: "CloudWatch Alarms for SQS - visible message count and oldest messa
 #     ProjectName=my-project \
 #     Env=prd \
 #     QueueName=my-project-prd-orders \
-#     MessageCountThreshold=100 \
-#     MessageAgeThreshold=300 \
-#     AlarmActionArn=$SNS_ARN
+#     WarningActionArn=$SLACK_SNS_ARN \
+#     CriticalActionArn=$PAGERDUTY_SNS_ARN
 #
 # NOTE: QueueName is the SQS queue name, not the URL or ARN.
 #       For FIFO queues, include the .fifo suffix (e.g. my-queue.fifo).
 #
-# MessageAgeThreshold is in seconds.
-# Tune it to match your expected consumer processing time.
+# MessageAge thresholds are in seconds.
+# Tune them to match your expected consumer processing SLA.
 # -----------------------------------------------
 
 Metadata:
@@ -40,24 +35,22 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "General"
-        Parameters:
-          - ProjectName
-          - Env
+        Parameters: [ProjectName, Env]
       - Label:
           default: "Target Queue"
-        Parameters:
-          - QueueName
+        Parameters: [QueueName]
       - Label:
-          default: "Thresholds"
-        Parameters:
-          - MessageCountThreshold
-          - MessageAgeThreshold
-          - EvaluationPeriods
+          default: "WARNING Thresholds"
+        Parameters: [MessageCountWarningThreshold, MessageAgeWarningThreshold]
+      - Label:
+          default: "CRITICAL Thresholds"
+        Parameters: [MessageCountCriticalThreshold, MessageAgeCriticalThreshold]
+      - Label:
+          default: "Common"
+        Parameters: [EvaluationPeriods]
       - Label:
           default: "Notifications (optional)"
-        Parameters:
-          - AlarmActionArn
-          - OKActionArn
+        Parameters: [WarningActionArn, CriticalActionArn]
 
 Parameters:
   ProjectName:
@@ -69,26 +62,35 @@ Parameters:
   Env:
     Type: String
     Default: dev
-    AllowedValues:
-      - stg
-      - dev
-      - prd
+    AllowedValues: [stg, dev, prd]
 
   QueueName:
     Type: String
     Description: "SQS queue name (not URL or ARN). For FIFO queues, include the .fifo suffix."
 
-  MessageCountThreshold:
+  MessageCountWarningThreshold:
     Type: Number
-    Default: 100
+    Default: 50
     MinValue: 1
-    Description: "Visible message count threshold. Triggers when the queue depth exceeds this value, indicating consumer lag."
+    Description: "Visible message count WARNING threshold. Triggers when queue depth exceeds this value."
 
-  MessageAgeThreshold:
+  MessageCountCriticalThreshold:
     Type: Number
-    Default: 300
+    Default: 200
     MinValue: 1
-    Description: "Oldest message age threshold in seconds. Triggers when the oldest visible message exceeds this age. Default: 300 s (5 min)."
+    Description: "Visible message count CRITICAL threshold."
+
+  MessageAgeWarningThreshold:
+    Type: Number
+    Default: 180
+    MinValue: 1
+    Description: "Oldest message age WARNING threshold in seconds. Default: 180 s (3 min)."
+
+  MessageAgeCriticalThreshold:
+    Type: Number
+    Default: 600
+    MinValue: 1
+    Description: "Oldest message age CRITICAL threshold in seconds. Default: 600 s (10 min)."
 
   EvaluationPeriods:
     Type: Number
@@ -96,27 +98,27 @@ Parameters:
     MinValue: 1
     Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
 
-  AlarmActionArn:
+  WarningActionArn:
     Type: String
     Default: ""
-    Description: "SNS topic ARN to notify when alarm state is ALARM. Leave empty for no notification."
+    Description: "SNS topic ARN for WARNING severity (e.g. Slack). Used for both ALARM and OK notifications."
 
-  OKActionArn:
+  CriticalActionArn:
     Type: String
     Default: ""
-    Description: "SNS topic ARN to notify when alarm state returns to OK. Leave empty for no notification."
+    Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
 
 Conditions:
-  HasAlarmAction: !Not [!Equals [!Ref AlarmActionArn, ""]]
-  HasOKAction:    !Not [!Equals [!Ref OKActionArn, ""]]
+  HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
+  HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
 
 Resources:
 
-  MessageCountAlarm:
+  MessageCountWarningAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-depth"
-      AlarmDescription: !Sub "SQS visible messages > ${MessageCountThreshold} for ${EvaluationPeriods} consecutive 1-min periods."
+      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-depth-warning"
+      AlarmDescription: !Sub "SQS visible messages > ${MessageCountWarningThreshold} for ${EvaluationPeriods} x 1 min. [WARNING]"
       Namespace: AWS/SQS
       MetricName: ApproximateNumberOfMessagesVisible
       Dimensions:
@@ -125,17 +127,36 @@ Resources:
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref MessageCountThreshold
+      Threshold: !Ref MessageCountWarningThreshold
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
-      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  MessageAgeAlarm:
+  MessageCountCriticalAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-age"
-      AlarmDescription: !Sub "SQS oldest message age > ${MessageAgeThreshold} s for ${EvaluationPeriods} consecutive 1-min periods."
+      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-depth-critical"
+      AlarmDescription: !Sub "SQS visible messages > ${MessageCountCriticalThreshold} for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref MessageCountCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+
+  MessageAgeWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-age-warning"
+      AlarmDescription: !Sub "SQS oldest message age > ${MessageAgeWarningThreshold} s for ${EvaluationPeriods} x 1 min. [WARNING]"
       Namespace: AWS/SQS
       MetricName: ApproximateAgeOfOldestMessage
       Dimensions:
@@ -144,22 +165,53 @@ Resources:
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
-      Threshold: !Ref MessageAgeThreshold
+      Threshold: !Ref MessageAgeWarningThreshold
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [HasAlarmAction, [!Ref AlarmActionArn], !Ref AWS::NoValue]
-      OKActions:    !If [HasOKAction,    [!Ref OKActionArn],    !Ref AWS::NoValue]
+      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+
+  MessageAgeCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-age-critical"
+      AlarmDescription: !Sub "SQS oldest message age > ${MessageAgeCriticalThreshold} s for ${EvaluationPeriods} x 1 min. [CRITICAL]"
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriods
+      Threshold: !Ref MessageAgeCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
 Outputs:
 
-  MessageCountAlarmArn:
-    Description: "Message count (queue depth) alarm ARN"
-    Value: !GetAtt MessageCountAlarm.Arn
+  MessageCountWarningAlarmArn:
+    Description: "Message count WARNING alarm ARN"
+    Value: !GetAtt MessageCountWarningAlarm.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-MessageCountAlarmArn"
+      Name: !Sub "${AWS::StackName}-MessageCountWarningAlarmArn"
 
-  MessageAgeAlarmArn:
-    Description: "Message age alarm ARN"
-    Value: !GetAtt MessageAgeAlarm.Arn
+  MessageCountCriticalAlarmArn:
+    Description: "Message count CRITICAL alarm ARN"
+    Value: !GetAtt MessageCountCriticalAlarm.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-MessageAgeAlarmArn"
+      Name: !Sub "${AWS::StackName}-MessageCountCriticalAlarmArn"
+
+  MessageAgeWarningAlarmArn:
+    Description: "Message age WARNING alarm ARN"
+    Value: !GetAtt MessageAgeWarningAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MessageAgeWarningAlarmArn"
+
+  MessageAgeCriticalAlarmArn:
+    Description: "Message age CRITICAL alarm ARN"
+    Value: !GetAtt MessageAgeCriticalAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MessageAgeCriticalAlarmArn"
