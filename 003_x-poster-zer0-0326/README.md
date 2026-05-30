@@ -123,26 +123,26 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 
 ## SSMパラメータ
 
-| パラメータ名                          | 種別         | 管理          |
-| ------------------------------------- | ------------ | ------------- |
-| `/ai_bot/twitter_api_key`             | SecureString | setup_ssm.sh  |
-| `/ai_bot/twitter_api_secret`          | SecureString | setup_ssm.sh  |
-| `/ai_bot/twitter_access_token`        | SecureString | setup_ssm.sh  |
-| `/ai_bot/twitter_access_token_secret` | SecureString | setup_ssm.sh  |
+| パラメータ名                          | 種別         | 管理           |
+| ------------------------------------- | ------------ | -------------- |
+| `/ai_bot/twitter_api_key`             | SecureString | setup_ssm.sh   |
+| `/ai_bot/twitter_api_secret`          | SecureString | setup_ssm.sh   |
+| `/ai_bot/twitter_access_token`        | SecureString | setup_ssm.sh   |
+| `/ai_bot/twitter_access_token_secret` | SecureString | setup_ssm.sh   |
 | `/ai_bot/history/used_categories`     | String       | Lambda自動更新 |
 | `/ai_bot/history/{category}`          | String       | Lambda自動更新 |
 | `/ai_bot/history/url_reaction_urls`   | String       | Lambda自動更新 |
 
 ## トラブルシューティング
 
-| 症状                   | 原因                            | 対処                                                      |
-| ---------------------- | ------------------------------- | --------------------------------------------------------- |
-| 投稿されない           | DRY_RUN=true のまま             | Lambda 環境変数 `DRY_RUN` を `false` に更新               |
-| 同カテゴリが連続投稿   | SSM履歴破損                     | `/ai_bot/history/used_categories` を削除してリセット      |
-| X API 403 Forbidden    | APIクレジット不足               | developer.x.com でクレジット残高確認・チャージ            |
-| X API 401 Unauthorized | アクセストークン期限切れ        | `bash src/setup_ssm.sh` で4キーを再登録                   |
-| Bedrock エラー         | モデルアクセス未承認            | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化 |
-| url_reaction 記事が0件 | Zenn/Qiita RSSフィード取得失敗  | CloudWatch Logs で HTTP ステータス確認                    |
+| 症状                   | 原因                           | 対処                                                        |
+| ---------------------- | ------------------------------ | ----------------------------------------------------------- |
+| 投稿されない           | DRY_RUN=true のまま            | Lambda 環境変数 `DRY_RUN` を `false` に更新                 |
+| 同カテゴリが連続投稿   | SSM履歴破損                    | `/ai_bot/history/used_categories` を削除してリセット        |
+| X API 403 Forbidden    | APIクレジット不足              | developer.x.com でクレジット残高確認・チャージ              |
+| X API 401 Unauthorized | アクセストークン期限切れ       | `bash src/setup_ssm.sh` で4キーを再登録                     |
+| Bedrock エラー         | モデルアクセス未承認           | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化 |
+| url_reaction 記事が0件 | Zenn/Qiita RSSフィード取得失敗 | CloudWatch Logs で HTTP ステータス確認                      |
 
 ## コスト内訳
 

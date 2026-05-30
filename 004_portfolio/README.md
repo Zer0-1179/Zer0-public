@@ -11,7 +11,7 @@
 
 | 項目           | 内容                                                   |
 | -------------- | ------------------------------------------------------ |
-| URL            | https://www.zer0-infra.com                             |
+| URL            | `https://www.zer0-infra.com`                           |
 | フレームワーク | Astro（SSR / `output: 'server'` / Node.js adapter）    |
 | 対応言語       | 日本語（`/ja/`）・英語（`/en/`）                       |
 | ホスティング   | CloudFront + S3（静的） + API Gateway + Lambda（SSR）  |
