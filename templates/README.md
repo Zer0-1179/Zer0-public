@@ -40,10 +40,11 @@ SAM は使用しません。Lambda のコードデプロイは `aws lambda updat
 
 ### データベース
 
-| ファイル名          | 作成リソース                                                  | 依存                        |
-| ------------------- | ------------------------------------------------------------- | --------------------------- |
-| `cfn-rds.yaml`      | RDS DBインスタンス（MySQL / PostgreSQL） + サブネットグループ | cfn-vpc, cfn-security-group |
-| `cfn-dynamodb.yaml` | DynamoDBテーブル（PITR・TTL・KMSオプション）                  | なし                        |
+| ファイル名              | 作成リソース                                                      | 依存                        |
+| ----------------------- | ----------------------------------------------------------------- | --------------------------- |
+| `cfn-rds.yaml`          | RDS DBインスタンス（MySQL / PostgreSQL） + サブネットグループ     | cfn-vpc, cfn-security-group |
+| `cfn-dynamodb.yaml`     | DynamoDBテーブル（PITR・TTL・KMSオプション）                      | なし                        |
+| `cfn-elasticache.yaml`  | ElastiCache Redis レプリケーショングループ（Single / Multi-AZ）   | cfn-vpc, cfn-security-group |
 
 ### セキュリティ
 
@@ -52,12 +53,19 @@ SAM は使用しません。Lambda のコードデプロイは `aws lambda updat
 | `cfn-kms.yaml`      | カスタマー管理KMSキー + エイリアス | なし |
 | `cfn-iam-role.yaml` | Lambda用IAM実行ロール              | なし |
 
-### モニタリング・メッセージング
+### メッセージング
+
+| ファイル名              | 作成リソース                                       | 依存 |
+| ----------------------- | -------------------------------------------------- | ---- |
+| `cfn-eventbridge.yaml`  | EventBridge ルール（スケジュール / イベント駆動）  | なし |
+| `cfn-sns.yaml`          | SNS トピック + Email / HTTPS サブスクリプション    | なし |
+| `cfn-sqs.yaml`          | SQSキュー + デッドレターキュー（DLQ）              | なし |
+
+### モニタリング
 
 | ファイル名                 | 作成リソース                                                      | 依存 |
 | -------------------------- | ----------------------------------------------------------------- | ---- |
 | `cfn-cw-logs.yaml`         | CloudWatch ロググループ（最大5グループ一括作成）                  | なし |
-| `cfn-sqs.yaml`             | SQSキュー + デッドレターキュー（DLQ）                             | なし |
 | `cfn-cw-alarm-ec2.yaml`    | EC2 CPU・メモリ アラーム（WARNING/CRITICAL 各2段階、計4アラーム） | なし |
 | `cfn-cw-alarm-rds.yaml`    | RDS CPU・FreeableMemory アラーム（計4アラーム）                   | なし |
 | `cfn-cw-alarm-efs.yaml`    | EFS バーストクレジット・I/O使用率 アラーム（計4アラーム）         | なし |
