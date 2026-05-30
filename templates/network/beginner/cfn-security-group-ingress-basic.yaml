@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Additional inbound rules for an existing security group"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sg-ingress \
+#   --template-file cfn-security-group-ingress-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SecurityGroupId=sg-xxxxxxxx \
+#     IngressPort=443 \
+#     IngressCidr=0.0.0.0/0
+#
+# Use this template to add inbound rules to an existing security group
+# without modifying the original security group stack.
+#
+# Prerequisites:
+#   - Target security group must exist.
+#     Use cfn-security-group-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-security-group-basic.yaml
+#   2. cfn-security-group-ingress-basic.yaml (this template)
+#
+# To add a second inbound rule:
+#   Copy the IngressRule01 block, rename it IngressRule02,
+#   add IngressPort02 and IngressCidr02 parameters, and adjust accordingly.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - SecurityGroupId
+      - Label:
+          default: "Inbound Rule"
+        Parameters:
+          - IngressPort
+          - IngressCidr
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group ID to add inbound rules to."
+
+  IngressPort:
+    Type: Number
+    Default: 443
+    MinValue: 0
+    MaxValue: 65535
+    Description: "Port number to allow inbound traffic on."
+
+  IngressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: "Source CIDR block for the inbound rule."
+
+# -----------------------------------------------
+# Resources
+# To add a second inbound rule, copy the IngressRule01 block and rename it IngressRule02.
+# -----------------------------------------------
+Resources:
+  # To add a second inbound rule, copy this block, rename it IngressRule02,
+  # add IngressPort02 and IngressCidr02 parameters, and adjust FromPort/ToPort/CidrIp.
+  IngressRule01:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref IngressPort
+      ToPort: !Ref IngressPort
+      CidrIp: !Ref IngressCidr
+      Description: !Sub "Allow TCP ${IngressPort} from ${IngressCidr}"
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  SecurityGroupId:
+    Description: "Security group ID that the rule was added to"
+    Value: !Ref SecurityGroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-SecurityGroupId"

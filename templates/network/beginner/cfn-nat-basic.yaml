@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "NAT Gateway with Elastic IP in a public subnet"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-nat \
+#   --template-file cfn-nat-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     PublicSubnetId=subnet-xxxxxxxx \
+#     PrivateRouteTableId=rtb-xxxxxxxx
+#
+# Prerequisites:
+#   - Public subnet with an Internet Gateway route and a private route table must exist.
+#     Use cfn-vpc-basic.yaml to create them.
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml (or ensure VPC + public subnet exists)
+#   2. cfn-nat-basic.yaml (this template)
+#
+# Note: NAT Gateway incurs an hourly cost. Delete the stack when not needed.
+#
+# To add a second NAT Gateway (for high availability):
+#   Copy the ElasticIp01 and NatGateway01 blocks,
+#   rename them ElasticIp02 and NatGateway02,
+#   and change SubnetId to a different public subnet.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Network"
+        Parameters:
+          - PublicSubnetId
+          - PrivateRouteTableId
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Public subnet where the NAT Gateway will be placed."
+
+  PrivateRouteTableId:
+    Type: String
+    Description: "Route table ID of the private subnet. A default route (0.0.0.0/0) to the NAT Gateway will be added."
+
+# -----------------------------------------------
+# Resources
+# To add a second NAT Gateway, copy the ElasticIp01 and NatGateway01 blocks
+# and rename them ElasticIp02 and NatGateway02.
+# -----------------------------------------------
+Resources:
+  ElasticIp01:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-nat-eip-01"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  NatGateway01:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnetId
+      AllocationId: !GetAtt ElasticIp01.AllocationId
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-nat-01"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableId
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway01
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  NatGatewayId01:
+    Description: "NAT Gateway ID"
+    Value: !Ref NatGateway01
+    Export:
+      Name: !Sub "${AWS::StackName}-NatGatewayId01"
+
+  ElasticIp01:
+    Description: "Elastic IP address allocated to the NAT Gateway"
+    Value: !Ref ElasticIp01
+    Export:
+      Name: !Sub "${AWS::StackName}-ElasticIp01"
