@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DynamoDB table with on-demand billing and AES256 encryption"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-dynamodb-<TableSuffix> \
+#   --template-file cfn-dynamodb-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     TableSuffix=users \
+#     PartitionKeyName=userId
+#
+# Deploy order:
+#   1. cfn-dynamodb-basic.yaml (this template — no dependencies)
+#
+# To add a second table:
+#   Deploy this template again with a different TableSuffix and PartitionKeyName.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - TableSuffix
+      - Label:
+          default: "Table Schema"
+        Parameters:
+          - PartitionKeyName
+          - PartitionKeyType
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  TableSuffix:
+    Type: String
+    Default: items
+    AllowedPattern: "^[a-zA-Z0-9-]+$"
+    ConstraintDescription: "Alphanumeric characters and hyphens only."
+    Description: "Purpose identifier for this table (e.g. users, orders, items)."
+
+  PartitionKeyName:
+    Type: String
+    Default: id
+    Description: "Partition key attribute name (e.g. id, userId, orderId)."
+
+  PartitionKeyType:
+    Type: String
+    Default: S
+    AllowedValues:
+      - S
+      - N
+      - B
+    Description: "Partition key type. S = String, N = Number, B = Binary."
+
+# -----------------------------------------------
+# Resources
+# BillingMode PAY_PER_REQUEST (on-demand) requires no capacity planning.
+# SSESpecification uses the AWS-managed key (aws/dynamodb) at no additional cost.
+# DeletionProtectionEnabled: false allows stack deletion to remove the table.
+# -----------------------------------------------
+Resources:
+  DynamoDbTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "${ProjectName}-${Env}-${TableSuffix}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: !Ref PartitionKeyName
+          AttributeType: !Ref PartitionKeyType
+      KeySchema:
+        - AttributeName: !Ref PartitionKeyName
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: AES256
+      DeletionProtectionEnabled: false
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  TableName:
+    Description: "DynamoDB table name"
+    Value: !Ref DynamoDbTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TableName"
+
+  TableArn:
+    Description: "DynamoDB table ARN"
+    Value: !GetAtt DynamoDbTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TableArn"

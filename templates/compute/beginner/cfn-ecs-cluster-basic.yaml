@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECS cluster with Container Insights enabled"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ecs-cluster \
+#   --template-file cfn-ecs-cluster-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev
+#
+# Deploy order:
+#   1. cfn-ecs-cluster-basic.yaml (this template — no dependencies)
+#   2. cfn-ecs-service-basic.yaml (references this cluster)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+# -----------------------------------------------
+# Resources
+# ContainerInsights enables CloudWatch metrics for the cluster.
+# -----------------------------------------------
+Resources:
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${ProjectName}-${Env}-cluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  ClusterName:
+    Description: "ECS cluster name"
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub "${AWS::StackName}-ClusterName"
+
+  ClusterArn:
+    Description: "ECS cluster ARN"
+    Value: !GetAtt EcsCluster.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ClusterArn"

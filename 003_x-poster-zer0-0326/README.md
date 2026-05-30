@@ -11,7 +11,7 @@
 | 項目       | 内容                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------- |
 | 投稿頻度   | 毎日 22:00 JST + 日曜 10:00 JST（trend）の計2スロット                                                   |
-| カテゴリ数 | 6カテゴリ（+ 固定2スロット = 実質7パターン）                                                            |
+| カテゴリ数 | 6カテゴリ（shigoto/fukugyo/jitsuwa/question/suji/nichijo）+ 固定2スロット（url_reaction/trend）          |
 | 重複防止   | 直近7投稿で同カテゴリが連続しないようSSMで履歴管理                                                      |
 | 曜日別制御 | 水曜: question 固定 / 火・金: url_reaction / 日曜: trend                                                |
 | AI生成     | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
@@ -42,6 +42,7 @@ EventBridge Scheduler（22:00 JST / 日曜 10:00 JST）
 | `jitsuwa`      | 「実は〜してる」告白系         | ランダム                |
 | `question`     | 問いかけ・議論系               | **水曜固定** + ランダム |
 | `suji`         | 「〇つのこと」リスト型         | ランダム                |
+| `nichijo`      | 日常のどうでもいいこと（通勤・食事・会社の謎ルール等） | ランダム |
 | `url_reaction` | Zenn/Qiita 記事感想（URL付き） | 火・金固定              |
 | `trend`        | Google Trends トレンド連動     | 日曜固定                |
 

@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "SNS topic with an email subscription"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sns-<TopicSuffix> \
+#   --template-file cfn-sns-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     TopicSuffix=alerts \
+#     EmailAddress=your-email@example.com
+#
+# Note: After deploy, AWS sends a confirmation email to EmailAddress.
+#       You must click the link in the email to activate the subscription.
+#
+# Deploy order:
+#   1. cfn-sns-basic.yaml (this template — no dependencies)
+#
+# To add a second email subscription:
+#   Copy the EmailSubscription01 block, rename it EmailSubscription02,
+#   add an EmailAddress02 parameter, and change Endpoint accordingly.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - TopicSuffix
+      - Label:
+          default: "Subscription"
+        Parameters:
+          - EmailAddress
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  TopicSuffix:
+    Type: String
+    Default: alerts
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose identifier for this topic (e.g. alerts, notify, events)."
+
+  EmailAddress:
+    Type: String
+    Default: your-email@example.com
+    Description: "Email address to receive notifications. A confirmation email will be sent."
+
+# -----------------------------------------------
+# Resources
+# To add a second email, copy the EmailSubscription01 block and rename it EmailSubscription02.
+# -----------------------------------------------
+Resources:
+  SnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectName}-${Env}-${TopicSuffix}"
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  # To add a second email subscription, copy this block, rename it EmailSubscription02,
+  # add an EmailAddress02 parameter, and change Endpoint to !Ref EmailAddress02.
+  EmailSubscription01:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SnsTopic
+      Protocol: email
+      Endpoint: !Ref EmailAddress
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  TopicArn:
+    Description: "SNS topic ARN"
+    Value: !Ref SnsTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-TopicArn"
+
+  TopicName:
+    Description: "SNS topic name"
+    Value: !GetAtt SnsTopic.TopicName
+    Export:
+      Name: !Sub "${AWS::StackName}-TopicName"

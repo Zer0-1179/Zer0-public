@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECR private repository with AES256 encryption"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ecr \
+#   --template-file cfn-ecr-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     RepoSuffix=app
+#
+# Push an image after deploy:
+#   aws ecr get-login-password --region ap-northeast-1 | \
+#     docker login --username AWS \
+#       --password-stdin <AccountId>.dkr.ecr.ap-northeast-1.amazonaws.com
+#   docker tag my-image:latest <RepositoryUri>:latest
+#   docker push <RepositoryUri>:latest
+#
+# Deploy order:
+#   1. cfn-ecr-basic.yaml (this template — no dependencies)
+#
+# To add a second repository:
+#   Copy the EcrRepository01 block, rename it EcrRepository02,
+#   and change the repository name accordingly.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - RepoSuffix
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  RepoSuffix:
+    Type: String
+    Default: app
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose identifier for this repository (e.g. app, api, worker)."
+
+# -----------------------------------------------
+# Resources
+# EncryptionType: AES256 uses the AWS-managed key at no additional cost.
+# ImageTagImmutability: IMMUTABLE prevents overwriting existing tags.
+# -----------------------------------------------
+Resources:
+  # To add a second repository, copy this block and rename it EcrRepository02.
+  EcrRepository01:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-${Env}-${RepoSuffix}"
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  RepositoryName01:
+    Description: "ECR repository name"
+    Value: !Ref EcrRepository01
+    Export:
+      Name: !Sub "${AWS::StackName}-RepositoryName01"
+
+  RepositoryUri01:
+    Description: "ECR repository URI (use for docker push)"
+    Value: !GetAtt EcrRepository01.RepositoryUri
+    Export:
+      Name: !Sub "${AWS::StackName}-RepositoryUri01"

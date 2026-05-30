@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EBS Volume with encryption using the AWS-managed key"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ebs \
+#   --template-file cfn-ebs-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     AvailabilityZone=ap-northeast-1a
+#
+# Note: The EBS volume must be in the same AZ as the EC2 instance
+#       you intend to attach it to.
+#
+# Deploy order:
+#   1. cfn-ebs-basic.yaml (this template — no dependencies)
+#
+# To add a second volume:
+#   Copy the EbsVolume01 block, rename it EbsVolume02,
+#   and adjust VolumeSize as needed.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Volume"
+        Parameters:
+          - AvailabilityZone
+          - VolumeSize
+          - VolumeType
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-northeast-1a
+    Description: "AZ where the volume will be created. Must match the target EC2 instance AZ."
+
+  VolumeSize:
+    Type: Number
+    Default: 20
+    MinValue: 1
+    MaxValue: 16384
+    Description: "Volume size in GiB."
+
+  VolumeType:
+    Type: String
+    Default: gp3
+    AllowedValues:
+      - gp3
+      - gp2
+      - io2
+      - st1
+      - sc1
+    Description: "Volume type. gp3 is recommended for general use."
+
+# -----------------------------------------------
+# Resources
+# Encrypted: true uses the AWS-managed key (aws/ebs) at no additional cost.
+# -----------------------------------------------
+Resources:
+  # To add a second volume, copy this block and rename it EbsVolume02.
+  EbsVolume01:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      Size: !Ref VolumeSize
+      VolumeType: !Ref VolumeType
+      Encrypted: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-ebs-01"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  VolumeId01:
+    Description: "EBS volume ID"
+    Value: !Ref EbsVolume01
+    Export:
+      Name: !Sub "${AWS::StackName}-VolumeId01"

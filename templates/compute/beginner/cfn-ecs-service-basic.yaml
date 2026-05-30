@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECS Fargate task definition and service (no ALB)"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ecs-service-<ServiceSuffix> \
+#   --template-file cfn-ecs-service-basic.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     ServiceSuffix=api \
+#     ClusterName=my-project-dev-cluster \
+#     SubnetId=subnet-xxxxxxxx \
+#     SecurityGroupId=sg-xxxxxxxx \
+#     ContainerImage=nginx:latest
+#
+# Prerequisites:
+#   - ECS cluster, subnet, and security group must exist.
+#     Use cfn-ecs-cluster-basic.yaml and cfn-security-group-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-ecs-cluster-basic.yaml
+#   2. cfn-security-group-basic.yaml
+#   3. cfn-ecs-service-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - ServiceSuffix
+      - Label:
+          default: "Cluster & Network"
+        Parameters:
+          - ClusterName
+          - SubnetId
+          - SecurityGroupId
+      - Label:
+          default: "Container"
+        Parameters:
+          - ContainerImage
+          - ContainerPort
+          - Cpu
+          - Memory
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  ServiceSuffix:
+    Type: String
+    Default: api
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose identifier for this service (e.g. api, worker, batch)."
+
+  ClusterName:
+    Type: String
+    Default: my-project-dev-cluster
+    Description: "ECS cluster name. Must exist before deploying this template."
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Subnet where Fargate tasks will run (private subnet recommended)."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group to attach to Fargate tasks."
+
+  ContainerImage:
+    Type: String
+    Default: nginx:latest
+    Description: "Container image URI (e.g. nginx:latest or ECR URI)."
+
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: "Port the container listens on."
+
+  Cpu:
+    Type: String
+    Default: "256"
+    AllowedValues:
+      - "256"
+      - "512"
+      - "1024"
+      - "2048"
+      - "4096"
+    Description: "Fargate task CPU units."
+
+  Memory:
+    Type: String
+    Default: "512"
+    AllowedValues:
+      - "512"
+      - "1024"
+      - "2048"
+      - "4096"
+      - "8192"
+    Description: "Fargate task memory in MiB."
+
+# -----------------------------------------------
+# Resources
+# TaskExecutionRole allows ECS to pull images and write logs.
+# TaskRole is the runtime role for the container itself.
+# -----------------------------------------------
+Resources:
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}-exec-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}-task-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}-${Env}-${ServiceSuffix}"
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
+      Cpu: !Ref Cpu
+      Memory: !Ref Memory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
+          Image: !Ref ContainerImage
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
+      Cluster: !Ref ClusterName
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref SubnetId
+          SecurityGroups:
+            - !Ref SecurityGroupId
+          AssignPublicIp: DISABLED
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  ServiceName:
+    Description: "ECS service name"
+    Value: !GetAtt EcsService.Name
+    Export:
+      Name: !Sub "${AWS::StackName}-ServiceName"
+
+  TaskDefinitionArn:
+    Description: "Task definition ARN"
+    Value: !Ref TaskDefinition
+    Export:
+      Name: !Sub "${AWS::StackName}-TaskDefinitionArn"
