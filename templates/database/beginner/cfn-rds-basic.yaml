@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "RDS MySQL instance (single-AZ) with encrypted storage"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-rds \
+#   --template-file cfn-rds-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SubnetId01=subnet-xxxxxxxx \
+#     SubnetId02=subnet-yyyyyyyy \
+#     SecurityGroupId=sg-xxxxxxxx \
+#     DBPassword=YourSecurePassword123!
+#
+# Prerequisites:
+#   - Two subnets in different AZs and a security group must exist.
+#     A DB subnet group requires at least 2 AZs even for single-AZ instances.
+#     Use cfn-vpc-basic.yaml and cfn-security-group-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml
+#   2. cfn-security-group-basic.yaml
+#   3. cfn-rds-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Network"
+        Parameters:
+          - SubnetId01
+          - SubnetId02
+          - SecurityGroupId
+      - Label:
+          default: "Database"
+        Parameters:
+          - DBInstanceClass
+          - DBName
+          - DBUsername
+          - DBPassword
+      - Label:
+          default: "Storage"
+        Parameters:
+          - AllocatedStorage
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  SubnetId01:
+    Type: AWS::EC2::Subnet::Id
+    Description: "First subnet for the DB subnet group (AZ-a)."
+
+  SubnetId02:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Second subnet for the DB subnet group (AZ-c). Must be in a different AZ."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group for the RDS instance. Allow inbound MySQL (port 3306)."
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+    Description: "RDS instance class."
+
+  DBName:
+    Type: String
+    Default: mydb
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
+    ConstraintDescription: "Must start with a letter, then letters, numbers, or underscores."
+    Description: "Initial database name."
+
+  DBUsername:
+    Type: String
+    Default: admin
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
+    ConstraintDescription: "Must start with a letter, then letters, numbers, or underscores."
+    Description: "Master username."
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    Description: "Master password (8-41 characters). No slash, @, or double-quote."
+
+  AllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 65536
+    Description: "Allocated storage in GiB."
+
+# -----------------------------------------------
+# Resources
+# StorageEncrypted: true uses the AWS-managed key (aws/rds) at no additional cost.
+# BackupRetentionPeriod: 7 keeps automated backups for 7 days.
+# -----------------------------------------------
+Resources:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${ProjectName}-${Env}-rds subnet group"
+      SubnetIds:
+        - !Ref SubnetId01
+        - !Ref SubnetId02
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds"
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      EngineVersion: "8.0"
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: !Ref DBName
+      AllocatedStorage: !Ref AllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref SecurityGroupId
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  DBInstanceEndpoint:
+    Description: "RDS endpoint address"
+    Value: !GetAtt RdsInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-Endpoint"
+
+  DBInstancePort:
+    Description: "RDS endpoint port"
+    Value: !GetAtt RdsInstance.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-Port"
+
+  DBInstanceId:
+    Description: "RDS instance identifier"
+    Value: !Ref RdsInstance
+    Export:
+      Name: !Sub "${AWS::StackName}-InstanceId"

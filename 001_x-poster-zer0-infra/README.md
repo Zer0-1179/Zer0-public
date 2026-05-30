@@ -1,6 +1,6 @@
 # 001 X Poster Bot (@Zer0_Infra)
 
-> AWS最新ニュースを4ソースのRSSから収集し、Bedrock Claude で @Zer0_Infra の口調に変換してXへ毎日20時に自動投稿するサーバーレスBot。3段階の重複フィルタで品質を担保。
+> AWS最新ニュースを5ソースのRSSから収集し、Bedrock Claude で @Zer0_Infra の口調に変換してXへ毎日20時に自動投稿するサーバーレスBot。3段階の重複フィルタで品質を担保。
 
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20EventBridge-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
@@ -11,7 +11,7 @@
 | 項目       | 内容                                                      |
 | ---------- | --------------------------------------------------------- |
 | 投稿頻度   | 毎日 20:00 JST（夜）の1回                                 |
-| 情報ソース | AWS公式ブログ / クラスメソッド / Zenn / Qiita（4ソース）  |
+| 情報ソース | AWS公式ニュース / AWSブログ / クラスメソッド / Zenn / Qiita（5ソース） |
 | 取得期間   | 過去14日以内の記事のみ                                    |
 | 重複排除   | URL完全一致 → キーワード → AWSサービス名の3段階           |
 | AI変換     | Amazon Bedrock Claude Haiku（口調変換・ハッシュタグ生成） |
@@ -25,7 +25,7 @@
 ```text
 EventBridge ルール（20:00 JST）
   └─▶ Lambda（Python 3.14）
-        ├─ RSS/Atom 取得（AWS公式・Classmethod・Zenn・Qiita）
+        ├─ RSS/Atom 取得（AWS公式ニュース・AWSブログ・Classmethod・Zenn・Qiita）
         ├─ 14日フィルタ + 3段階重複排除
         ├─ Bedrock Claude Haiku（口調変換・ハッシュタグ生成）
         ├─ SSM Parameter Store（投稿済み URL 記録）

@@ -9,35 +9,63 @@ app.disable('x-powered-by');
 const GITHUB_RAW_BASE =
   'https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates';
 
+// { category: { advanced: [...], beginner: [...] } }
 const CATEGORY_FILES = {
-  network:    ['cfn-vpc.yaml', 'cfn-igw.yaml', 'cfn-nat.yaml', 'cfn-security-group.yaml', 'cfn-security-group-ingress.yaml', 'cfn-security-group-egress.yaml', 'cfn-alb.yaml', 'cfn-nlb.yaml'],
-  compute:    ['cfn-ecr.yaml', 'cfn-ecs-cluster.yaml', 'cfn-ecs-service.yaml', 'cfn-lambda.yaml', 'cfn-ec2.yaml'],
-  storage:    ['cfn-s3.yaml', 'cfn-efs.yaml', 'cfn-ebs.yaml'],
-  database:   ['cfn-dynamodb.yaml', 'cfn-rds.yaml', 'cfn-elasticache.yaml'],
-  security:   ['cfn-kms.yaml', 'cfn-iam-role.yaml'],
-  messaging:  ['cfn-sqs.yaml'],
-  monitoring: ['cfn-cw-logs.yaml', 'cfn-cw-alarm-ec2.yaml', 'cfn-cw-alarm-rds.yaml', 'cfn-cw-alarm-efs.yaml', 'cfn-cw-alarm-lambda.yaml', 'cfn-cw-alarm-sqs.yaml', 'cfn-cw-alarm-alb.yaml'],
+  network: {
+    advanced: ['cfn-vpc.yaml', 'cfn-igw.yaml', 'cfn-nat.yaml', 'cfn-security-group.yaml', 'cfn-security-group-ingress.yaml', 'cfn-security-group-egress.yaml', 'cfn-alb.yaml', 'cfn-nlb.yaml'],
+    beginner: ['cfn-vpc-basic.yaml', 'cfn-igw-basic.yaml', 'cfn-nat-basic.yaml', 'cfn-security-group-basic.yaml', 'cfn-security-group-ingress-basic.yaml', 'cfn-security-group-egress-basic.yaml', 'cfn-alb-basic.yaml', 'cfn-nlb-basic.yaml'],
+  },
+  compute: {
+    advanced: ['cfn-ecr.yaml', 'cfn-ecs-cluster.yaml', 'cfn-ecs-service.yaml', 'cfn-lambda.yaml', 'cfn-ec2.yaml'],
+    beginner: ['cfn-ecr-basic.yaml', 'cfn-ecs-cluster-basic.yaml', 'cfn-ecs-service-basic.yaml', 'cfn-lambda-basic.yaml', 'cfn-ec2-basic.yaml'],
+  },
+  storage: {
+    advanced: ['cfn-s3.yaml', 'cfn-efs.yaml', 'cfn-ebs.yaml'],
+    beginner: ['cfn-s3-basic.yaml', 'cfn-efs-basic.yaml', 'cfn-ebs-basic.yaml'],
+  },
+  database: {
+    advanced: ['cfn-dynamodb.yaml', 'cfn-rds.yaml', 'cfn-elasticache.yaml'],
+    beginner: ['cfn-dynamodb-basic.yaml', 'cfn-rds-basic.yaml', 'cfn-elasticache-basic.yaml'],
+  },
+  security: {
+    advanced: ['cfn-kms.yaml', 'cfn-iam-role.yaml'],
+    beginner: ['cfn-kms-basic.yaml', 'cfn-iam-role-basic.yaml'],
+  },
+  messaging: {
+    advanced: ['cfn-sqs.yaml', 'cfn-sns.yaml', 'cfn-eventbridge.yaml'],
+    beginner: ['cfn-sqs-basic.yaml', 'cfn-sns-basic.yaml', 'cfn-eventbridge-basic.yaml'],
+  },
+  monitoring: {
+    advanced: ['cfn-cw-logs.yaml', 'cfn-cw-alarm-ec2.yaml', 'cfn-cw-alarm-rds.yaml', 'cfn-cw-alarm-efs.yaml', 'cfn-cw-alarm-lambda.yaml', 'cfn-cw-alarm-sqs.yaml', 'cfn-cw-alarm-alb.yaml'],
+    beginner: ['cfn-cw-logs-basic.yaml', 'cfn-cw-alarm-ec2-basic.yaml', 'cfn-cw-alarm-rds-basic.yaml', 'cfn-cw-alarm-efs-basic.yaml', 'cfn-cw-alarm-lambda-basic.yaml', 'cfn-cw-alarm-sqs-basic.yaml', 'cfn-cw-alarm-alb-basic.yaml'],
+  },
 };
 
-// Reverse lookup: filename → category (for subdirectory path construction)
-const FILE_CATEGORY = {};
-for (const [cat, files] of Object.entries(CATEGORY_FILES)) {
-  for (const f of files) FILE_CATEGORY[f] = cat;
+// Reverse lookup: filename → { cat, subdir }
+const FILE_META = {};
+for (const [cat, levels] of Object.entries(CATEGORY_FILES)) {
+  for (const [subdir, files] of Object.entries(levels)) {
+    for (const f of files) FILE_META[f] = { cat, subdir };
+  }
 }
 
 // ZIP一括ダウンロード: /api/templates/download/all.zip or /{category}.zip
 app.get('/api/templates/download/:zipname', async (req, res) => {
   const { zipname } = req.params;
-  let filenames;
+  let entries; // [{ cat, subdir, filename }]
   let downloadName;
 
   if (zipname === 'all.zip') {
-    filenames = Object.values(CATEGORY_FILES).flat();
+    entries = Object.entries(CATEGORY_FILES).flatMap(([cat, levels]) =>
+      Object.entries(levels).flatMap(([subdir, files]) => files.map(f => ({ cat, subdir, filename: f })))
+    );
     downloadName = 'cfn-templates-all.zip';
   } else if (/^[a-z]+\.zip$/.test(zipname)) {
     const cat = zipname.slice(0, -4);
     if (!CATEGORY_FILES[cat]) return res.status(404).send('Not Found');
-    filenames = CATEGORY_FILES[cat];
+    entries = Object.entries(CATEGORY_FILES[cat]).flatMap(([subdir, files]) =>
+      files.map(f => ({ cat, subdir, filename: f }))
+    );
     downloadName = `cfn-templates-${cat}.zip`;
   } else {
     return res.status(404).send('Not Found');
@@ -45,11 +73,10 @@ app.get('/api/templates/download/:zipname', async (req, res) => {
 
   try {
     const zip = new JSZip();
-    await Promise.all(filenames.map(async (fn) => {
-      const cat = FILE_CATEGORY[fn];
-      const r = await fetch(`${GITHUB_RAW_BASE}/${cat}/${fn}`);
-      if (!r.ok) throw new Error(`fetch failed: ${fn}`);
-      zip.file(fn, await r.text());
+    await Promise.all(entries.map(async ({ cat, subdir, filename }) => {
+      const r = await fetch(`${GITHUB_RAW_BASE}/${cat}/${subdir}/${filename}`);
+      if (!r.ok) throw new Error(`fetch failed: ${filename}`);
+      zip.file(filename, await r.text());
     }));
     const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
     res.status(200)
@@ -69,10 +96,10 @@ app.get('/api/templates/:filename', async (req, res) => {
   if (!filename || !/^cfn-[a-z0-9-]+\.yaml$/.test(filename)) {
     return res.status(404).send('Not Found');
   }
-  const category = FILE_CATEGORY[filename];
-  if (!category) return res.status(404).send('Not Found');
+  const meta = FILE_META[filename];
+  if (!meta) return res.status(404).send('Not Found');
   try {
-    const response = await fetch(`${GITHUB_RAW_BASE}/${category}/${filename}`);
+    const response = await fetch(`${GITHUB_RAW_BASE}/${meta.cat}/${meta.subdir}/${filename}`);
     if (!response.ok) return res.status(404).send('Not Found');
     const content = await response.text();
     res.setHeader('Content-Type', 'application/octet-stream');

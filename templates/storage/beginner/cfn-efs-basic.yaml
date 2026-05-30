@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EFS File System with encryption and a single mount target"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-efs \
+#   --template-file cfn-efs-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SubnetId=subnet-xxxxxxxx \
+#     SecurityGroupId=sg-xxxxxxxx
+#
+# Prerequisites:
+#   - VPC, subnet, and security group must exist beforehand.
+#     Use cfn-vpc-basic.yaml and cfn-security-group-basic.yaml to create them.
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml
+#   2. cfn-security-group-basic.yaml
+#   3. cfn-efs-basic.yaml (this template)
+#
+# To add a mount target in another AZ:
+#   Copy the MountTarget01 block, rename it MountTarget02,
+#   and change SubnetId02 to the target subnet.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Network"
+        Parameters:
+          - SubnetId
+          - SecurityGroupId
+
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Subnet ID where the mount target will be created."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group ID to attach to the mount target. Allow inbound NFS (port 2049)."
+
+# -----------------------------------------------
+# Resources
+# Encrypted: true uses the AWS-managed key (no KMS cost).
+# PerformanceMode: generalPurpose is sufficient for most workloads.
+# -----------------------------------------------
+Resources:
+  EfsFileSystem:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-efs"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  # Mount target in the specified subnet.
+  # To add a mount target in another AZ, copy this block,
+  # rename it MountTarget02, and change SubnetId to a different subnet.
+  MountTarget01:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EfsFileSystem
+      SubnetId: !Ref SubnetId
+      SecurityGroups:
+        - !Ref SecurityGroupId
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  FileSystemId:
+    Description: "EFS file system ID"
+    Value: !Ref EfsFileSystem
+    Export:
+      Name: !Sub "${AWS::StackName}-FileSystemId"
+
+  MountTargetDnsName:
+    Description: "EFS DNS name for mounting (use as NFS server address)"
+    Value: !Sub "${EfsFileSystem}.efs.${AWS::Region}.amazonaws.com"
+    Export:
+      Name: !Sub "${AWS::StackName}-DnsName"

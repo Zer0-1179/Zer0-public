@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ElastiCache Redis single-node cluster with encryption"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-elasticache \
+#   --template-file cfn-elasticache-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SubnetId01=subnet-xxxxxxxx \
+#     SubnetId02=subnet-yyyyyyyy \
+#     SecurityGroupId=sg-xxxxxxxx
+#
+# Prerequisites:
+#   - Two subnets in different AZs and a security group must exist.
+#     A subnet group requires at least 2 subnets even for single-node clusters.
+#     Allow inbound Redis (port 6379) in the security group.
+#     Use cfn-vpc-basic.yaml and cfn-security-group-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml
+#   2. cfn-security-group-basic.yaml
+#   3. cfn-elasticache-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Network"
+        Parameters:
+          - SubnetId01
+          - SubnetId02
+          - SecurityGroupId
+      - Label:
+          default: "Cache"
+        Parameters:
+          - NodeType
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  SubnetId01:
+    Type: AWS::EC2::Subnet::Id
+    Description: "First subnet for the cache subnet group."
+
+  SubnetId02:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Second subnet for the cache subnet group (different AZ)."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group for the cache cluster. Allow inbound Redis (port 6379)."
+
+  NodeType:
+    Type: String
+    Default: cache.t3.micro
+    AllowedValues:
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
+      - cache.r7g.large
+    Description: "ElastiCache node type."
+
+# -----------------------------------------------
+# Resources
+# AtRestEncryptionEnabled uses the AWS-managed key at no additional cost.
+# TransitEncryptionEnabled encrypts data in transit (TLS).
+# NumCacheClusters: 1 creates a single-node cluster (no replication).
+# -----------------------------------------------
+Resources:
+  CacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet"
+      Description: !Sub "Subnet group for ${ProjectName}-${Env} Redis cluster"
+      SubnetIds:
+        - !Ref SubnetId01
+        - !Ref SubnetId02
+
+  RedisCluster:
+    Type: AWS::ElastiCache::ReplicationGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      ReplicationGroupId: !Sub "${ProjectName}-${Env}-redis"
+      ReplicationGroupDescription: !Sub "${ProjectName}-${Env} Redis cluster"
+      CacheNodeType: !Ref NodeType
+      Engine: redis
+      EngineVersion: "7.1"
+      NumCacheClusters: 1
+      AutomaticFailoverEnabled: false
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  PrimaryEndpoint:
+    Description: "Redis primary endpoint address"
+    Value: !GetAtt RedisCluster.PrimaryEndPoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-PrimaryEndpoint"
+
+  PrimaryPort:
+    Description: "Redis primary endpoint port"
+    Value: !GetAtt RedisCluster.PrimaryEndPoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-PrimaryPort"

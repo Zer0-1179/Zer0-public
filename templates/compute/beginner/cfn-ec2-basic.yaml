@@ -1,0 +1,182 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EC2 instance with an IAM instance profile and encrypted root volume"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ec2 \
+#   --template-file cfn-ec2-basic.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     AmiId=ami-xxxxxxxxxxxxxxxx \
+#     SubnetId=subnet-xxxxxxxx \
+#     SecurityGroupId=sg-xxxxxxxx
+#
+# Find the latest Amazon Linux 2023 AMI ID:
+#   aws ssm get-parameter \
+#     --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+#     --query "Parameter.Value" --output text
+#
+# Prerequisites:
+#   - Subnet and security group must exist beforehand.
+#     Use cfn-vpc-basic.yaml and cfn-security-group-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml
+#   2. cfn-security-group-basic.yaml
+#   3. cfn-ec2-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Instance"
+        Parameters:
+          - AmiId
+          - InstanceType
+          - SubnetId
+          - SecurityGroupId
+      - Label:
+          default: "Storage"
+        Parameters:
+          - RootVolumeSize
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Description: "AMI ID to use for the instance (e.g. Amazon Linux 2023)."
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+    Description: "EC2 instance type."
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Subnet where the instance will be launched."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group to attach to the instance."
+
+  RootVolumeSize:
+    Type: Number
+    Default: 20
+    MinValue: 8
+    MaxValue: 16384
+    Description: "Root EBS volume size in GiB."
+
+# -----------------------------------------------
+# Resources
+# Encrypted: true on the root volume uses the AWS-managed key (aws/ebs).
+# SSMInstanceCorePolicy enables AWS Systems Manager Session Manager
+# so you can connect without SSH keys.
+# -----------------------------------------------
+Resources:
+  Ec2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Env}-ec2-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile"
+      Roles:
+        - !Ref Ec2InstanceRole
+
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref RootVolumeSize
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-ec2"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  InstanceId:
+    Description: "EC2 instance ID"
+    Value: !Ref Ec2Instance
+    Export:
+      Name: !Sub "${AWS::StackName}-InstanceId"
+
+  PrivateIp:
+    Description: "Private IP address of the instance"
+    Value: !GetAtt Ec2Instance.PrivateIp
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateIp"
+
+  RoleArn:
+    Description: "EC2 IAM role ARN"
+    Value: !GetAtt Ec2InstanceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RoleArn"
