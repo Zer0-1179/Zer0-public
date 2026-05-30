@@ -152,7 +152,7 @@ Resources:
       DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds"
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: "8.0"
+      EngineVersion: "8.0.40"
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       DBName: !Ref DBName
