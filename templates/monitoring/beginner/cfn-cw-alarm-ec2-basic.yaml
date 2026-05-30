@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch alarm for EC2 CPU utilization"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-cw-alarm-ec2 \
+#   --template-file cfn-cw-alarm-ec2-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     InstanceId=i-xxxxxxxxxxxxxxxx \
+#     AlarmTopicArn=arn:aws:sns:ap-northeast-1:123456789012:my-project-dev-alerts
+#
+# Prerequisites:
+#   - EC2 instance and SNS topic must exist.
+#     Use cfn-ec2-basic.yaml and cfn-sns-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-ec2-basic.yaml
+#   2. cfn-sns-basic.yaml
+#   3. cfn-cw-alarm-ec2-basic.yaml (this template)
+#
+# To add a second alarm (e.g. for another instance):
+#   Copy the CpuAlarm01 block, rename it CpuAlarm02,
+#   add an InstanceId02 parameter, and change Dimensions accordingly.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - InstanceId
+      - Label:
+          default: "Alarm"
+        Parameters:
+          - Threshold
+          - AlarmTopicArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  InstanceId:
+    Type: AWS::EC2::Instance::Id
+    Description: "EC2 instance ID to monitor."
+
+  Threshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: "CPU utilization threshold (%). Alarm fires when CPU exceeds this value for 5 minutes."
+
+  AlarmTopicArn:
+    Type: String
+    Description: "SNS topic ARN to send alarm notifications."
+
+# -----------------------------------------------
+# Resources
+# EvaluationPeriods * Period = 1 * 300s = 5 minutes before alarm fires.
+# To add a second alarm, copy the CpuAlarm01 block and rename it CpuAlarm02.
+# -----------------------------------------------
+Resources:
+  # To add a second alarm (e.g. for a different instance),
+  # copy this block, rename it CpuAlarm02, add an InstanceId02 parameter,
+  # and change the Dimensions value to !Ref InstanceId02.
+  CpuAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-ec2-cpu-high-01"
+      AlarmDescription: !Sub "EC2 CPU utilization > ${Threshold}% for 5 minutes"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref Threshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopicArn
+      OKActions:
+        - !Ref AlarmTopicArn
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  AlarmName01:
+    Description: "CloudWatch alarm name"
+    Value: !Ref CpuAlarm01
+    Export:
+      Name: !Sub "${AWS::StackName}-AlarmName01"

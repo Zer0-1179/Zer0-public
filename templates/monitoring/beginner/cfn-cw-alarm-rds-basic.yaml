@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch alarm for RDS CPU utilization"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-cw-alarm-rds \
+#   --template-file cfn-cw-alarm-rds-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     DBInstanceIdentifier=my-project-dev-rds \
+#     AlarmTopicArn=arn:aws:sns:ap-northeast-1:123456789012:my-project-dev-alerts
+#
+# Prerequisites:
+#   - RDS instance and SNS topic must exist.
+#     Use cfn-rds-basic.yaml and cfn-sns-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-rds-basic.yaml
+#   2. cfn-sns-basic.yaml
+#   3. cfn-cw-alarm-rds-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - DBInstanceIdentifier
+      - Label:
+          default: "Alarm"
+        Parameters:
+          - Threshold
+          - AlarmTopicArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  DBInstanceIdentifier:
+    Type: String
+    Default: my-project-dev-rds
+    Description: "RDS DB instance identifier to monitor."
+
+  Threshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: "CPU utilization threshold (%). Alarm fires when CPU exceeds this value for 5 minutes."
+
+  AlarmTopicArn:
+    Type: String
+    Description: "SNS topic ARN to send alarm notifications."
+
+# -----------------------------------------------
+# Resources
+# -----------------------------------------------
+Resources:
+  CpuAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-rds-cpu-high-01"
+      AlarmDescription: !Sub "RDS CPU utilization > ${Threshold}% for 5 minutes"
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DBInstanceIdentifier
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref Threshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopicArn
+      OKActions:
+        - !Ref AlarmTopicArn
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  AlarmName01:
+    Description: "CloudWatch alarm name"
+    Value: !Ref CpuAlarm01
+    Export:
+      Name: !Sub "${AWS::StackName}-AlarmName01"

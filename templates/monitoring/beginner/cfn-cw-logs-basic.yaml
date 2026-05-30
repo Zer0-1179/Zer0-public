@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Log Group with configurable retention"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-cw-logs \
+#   --template-file cfn-cw-logs-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     LogGroupName=/app/my-project/api
+#
+# Deploy order:
+#   1. cfn-cw-logs-basic.yaml (this template — no dependencies)
+#
+# To add a second log group:
+#   Copy the LogGroup01 block, rename it LogGroup02,
+#   add a LogGroupName02 parameter, and change LogGroupName accordingly.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Log Group"
+        Parameters:
+          - LogGroupName
+          - RetentionInDays
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  LogGroupName:
+    Type: String
+    Default: /app/my-project/api
+    Description: "CloudWatch Log Group name (e.g. /app/my-project/api, /aws/lambda/my-function)."
+
+  RetentionInDays:
+    Type: Number
+    Default: 30
+    AllowedValues:
+      - 1
+      - 3
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 180
+      - 365
+    Description: "Log retention period in days."
+
+# -----------------------------------------------
+# Resources
+# DeletionPolicy: Retain keeps the log group and its logs after stack deletion.
+# To add a second log group, copy the LogGroup01 block and rename it LogGroup02.
+# -----------------------------------------------
+Resources:
+  # To add a second log group, copy this block, rename it LogGroup02,
+  # add a LogGroupName02 parameter, and change LogGroupName to !Ref LogGroupName02.
+  LogGroup01:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Ref LogGroupName
+      RetentionInDays: !Ref RetentionInDays
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  LogGroupName01:
+    Description: "CloudWatch Log Group name"
+    Value: !Ref LogGroup01
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroupName01"
+
+  LogGroupArn01:
+    Description: "CloudWatch Log Group ARN"
+    Value: !GetAtt LogGroup01.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroupArn01"
