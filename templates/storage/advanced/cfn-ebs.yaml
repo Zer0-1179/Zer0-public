@@ -146,6 +146,7 @@ Conditions:
   HasIops: !Not [!Equals [!Ref Iops, 0]]
   HasThroughput: !Not [!Equals [!Ref Throughput, 0]]
   HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
+  HasEc2Instance: !Not [!Equals [!Ref Ec2InstanceId, ""]]
 
 # -----------------------------------------------
 # Resources
@@ -176,6 +177,7 @@ Resources:
 
   VolumeAttachment:
     Type: AWS::EC2::VolumeAttachment
+    Condition: HasEc2Instance
     Properties:
       InstanceId: !Ref Ec2InstanceId
       VolumeId: !Ref Volume
