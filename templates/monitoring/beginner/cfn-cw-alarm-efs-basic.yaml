@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch alarm for EFS PercentIOLimit"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-cw-alarm-efs \
+#   --template-file cfn-cw-alarm-efs-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     FileSystemId=fs-xxxxxxxx \
+#     AlarmTopicArn=arn:aws:sns:ap-northeast-1:123456789012:my-project-dev-alerts
+#
+# Prerequisites:
+#   - EFS file system and SNS topic must exist.
+#     Use cfn-efs-basic.yaml and cfn-sns-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-efs-basic.yaml
+#   2. cfn-sns-basic.yaml
+#   3. cfn-cw-alarm-efs-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - FileSystemId
+      - Label:
+          default: "Alarm"
+        Parameters:
+          - Threshold
+          - AlarmTopicArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  FileSystemId:
+    Type: String
+    Default: fs-xxxxxxxx
+    Description: "EFS file system ID to monitor (e.g. fs-xxxxxxxx)."
+
+  Threshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: "PercentIOLimit threshold (%). Alarm fires when I/O limit exceeds this value for 5 minutes."
+
+  AlarmTopicArn:
+    Type: String
+    Description: "SNS topic ARN to send alarm notifications."
+
+# -----------------------------------------------
+# Resources
+# PercentIOLimit: percentage of the time the EFS file system is at the I/O limit.
+# Values above 80% indicate the file system is approaching the limit.
+# -----------------------------------------------
+Resources:
+  PercentIoLimitAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-efs-io-limit-01"
+      AlarmDescription: !Sub "EFS PercentIOLimit > ${Threshold}% for 5 minutes"
+      Namespace: AWS/EFS
+      MetricName: PercentIOLimit
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystemId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref Threshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopicArn
+      OKActions:
+        - !Ref AlarmTopicArn
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  AlarmName01:
+    Description: "CloudWatch alarm name"
+    Value: !Ref PercentIoLimitAlarm01
+    Export:
+      Name: !Sub "${AWS::StackName}-AlarmName01"

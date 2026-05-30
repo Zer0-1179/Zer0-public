@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch alarm for Lambda function errors"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-cw-alarm-lambda \
+#   --template-file cfn-cw-alarm-lambda-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     FunctionName=my-project-dev-lambda-api \
+#     AlarmTopicArn=arn:aws:sns:ap-northeast-1:123456789012:my-project-dev-alerts
+#
+# Prerequisites:
+#   - Lambda function and SNS topic must exist.
+#     Use cfn-lambda-basic.yaml and cfn-sns-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-lambda-basic.yaml
+#   2. cfn-sns-basic.yaml
+#   3. cfn-cw-alarm-lambda-basic.yaml (this template)
+#
+# To add a second alarm (e.g. for another function):
+#   Copy the ErrorAlarm01 block, rename it ErrorAlarm02,
+#   add a FunctionName02 parameter, and change Dimensions accordingly.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - FunctionName
+      - Label:
+          default: "Alarm"
+        Parameters:
+          - Threshold
+          - AlarmTopicArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  FunctionName:
+    Type: String
+    Default: my-project-dev-lambda-fn
+    Description: "Lambda function name to monitor."
+
+  Threshold:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: "Error count threshold. Alarm fires when errors exceed this value in 5 minutes."
+
+  AlarmTopicArn:
+    Type: String
+    Description: "SNS topic ARN to send alarm notifications."
+
+# -----------------------------------------------
+# Resources
+# Errors: number of invocations that resulted in an error.
+# TreatMissingData: notBreaching — treat absence of data (no invocations) as OK.
+# -----------------------------------------------
+Resources:
+  # To add a second alarm for a different function,
+  # copy this block, rename it ErrorAlarm02, add a FunctionName02 parameter,
+  # and change Dimensions to use !Ref FunctionName02.
+  ErrorAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-lambda-errors-01"
+      AlarmDescription: !Sub "Lambda ${FunctionName} errors > ${Threshold} in 5 minutes"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref Threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopicArn
+      OKActions:
+        - !Ref AlarmTopicArn
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  AlarmName01:
+    Description: "CloudWatch alarm name"
+    Value: !Ref ErrorAlarm01
+    Export:
+      Name: !Sub "${AWS::StackName}-AlarmName01"

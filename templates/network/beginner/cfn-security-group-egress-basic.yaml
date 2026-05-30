@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Additional outbound rules for an existing security group"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-sg-egress \
+#   --template-file cfn-security-group-egress-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     SecurityGroupId=sg-xxxxxxxx \
+#     EgressPort=443 \
+#     EgressCidr=0.0.0.0/0
+#
+# Use this template to add explicit outbound rules to an existing security group.
+# By default, AWS security groups allow all outbound traffic.
+# Use this template only if you want to restrict outbound traffic to specific ports.
+#
+# Prerequisites:
+#   - Target security group must exist.
+#     Use cfn-security-group-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-security-group-basic.yaml
+#   2. cfn-security-group-egress-basic.yaml (this template)
+#
+# To add a second outbound rule:
+#   Copy the EgressRule01 block, rename it EgressRule02,
+#   add EgressPort02 and EgressCidr02 parameters, and adjust accordingly.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - SecurityGroupId
+      - Label:
+          default: "Outbound Rule"
+        Parameters:
+          - EgressPort
+          - EgressCidr
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group ID to add outbound rules to."
+
+  EgressPort:
+    Type: Number
+    Default: 443
+    MinValue: 0
+    MaxValue: 65535
+    Description: "Port number to allow outbound traffic on."
+
+  EgressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: "Destination CIDR block for the outbound rule."
+
+# -----------------------------------------------
+# Resources
+# To add a second outbound rule, copy the EgressRule01 block and rename it EgressRule02.
+# -----------------------------------------------
+Resources:
+  # To add a second outbound rule, copy this block, rename it EgressRule02,
+  # add EgressPort02 and EgressCidr02 parameters, and adjust FromPort/ToPort/CidrIp.
+  EgressRule01:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref SecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref EgressPort
+      ToPort: !Ref EgressPort
+      CidrIp: !Ref EgressCidr
+      Description: !Sub "Allow TCP ${EgressPort} to ${EgressCidr}"
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  SecurityGroupId:
+    Description: "Security group ID that the rule was added to"
+    Value: !Ref SecurityGroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-SecurityGroupId"

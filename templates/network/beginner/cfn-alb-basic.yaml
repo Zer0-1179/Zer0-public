@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Application Load Balancer with HTTP listener and target group"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-alb \
+#   --template-file cfn-alb-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     VpcId=vpc-xxxxxxxx \
+#     SubnetId01=subnet-xxxxxxxx \
+#     SubnetId02=subnet-yyyyyyyy \
+#     SecurityGroupId=sg-xxxxxxxx
+#
+# Prerequisites:
+#   - VPC, two public subnets in different AZs, and a security group must exist.
+#     Use cfn-vpc-basic.yaml and cfn-security-group-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml
+#   2. cfn-security-group-basic.yaml
+#   3. cfn-alb-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Network"
+        Parameters:
+          - VpcId
+          - SubnetId01
+          - SubnetId02
+          - SecurityGroupId
+      - Label:
+          default: "Target Group"
+        Parameters:
+          - TargetPort
+          - HealthCheckPath
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: "VPC where the ALB will be created."
+
+  SubnetId01:
+    Type: AWS::EC2::Subnet::Id
+    Description: "First public subnet for the ALB (AZ-a)."
+
+  SubnetId02:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Second public subnet for the ALB (AZ-c). Must be in a different AZ."
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group for the ALB. Allow inbound HTTP (port 80)."
+
+  TargetPort:
+    Type: Number
+    Default: 80
+    Description: "Port the backend targets listen on."
+
+  HealthCheckPath:
+    Type: String
+    Default: /health
+    Description: "Health check path. The backend must return HTTP 200 for this path."
+
+# -----------------------------------------------
+# Resources
+# ALB access logging is disabled for simplicity. Enable it in the advanced version.
+# -----------------------------------------------
+Resources:
+  AlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-tg"
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: !Ref TargetPort
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-alb"
+      Type: application
+      Scheme: internet-facing
+      Subnets:
+        - !Ref SubnetId01
+        - !Ref SubnetId02
+      SecurityGroups:
+        - !Ref SecurityGroupId
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroup
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  LoadBalancerDnsName:
+    Description: "ALB DNS name"
+    Value: !GetAtt Alb.DNSName
+    Export:
+      Name: !Sub "${AWS::StackName}-DnsName"
+
+  LoadBalancerArn:
+    Description: "ALB ARN"
+    Value: !Ref Alb
+    Export:
+      Name: !Sub "${AWS::StackName}-Arn"
+
+  TargetGroupArn:
+    Description: "Target group ARN"
+    Value: !Ref AlbTargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-TargetGroupArn"

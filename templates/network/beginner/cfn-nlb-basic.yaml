@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Network Load Balancer with TCP listener and target group"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-nlb \
+#   --template-file cfn-nlb-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     VpcId=vpc-xxxxxxxx \
+#     SubnetId01=subnet-xxxxxxxx \
+#     SubnetId02=subnet-yyyyyyyy
+#
+# Prerequisites:
+#   - VPC and two public subnets in different AZs must exist.
+#     Use cfn-vpc-basic.yaml.
+#
+# Note: NLB does not use security groups. Traffic control is done via
+#       the security groups attached to the backend targets.
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml
+#   2. cfn-nlb-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Network"
+        Parameters:
+          - VpcId
+          - SubnetId01
+          - SubnetId02
+      - Label:
+          default: "Target Group"
+        Parameters:
+          - TargetPort
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: "VPC where the NLB will be created."
+
+  SubnetId01:
+    Type: AWS::EC2::Subnet::Id
+    Description: "First subnet for the NLB (AZ-a)."
+
+  SubnetId02:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Second subnet for the NLB (AZ-c). Must be in a different AZ."
+
+  TargetPort:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 65535
+    Description: "Port the backend targets listen on."
+
+# -----------------------------------------------
+# Resources
+# NLB operates at Layer 4 (TCP/UDP). Use ALB for Layer 7 (HTTP/HTTPS).
+# -----------------------------------------------
+Resources:
+  NlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-nlb-tg"
+      VpcId: !Ref VpcId
+      Protocol: TCP
+      Port: !Ref TargetPort
+      TargetType: ip
+      HealthCheckProtocol: TCP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  Nlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-nlb"
+      Type: network
+      Scheme: internet-facing
+      Subnets:
+        - !Ref SubnetId01
+        - !Ref SubnetId02
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  TcpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Nlb
+      Protocol: TCP
+      Port: !Ref TargetPort
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NlbTargetGroup
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  LoadBalancerDnsName:
+    Description: "NLB DNS name"
+    Value: !GetAtt Nlb.DNSName
+    Export:
+      Name: !Sub "${AWS::StackName}-DnsName"
+
+  LoadBalancerArn:
+    Description: "NLB ARN"
+    Value: !Ref Nlb
+    Export:
+      Name: !Sub "${AWS::StackName}-Arn"
+
+  TargetGroupArn:
+    Description: "Target group ARN"
+    Value: !Ref NlbTargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-TargetGroupArn"

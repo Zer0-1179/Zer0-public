@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch alarm for SQS ApproximateAgeOfOldestMessage"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-cw-alarm-sqs \
+#   --template-file cfn-cw-alarm-sqs-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     QueueName=my-project-dev-tasks \
+#     AlarmTopicArn=arn:aws:sns:ap-northeast-1:123456789012:my-project-dev-alerts
+#
+# Prerequisites:
+#   - SQS queue and SNS topic must exist.
+#     Use cfn-sqs-basic.yaml and cfn-sns-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-sqs-basic.yaml
+#   2. cfn-sns-basic.yaml
+#   3. cfn-cw-alarm-sqs-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - QueueName
+      - Label:
+          default: "Alarm"
+        Parameters:
+          - Threshold
+          - AlarmTopicArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  QueueName:
+    Type: String
+    Default: my-project-dev-tasks
+    Description: "SQS queue name to monitor (not ARN, just the name)."
+
+  Threshold:
+    Type: Number
+    Default: 300
+    MinValue: 1
+    Description: "Age threshold in seconds. Alarm fires when the oldest message is older than this value."
+
+  AlarmTopicArn:
+    Type: String
+    Description: "SNS topic ARN to send alarm notifications."
+
+# -----------------------------------------------
+# Resources
+# ApproximateAgeOfOldestMessage: age in seconds of the oldest message in the queue.
+# High values indicate the consumer is not processing messages fast enough.
+# -----------------------------------------------
+Resources:
+  MessageAgeAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-sqs-age-01"
+      AlarmDescription: !Sub "SQS ${QueueName} oldest message age > ${Threshold}s"
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref Threshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopicArn
+      OKActions:
+        - !Ref AlarmTopicArn
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  AlarmName01:
+    Description: "CloudWatch alarm name"
+    Value: !Ref MessageAgeAlarm01
+    Export:
+      Name: !Sub "${AWS::StackName}-AlarmName01"

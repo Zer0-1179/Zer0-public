@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch alarm for ALB 5xx error rate"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# Get the LoadBalancer dimension value from the ALB ARN:
+#   ALB_ARN=$(aws cloudformation describe-stacks \
+#     --stack-name <ProjectName>-<Env>-alb \
+#     --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerArn'].OutputValue" \
+#     --output text)
+#   # Extract the suffix (e.g. app/my-alb/1234567890abcdef)
+#   ALB_SUFFIX=$(echo $ALB_ARN | sed 's|.*:loadbalancer/||')
+#
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-cw-alarm-alb \
+#   --template-file cfn-cw-alarm-alb-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     LoadBalancer=app/my-project-dev-alb/1234567890abcdef \
+#     AlarmTopicArn=arn:aws:sns:ap-northeast-1:123456789012:my-project-dev-alerts
+#
+# Prerequisites:
+#   - ALB and SNS topic must exist.
+#     Use cfn-alb-basic.yaml and cfn-sns-basic.yaml.
+#
+# Deploy order:
+#   1. cfn-alb-basic.yaml
+#   2. cfn-sns-basic.yaml
+#   3. cfn-cw-alarm-alb-basic.yaml (this template)
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Target"
+        Parameters:
+          - LoadBalancer
+      - Label:
+          default: "Alarm"
+        Parameters:
+          - Threshold
+          - AlarmTopicArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  LoadBalancer:
+    Type: String
+    Default: app/my-project-dev-alb/1234567890abcdef
+    Description: "ALB dimension value. Extract from the ALB ARN: the part after 'loadbalancer/' (e.g. app/my-alb/xxxxxxxx)."
+
+  Threshold:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: "5xx error count threshold. Alarm fires when 5xx errors exceed this value in 1 minute."
+
+  AlarmTopicArn:
+    Type: String
+    Description: "SNS topic ARN to send alarm notifications."
+
+# -----------------------------------------------
+# Resources
+# HTTPCode_ELB_5XX_Count: number of 5xx responses from the load balancer itself.
+# HTTPCode_Target_5XX_Count: number of 5xx responses from backend targets.
+# -----------------------------------------------
+Resources:
+  Elb5xxAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Env}-alb-5xx-01"
+      AlarmDescription: !Sub "ALB 5xx errors > ${Threshold} in 1 minute"
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref LoadBalancer
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: !Ref Threshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopicArn
+      OKActions:
+        - !Ref AlarmTopicArn
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  AlarmName01:
+    Description: "CloudWatch alarm name"
+    Value: !Ref Elb5xxAlarm01
+    Export:
+      Name: !Sub "${AWS::StackName}-AlarmName01"

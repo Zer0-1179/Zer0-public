@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "IAM role for Lambda with AWSLambdaBasicExecutionRole"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-iam-role-<RoleSuffix> \
+#   --template-file cfn-iam-role-basic.yaml \
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     RoleSuffix=api
+#
+# Deploy order:
+#   1. cfn-iam-role-basic.yaml (this template — no dependencies)
+#
+# To grant additional permissions:
+#   Add managed policy ARNs to the ManagedPolicyArns list.
+#   Example:
+#     ManagedPolicyArns:
+#       - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+#       - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - RoleSuffix
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  RoleSuffix:
+    Type: String
+    Default: fn
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose identifier for this role (e.g. api, worker, batch)."
+
+# -----------------------------------------------
+# Resources
+# AWSLambdaBasicExecutionRole grants permission to write logs to CloudWatch.
+# To add more permissions, add managed policy ARNs to ManagedPolicyArns.
+# -----------------------------------------------
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Env}-lambda-${RoleSuffix}-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  RoleName:
+    Description: "IAM role name"
+    Value: !Ref LambdaRole
+    Export:
+      Name: !Sub "${AWS::StackName}-RoleName"
+
+  RoleArn:
+    Description: "IAM role ARN"
+    Value: !GetAtt LambdaRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RoleArn"

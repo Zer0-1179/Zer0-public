@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "VPC with one public subnet, Internet Gateway, and route table"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-vpc \
+#   --template-file cfn-vpc-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev
+#
+# Deploy order:
+#   1. cfn-vpc-basic.yaml (this template — no dependencies)
+#   2. cfn-security-group-basic.yaml (references this VPC)
+#
+# To add a second public subnet (in another AZ):
+#   Copy the PublicSubnet01 and RouteTableAssociation01 blocks,
+#   rename them PublicSubnet02 and RouteTableAssociation02,
+#   add a PublicSubnetCidr02 parameter, and change AvailabilityZone.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+      - Label:
+          default: "Network"
+        Parameters:
+          - VpcCidr
+          - PublicSubnetCidr01
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: "CIDR block for the VPC."
+
+  PublicSubnetCidr01:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: "CIDR block for the public subnet in AZ-a."
+
+# -----------------------------------------------
+# Resources
+# EnableDnsHostnames: true required for RDS, EFS, and other services.
+# To add a second subnet, copy PublicSubnet01 and rename it PublicSubnet02.
+# -----------------------------------------------
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-vpc"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-igw"
+        - Key: Project
+          Value: !Ref ProjectName
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # To add a second public subnet, copy this block and rename it PublicSubnet02.
+  # Change AvailabilityZone to ap-northeast-1c and CidrBlock to PublicSubnetCidr02.
+  PublicSubnet01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnetCidr01
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-public-subnet-01"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Env}-public-rtb"
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  RouteTableAssociation01:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet01
+      RouteTableId: !Ref PublicRouteTable
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  VpcId:
+    Description: "VPC ID"
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcId"
+
+  PublicSubnetId01:
+    Description: "Public subnet ID (AZ-a)"
+    Value: !Ref PublicSubnet01
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetId01"
+
+  InternetGatewayId:
+    Description: "Internet Gateway ID"
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-IgwId"
