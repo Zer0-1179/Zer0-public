@@ -73,11 +73,13 @@ app.get('/api/templates/download/:zipname', async (req, res) => {
 
   try {
     const zip = new JSZip();
-    await Promise.all(entries.map(async ({ cat, subdir, filename }) => {
+    const results = await Promise.allSettled(entries.map(async ({ cat, subdir, filename }) => {
       const r = await fetch(`${GITHUB_RAW_BASE}/${cat}/${subdir}/${filename}`);
-      if (!r.ok) throw new Error(`fetch failed: ${filename}`);
+      if (!r.ok) throw new Error(`${filename}: HTTP ${r.status}`);
       zip.file(filename, await r.text());
     }));
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length === entries.length) return res.status(502).send('Failed to fetch templates');
     const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
     res.status(200)
       .set('Content-Type', 'application/zip')
