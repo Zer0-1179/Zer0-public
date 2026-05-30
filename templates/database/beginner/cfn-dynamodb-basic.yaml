@@ -99,9 +99,8 @@ Resources:
       KeySchema:
         - AttributeName: !Ref PartitionKeyName
           KeyType: HASH
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: AES256
+      # DynamoDB encrypts all data at rest by default using AWS-owned keys (free, no configuration required).
+      # To use an AWS managed KMS key instead, add: SSESpecification: { SSEEnabled: true, SSEType: KMS }
       DeletionProtectionEnabled: false
       Tags:
         - Key: Project
