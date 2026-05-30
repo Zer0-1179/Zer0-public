@@ -118,7 +118,9 @@ bash scripts/deploy.sh
 
 実運用プロジェクトで使用している CloudFormation テンプレートを汎用化して公開。
 
-- **22テンプレート** / 7カテゴリ（ネットワーク・コンピューティング・ストレージ・データベース・セキュリティ・モニタリング・メッセージング）
+- **62テンプレート**（31種類 × Beginner/Advanced）/ 7カテゴリ（compute / database / messaging / monitoring / network / security / storage）
+- **GitHub 風 UI**: パンくず・行番号・ファイルサイズ・VS Code Dark Modern シンタックスハイライト
+- **モバイル対応**: フルスクリーン3ステップ操作（カテゴリ → ファイル → コードビュー）
 - **Env パラメータ**: `stg / dev / prd` の3環境対応。`prd` のみ DeletionPolicy=Retain・削除保護が有効
 - **配信**: GitHub raw URL（AWS インフラ非経由）— `sync_to_public.sh` で自動 push
 
@@ -141,3 +143,4 @@ bash scripts/deploy.sh
 | 2026-04-01 | v1.2       | カスタムドメイン `www.zer0-infra.com` 設定完了                     |
 | 2026-04-10 | v1.3       | Templatesページ（VS Codeエクスプローラー風UIと22テンプレート）追加 |
 | 2026-05-30 | v1.5       | YAMLビューアーにVS Code Dark Modernシンタックスハイライト追加      |
+| 2026-05-30 | v1.6       | Templatesページ UI改善。GitHub風パンくず・行番号・モバイルフルスクリーン化 |
