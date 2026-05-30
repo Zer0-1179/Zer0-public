@@ -142,5 +142,6 @@ bash scripts/deploy.sh
 | 2026-03-20 | v1.1       | API Gateway HTTP API に切り替え（Function URL SCP問題の回避）      |
 | 2026-04-01 | v1.2       | カスタムドメイン `www.zer0-infra.com` 設定完了                     |
 | 2026-04-10 | v1.3       | Templatesページ（VS Codeエクスプローラー風UIと22テンプレート）追加 |
+| 2026-04-19 | v1.4       | 全62テンプレート公開完了。全カテゴリ（compute/database/messaging/monitoring/network/security/storage）対応 |
 | 2026-05-30 | v1.5       | YAMLビューアーにVS Code Dark Modernシンタックスハイライト追加      |
 | 2026-05-30 | v1.6       | Templatesページ UI改善。GitHub風パンくず・行番号・モバイルフルスクリーン化 |
