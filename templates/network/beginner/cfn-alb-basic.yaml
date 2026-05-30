@@ -48,6 +48,7 @@ Metadata:
           default: "Target Group"
         Parameters:
           - TargetPort
+          - TargetType
           - HealthCheckPath
 
 # -----------------------------------------------
@@ -95,6 +96,14 @@ Parameters:
     Default: /health
     Description: "Health check path. The backend must return HTTP 200 for this path."
 
+  TargetType:
+    Type: String
+    Default: instance
+    AllowedValues:
+      - instance
+      - ip
+    Description: "Target type. Use 'instance' for EC2. Use 'ip' for ECS Fargate or Lambda."
+
 # -----------------------------------------------
 # Resources
 # ALB access logging is disabled for simplicity. Enable it in the advanced version.
@@ -107,7 +116,7 @@ Resources:
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: !Ref TargetPort
-      TargetType: ip
+      TargetType: !Ref TargetType
       HealthCheckProtocol: HTTP
       HealthCheckPath: !Ref HealthCheckPath
       HealthCheckIntervalSeconds: 30

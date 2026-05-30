@@ -222,7 +222,7 @@ Resources:
             - !Ref SubnetId
           SecurityGroups:
             - !Ref SecurityGroupId
-          AssignPublicIp: DISABLED
+          AssignPublicIp: ENABLED
       Tags:
         - Key: Project
           Value: !Ref ProjectName
