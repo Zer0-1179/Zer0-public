@@ -391,3 +391,14 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | DynamoDB（ratelimit + share / PAY_PER_REQUEST）       | ~$0（無料枠内）      |
 | API Gateway・CloudFront・S3                           | ~$0                  |
 | **合計**                                              | **~$0.40（約60円）** |
+
+## 変更履歴
+
+| 日付       | バージョン | 内容                                                                        |
+| ---------- | ---------- | --------------------------------------------------------------------------- |
+| 2026-05-10 | v1         | 初版リリース。Astro PWA + Lambda Bedrock Haiku によるコース提案             |
+| 2026-05-14 | v1.2       | Google Maps + OSRM フォールバック二重ルーティング追加                       |
+| 2026-05-15 | v1.3       | DynamoDB レートリミット（IP別・日別3回制限）追加                            |
+| 2026-05-18 | v1.4       | URL短縮 + OGP SNSシェア機能（`/s/{id}`）追加                               |
+| 2026-05-20 | v1.5       | スタイルタグ9種類 + 天気比較ウィジェット + 週間天気予報ストリップ追加       |
+| 2026-05-25 | v1.7       | iOS Safariバックグラウンドリロード対応・popstate戻るジェスチャー対応       |

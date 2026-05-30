@@ -131,3 +131,13 @@ bash scripts/deploy.sh
 | Lambda      | Zer0-portfolio-ssr                                      |
 | API Gateway | Zer0-portfolio-api                                      |
 | ACM 証明書  | us-east-1（www.zer0-infra.com）                         |
+
+## 変更履歴
+
+| 日付       | バージョン | 内容                                                                        |
+| ---------- | ---------- | --------------------------------------------------------------------------- |
+| 2026-03-15 | v1         | 初版リリース。Astro SSR + Lambda + CloudFront + S3                         |
+| 2026-03-20 | v1.1       | API Gateway HTTP API に切り替え（Function URL SCP問題の回避）               |
+| 2026-04-01 | v1.2       | カスタムドメイン `www.zer0-infra.com` 設定完了                             |
+| 2026-04-10 | v1.3       | Templatesページ（VS Codeエクスプローラー風UIと22テンプレート）追加         |
+| 2026-05-30 | v1.5       | YAMLビューアーにVS Code Dark Modernシンタックスハイライト追加              |
