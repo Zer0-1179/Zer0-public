@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EventBridge scheduled rule to invoke a Lambda function"
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-eventbridge-<RuleSuffix> \
+#   --template-file cfn-eventbridge-basic.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     RuleSuffix=daily-batch \
+#     TargetLambdaArn=arn:aws:lambda:ap-northeast-1:123456789012:function:my-function \
+#     ScheduleExpression=rate(1 day)
+#
+# ScheduleExpression examples:
+#   rate(5 minutes)    — every 5 minutes
+#   rate(1 hour)       — every hour
+#   rate(1 day)        — every day
+#   cron(0 9 * * ? *)  — every day at 09:00 UTC
+#
+# Prerequisites:
+#   - Target Lambda function must exist beforehand.
+#     Use cfn-lambda-basic.yaml to create it.
+#
+# Deploy order:
+#   1. cfn-lambda-basic.yaml
+#   2. cfn-eventbridge-basic.yaml (this template)
+#
+# To add a second rule:
+#   Copy this template and change RuleSuffix and ScheduleExpression.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "General"
+        Parameters:
+          - ProjectName
+          - Env
+          - RuleSuffix
+      - Label:
+          default: "Schedule"
+        Parameters:
+          - ScheduleExpression
+      - Label:
+          default: "Target"
+        Parameters:
+          - TargetLambdaArn
+
+# -----------------------------------------------
+# Parameters
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - stg
+      - dev
+      - prd
+    Description: "Deployment environment."
+
+  RuleSuffix:
+    Type: String
+    Default: batch
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose identifier for this rule (e.g. daily-batch, hourly-sync)."
+
+  ScheduleExpression:
+    Type: String
+    Default: rate(1 hour)
+    Description: "Schedule expression (e.g. rate(1 hour), rate(5 minutes), cron(0 9 * * ? *))."
+
+  TargetLambdaArn:
+    Type: String
+    Description: "ARN of the Lambda function to invoke."
+
+# -----------------------------------------------
+# Resources
+# LambdaPermission grants EventBridge permission to invoke the Lambda function.
+# -----------------------------------------------
+Resources:
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-${Env}-rule-${RuleSuffix}"
+      Description: !Sub "Scheduled rule for ${ProjectName}-${Env}-${RuleSuffix}"
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: !Sub "${ProjectName}-${Env}-${RuleSuffix}-target"
+          Arn: !Ref TargetLambdaArn
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TargetLambdaArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventRule.Arn
+
+# -----------------------------------------------
+# Outputs
+# -----------------------------------------------
+Outputs:
+  RuleArn:
+    Description: "EventBridge rule ARN"
+    Value: !GetAtt EventRule.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RuleArn"
+
+  RuleName:
+    Description: "EventBridge rule name"
+    Value: !Ref EventRule
+    Export:
+      Name: !Sub "${AWS::StackName}-RuleName"
