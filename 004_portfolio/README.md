@@ -146,3 +146,4 @@ bash scripts/deploy.sh
 | 2026-05-30 | v1.5       | YAMLビューアーにVS Code Dark Modernシンタックスハイライト追加                                                        |
 | 2026-05-30 | v1.6       | Templatesページ UI改善。GitHub風パンくず・行番号・モバイルフルスクリーン化                                           |
 | 2026-05-31 | v1.7       | cfn-dynamodb-basic.yaml バグ修正（SSEType AES256 非対応→デフォルト暗号化に変更）。全62テンプレート実デプロイ検証完了 |
+| 2026-05-31 | v1.8       | Advanced全31テンプレート実デプロイ検証完了。cfn-elasticache.yaml バグ修正（EngineVersion 7.2未提供→7.1）。cfn-ecs-service.yaml CREATE_COMPLETE確認 |
