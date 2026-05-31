@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "DynamoDB table with on-demand billing and AES256 encryption"
+Description: "DynamoDB table with on-demand billing and default encryption"
 
 # -----------------------------------------------
 # DEPLOY
