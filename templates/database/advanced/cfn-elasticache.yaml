@@ -114,9 +114,8 @@ Parameters:
 
   EngineVersion:
     Type: String
-    Default: "7.2"
+    Default: "7.1"
     AllowedValues:
-      - "7.2"
       - "7.1"
       - "7.0"
       - "6.2"
