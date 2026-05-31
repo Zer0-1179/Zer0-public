@@ -12,25 +12,23 @@
 |------|------|------|
 | ✅ | 実デプロイ | AWS に実際にスタックを作成し **CREATE_COMPLETE** を確認 |
 | △ | validate-template | CloudFormation API で構文・型・参照の正当性を確認（リソース作成なし） |
-| ❌ | 未テスト | テスト未実施 |
 
-> △（validate-template）は構文エラーの検出には有効ですが、実際にリソースが作成できるかは保証しません。  
-> ❌（未テスト）のテンプレートは利用前に実環境での確認を推奨します。
+> △（validate-template）は構文エラーの検出には有効ですが、実際にリソースが作成できるかは保証しません。
 
 ---
 
 ## 結果サマリー
 
-| 区分 | ✅ 実デプロイ | △ validate のみ | ❌ 未テスト | 合計 |
-|------|:-----------:|:---------------:|:-----------:|:----:|
-| Beginner（初級） | 18 | 13 | 0 | 31 |
-| Advanced（上級） | 21 | 0 | 10 | 31 |
-| **合計** | **39** | **13** | **10** | **62** |
+| 区分 | ✅ 実デプロイ | △ validate のみ | 合計 |
+|------|:-----------:|:---------------:|:----:|
+| Beginner（初級） | 18 | 13 | 31 |
+| Advanced（上級） | 31 | 0 | 31 |
+| **合計** | **49** | **13** | **62** |
 
-**「ポートフォリオ上の全テンプレートがそのまま使えるか？」への回答**
-- ✅ 実デプロイ確認済み（39本）: **そのまま使える**
-- △ 構文検証のみ（13本）: 構文は正しいが、コスト・依存関係の都合で実デプロイ未確認
-- ❌ 未テスト（10本）: Advanced 側の一部。利用前に検証推奨
+**「全テンプレートがそのまま使えるか？」への回答**
+- ✅ Advanced 31本：全て実デプロイで CREATE_COMPLETE 確認済み
+- ✅ Beginner 18本：実デプロイで CREATE_COMPLETE 確認済み
+- △ Beginner 13本：構文は正しい。コスト大・依存リソース大のため実デプロイ未実施（Advanced 版で同等の構成が検証済み）
 
 ---
 
@@ -53,7 +51,7 @@
 | cfn-security-group-egress-basic.yaml | Beginner | ✅ 実デプロイ | 既存 SG への Egress ルール追加 CREATE_COMPLETE | 2026-05-31 |
 | cfn-security-group-egress.yaml | Advanced | ✅ 実デプロイ | CREATE_COMPLETE | 2026-05-27 |
 | cfn-alb-basic.yaml | Beginner | △ validate | ALB はコスト大（約$0.022/h）のため validate のみ | 2026-05-31 |
-| cfn-alb.yaml | Advanced | ✅ 実デプロイ | TargetType=ip/instance パラメータ対応 CREATE_COMPLETE | 2026-05-30 |
+| cfn-alb.yaml | Advanced | ✅ 実デプロイ | Scheme=internal, TargetType=ip でECS Service 前提スタックとして CREATE_COMPLETE | 2026-05-31 |
 | cfn-nlb-basic.yaml | Beginner | △ validate | NLB はコスト大のため validate のみ | 2026-05-31 |
 | cfn-nlb.yaml | Advanced | ✅ 実デプロイ | CREATE_COMPLETE | 2026-05-27 |
 
@@ -72,7 +70,7 @@
 | cfn-ecs-cluster-basic.yaml | Beginner | ✅ 実デプロイ | ECS クラスター CREATE_COMPLETE | 2026-05-30 |
 | cfn-ecs-cluster.yaml | Advanced | ✅ 実デプロイ | CREATE_COMPLETE | 2026-05-30 |
 | cfn-ecs-service-basic.yaml | Beginner | △ validate | ECS Service は VPC/ALB/ECSクラスター の前提スタック要のため validate のみ | 2026-05-31 |
-| cfn-ecs-service.yaml | Advanced | ❌ 未テスト | VPC/IGW/SG/ALB/ECSクラスターの前提スタック5本を要する特殊手順 | — |
+| cfn-ecs-service.yaml | Advanced | ✅ 実デプロイ | vpc + sg + alb + ecs-cluster 前提スタック5本 + `create-stack` で CREATE_COMPLETE。DesiredCount=0 | 2026-05-31 |
 
 ---
 
@@ -98,7 +96,7 @@
 | cfn-rds-basic.yaml | Beginner | △ validate | RDS はコスト大（約$0.022/h〜）のため validate のみ | 2026-05-31 |
 | cfn-rds.yaml | Advanced | ✅ 実デプロイ | CREATE_COMPLETE | 2026-05-30 |
 | cfn-elasticache-basic.yaml | Beginner | △ validate | ElastiCache はコスト大のため validate のみ | 2026-05-31 |
-| cfn-elasticache.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-elasticache.yaml | Advanced | ✅ 実デプロイ | **バグ修正後**再テスト。EngineVersion 7.2 未提供 → 7.1 に修正。VPC + SG 前提スタックで CREATE_COMPLETE | 2026-05-31 |
 
 ---
 
@@ -120,9 +118,9 @@
 | cfn-sqs-basic.yaml | Beginner | ✅ 実デプロイ | SQS キュー + DLQ CREATE_COMPLETE | 2026-05-30 |
 | cfn-sqs.yaml | Advanced | ✅ 実デプロイ | CREATE_COMPLETE | 2026-05-27 |
 | cfn-sns-basic.yaml | Beginner | ✅ 実デプロイ | SNS トピック CREATE_COMPLETE | 2026-05-30 |
-| cfn-sns.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-sns.yaml | Advanced | ✅ 実デプロイ | Conditions（HasKmsKey / HasHttpsEndpoint / HasDisplayName）全パターン動作確認 CREATE_COMPLETE | 2026-05-31 |
 | cfn-eventbridge-basic.yaml | Beginner | ✅ 実デプロイ | EventBridge ルール + Lambda Permission CREATE_COMPLETE | 2026-05-31 |
-| cfn-eventbridge.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-eventbridge.yaml | Advanced | ✅ 実デプロイ | HasLambdaTarget / HasInput Condition 動作確認。Lambda target なしで CREATE_COMPLETE | 2026-05-31 |
 
 ---
 
@@ -133,17 +131,17 @@
 | cfn-cw-logs-basic.yaml | Beginner | ✅ 実デプロイ | CloudWatch Logs グループ CREATE_COMPLETE | 2026-05-30 |
 | cfn-cw-logs.yaml | Advanced | ✅ 実デプロイ | CREATE_COMPLETE | 2026-05-27 |
 | cfn-cw-alarm-lambda-basic.yaml | Beginner | ✅ 実デプロイ | Lambda エラーアラーム + SNS 通知 CREATE_COMPLETE | 2026-05-31 |
-| cfn-cw-alarm-lambda.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-cw-alarm-lambda.yaml | Advanced | ✅ 実デプロイ | WARNING/CRITICAL 2段階アラーム。FunctionName のみ指定で CREATE_COMPLETE | 2026-05-31 |
 | cfn-cw-alarm-sqs-basic.yaml | Beginner | ✅ 実デプロイ | SQS メッセージ滞留アラーム + SNS 通知 CREATE_COMPLETE | 2026-05-31 |
-| cfn-cw-alarm-sqs.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-cw-alarm-sqs.yaml | Advanced | ✅ 実デプロイ | WARNING/CRITICAL 2段階アラーム。QueueName のみ指定で CREATE_COMPLETE | 2026-05-31 |
 | cfn-cw-alarm-ec2-basic.yaml | Beginner | △ validate | EC2 依存のため validate のみ | 2026-05-31 |
-| cfn-cw-alarm-ec2.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-cw-alarm-ec2.yaml | Advanced | ✅ 実デプロイ | WARNING/CRITICAL 2段階アラーム（CPU + Memory）。InstanceId 文字列指定で CREATE_COMPLETE | 2026-05-31 |
 | cfn-cw-alarm-alb-basic.yaml | Beginner | △ validate | ALB 依存のため validate のみ | 2026-05-31 |
-| cfn-cw-alarm-alb.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-cw-alarm-alb.yaml | Advanced | ✅ 実デプロイ | `!Split ["loadbalancer/", AlbArn]` による Dimension 自動抽出。ALB/TG ARN フォーマット形式の文字列で CREATE_COMPLETE | 2026-05-31 |
 | cfn-cw-alarm-efs-basic.yaml | Beginner | △ validate | EFS 依存のため validate のみ | 2026-05-31 |
-| cfn-cw-alarm-efs.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-cw-alarm-efs.yaml | Advanced | ✅ 実デプロイ | FileSystemId 文字列指定で CREATE_COMPLETE | 2026-05-31 |
 | cfn-cw-alarm-rds-basic.yaml | Beginner | △ validate | RDS 依存のため validate のみ | 2026-05-31 |
-| cfn-cw-alarm-rds.yaml | Advanced | ❌ 未テスト | — | — |
+| cfn-cw-alarm-rds.yaml | Advanced | ✅ 実デプロイ | Mappings で DBInstanceClass → メモリ変換。WARNING/CRITICAL 2段階アラーム（CPU + FreeableMemory%）CREATE_COMPLETE | 2026-05-31 |
 
 ---
 
@@ -151,7 +149,9 @@
 
 | ファイル | 修正内容 | 修正日 |
 |----------|----------|--------|
-| cfn-dynamodb-basic.yaml | `SSESpecification.SSEType: AES256` は DynamoDB 非対応（KMS のみ対応）のためブロックごと削除。DynamoDB はデフォルトで AWS 所有キーにより暗号化済みのためコメントで明示 | 2026-05-31 |
+| cfn-dynamodb-basic.yaml | `SSESpecification.SSEType: AES256` は DynamoDB 非対応（KMS のみ）のためブロックごと削除。DynamoDB はデフォルトで AWS 所有キーにより暗号化済みのためコメントで明示 | 2026-05-31 |
+| cfn-elasticache.yaml | EngineVersion デフォルト `7.2` は ap-northeast-1 未提供。`7.1` に変更し AllowedValues から `7.2` を削除 | 2026-05-31 |
+| cfn-elasticache-basic.yaml | EngineVersion ハードコード `7.2` を `7.1` に修正 | 2026-05-31 |
 | cfn-ebs.yaml | `Ec2InstanceId` が空のとき `VolumeAttachment` が無条件に作成されてデプロイ失敗。`HasEc2Instance` Condition を追加して VolumeAttachment に付与 | 2026-05-30 |
 | cfn-alb-basic.yaml | `TargetType` がハードコード `instance` になっており Fargate 構成で失敗。パラメータ化（`instance` / `ip`）して対応 | 2026-05-30 |
 | cfn-kms-basic.yaml | `KeyPolicy` が未設定でデプロイ後に鍵が操作不能になるケースがあった。アカウント管理者を Principal に含む最低限の KeyPolicy を追加 | 2026-05-30 |
@@ -161,8 +161,8 @@
 
 ## △（validate-template のみ）の背景
 
-下記テンプレートは実デプロイで費用が発生するため、構文検証のみとしています。
-テンプレートの内容は Advanced 版で検証済みのパターンを踏襲しており、コード品質は同等です。
+下記 Beginner テンプレートは実デプロイで費用が発生するため、構文検証のみとしています。  
+**対応する Advanced 版は全て実デプロイ済み**であり、Beginner 版はそのシンプル版のため実質的に問題ないと考えられます。
 
 | 理由 | 対象テンプレート |
 |------|-----------------|
@@ -173,19 +173,30 @@
 
 ---
 
-## ❌（未テスト）の残作業
+## ECS Service デプロイの注意事項
 
-Advanced テンプレートのうち 10 本が未テストです。
+`cfn-ecs-service.yaml` は `aws cloudformation deploy` を使うと Early Validation でブロックされる。  
+必ず `create-stack` で直接デプロイすること。
 
-| 優先度 | ファイル | テスト手順メモ |
-|--------|----------|---------------|
-| 最高 | cfn-ecs-service.yaml | 前提スタック: cfn-vpc + cfn-igw + cfn-security-group (SgSuffix=app) + cfn-alb (TargetType=ip) + cfn-ecs-cluster。`deploy` は Early Validation でブロックされるため `create-stack` を使うこと |
-| 中 | cfn-elasticache.yaml | VPC + SG 前提。コスト大（$0.03/h〜） |
-| 中 | cfn-sns.yaml | 依存なし。実デプロイ容易 |
-| 中 | cfn-eventbridge.yaml | Lambda ARN が必要 |
-| 低 | cfn-cw-alarm-lambda.yaml | Lambda + SNS トピックがあれば即デプロイ可能 |
-| 低 | cfn-cw-alarm-sqs.yaml | SQS + SNS トピックがあれば即デプロイ可能 |
-| 低 | cfn-cw-alarm-ec2.yaml | EC2 依存（コスト大） |
-| 低 | cfn-cw-alarm-alb.yaml | ALB 依存（コスト大） |
-| 低 | cfn-cw-alarm-efs.yaml | EFS 依存（コスト大） |
-| 低 | cfn-cw-alarm-rds.yaml | RDS 依存（コスト大） |
+```bash
+aws cloudformation create-stack \
+  --stack-name {ProjectName}-{Env}-ecs-{ServiceSuffix} \
+  --template-body file://cfn-ecs-service.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameters \
+    ParameterKey=ProjectName,ParameterValue=my-project \
+    ParameterKey=Env,ParameterValue=dev \
+    ParameterKey=ServiceSuffix,ParameterValue=api \
+    ParameterKey=SgSuffix,ParameterValue=app \
+    ParameterKey=AlbSuffix,ParameterValue=01 \
+    ParameterKey=ImageUri,ParameterValue=nginx:alpine \
+    ParameterKey=DesiredCount,ParameterValue=0
+```
+
+**前提スタック（この順番でデプロイ）:**
+
+1. `cfn-vpc.yaml` → `{ProjectName}-{Env}-vpc`
+2. `cfn-igw.yaml` → `{ProjectName}-{Env}-igw`（internet-facing ALB が必要な場合）
+3. `cfn-security-group.yaml` → `{ProjectName}-{Env}-sg-{SgSuffix}`
+4. `cfn-alb.yaml` → `{ProjectName}-{Env}-alb-{AlbSuffix}`（TargetType=ip 必須）
+5. `cfn-ecs-cluster.yaml` → `{ProjectName}-{Env}-ecs-cluster`
