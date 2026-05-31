@@ -115,7 +115,7 @@ Resources:
       ReplicationGroupDescription: !Sub "${ProjectName}-${Env} Redis cluster"
       CacheNodeType: !Ref NodeType
       Engine: redis
-      EngineVersion: "7.2"
+      EngineVersion: "7.1"
       NumCacheClusters: 1
       AutomaticFailoverEnabled: false
       AtRestEncryptionEnabled: true
