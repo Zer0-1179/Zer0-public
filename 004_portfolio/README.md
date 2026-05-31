@@ -136,14 +136,14 @@ bash scripts/deploy.sh
 
 ## 変更履歴
 
-| 日付       | バージョン | 内容                                                                                                                 |
-| ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| 2026-03-15 | v1         | 初版リリース。Astro SSR + Lambda + CloudFront + S3                                                                   |
-| 2026-03-20 | v1.1       | API Gateway HTTP API に切り替え（Function URL SCP問題の回避）                                                        |
-| 2026-04-01 | v1.2       | カスタムドメイン `www.zer0-infra.com` 設定完了                                                                       |
-| 2026-04-10 | v1.3       | Templatesページ（VS Codeエクスプローラー風UIと22テンプレート）追加                                                   |
-| 2026-04-19 | v1.4       | 全62テンプレート公開完了。全カテゴリ（compute/database/messaging/monitoring/network/security/storage）対応           |
-| 2026-05-30 | v1.5       | YAMLビューアーにVS Code Dark Modernシンタックスハイライト追加                                                        |
-| 2026-05-30 | v1.6       | Templatesページ UI改善。GitHub風パンくず・行番号・モバイルフルスクリーン化                                           |
-| 2026-05-31 | v1.7       | cfn-dynamodb-basic.yaml バグ修正（SSEType AES256 非対応→デフォルト暗号化に変更）。全62テンプレート実デプロイ検証完了 |
+| 日付       | バージョン | 内容                                                                                                                                               |
+| ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-03-15 | v1         | 初版リリース。Astro SSR + Lambda + CloudFront + S3                                                                                                 |
+| 2026-03-20 | v1.1       | API Gateway HTTP API に切り替え（Function URL SCP問題の回避）                                                                                      |
+| 2026-04-01 | v1.2       | カスタムドメイン `www.zer0-infra.com` 設定完了                                                                                                     |
+| 2026-04-10 | v1.3       | Templatesページ（VS Codeエクスプローラー風UIと22テンプレート）追加                                                                                 |
+| 2026-04-19 | v1.4       | 全62テンプレート公開完了。全カテゴリ（compute/database/messaging/monitoring/network/security/storage）対応                                         |
+| 2026-05-30 | v1.5       | YAMLビューアーにVS Code Dark Modernシンタックスハイライト追加                                                                                      |
+| 2026-05-30 | v1.6       | Templatesページ UI改善。GitHub風パンくず・行番号・モバイルフルスクリーン化                                                                         |
+| 2026-05-31 | v1.7       | cfn-dynamodb-basic.yaml バグ修正（SSEType AES256 非対応→デフォルト暗号化に変更）。全62テンプレート実デプロイ検証完了                               |
 | 2026-05-31 | v1.8       | Advanced全31テンプレート実デプロイ検証完了。cfn-elasticache.yaml バグ修正（EngineVersion 7.2未提供→7.1）。cfn-ecs-service.yaml CREATE_COMPLETE確認 |
