@@ -17,6 +17,7 @@ def test_article_prompt_no_key_error():
         services="Lambda, API Gateway, DynamoDB",
         keywords="サーバーレス, eコマース, スケーリング",
         today="2026-01-01",
+        docs_section="",
     )
     assert "Lambda" in result
     assert "{DIAGRAM_1}" in result

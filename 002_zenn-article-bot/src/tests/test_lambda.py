@@ -16,6 +16,7 @@ def test_article_prompt_no_key_error():
         topic_subtitle="オブジェクトストレージの基本",
         keywords="s3, バケット, オブジェクト",
         today="2026-01-01",
+        docs_section="",
     )
     assert "Amazon S3" in result
     assert "{DIAGRAM_1}" in result
