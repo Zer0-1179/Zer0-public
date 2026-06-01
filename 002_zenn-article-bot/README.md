@@ -141,4 +141,5 @@ bash scripts/download_article.sh
 | 2026-04-20 | v1.2       | `{DIAGRAM_N}` マーカー方式導入                  |
 | 2026-04-28 | v1.3       | AWS公式ドキュメント自動取得（Step 2.5）追加     |
 | 2026-05-05 | v1.4       | DLQ + CloudWatch Alarm によるアラート体制整備   |
-| 2026-05-21 | v1.5       | `output/` 自動クリーンアップ（最新5件保持）追加 |
+| 2026-05-21 | v1.5       | `output/` 自動クリーンアップ（最新5件保持）追加                                                                                                                    |
+| 2026-06-01 | v1.6       | CFn `validate_template` 検証機能追加・バグ修正5件（重複トピック・TemplateBody上限・HTMLエスケープ・CFn例外取得・マーカー自動除去）・処理時間計測・Bedrockコスト概算ログ追加 |
