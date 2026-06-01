@@ -19,6 +19,7 @@ bedrock = boto3.client(
 ses = boto3.client("ses", region_name="ap-northeast-1")
 s3  = boto3.client("s3",  region_name="ap-northeast-1")
 ssm = boto3.client("ssm", region_name="ap-northeast-1")
+cfn = boto3.client("cloudformation", region_name="ap-northeast-1")
 
 # Lambda環境かどうかで出力先を切り替え
 _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
@@ -700,11 +701,48 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
     return f"s3://{S3_BUCKET}/{s3_base}/"
 
 
+# ─── CFn テンプレート検証 ────────────────────────────────────────────────────
+
+def validate_cfn_in_article(article_text: str) -> list[str]:
+    """記事内の完全なCFnテンプレートをcloudformation:ValidateTemplateでチェックする"""
+    import re
+    import yaml as _yaml
+
+    issues = []
+    pattern = r'```(?:yaml|YAML)(?::[^\n]*)?\n(.*?)```'
+    blocks = re.findall(pattern, article_text, re.DOTALL)
+
+    complete = []
+    for i, block in enumerate(blocks, 1):
+        if 'Resources:' not in block:
+            continue
+        try:
+            parsed = _yaml.safe_load(block)
+            if isinstance(parsed, dict) and 'Resources' in parsed:
+                complete.append((i, block))
+        except _yaml.YAMLError as e:
+            issues.append(f"ブロック{i}: YAML構文エラー — {str(e)[:200]}")
+
+    if not complete and not issues:
+        return []
+
+    for i, block in complete:
+        try:
+            cfn.validate_template(TemplateBody=block)
+        except Exception as e:
+            msg = getattr(e, 'response', {}).get('Error', {}).get('Message', str(e))
+            issues.append(f"ブロック{i}: {str(msg)[:300]}")
+
+    print(f"[CFn検証] 完全テンプレート{len(complete)}件検証 / 問題{len(issues)}件")
+    return issues
+
+
 # ─── SES メール通知 ───────────────────────────────────────────────────────────
 
 def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
     timestamp: str, s3_url: str = "", is_truncated: bool = False,
+    cfn_issues: list | None = None,
 ):
     """SES でメール通知を送信する"""
     char_count = len(article)
@@ -732,14 +770,20 @@ def send_email_notification(
         if s3_url else ""
     )
 
+    cfn_issues = cfn_issues or []
     truncation_warning_text = """
 ⚠️ 警告: 記事が途中で切れています
 記事の生成がmax_tokensに達したため、末尾が不完全な可能性があります。
 Zennに投稿する前に内容を必ず確認してください。
 """ if is_truncated else ""
 
+    cfn_warning_text = (
+        "⚠️ CFnテンプレート検証で問題が見つかりました:\n"
+        + "\n".join(f"  - {i}" for i in cfn_issues) + "\n"
+    ) if cfn_issues else ""
+
     body_text = f"""Zenn技術記事の自動生成が完了しました。
-{truncation_warning_text}
+{truncation_warning_text}{cfn_warning_text}
 ■ 記事情報
 - テーマ: {topic['name']}（{topic['subtitle']}）
 - 文字数: {char_count:,}文字
@@ -770,11 +814,24 @@ Zennに投稿する前に内容を必ず確認してください。
   </div>
 """ if is_truncated else ""
 
+    cfn_issues_html = (
+        '<div style="background:#fde8e8;border:2px solid #e53e3e;padding:15px;border-radius:8px;margin:20px 0;">'
+        '<h3 style="color:#c53030;margin-top:0;">⚠️ CFnテンプレート検証で問題が見つかりました</h3>'
+        '<ul style="color:#c53030;margin:0;">'
+        + "".join(f'<li><code>{i}</code></li>' for i in cfn_issues)
+        + '</ul></div>'
+    ) if cfn_issues else (
+        '<div style="background:#e8f5e9;border:1px solid #66bb6a;padding:10px 15px;border-radius:8px;margin:20px 0;">'
+        '<p style="color:#2e7d32;margin:0;">✅ CFnテンプレート検証 — 問題なし</p>'
+        '</div>'
+    )
+
     body_html = f"""
 <html>
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <h2 style="color:#3EA8FF;">Zenn技術記事の自動生成が完了しました</h2>
   {truncation_warning_html}
+  {cfn_issues_html}
 
   <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>記事情報</h3>
@@ -860,9 +917,21 @@ def run():
     s3_url    = upload_to_s3(md_path, png_paths, s3_folder)
     print(f"  S3アップロード完了: {s3_url}")
 
-    # Step 5: SES メール通知
-    print("Step 5: メール通知を送信中...")
-    send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url, is_truncated)
+    # Step 5: CFnテンプレート検証
+    print("Step 5: CFnテンプレートを検証中...")
+    try:
+        cfn_issues = validate_cfn_in_article(article)
+        if cfn_issues:
+            print(f"  ⚠️ CFn問題検出: {len(cfn_issues)}件")
+        else:
+            print("  ✓ CFn検証問題なし")
+    except Exception as e:
+        print(f"  CFn検証スキップ（無視して続行）: {e}")
+        cfn_issues = []
+
+    # Step 6: SES メール通知
+    print("Step 6: メール通知を送信中...")
+    send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues)
     print("  メール送信完了")
 
     print(f"[{timestamp}] 処理が正常に完了しました")
