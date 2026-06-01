@@ -443,6 +443,33 @@ aws cloudformation describe-stacks --stack-name my-stack
 - `:::message` や `:::details` は前後に必ず空行を入れること
 - コードブロック内のサンプル日付は**本日の日付（{today}）** を基準にする（`2024`や`2023`等の過去の年は使わない）
 - **文字数**: 4,000〜6,000文字程度（水増しより内容の充実を優先する）
+
+---
+
+## CloudFormation・IAM・コード品質の必須ルール
+
+### IAM ポリシー（間違えやすい点）
+- `ec2:DescribeInstances` / `s3:ListBuckets` / `cloudwatch:GetMetricData` などリスト・Describe系アクションは**リソースレベル条件（`ec2:ResourceTag` 等）を非サポート**。これらは `Resource: '*'` のみで単独ステートメントに書く
+- リソースタグ条件（`ec2:ResourceTag/Environment: dev` 等）は `StopInstances` / `PutObject` などリソースレベル権限に対応したアクションのみに付与する
+- 同一ステートメントにリソース条件対応・非対応のアクションを混在させない（条件が正しく評価されない）
+
+### Lambda Runtime
+- Lambda の Runtime は現時点の最新安定版を使う: `python3.13`（Python）/ `nodejs22.x`（Node.js）
+- `python3.12` や `nodejs20.x` 等の旧バージョンは使わない
+
+### CloudFormation の正確性
+- 記事内の CFn テンプレートは**実際にデプロイできる完全なリソース定義**を書く
+- `!Ref` / `!GetAtt` の参照先が同じテンプレート内に存在することを確認する
+- SNS → Lambda トリガーには `AWS::Lambda::Permission`（Principal: sns.amazonaws.com）が必須
+- 80%通知と100%通知で**アクションが異なる場合は SNS トピックを別々に作成する**（同一トピックに Lambda 購読を紐付けると全閾値でLambdaが発動する）
+- SNS メール購読（`Protocol: email`）はデプロイ後に**確認メールのクリックが必要**な旨を記事内で明記する
+
+### AWS サービスの制約（よく見落とされる事実）
+- **Compute Optimizer**: メモリ使用率の分析には **CloudWatch Agent の別途インストールが必要**。Agent なしでは CPU・ネットワーク・ディスクのみ分析対象になる
+- **AWS Budgets のデータ反映**: コストデータが Budgets に反映されるまで**最大24時間**かかる場合がある。「リアルタイム検知」は不可
+- **Cost Explorer API コスト**: `GetCostAndUsage` 等のAPI呼び出しは**1リクエストあたり$0.01**の費用が発生する（コンソール閲覧は無料）
+- **Savings Plans キャンセル不可**: 購入後のキャンセルは不可。推奨額の80〜90%からスタートする旨を必ず記載する
+- サービスの制約・注意点は「できること」と同等の重みで記載する
 """
 
 
