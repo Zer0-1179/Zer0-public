@@ -525,6 +525,8 @@ def get_recent_topics() -> list[str]:
 def save_topic_to_ssm(topic_id: str):
     """選択したトピックを SSM に保存する（最新 RECENT_TOPICS_LIMIT 件を保持）"""
     recent = get_recent_topics()
+    if topic_id in recent:
+        recent.remove(topic_id)
     recent.append(topic_id)
     recent = recent[-RECENT_TOPICS_LIMIT:]
     try:
@@ -662,7 +664,11 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
     マーカーが見つからない場合は見出し名ベースのフォールバック挿入を行う。
     """
     if not png_paths:
-        return article
+        import re as _re
+        cleaned, n = _re.subn(r'\n*\{\{DIAGRAM_\d+\}\}\n*', '\n\n', article)
+        if n:
+            print(f"[WARNING] PNG未生成のためDIAGRAMマーカー{n}件を除去しました")
+        return cleaned
 
     # フォールバック用: 見出し名で挿入位置を探す順序
     _FALLBACK_HEADINGS = ["アーキテクチャ概要", "設計上の考慮ポイント"]
@@ -802,11 +808,14 @@ def validate_cfn_in_article(article_text: str) -> list[str]:
         return []
 
     for i, block in complete:
+        if len(block.encode('utf-8')) > 51200:
+            issues.append(f"ブロック{i}: テンプレートサイズ超過（{len(block.encode('utf-8')):,}バイト > 51,200バイト上限）")
+            continue
         try:
             cfn.validate_template(TemplateBody=block)
         except Exception as e:
-            msg = getattr(e, 'response', {}).get('Error', {}).get('Message', str(e))
-            issues.append(f"ブロック{i}: {str(msg)[:300]}")
+            msg = e.response.get('Error', {}).get('Message', str(e)) if hasattr(e, 'response') else str(e)
+            issues.append(f"ブロック{i}: {msg[:300]}")
 
     print(f"[CFn検証] 完全テンプレート{len(complete)}件検証 / 問題{len(issues)}件")
     return issues
@@ -820,8 +829,10 @@ def send_email_notification(
     cfn_issues: list | None = None,
 ):
     """SES でメール通知を送信する"""
+    import html as _html
     char_count = len(article)
     preview    = article[:300].replace("\n", " ")
+    preview_html = _html.escape(preview)
     services_str = " + ".join(topic["services"])
     diagram_info = ", ".join(os.path.basename(p) for p in png_paths) if png_paths else "生成なし"
 
@@ -931,7 +942,7 @@ Zennに投稿する前に内容を必ず確認してください。
 
   <div style="background:#fff8e1;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>記事プレビュー</h3>
-    <p style="color:#555;">{preview}...</p>
+    <p style="color:#555;">{preview_html}...</p>
   </div>
 
   <div style="background:#e8f5e9;padding:15px;border-radius:8px;margin:20px 0;">
