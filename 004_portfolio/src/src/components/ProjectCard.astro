@@ -19,7 +19,7 @@ const desc = lang === 'ja' ? project.descJa : project.descEn;
   <div class="bg-slate-100 overflow-hidden h-44 flex items-center justify-center">
     <img
       src={project.architecture}
-      alt={`${name} アーキテクチャ図`}
+      alt={`${name} ${lang === 'ja' ? 'アーキテクチャ図' : 'architecture diagram'}`}
       class="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
       loading="lazy"
     />
