@@ -771,6 +771,18 @@ def validate_cfn_in_article(article_text: str) -> list[str]:
     import re
     import yaml as _yaml
 
+    # !Ref / !Sub / !GetAtt 等のCFnタグをsafe_loadで扱えるようにするローダー
+    class _CfnLoader(_yaml.SafeLoader):
+        pass
+    _CfnLoader.add_multi_constructor(
+        '!',
+        lambda loader, tag, node: (
+            loader.construct_scalar(node) if isinstance(node, _yaml.ScalarNode)
+            else loader.construct_sequence(node, deep=True) if isinstance(node, _yaml.SequenceNode)
+            else loader.construct_mapping(node, deep=True)
+        ),
+    )
+
     issues = []
     pattern = r'```(?:yaml|YAML)(?::[^\n]*)?\n(.*?)```'
     blocks = re.findall(pattern, article_text, re.DOTALL)
@@ -780,7 +792,7 @@ def validate_cfn_in_article(article_text: str) -> list[str]:
         if 'Resources:' not in block:
             continue
         try:
-            parsed = _yaml.safe_load(block)
+            parsed = _yaml.load(block, Loader=_CfnLoader)
             if isinstance(parsed, dict) and 'Resources' in parsed:
                 complete.append((i, block))
         except _yaml.YAMLError as e:
