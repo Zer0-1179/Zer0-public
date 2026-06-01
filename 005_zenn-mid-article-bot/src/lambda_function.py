@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import time
 import boto3
 import datetime
 from botocore.config import Config
@@ -38,7 +39,7 @@ S3_PREFIX  = "zenn-mid-articles"
 
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/mid-article-bot/recent-topics"
-RECENT_TOPICS_LIMIT = 4
+RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "4"))
 
 # ─── 中級者向けトピック定義（16記事分 ≒ 8ヶ月分） ────────────────────────────
 AWS_TOPICS = [
@@ -518,7 +519,7 @@ def get_recent_topics() -> list[str]:
     except ssm.exceptions.ParameterNotFound:
         return []
     except Exception as e:
-        print(f"SSM読み込みエラー（除外なしで続行）: {e}")
+        print(f"[WARNING] SSM読み込みエラー。トピック除外なしで続行します（同テーマが連続生成される可能性あり）: {e}")
         return []
 
 
@@ -620,7 +621,10 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
     usage = result.get("usage", {})
     stop_reason = result.get("stop_reason", "unknown")
     is_truncated = stop_reason == "max_tokens"
-    print(f"[Bedrock/article] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}, stop={stop_reason}")
+    in_tok  = usage.get('input_tokens', 0)
+    out_tok = usage.get('output_tokens', 0)
+    cost_usd = (in_tok * 3.0 + out_tok * 15.0) / 1_000_000  # Sonnet pricing (概算)
+    print(f"[Bedrock/article] in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
     if is_truncated:
         print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
 
@@ -800,6 +804,8 @@ def validate_cfn_in_article(article_text: str) -> list[str]:
         try:
             parsed = _yaml.load(block, Loader=_CfnLoader)
             if isinstance(parsed, dict) and 'Resources' in parsed:
+                if 'Outputs' not in parsed:
+                    print(f"[CFn検証] ブロック{i}: Outputs セクションなし（デプロイ後の値参照・クロススタック連携が困難）")
                 complete.append((i, block))
         except _yaml.YAMLError as e:
             issues.append(f"ブロック{i}: YAML構文エラー — {str(e)[:200]}")
@@ -980,6 +986,7 @@ Zennに投稿する前に内容を必ず確認してください。
 HAIKU_MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 def lambda_handler(event, context):
+    _total_start = time.time()
     model_id = HAIKU_MODEL_ID if event.get("test_mode") else BEDROCK_MODEL_ID
     if event.get("test_mode"):
         print(f"[TEST MODE] モデルをHaikuに切り替えました: {model_id}")
@@ -990,60 +997,68 @@ def lambda_handler(event, context):
     print(f"[{timestamp}] Zenn中級記事自動生成を開始します")
 
     # Step 1: 直近トピック取得
+    _t = time.time()
     print("Step 1: 直近トピックをSSMから取得中...")
     excluded_ids = get_recent_topics()
-    print(f"  除外トピック: {excluded_ids}")
+    print(f"  除外トピック: {excluded_ids} [{time.time()-_t:.1f}s]")
 
     # Step 2: トピック選択
+    _t = time.time()
     print("Step 2: Bedrockでトピックを選択中...")
     topic = select_topic_with_bedrock(excluded_ids, model_id)
-    print(f"  選択されたトピック: {topic['name']} ({topic['id']})")
+    print(f"  選択されたトピック: {topic['name']} ({topic['id']}) [{time.time()-_t:.1f}s]")
     print(f"  記事タイプ: {topic['article_type']}")
     print(f"  使用サービス: {', '.join(topic['services'])}")
 
     # Step 3: 記事生成
+    _t = time.time()
     print("Step 3: 記事を生成中（6,000〜8,000文字）...")
     article, is_truncated = generate_article(topic, today, model_id)
-    print(f"  記事生成完了: {len(article):,}文字")
+    print(f"  記事生成完了: {len(article):,}文字 [{time.time()-_t:.1f}s]")
 
     # Step 4: ローカル保存 + 構成図生成
+    _t = time.time()
     print("Step 4: ローカルに保存中（記事MD + 構成図PNG）...")
     md_path, png_paths = save_to_local(topic, article, timestamp)
     print(f"  MD保存完了: {md_path}")
-    print(f"  PNG生成完了: {len(png_paths)}枚")
+    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
 
     # Step 5: S3 アップロード（Lambda環境のみ）
     s3_url = ""
     if _IS_LAMBDA:
+        _t = time.time()
         print("Step 5: S3にアップロード中...")
         s3_folder = f"{timestamp}_{topic['id']}"
         s3_url = upload_to_s3(md_path, png_paths, s3_folder)
-        print(f"  S3アップロード完了: {s3_url}")
+        print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
 
     # Step 6: SSM 更新
     print("Step 6: SSMにトピックを保存中...")
     save_topic_to_ssm(topic["id"])
 
     # Step 7: CFnテンプレート検証
+    _t = time.time()
     print("Step 7: CFnテンプレートを検証中...")
     try:
         cfn_issues = validate_cfn_in_article(article)
         if cfn_issues:
-            print(f"  ⚠️ CFn問題検出: {len(cfn_issues)}件")
+            print(f"  ⚠️ CFn問題検出: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
         else:
-            print("  ✓ CFn検証問題なし")
+            print(f"  ✓ CFn検証問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
         print(f"  CFn検証スキップ（無視して続行）: {e}")
         cfn_issues = []
 
     # Step 8: メール通知
+    _t = time.time()
     print("Step 8: メール通知を送信中...")
     try:
         send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues)
+        print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
     except Exception as e:
         print(f"  メール送信失敗（無視して続行）: {e}")
 
-    print(f"[{timestamp}] 処理が正常に完了しました")
+    print(f"[{timestamp}] 処理完了 (合計: {time.time()-_total_start:.1f}s)")
     return {
         "statusCode": 200,
         "body": json.dumps({

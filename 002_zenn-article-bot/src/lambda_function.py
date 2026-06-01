@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import time
 import boto3
 import datetime
 from botocore.config import Config
@@ -35,11 +36,11 @@ OUTPUT_DIR = os.environ.get(
 )
 S3_BUCKET  = os.environ.get("S3_BUCKET", "zer0-dev-s3")
 S3_PREFIX  = "zenn-articles"
-OUTPUT_KEEP_MAX = 5  # ローカル output/ に残す記事フォルダの最大数
+OUTPUT_KEEP_MAX     = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
 
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/zenn-article-bot/recent-topics"
-RECENT_TOPICS_LIMIT = 5
+RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "5"))
 
 AWS_TOPICS = [
     {
@@ -437,7 +438,7 @@ def get_recent_topics() -> list[str]:
     except ssm.exceptions.ParameterNotFound:
         return []
     except Exception as e:
-        print(f"SSM読み込みエラー（除外なしで続行）: {e}")
+        print(f"[WARNING] SSM読み込みエラー。トピック除外なしで続行します（同テーマが連続生成される可能性あり）: {e}")
         return []
 
 
@@ -540,7 +541,10 @@ def generate_article(topic: dict, today: str) -> tuple[str, bool]:
     usage = result.get("usage", {})
     stop_reason = result.get("stop_reason", "unknown")
     is_truncated = stop_reason == "max_tokens"
-    print(f"[Bedrock/article] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}, stop={stop_reason}")
+    in_tok  = usage.get('input_tokens', 0)
+    out_tok = usage.get('output_tokens', 0)
+    cost_usd = (in_tok * 0.80 + out_tok * 4.0) / 1_000_000  # Haiku pricing (概算)
+    print(f"[Bedrock/article] in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
     if is_truncated:
         print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
 
@@ -737,6 +741,8 @@ def validate_cfn_in_article(article_text: str) -> list[str]:
         try:
             parsed = _yaml.load(block, Loader=_CfnLoader)
             if isinstance(parsed, dict) and 'Resources' in parsed:
+                if 'Outputs' not in parsed:
+                    print(f"[CFn検証] ブロック{i}: Outputs セクションなし（デプロイ後の値参照・クロススタック連携が困難）")
                 complete.append((i, block))
         except _yaml.YAMLError as e:
             issues.append(f"ブロック{i}: YAML構文エラー — {str(e)[:200]}")
@@ -908,56 +914,63 @@ Zennに投稿する前に内容を必ず確認してください。
 # ─── メイン処理 ───────────────────────────────────────────────────────────────
 
 def run():
+    _total_start = time.time()
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     timestamp = now.strftime("%Y%m%d_%H%M%S")
-    today     = now.strftime("%Y-%m-%d")   # コードサンプル日付用 (例: 2026-04-12)
+    today     = now.strftime("%Y-%m-%d")
 
     print(f"[{timestamp}] Zenn技術記事自動生成を開始します")
 
     # Step 1: 直近トピック取得 → Bedrock でトピック選択 → SSM に保存
+    _t = time.time()
     print("Step 1: Bedrockでトピックを選択中...")
     recent_topics = get_recent_topics()
     print(f"  除外トピック（直近{len(recent_topics)}件）: {recent_topics}")
     topic = select_topic_with_bedrock(excluded_ids=recent_topics)
-    print(f"  選択されたトピック: {topic['name']}")
+    print(f"  選択されたトピック: {topic['name']} [{time.time()-_t:.1f}s]")
     save_topic_to_ssm(topic["id"])
 
     # Step 2: 記事生成
+    _t = time.time()
     print("Step 2: 記事を生成中（2,000〜3,500文字）...")
     article, is_truncated = generate_article(topic, today)
     char_count = len(article)
-    print(f"  記事生成完了: {char_count:,}文字")
+    print(f"  記事生成完了: {char_count:,}文字 [{time.time()-_t:.1f}s]")
 
     # Step 3: ローカル保存（MD + PNG）
+    _t = time.time()
     print("Step 3: ファイル保存中（記事MD + 構成図PNG）...")
     md_path, png_paths = save_to_local(topic, article, timestamp)
     print(f"  MD保存完了: {md_path}")
-    print(f"  PNG生成完了: {len(png_paths)}枚 {png_paths}" if png_paths else "  PNG生成: スキップ")
+    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]" if png_paths else f"  PNG生成: スキップ [{time.time()-_t:.1f}s]")
 
     # Step 4: S3 アップロード
+    _t = time.time()
     print("Step 4: S3にアップロード中...")
     s3_folder = f"{timestamp}_{topic['id']}"
     s3_url    = upload_to_s3(md_path, png_paths, s3_folder)
-    print(f"  S3アップロード完了: {s3_url}")
+    print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
 
     # Step 5: CFnテンプレート検証
+    _t = time.time()
     print("Step 5: CFnテンプレートを検証中...")
     try:
         cfn_issues = validate_cfn_in_article(article)
         if cfn_issues:
-            print(f"  ⚠️ CFn問題検出: {len(cfn_issues)}件")
+            print(f"  ⚠️ CFn問題検出: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
         else:
-            print("  ✓ CFn検証問題なし")
+            print(f"  ✓ CFn検証問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
         print(f"  CFn検証スキップ（無視して続行）: {e}")
         cfn_issues = []
 
     # Step 6: SES メール通知
+    _t = time.time()
     print("Step 6: メール通知を送信中...")
     send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues)
-    print("  メール送信完了")
+    print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
 
-    print(f"[{timestamp}] 処理が正常に完了しました")
+    print(f"[{timestamp}] 処理完了 (合計: {time.time()-_total_start:.1f}s)")
     return topic, char_count, md_path, png_paths, s3_url
 
 
