@@ -442,7 +442,7 @@ aws cloudformation describe-stacks --stack-name my-stack
 - CLIコマンドの実行結果は**成功時のレスポンス例を必ずコードブロックで示す**（「結果が表示されます」は使わない）
 - `:::message` や `:::details` は前後に必ず空行を入れること
 - コードブロック内のサンプル日付は**本日の日付（{today}）** を基準にする（`2024`や`2023`等の過去の年は使わない）
-- **文字数**: 10,000〜15,000文字程度（水増しより内容の充実を優先する）
+- **文字数**: 6,000〜8,000文字程度（水増しより内容の充実を優先する）
 
 ---
 
@@ -922,7 +922,7 @@ def lambda_handler(event, context):
     print(f"  使用サービス: {', '.join(topic['services'])}")
 
     # Step 3: 記事生成
-    print("Step 3: 記事を生成中（10,000〜15,000文字）...")
+    print("Step 3: 記事を生成中（6,000〜8,000文字）...")
     article, is_truncated = generate_article(topic, today, model_id)
     print(f"  記事生成完了: {len(article):,}文字")
 
