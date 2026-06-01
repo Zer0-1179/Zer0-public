@@ -157,11 +157,11 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 
 ## 変更履歴
 
-| 日付       | バージョン | 内容                                                       |
-| ---------- | ---------- | ---------------------------------------------------------- |
-| 2026-04-15 | v1         | 初版リリース。EventBridge Scheduler + Lambda + Bedrock Haiku による毎日22:00 X自動投稿             |
+| 日付       | バージョン | 内容                                                                                                    |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| 2026-04-15 | v1         | 初版リリース。EventBridge Scheduler + Lambda + Bedrock Haiku による毎日22:00 X自動投稿                  |
 | 2026-04-20 | v1.1       | 6カテゴリローテーション（shigoto/fukugyo/jitsuwa/question/suji/url_reaction）実装。SSMで直近7件履歴管理 |
-| 2026-04-25 | v1.2       | 曜日別固定スロット追加。水曜=question固定、火・金=url_reaction固定                                  |
-| 2026-05-01 | v1.3       | Google Trends RSS連動の `trend` カテゴリ（日曜10:00）追加。Tier1/2/3優先度でキーワード選択          |
-| 2026-05-10 | v1.4       | url_reaction の記事概要を150→300文字に拡張。Bedrockが具体的な感想を生成しやすくなるよう改善         |
-| 2026-05-29 | v1.5       | スタック名・Lambda関数名を `x-poster-zer0-0326` にリネーム。DRY_RUNテスト済み                       |
+| 2026-04-25 | v1.2       | 曜日別固定スロット追加。水曜=question固定、火・金=url_reaction固定                                      |
+| 2026-05-01 | v1.3       | Google Trends RSS連動の `trend` カテゴリ（日曜10:00）追加。Tier1/2/3優先度でキーワード選択              |
+| 2026-05-10 | v1.4       | url_reaction の記事概要を150→300文字に拡張。Bedrockが具体的な感想を生成しやすくなるよう改善             |
+| 2026-05-29 | v1.5       | スタック名・Lambda関数名を `x-poster-zer0-0326` にリネーム。DRY_RUNテスト済み                           |
