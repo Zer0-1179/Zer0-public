@@ -129,7 +129,8 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 
 | 日付       | バージョン | 内容                                                        |
 | ---------- | ---------- | ----------------------------------------------------------- |
-| 2026-04-20 | v1         | 初版リリース。Claude Sonnet + 512MB Lambda + 16トピック体制 |
-| 2026-04-28 | v1.1       | 2段階Bedrock呼び出し（トピック選択にHaiku使用）             |
-| 2026-05-10 | v1.2       | AWS公式ドキュメント自動取得追加                             |
-| 2026-05-20 | v1.3       | Lambda Function URL（AWS_IAM認証）追加                      |
+| 2026-04-20 | v1         | 初版リリース。Claude Sonnet + 512MB Lambda + 16トピック体制                                                   |
+| 2026-04-28 | v1.1       | 2段階Bedrock呼び出し（トピック選択にHaiku使用）。月額コスト約30%削減                                          |
+| 2026-05-05 | v1.2       | `{DIAGRAM_N}` マーカー方式導入。Bedrockが図挿入位置と説明文を記事本文内に自然配置するよう改善                 |
+| 2026-05-10 | v1.3       | AWS公式ドキュメント自動取得（primary_serviceのdocs.aws.amazon.com・最大6,000文字）を根拠情報として付与        |
+| 2026-05-20 | v1.4       | Lambda Function URL（AWS_IAM認証）追加。EventBridgeスケジュールを止めずに任意タイミングでテスト実行可能に     |
