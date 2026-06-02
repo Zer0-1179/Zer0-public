@@ -126,7 +126,7 @@ Resources:
       VpcId: !Ref Vpc01
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-public-rtb-01"
+          Value: !Sub "${ProjectName}-${Env}-public-route-01"
         - Key: Project
           Value: !Ref ProjectName
 

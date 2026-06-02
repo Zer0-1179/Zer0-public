@@ -129,7 +129,7 @@ Resources:
       VpcId: !Ref Vpc01
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-public-rt-01"
+          Value: !Sub "${ProjectName}-${Env}-public-route-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
@@ -141,7 +141,7 @@ Resources:
       VpcId: !Ref Vpc01
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-private-rt-01"
+          Value: !Sub "${ProjectName}-${Env}-private-route-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
