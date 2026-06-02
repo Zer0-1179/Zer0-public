@@ -59,6 +59,17 @@ Metadata:
         Parameters:
           - VolumeSize
           - VolumeType
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - EnableDetailedMonitoring
+          - EnableTerminationProtection
+          - ShutdownBehavior
+          - EbsOptimized
+          - Tenancy
+          - HttpTokens
+          - HttpPutResponseHopLimit
+          - UserData
 
 # -----------------------------------------------
 # Parameters
@@ -150,13 +161,78 @@ Parameters:
       - gp2
     Description: "Root EBS volume type. gp3 is recommended."
 
+  EnableDetailedMonitoring:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable detailed (1-minute) CloudWatch monitoring. Default is basic (5-minute)."
+
+  EnableTerminationProtection:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Prevent accidental termination via API or console."
+
+  ShutdownBehavior:
+    Type: String
+    Default: stop
+    AllowedValues:
+      - stop
+      - terminate
+    Description: "Action on OS shutdown: stop (default) or terminate the instance."
+
+  EbsOptimized:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable EBS-optimized dedicated throughput. Not all instance types support this."
+
+  Tenancy:
+    Type: String
+    Default: default
+    AllowedValues:
+      - default
+      - dedicated
+      - host
+    Description: "Instance tenancy. dedicated/host incurs additional cost."
+
+  HttpTokens:
+    Type: String
+    Default: required
+    AllowedValues:
+      - required
+      - optional
+    Description: "IMDSv2 enforcement. required = IMDSv2 only (recommended). optional = allows IMDSv1."
+
+  HttpPutResponseHopLimit:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 64
+    Description: "HTTP PUT response hop limit for instance metadata. 1 for EC2, 2 for containers."
+
+  UserData:
+    Type: String
+    Default: ""
+    Description: "Shell script to run on first launch. Leave empty to skip."
+
 # -----------------------------------------------
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsLinux:   !Equals [!Ref OsType, "Linux"]
-  IsWindows: !Equals [!Ref OsType, "Windows"]
-  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  IsLinux:                !Equals [!Ref OsType, "Linux"]
+  IsWindows:              !Equals [!Ref OsType, "Windows"]
+  HasKeyName:             !Not [!Equals [!Ref KeyName, ""]]
+  HasUserData:            !Not [!Equals [!Ref UserData, ""]]
+  IsEbsOptimized:         !Equals [!Ref EbsOptimized, "true"]
+  IsDetailedMonitoring:   !Equals [!Ref EnableDetailedMonitoring, "true"]
+  IsTerminationProtected: !Equals [!Ref EnableTerminationProtection, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -210,6 +286,17 @@ Resources:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
       IamInstanceProfile: !Ref Ec2InstanceProfile01
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref AWS::NoValue]
+      EbsOptimized: !If [IsEbsOptimized, true, false]
+      Monitoring:
+        Enabled: !If [IsDetailedMonitoring, true, false]
+      DisableApiTermination: !If [IsTerminationProtected, true, false]
+      InstanceInitiatedShutdownBehavior: !Ref ShutdownBehavior
+      Tenancy: !Ref Tenancy
+      UserData: !If [HasUserData, !Base64 !Ref UserData, !Ref AWS::NoValue]
+      MetadataOptions:
+        HttpTokens: !Ref HttpTokens
+        HttpPutResponseHopLimit: !Ref HttpPutResponseHopLimit
+        HttpEndpoint: enabled
       BlockDeviceMappings:
         - DeviceName: !If [IsLinux, /dev/xvda, /dev/sda1]
           Ebs:
