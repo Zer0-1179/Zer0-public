@@ -171,7 +171,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  ExecutionRole:
+  IamRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub
@@ -196,13 +196,13 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  InstanceProfile:
+  InstanceProfile01:
     Condition: IsEC2
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-instance-profile"
       Roles:
-        - !Ref ExecutionRole
+        - !Ref IamRole01
 
 # -----------------------------------------------
 # Outputs
@@ -211,21 +211,21 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  RoleArn:
+  RoleArn01:
     Description: "Execution role ARN"
-    Value: !GetAtt ExecutionRole.Arn
+    Value: !GetAtt IamRole01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RoleArn"
 
-  RoleName:
+  RoleName01:
     Description: "Execution role name"
-    Value: !Ref ExecutionRole
+    Value: !Ref IamRole01
     Export:
       Name: !Sub "${AWS::StackName}-RoleName"
 
-  InstanceProfileArn:
+  InstanceProfileArn01:
     Condition: IsEC2
     Description: "EC2 instance profile ARN. Pass this to IamInstanceProfile in cfn-ec2.yaml."
-    Value: !GetAtt InstanceProfile.Arn
+    Value: !GetAtt InstanceProfile01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-InstanceProfileArn"

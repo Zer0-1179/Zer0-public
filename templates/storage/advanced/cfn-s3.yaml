@@ -123,7 +123,7 @@ Conditions:
 # are available without defining them in Parameters.
 # -----------------------------------------------
 Resources:
-  S3Bucket:
+  S3Bucket01:
     Type: AWS::S3::Bucket
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
@@ -164,18 +164,18 @@ Resources:
 # Export allows other stacks to reference via !ImportValue.
 # -----------------------------------------------
 Outputs:
-  BucketName:
+  BucketName01:
     Description: "S3 bucket name"
-    Value: !Ref S3Bucket
+    Value: !Ref S3Bucket01
     Export:
       Name: !Sub "${AWS::StackName}-BucketName"
 
-  BucketArn:
+  BucketArn01:
     Description: "S3 bucket ARN"
-    Value: !GetAtt S3Bucket.Arn
+    Value: !GetAtt S3Bucket01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-BucketArn"
 
-  EncryptionType:
+  EncryptionType01:
     Description: "Server-side encryption type (always aws:kms)"
     Value: !If [HasKmsKey, "aws:kms (customer managed key)", "aws:kms (AWS managed key)"]

@@ -156,7 +156,7 @@ Conditions:
 # SG is resolved from {ProjectName}-{Env}-sg-{SgSuffix} stack.
 # -----------------------------------------------
 Resources:
-  InstanceRole:
+  Ec2InstanceRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-ec2-role"
@@ -177,14 +177,14 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  InstanceProfile:
+  Ec2InstanceProfile01:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile"
       Roles:
-        - !Ref InstanceRole
+        - !Ref Ec2InstanceRole01
 
-  EC2Instance:
+  Ec2Instance01:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
@@ -199,7 +199,7 @@ Resources:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-${SubnetType}Subnet${SubnetNumber}Id"
       SecurityGroupIds:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IamInstanceProfile: !Ref InstanceProfile
+      IamInstanceProfile: !Ref Ec2InstanceProfile01
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref AWS::NoValue]
       BlockDeviceMappings:
         - DeviceName: !If [IsLinux, /dev/xvda, /dev/sda1]
@@ -220,20 +220,20 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  InstanceId:
+  Ec2InstanceId01:
     Description: "EC2 Instance ID"
-    Value: !Ref EC2Instance
+    Value: !Ref Ec2Instance01
     Export:
       Name: !Sub "${AWS::StackName}-InstanceId"
 
-  PrivateIp:
+  PrivateIp01:
     Description: "Private IP address"
-    Value: !GetAtt EC2Instance.PrivateIp
+    Value: !GetAtt Ec2Instance01.PrivateIp
     Export:
       Name: !Sub "${AWS::StackName}-PrivateIp"
 
-  PublicIp:
+  PublicIp01:
     Description: "Public IP address (empty if placed in a private subnet)"
-    Value: !GetAtt EC2Instance.PublicIp
+    Value: !GetAtt Ec2Instance01.PublicIp
     Export:
       Name: !Sub "${AWS::StackName}-PublicIp"

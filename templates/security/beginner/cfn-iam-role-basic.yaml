@@ -70,7 +70,7 @@ Parameters:
 # To add more permissions, add managed policy ARNs to ManagedPolicyArns.
 # -----------------------------------------------
 Resources:
-  LambdaRole:
+  LambdaRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-lambda-${RoleSuffix}-role"
@@ -93,14 +93,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  RoleName:
+  RoleName01:
     Description: "IAM role name"
-    Value: !Ref LambdaRole
+    Value: !Ref LambdaRole01
     Export:
       Name: !Sub "${AWS::StackName}-RoleName"
 
-  RoleArn:
+  RoleArn01:
     Description: "IAM role ARN"
-    Value: !GetAtt LambdaRole.Arn
+    Value: !GetAtt LambdaRole01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RoleArn"

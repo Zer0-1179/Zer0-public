@@ -109,7 +109,7 @@ Parameters:
 # ALB access logging is disabled for simplicity. Enable it in the advanced version.
 # -----------------------------------------------
 Resources:
-  AlbTargetGroup:
+  AlbTargetGroup01:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub "${ProjectName}-${Env}-tg"
@@ -128,7 +128,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  Alb:
+  Alb01:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${ProjectName}-${Env}-alb"
@@ -145,34 +145,34 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  HttpListener:
+  HttpListener01:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref Alb
+      LoadBalancerArn: !Ref Alb01
       Protocol: HTTP
       Port: 80
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref AlbTargetGroup
+          TargetGroupArn: !Ref AlbTargetGroup01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  LoadBalancerDnsName:
+  AlbDnsName01:
     Description: "ALB DNS name"
-    Value: !GetAtt Alb.DNSName
+    Value: !GetAtt Alb01.DNSName
     Export:
       Name: !Sub "${AWS::StackName}-DnsName"
 
-  LoadBalancerArn:
+  AlbArn01:
     Description: "ALB ARN"
-    Value: !Ref Alb
+    Value: !Ref Alb01
     Export:
       Name: !Sub "${AWS::StackName}-Arn"
 
-  TargetGroupArn:
+  TargetGroupArn01:
     Description: "Target group ARN"
-    Value: !Ref AlbTargetGroup
+    Value: !Ref AlbTargetGroup01
     Export:
       Name: !Sub "${AWS::StackName}-TargetGroupArn"

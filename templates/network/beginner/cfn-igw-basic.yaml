@@ -72,7 +72,7 @@ Parameters:
 # A route pointing 0.0.0.0/0 to this IGW is needed in each public subnet's route table.
 # -----------------------------------------------
 Resources:
-  InternetGateway:
+  InternetGateway01:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
@@ -83,18 +83,18 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  VpcGatewayAttachment:
+  VpcGatewayAttachment01:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VpcId
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId: !Ref InternetGateway01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  InternetGatewayId:
+  InternetGatewayId01:
     Description: "Internet Gateway ID"
-    Value: !Ref InternetGateway
+    Value: !Ref InternetGateway01
     Export:
       Name: !Sub "${AWS::StackName}-IgwId"

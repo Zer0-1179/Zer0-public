@@ -74,7 +74,7 @@ Parameters:
 # To add a second subnet, copy PublicSubnet01 and rename it PublicSubnet02.
 # -----------------------------------------------
 Resources:
-  Vpc:
+  Vpc01:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidr
@@ -88,7 +88,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  InternetGateway:
+  InternetGateway01:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
@@ -97,18 +97,18 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  VpcGatewayAttachment:
+  VpcGatewayAttachment01:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref Vpc
-      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc01
+      InternetGatewayId: !Ref InternetGateway01
 
   # To add a second public subnet, copy this block and rename it PublicSubnet02.
   # Change AvailabilityZone to ap-northeast-1c and CidrBlock to PublicSubnetCidr02.
   PublicSubnet01:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref Vpc
+      VpcId: !Ref Vpc01
       CidrBlock: !Ref PublicSubnetCidr01
       AvailabilityZone: !Sub "${AWS::Region}a"
       MapPublicIpOnLaunch: true
@@ -120,37 +120,37 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  PublicRouteTable:
+  PublicRouteTable01:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref Vpc
+      VpcId: !Ref Vpc01
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-public-rtb"
         - Key: Project
           Value: !Ref ProjectName
 
-  DefaultRoute:
+  PublicDefaultRoute01:
     Type: AWS::EC2::Route
-    DependsOn: VpcGatewayAttachment
+    DependsOn: VpcGatewayAttachment01
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PublicRouteTable01
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      GatewayId: !Ref InternetGateway01
 
   RouteTableAssociation01:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet01
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PublicRouteTable01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  VpcId:
+  VpcId01:
     Description: "VPC ID"
-    Value: !Ref Vpc
+    Value: !Ref Vpc01
     Export:
       Name: !Sub "${AWS::StackName}-VpcId"
 
@@ -160,8 +160,8 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-PublicSubnetId01"
 
-  InternetGatewayId:
+  InternetGatewayId01:
     Description: "Internet Gateway ID"
-    Value: !Ref InternetGateway
+    Value: !Ref InternetGateway01
     Export:
       Name: !Sub "${AWS::StackName}-IgwId"

@@ -184,7 +184,7 @@ Conditions:
 # Resources
 # -----------------------------------------------
 Resources:
-  DynamoDBTable:
+  DynamoDbTable01:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
@@ -242,14 +242,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  TableName:
+  TableName01:
     Description: "DynamoDB table name"
-    Value: !Ref DynamoDBTable
+    Value: !Ref DynamoDbTable01
     Export:
       Name: !Sub "${AWS::StackName}-TableName"
 
-  TableArn:
+  TableArn01:
     Description: "DynamoDB table ARN"
-    Value: !GetAtt DynamoDBTable.Arn
+    Value: !GetAtt DynamoDbTable01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TableArn"

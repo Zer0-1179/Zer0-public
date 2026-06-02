@@ -198,7 +198,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  SubnetGroup:
+  CacheSubnetGroup01:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
       CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet-group"
@@ -212,7 +212,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  ReplicationGroup:
+  ReplicationGroup01:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
       ReplicationGroupId: !Sub "${ProjectName}-${Env}"
@@ -221,7 +221,7 @@ Resources:
       Engine: redis
       EngineVersion: !Ref EngineVersion
       NumCacheClusters: !Ref NumCacheClusters
-      CacheSubnetGroupName: !Ref SubnetGroup
+      CacheSubnetGroupName: !Ref CacheSubnetGroup01
       SecurityGroupIds:
         - !Ref SecurityGroupId
       AtRestEncryptionEnabled: !If [EnableAtRestEncryption,  true, false]
@@ -248,27 +248,27 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  PrimaryEndpoint:
+  PrimaryEndpoint01:
     Description: "Redis primary endpoint (host:port). Use for writes or all operations in single-node."
     Value: !Sub
       - "${Addr}:${Port}"
-      - Addr: !GetAtt ReplicationGroup.PrimaryEndPoint.Address
-        Port: !GetAtt ReplicationGroup.PrimaryEndPoint.Port
+      - Addr: !GetAtt ReplicationGroup01.PrimaryEndPoint.Address
+        Port: !GetAtt ReplicationGroup01.PrimaryEndPoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryEndpoint"
 
-  ReaderEndpoint:
+  ReaderEndpoint01:
     Condition: IsMultiNode
     Description: "Redis reader endpoint (host:port). Use for read-only operations when NumCacheClusters >= 2."
     Value: !Sub
       - "${Addr}:${Port}"
-      - Addr: !GetAtt ReplicationGroup.ReaderEndPoint.Address
-        Port: !GetAtt ReplicationGroup.ReaderEndPoint.Port
+      - Addr: !GetAtt ReplicationGroup01.ReaderEndPoint.Address
+        Port: !GetAtt ReplicationGroup01.ReaderEndPoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-ReaderEndpoint"
 
-  SubnetGroupName:
+  SubnetGroupName01:
     Description: "ElastiCache subnet group name"
-    Value: !Ref SubnetGroup
+    Value: !Ref CacheSubnetGroup01
     Export:
       Name: !Sub "${AWS::StackName}-SubnetGroupName"

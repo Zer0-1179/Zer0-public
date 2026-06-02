@@ -134,7 +134,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  PercentIOLimitWarningAlarm:
+  PercentIOLimitWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-io-limit-warning"
@@ -153,7 +153,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  PercentIOLimitCriticalAlarm:
+  PercentIOLimitCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-efs-${FileSystemId}-io-limit-critical"
@@ -179,14 +179,14 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  PercentIOLimitWarningAlarmArn:
+  PercentIOLimitWarningAlarmArn01:
     Description: "I/O limit WARNING alarm ARN"
-    Value: !GetAtt PercentIOLimitWarningAlarm.Arn
+    Value: !GetAtt PercentIOLimitWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-PercentIOLimitWarningAlarmArn"
 
-  PercentIOLimitCriticalAlarmArn:
+  PercentIOLimitCriticalAlarmArn01:
     Description: "I/O limit CRITICAL alarm ARN"
-    Value: !GetAtt PercentIOLimitCriticalAlarm.Arn
+    Value: !GetAtt PercentIOLimitCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-PercentIOLimitCriticalAlarmArn"

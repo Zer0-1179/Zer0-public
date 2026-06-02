@@ -161,7 +161,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  UnhealthyHostWarningAlarm:
+  UnhealthyHostWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-alb-unhealthy-host-warning"
@@ -182,7 +182,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  UnhealthyHostCriticalAlarm:
+  UnhealthyHostCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-alb-unhealthy-host-critical"
@@ -203,7 +203,7 @@ Resources:
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
-  LatencyWarningAlarm:
+  LatencyWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-alb-latency-warning"
@@ -222,7 +222,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  LatencyCriticalAlarm:
+  LatencyCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-alb-latency-critical"
@@ -248,26 +248,26 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  UnhealthyHostWarningAlarmArn:
+  UnhealthyHostWarningAlarmArn01:
     Description: "Unhealthy host WARNING alarm ARN"
-    Value: !GetAtt UnhealthyHostWarningAlarm.Arn
+    Value: !GetAtt UnhealthyHostWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-UnhealthyHostWarningAlarmArn"
 
-  UnhealthyHostCriticalAlarmArn:
+  UnhealthyHostCriticalAlarmArn01:
     Description: "Unhealthy host CRITICAL alarm ARN"
-    Value: !GetAtt UnhealthyHostCriticalAlarm.Arn
+    Value: !GetAtt UnhealthyHostCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-UnhealthyHostCriticalAlarmArn"
 
-  LatencyWarningAlarmArn:
+  LatencyWarningAlarmArn01:
     Description: "Latency WARNING alarm ARN"
-    Value: !GetAtt LatencyWarningAlarm.Arn
+    Value: !GetAtt LatencyWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-LatencyWarningAlarmArn"
 
-  LatencyCriticalAlarmArn:
+  LatencyCriticalAlarmArn01:
     Description: "Latency CRITICAL alarm ARN"
-    Value: !GetAtt LatencyCriticalAlarm.Arn
+    Value: !GetAtt LatencyCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-LatencyCriticalAlarmArn"

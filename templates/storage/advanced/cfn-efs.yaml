@@ -135,7 +135,7 @@ Conditions:
 # Resources
 # -----------------------------------------------
 Resources:
-  FileSystem:
+  EfsFileSystem01:
     Type: AWS::EFS::FileSystem
     Properties:
       Encrypted: true
@@ -156,7 +156,7 @@ Resources:
   MountTarget01:
     Type: AWS::EFS::MountTarget
     Properties:
-      FileSystemId: !Ref FileSystem
+      FileSystemId: !Ref EfsFileSystem01
       SubnetId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet01Id"
       SecurityGroups:
@@ -165,7 +165,7 @@ Resources:
   MountTarget02:
     Type: AWS::EFS::MountTarget
     Properties:
-      FileSystemId: !Ref FileSystem
+      FileSystemId: !Ref EfsFileSystem01
       SubnetId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
       SecurityGroups:
@@ -175,14 +175,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  FileSystemId:
+  FileSystemId01:
     Description: "EFS File System ID"
-    Value: !Ref FileSystem
+    Value: !Ref EfsFileSystem01
     Export:
       Name: !Sub "${ProjectName}-${Env}-efs-${EfsSuffix}-FileSystemId"
 
-  FileSystemArn:
+  FileSystemArn01:
     Description: "EFS File System ARN"
-    Value: !GetAtt FileSystem.Arn
+    Value: !GetAtt EfsFileSystem01.Arn
     Export:
       Name: !Sub "${ProjectName}-${Env}-efs-${EfsSuffix}-FileSystemArn"

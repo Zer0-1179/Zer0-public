@@ -53,7 +53,7 @@ Parameters:
 # ContainerInsights enables CloudWatch metrics for the cluster.
 # -----------------------------------------------
 Resources:
-  EcsCluster:
+  EcsCluster01:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Sub "${ProjectName}-${Env}-cluster"
@@ -70,14 +70,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  ClusterName:
+  ClusterName01:
     Description: "ECS cluster name"
-    Value: !Ref EcsCluster
+    Value: !Ref EcsCluster01
     Export:
       Name: !Sub "${AWS::StackName}-ClusterName"
 
-  ClusterArn:
+  ClusterArn01:
     Description: "ECS cluster ARN"
-    Value: !GetAtt EcsCluster.Arn
+    Value: !GetAtt EcsCluster01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ClusterArn"

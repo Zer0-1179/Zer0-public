@@ -92,7 +92,7 @@ Parameters:
 # NLB operates at Layer 4 (TCP/UDP). Use ALB for Layer 7 (HTTP/HTTPS).
 # -----------------------------------------------
 Resources:
-  NlbTargetGroup:
+  NlbTargetGroup01:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub "${ProjectName}-${Env}-nlb-tg"
@@ -110,7 +110,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  Nlb:
+  Nlb01:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${ProjectName}-${Env}-nlb"
@@ -125,34 +125,34 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  TcpListener:
+  TcpListener01:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref Nlb
+      LoadBalancerArn: !Ref Nlb01
       Protocol: TCP
       Port: !Ref TargetPort
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref NlbTargetGroup
+          TargetGroupArn: !Ref NlbTargetGroup01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  LoadBalancerDnsName:
+  NlbDnsName01:
     Description: "NLB DNS name"
-    Value: !GetAtt Nlb.DNSName
+    Value: !GetAtt Nlb01.DNSName
     Export:
       Name: !Sub "${AWS::StackName}-DnsName"
 
-  LoadBalancerArn:
+  NlbArn01:
     Description: "NLB ARN"
-    Value: !Ref Nlb
+    Value: !Ref Nlb01
     Export:
       Name: !Sub "${AWS::StackName}-Arn"
 
-  TargetGroupArn:
+  TargetGroupArn01:
     Description: "Target group ARN"
-    Value: !Ref NlbTargetGroup
+    Value: !Ref NlbTargetGroup01
     Export:
       Name: !Sub "${AWS::StackName}-TargetGroupArn"

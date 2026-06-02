@@ -69,7 +69,7 @@ Parameters:
 # Use SSEAlgorithm AES256 for AWS-managed encryption (no cost).
 # -----------------------------------------------
 Resources:
-  S3Bucket:
+  S3Bucket01:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -97,14 +97,14 @@ Resources:
 # Export allows other stacks to reference via !ImportValue.
 # -----------------------------------------------
 Outputs:
-  BucketName:
+  BucketName01:
     Description: "S3 bucket name"
-    Value: !Ref S3Bucket
+    Value: !Ref S3Bucket01
     Export:
       Name: !Sub "${AWS::StackName}-BucketName"
 
-  BucketArn:
+  BucketArn01:
     Description: "S3 bucket ARN"
-    Value: !GetAtt S3Bucket.Arn
+    Value: !GetAtt S3Bucket01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-BucketArn"

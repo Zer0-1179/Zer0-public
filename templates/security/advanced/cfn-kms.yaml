@@ -100,7 +100,7 @@ Conditions:
 #            IAM policies can then delegate usage to roles and services.
 # -----------------------------------------------
 Resources:
-  KmsKey:
+  KmsKey01:
     Type: AWS::KMS::Key
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
@@ -128,11 +128,11 @@ Resources:
         - Key: Region
           Value: !Ref AWS::Region
 
-  KmsKeyAlias:
+  KmsKeyAlias01:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub "alias/${ProjectName}-${Env}-kms"
-      TargetKeyId: !Ref KmsKey
+      TargetKeyId: !Ref KmsKey01
 
 # -----------------------------------------------
 # Outputs
@@ -140,20 +140,20 @@ Resources:
 # Export allows other stacks to reference via !ImportValue.
 # -----------------------------------------------
 Outputs:
-  KmsKeyArn:
+  KmsKeyArn01:
     Description: "KMS key ARN"
-    Value: !GetAtt KmsKey.Arn
+    Value: !GetAtt KmsKey01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-KmsKeyArn"
 
-  KmsKeyId:
+  KmsKeyId01:
     Description: "KMS key ID"
-    Value: !Ref KmsKey
+    Value: !Ref KmsKey01
     Export:
       Name: !Sub "${AWS::StackName}-KmsKeyId"
 
-  KmsKeyAlias:
+  KmsKeyAlias01:
     Description: "KMS key alias"
-    Value: !Ref KmsKeyAlias
+    Value: !Ref KmsKeyAlias01
     Export:
       Name: !Sub "${AWS::StackName}-KmsKeyAlias"

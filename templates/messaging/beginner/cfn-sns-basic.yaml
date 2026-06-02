@@ -78,7 +78,7 @@ Parameters:
 # To add a second email, copy the EmailSubscription01 block and rename it EmailSubscription02.
 # -----------------------------------------------
 Resources:
-  SnsTopic:
+  SnsTopic01:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub "${ProjectName}-${Env}-${TopicSuffix}"
@@ -93,7 +93,7 @@ Resources:
   EmailSubscription01:
     Type: AWS::SNS::Subscription
     Properties:
-      TopicArn: !Ref SnsTopic
+      TopicArn: !Ref SnsTopic01
       Protocol: email
       Endpoint: !Ref EmailAddress
 
@@ -101,14 +101,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  TopicArn:
+  TopicArn01:
     Description: "SNS topic ARN"
-    Value: !Ref SnsTopic
+    Value: !Ref SnsTopic01
     Export:
       Name: !Sub "${AWS::StackName}-TopicArn"
 
-  TopicName:
+  TopicName01:
     Description: "SNS topic name"
-    Value: !GetAtt SnsTopic.TopicName
+    Value: !GetAtt SnsTopic01.TopicName
     Export:
       Name: !Sub "${AWS::StackName}-TopicName"

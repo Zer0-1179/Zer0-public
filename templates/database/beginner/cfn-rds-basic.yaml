@@ -131,7 +131,7 @@ Parameters:
 # BackupRetentionPeriod: 7 keeps automated backups for 7 days.
 # -----------------------------------------------
 Resources:
-  DBSubnetGroup:
+  DbSubnetGroup01:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: !Sub "${ProjectName}-${Env}-rds subnet group"
@@ -144,7 +144,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  RdsInstance:
+  RdsInstance01:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -163,7 +163,7 @@ Resources:
       PubliclyAccessible: false
       BackupRetentionPeriod: 7
       DeletionProtection: false
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBSubnetGroupName: !Ref DbSubnetGroup01
       VPCSecurityGroups:
         - !Ref SecurityGroupId
       Tags:
@@ -176,20 +176,20 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  DBInstanceEndpoint:
+  DbInstanceEndpoint01:
     Description: "RDS endpoint address"
-    Value: !GetAtt RdsInstance.Endpoint.Address
+    Value: !GetAtt RdsInstance01.Endpoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-Endpoint"
 
-  DBInstancePort:
+  DbInstancePort01:
     Description: "RDS endpoint port"
-    Value: !GetAtt RdsInstance.Endpoint.Port
+    Value: !GetAtt RdsInstance01.Endpoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-Port"
 
-  DBInstanceId:
+  DbInstanceId01:
     Description: "RDS instance identifier"
-    Value: !Ref RdsInstance
+    Value: !Ref RdsInstance01
     Export:
       Name: !Sub "${AWS::StackName}-InstanceId"

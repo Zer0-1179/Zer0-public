@@ -156,7 +156,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
   # TLS is terminated at the NLB; backend receives plain TCP.
-  TargetGroup:
+  NlbTargetGroup01:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}-tg"
@@ -178,7 +178,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LoadBalancer:
+  Nlb01:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}"
@@ -203,10 +203,10 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  Listener:
+  TcpListener01:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref LoadBalancer
+      LoadBalancerArn: !Ref Nlb01
       Port: !Ref Port
       Protocol: !Ref Protocol
       SslPolicy: !If [HasTls, ELBSecurityPolicy-TLS13-1-2-2021-06, !Ref AWS::NoValue]
@@ -216,26 +216,26 @@ Resources:
         - !Ref AWS::NoValue
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !Ref NlbTargetGroup01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  LoadBalancerArn:
+  NlbArn01:
     Description: "NLB ARN"
-    Value: !Ref LoadBalancer
+    Value: !Ref Nlb01
     Export:
       Name: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}-LoadBalancerArn"
 
-  LoadBalancerDnsName:
+  NlbDnsName01:
     Description: "NLB DNS name"
-    Value: !GetAtt LoadBalancer.DNSName
+    Value: !GetAtt Nlb01.DNSName
     Export:
       Name: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}-LoadBalancerDnsName"
 
-  TargetGroupArn:
+  TargetGroupArn01:
     Description: "Target Group ARN"
-    Value: !Ref TargetGroup
+    Value: !Ref NlbTargetGroup01
     Export:
       Name: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}-TargetGroupArn"

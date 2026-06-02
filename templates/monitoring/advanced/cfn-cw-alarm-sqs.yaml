@@ -147,7 +147,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  MessageCountWarningAlarm:
+  MessageCountWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-depth-warning"
@@ -166,7 +166,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  MessageCountCriticalAlarm:
+  MessageCountCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-depth-critical"
@@ -185,7 +185,7 @@ Resources:
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
-  MessageAgeWarningAlarm:
+  MessageAgeWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-age-warning"
@@ -204,7 +204,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  MessageAgeCriticalAlarm:
+  MessageAgeCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-sqs-${QueueName}-age-critical"
@@ -230,26 +230,26 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  MessageCountWarningAlarmArn:
+  MessageCountWarningAlarmArn01:
     Description: "Message count WARNING alarm ARN"
-    Value: !GetAtt MessageCountWarningAlarm.Arn
+    Value: !GetAtt MessageCountWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-MessageCountWarningAlarmArn"
 
-  MessageCountCriticalAlarmArn:
+  MessageCountCriticalAlarmArn01:
     Description: "Message count CRITICAL alarm ARN"
-    Value: !GetAtt MessageCountCriticalAlarm.Arn
+    Value: !GetAtt MessageCountCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-MessageCountCriticalAlarmArn"
 
-  MessageAgeWarningAlarmArn:
+  MessageAgeWarningAlarmArn01:
     Description: "Message age WARNING alarm ARN"
-    Value: !GetAtt MessageAgeWarningAlarm.Arn
+    Value: !GetAtt MessageAgeWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-MessageAgeWarningAlarmArn"
 
-  MessageAgeCriticalAlarmArn:
+  MessageAgeCriticalAlarmArn01:
     Description: "Message age CRITICAL alarm ARN"
-    Value: !GetAtt MessageAgeCriticalAlarm.Arn
+    Value: !GetAtt MessageAgeCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-MessageAgeCriticalAlarmArn"

@@ -97,7 +97,7 @@ Parameters:
 # NumCacheClusters: 1 creates a single-node cluster (no replication).
 # -----------------------------------------------
 Resources:
-  CacheSubnetGroup:
+  CacheSubnetGroup01:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
       CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet"
@@ -106,7 +106,7 @@ Resources:
         - !Ref SubnetId01
         - !Ref SubnetId02
 
-  RedisCluster:
+  RedisCluster01:
     Type: AWS::ElastiCache::ReplicationGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -120,7 +120,7 @@ Resources:
       AutomaticFailoverEnabled: false
       AtRestEncryptionEnabled: true
       TransitEncryptionEnabled: true
-      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      CacheSubnetGroupName: !Ref CacheSubnetGroup01
       SecurityGroupIds:
         - !Ref SecurityGroupId
       Tags:
@@ -133,14 +133,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  PrimaryEndpoint:
+  PrimaryEndpoint01:
     Description: "Redis primary endpoint address"
-    Value: !GetAtt RedisCluster.PrimaryEndPoint.Address
+    Value: !GetAtt RedisCluster01.PrimaryEndPoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryEndpoint"
 
-  PrimaryPort:
+  PrimaryPort01:
     Description: "Redis primary endpoint port"
-    Value: !GetAtt RedisCluster.PrimaryEndPoint.Port
+    Value: !GetAtt RedisCluster01.PrimaryEndPoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryPort"

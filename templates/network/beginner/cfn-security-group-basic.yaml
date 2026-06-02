@@ -98,7 +98,7 @@ Parameters:
 # To add a second inbound rule, copy the IngressRule01 block and rename it IngressRule02.
 # -----------------------------------------------
 Resources:
-  SecurityGroup:
+  SecurityGroup01:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}"
@@ -117,7 +117,7 @@ Resources:
   IngressRule01:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref SecurityGroup
+      GroupId: !Ref SecurityGroup01
       IpProtocol: tcp
       FromPort: !Ref IngressPort
       ToPort: !Ref IngressPort
@@ -128,8 +128,8 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  SecurityGroupId:
+  SecurityGroupId01:
     Description: "Security group ID"
-    Value: !Ref SecurityGroup
+    Value: !Ref SecurityGroup01
     Export:
       Name: !Sub "${AWS::StackName}-SecurityGroupId"

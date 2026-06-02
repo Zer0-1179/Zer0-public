@@ -109,7 +109,7 @@ Conditions:
 # which is then passed to !Select to pick the correct AZ and CIDR.
 # -----------------------------------------------
 Resources:
-  VPC:
+  Vpc01:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidr
@@ -123,10 +123,10 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  PublicRouteTable:
+  PublicRouteTable01:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref Vpc01
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-public-rt"
@@ -135,10 +135,10 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  PrivateRouteTable:
+  PrivateRouteTable01:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref Vpc01
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-private-rt"
@@ -154,7 +154,7 @@ Resources:
     - PublicSubnet${SubnetId}:
         Type: AWS::EC2::Subnet
         Properties:
-          VpcId: !Ref VPC
+          VpcId: !Ref Vpc01
           CidrBlock: !Select
             - !FindInMap [AZIndex, !Sub "${SubnetId}", Index]
             - !Ref PublicSubnetCidrs
@@ -178,7 +178,7 @@ Resources:
     - PrivateSubnet${SubnetId}:
         Type: AWS::EC2::Subnet
         Properties:
-          VpcId: !Ref VPC
+          VpcId: !Ref Vpc01
           CidrBlock: !Select
             - !FindInMap [AZIndex, !Sub "${SubnetId}", Index]
             - !Ref PrivateSubnetCidrs
@@ -201,25 +201,25 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet01
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PublicRouteTable01
 
   PublicSubnet02RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet02
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PublicRouteTable01
 
   PrivateSubnet01RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet01
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable01
 
   PrivateSubnet02RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet02
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable01
 
 # -----------------------------------------------
 # Outputs
@@ -227,27 +227,27 @@ Resources:
 # exporting each subnet ID for use in downstream stacks.
 # -----------------------------------------------
 Outputs:
-  VpcId:
+  VpcId01:
     Description: "VPC ID"
-    Value: !Ref VPC
+    Value: !Ref Vpc01
     Export:
       Name: !Sub "${AWS::StackName}-VpcId"
 
-  VpcCidr:
+  VpcCidr01:
     Description: "VPC CIDR block"
-    Value: !GetAtt VPC.CidrBlock
+    Value: !GetAtt Vpc01.CidrBlock
     Export:
       Name: !Sub "${AWS::StackName}-VpcCidr"
 
-  PublicRouteTableId:
+  PublicRouteTableId01:
     Description: "Public route table ID"
-    Value: !Ref PublicRouteTable
+    Value: !Ref PublicRouteTable01
     Export:
       Name: !Sub "${AWS::StackName}-PublicRouteTableId"
 
-  PrivateRouteTableId:
+  PrivateRouteTableId01:
     Description: "Private route table ID"
-    Value: !Ref PrivateRouteTable
+    Value: !Ref PrivateRouteTable01
     Export:
       Name: !Sub "${AWS::StackName}-PrivateRouteTableId"
 

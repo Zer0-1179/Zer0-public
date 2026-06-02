@@ -79,7 +79,7 @@ Parameters:
 # PerformanceMode: generalPurpose is sufficient for most workloads.
 # -----------------------------------------------
 Resources:
-  EfsFileSystem:
+  EfsFileSystem01:
     Type: AWS::EFS::FileSystem
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -101,7 +101,7 @@ Resources:
   MountTarget01:
     Type: AWS::EFS::MountTarget
     Properties:
-      FileSystemId: !Ref EfsFileSystem
+      FileSystemId: !Ref EfsFileSystem01
       SubnetId: !Ref SubnetId
       SecurityGroups:
         - !Ref SecurityGroupId
@@ -110,14 +110,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  FileSystemId:
+  FileSystemId01:
     Description: "EFS file system ID"
-    Value: !Ref EfsFileSystem
+    Value: !Ref EfsFileSystem01
     Export:
       Name: !Sub "${AWS::StackName}-FileSystemId"
 
-  MountTargetDnsName:
+  MountTargetDnsName01:
     Description: "EFS DNS name for mounting (use as NFS server address)"
-    Value: !Sub "${EfsFileSystem}.efs.${AWS::Region}.amazonaws.com"
+    Value: !Sub "${EfsFileSystem01}.efs.${AWS::Region}.amazonaws.com"
     Export:
       Name: !Sub "${AWS::StackName}-DnsName"
