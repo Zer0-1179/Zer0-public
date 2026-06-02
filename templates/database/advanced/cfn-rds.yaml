@@ -68,6 +68,19 @@ Metadata:
         Parameters:
           - MultiAZ
           - DeletionProtection
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - EnableIAMAuth
+          - AutoMinorVersionUpgrade
+          - CopyTagsToSnapshot
+          - PreferredBackupWindow
+          - PreferredMaintenanceWindow
+          - CloudwatchLogsExports
+          - ParameterGroupName
+          - OptionGroupName
+          - EnablePerformanceInsights
+          - PerformanceInsightsRetention
 
 # -----------------------------------------------
 # Parameters
@@ -167,6 +180,88 @@ Parameters:
       - "false"
     Description: "Prevent accidental deletion. Must be disabled before deleting the stack."
 
+  EnableIAMAuth:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable IAM database authentication. Allows IAM users/roles to connect without a password."
+
+  AutoMinorVersionUpgrade:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Automatically apply minor engine version upgrades during the maintenance window."
+
+  CopyTagsToSnapshot:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Copy instance tags to automated and manual snapshots."
+
+  PreferredBackupWindow:
+    Type: String
+    Default: "03:00-04:00"
+    Description: "Daily backup window (UTC, format hh24:mi-hh24:mi). Must not overlap with the maintenance window."
+
+  PreferredMaintenanceWindow:
+    Type: String
+    Default: "sun:04:00-sun:05:00"
+    Description: "Weekly maintenance window (UTC, format ddd:hh24:mi-ddd:hh24:mi)."
+
+  CloudwatchLogsExports:
+    Type: String
+    Default: ""
+    Description: "Comma-separated log types to export to CloudWatch Logs (e.g. error,slowquery for MySQL). Leave empty to disable."
+
+  ParameterGroupName:
+    Type: String
+    Default: ""
+    Description: "Custom DB parameter group name. Leave empty to use the engine default."
+
+  OptionGroupName:
+    Type: String
+    Default: ""
+    Description: "Custom DB option group name (MySQL/Oracle). Leave empty to use the engine default."
+
+  EnablePerformanceInsights:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable RDS Performance Insights. Free tier: 7 days retention."
+
+  PerformanceInsightsRetention:
+    Type: Number
+    Default: 7
+    AllowedValues:
+      - 7
+      - 31
+      - 62
+      - 93
+      - 124
+      - 155
+      - 186
+      - 217
+      - 248
+      - 279
+      - 310
+      - 341
+      - 372
+      - 403
+      - 434
+      - 465
+      - 496
+      - 527
+      - 731
+    Description: "Performance Insights retention in days. 7 days is free; longer retention incurs cost."
+
 # -----------------------------------------------
 # Mappings
 # -----------------------------------------------
@@ -188,7 +283,14 @@ Mappings:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsPrd: !Equals [!Ref Env, prd]
+  IsPrd:                      !Equals [!Ref Env, prd]
+  IsIAMAuthEnabled:           !Equals [!Ref EnableIAMAuth, "true"]
+  IsAutoMinorUpgradeEnabled:  !Equals [!Ref AutoMinorVersionUpgrade, "true"]
+  IsCopyTagsEnabled:          !Equals [!Ref CopyTagsToSnapshot, "true"]
+  HasCloudwatchLogs:          !Not [!Equals [!Ref CloudwatchLogsExports, ""]]
+  HasParameterGroup:          !Not [!Equals [!Ref ParameterGroupName, ""]]
+  HasOptionGroup:             !Not [!Equals [!Ref OptionGroupName, ""]]
+  IsPerformanceInsightsOn:    !Equals [!Ref EnablePerformanceInsights, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -234,9 +336,19 @@ Resources:
       DBSubnetGroupName:   !Ref DbSubnetGroup01
       VPCSecurityGroups:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      BackupRetentionPeriod: !FindInMap [Config, !Ref Env, BackupRetentionPeriod]
-      DeletionProtection:    !Ref DeletionProtection
-      PubliclyAccessible:    false
+      BackupRetentionPeriod:          !FindInMap [Config, !Ref Env, BackupRetentionPeriod]
+      DeletionProtection:             !Ref DeletionProtection
+      PubliclyAccessible:             false
+      EnableIAMDatabaseAuthentication: !If [IsIAMAuthEnabled, true, false]
+      AutoMinorVersionUpgrade:        !If [IsAutoMinorUpgradeEnabled, true, false]
+      CopyTagsToSnapshot:             !If [IsCopyTagsEnabled, true, false]
+      PreferredBackupWindow:          !Ref PreferredBackupWindow
+      PreferredMaintenanceWindow:     !Ref PreferredMaintenanceWindow
+      EnableCloudwatchLogsExports:    !If [HasCloudwatchLogs, !Split [",", !Ref CloudwatchLogsExports], !Ref AWS::NoValue]
+      DBParameterGroupName:           !If [HasParameterGroup, !Ref ParameterGroupName, !Ref AWS::NoValue]
+      OptionGroupName:                !If [HasOptionGroup, !Ref OptionGroupName, !Ref AWS::NoValue]
+      EnablePerformanceInsights:      !If [IsPerformanceInsightsOn, true, false]
+      PerformanceInsightsRetentionPeriod: !If [IsPerformanceInsightsOn, !Ref PerformanceInsightsRetention, !Ref AWS::NoValue]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-01"

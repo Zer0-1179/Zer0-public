@@ -47,6 +47,10 @@ Metadata:
           default: "Encryption (optional)"
         Parameters:
           - KmsKeyArn
+      - Label:
+          default: "Access Policy (optional)"
+        Parameters:
+          - RepositoryPolicy
 
 # -----------------------------------------------
 # Parameters
@@ -102,12 +106,18 @@ Parameters:
     Default: ""
     Description: "KMS key ARN for encryption at rest. Leave empty to use AES256 (AWS managed)."
 
+  RepositoryPolicy:
+    Type: String
+    Default: ""
+    Description: "JSON repository policy document for cross-account access. Leave empty to skip."
+
 # -----------------------------------------------
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsPrd:     !Equals [!Ref Env, prd]
-  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
+  IsPrd:            !Equals [!Ref Env, prd]
+  HasKmsKey:        !Not [!Equals [!Ref KmsKeyArn, ""]]
+  HasRepoPolicy:    !Not [!Equals [!Ref RepositoryPolicy, ""]]
 
 # -----------------------------------------------
 # Resources
@@ -146,6 +156,7 @@ Resources:
                 }
               ]
             }
+      RepositoryPolicyText: !If [HasRepoPolicy, !Ref RepositoryPolicy, !Ref AWS::NoValue]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-ecr-${RepoSuffix}"
