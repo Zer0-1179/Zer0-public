@@ -46,16 +46,6 @@ Metadata:
           default: "Logs"
         Parameters:
           - LogRetentionDays
-      - Label:
-          default: "Advanced Options"
-        Parameters:
-          - Architecture
-          - EphemeralStorageSize
-          - ReservedConcurrentExecutions
-          - TracingMode
-          - DlqArn
-          - LogFormat
-          - LogGroupClass
 
 # -----------------------------------------------
 # Parameters
@@ -90,6 +80,7 @@ Parameters:
     AllowedValues:
       - python3.13
       - python3.12
+      - python3.11
       - nodejs22.x
       - nodejs20.x
     Description: "Lambda runtime."
@@ -128,62 +119,6 @@ Parameters:
       - 365
     Description: "CloudWatch Logs retention period in days."
 
-  Architecture:
-    Type: String
-    Default: x86_64
-    AllowedValues:
-      - x86_64
-      - arm64
-    Description: "Instruction set architecture. arm64 (Graviton2) is typically 20% cheaper and faster."
-
-  EphemeralStorageSize:
-    Type: Number
-    Default: 512
-    MinValue: 512
-    MaxValue: 10240
-    Description: "/tmp ephemeral storage size in MB (512–10,240)."
-
-  ReservedConcurrentExecutions:
-    Type: String
-    Default: ""
-    Description: "Reserved concurrent executions. Leave empty for unreserved (default). 0 throttles all invocations."
-
-  TracingMode:
-    Type: String
-    Default: PassThrough
-    AllowedValues:
-      - PassThrough
-      - Active
-    Description: "X-Ray tracing mode. Active sends traces to X-Ray (incurs additional cost)."
-
-  DlqArn:
-    Type: String
-    Default: ""
-    Description: "SQS queue or SNS topic ARN for failed async invocations. Leave empty to disable."
-
-  LogFormat:
-    Type: String
-    Default: Text
-    AllowedValues:
-      - Text
-      - JSON
-    Description: "CloudWatch Logs log format. JSON enables structured logging with log levels."
-
-  LogGroupClass:
-    Type: String
-    Default: STANDARD
-    AllowedValues:
-      - STANDARD
-      - INFREQUENT_ACCESS
-    Description: "Log group storage class. INFREQUENT_ACCESS reduces cost for rarely-queried logs."
-
-# -----------------------------------------------
-# Conditions
-# -----------------------------------------------
-Conditions:
-  HasDlq:                 !Not [!Equals [!Ref DlqArn, ""]]
-  HasReservedConcurrency: !Not [!Equals [!Ref ReservedConcurrentExecutions, ""]]
-
 # -----------------------------------------------
 # Resources
 # AWSLambdaBasicExecutionRole allows writing to CloudWatch Logs.
@@ -191,7 +126,7 @@ Conditions:
 # LambdaExecutionRole by adding them to ManagedPolicyArns.
 # -----------------------------------------------
 Resources:
-  LambdaExecutionRole01:
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-lambda-${FunctionSuffix}-role"
@@ -210,29 +145,16 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LambdaFunction01:
+  LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${ProjectName}-${Env}-lambda-${FunctionSuffix}"
       Description: !Sub "Lambda function for ${ProjectName}-${Env}-${FunctionSuffix}"
       Runtime: !Ref Runtime
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole01.Arn
+      Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: !Ref Timeout
       MemorySize: !Ref MemorySize
-      Architectures:
-        - !Ref Architecture
-      EphemeralStorage:
-        Size: !Ref EphemeralStorageSize
-      ReservedConcurrentExecutions: !If [HasReservedConcurrency, !Ref ReservedConcurrentExecutions, !Ref AWS::NoValue]
-      TracingConfig:
-        Mode: !Ref TracingMode
-      DeadLetterConfig: !If
-        - HasDlq
-        - TargetArn: !Ref DlqArn
-        - !Ref AWS::NoValue
-      LoggingConfig:
-        LogFormat: !Ref LogFormat
       Code:
         # Replace the inline code below with your own logic.
         # After deploy, update with:
@@ -248,13 +170,12 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LogGroup01:
+  LogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${LambdaFunction01}"
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
       RetentionInDays: !Ref LogRetentionDays
-      LogGroupClass: !Ref LogGroupClass
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -265,26 +186,26 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  FunctionName01:
+  FunctionName:
     Description: "Lambda function name"
-    Value: !Ref LambdaFunction01
+    Value: !Ref LambdaFunction
     Export:
       Name: !Sub "${AWS::StackName}-FunctionName"
 
-  FunctionArn01:
+  FunctionArn:
     Description: "Lambda function ARN"
-    Value: !GetAtt LambdaFunction01.Arn
+    Value: !GetAtt LambdaFunction.Arn
     Export:
       Name: !Sub "${AWS::StackName}-FunctionArn"
 
-  RoleArn01:
+  RoleArn:
     Description: "Lambda execution role ARN"
-    Value: !GetAtt LambdaExecutionRole01.Arn
+    Value: !GetAtt LambdaExecutionRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RoleArn"
 
-  LogGroupName01:
+  LogGroupName:
     Description: "CloudWatch Log Group name"
-    Value: !Ref LogGroup01
+    Value: !Ref LogGroup
     Export:
       Name: !Sub "${AWS::StackName}-LogGroupName"

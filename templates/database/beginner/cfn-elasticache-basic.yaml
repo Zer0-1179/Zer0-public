@@ -48,11 +48,6 @@ Metadata:
           default: "Cache"
         Parameters:
           - NodeType
-      - Label:
-          default: "Advanced Options"
-        Parameters:
-          - NotificationTopicArn
-          - CacheParameterGroupName
 
 # -----------------------------------------------
 # Parameters
@@ -95,23 +90,6 @@ Parameters:
       - cache.r7g.large
     Description: "ElastiCache node type."
 
-  NotificationTopicArn:
-    Type: String
-    Default: ""
-    Description: "SNS topic ARN for ElastiCache event notifications. Leave empty to disable."
-
-  CacheParameterGroupName:
-    Type: String
-    Default: ""
-    Description: "Custom cache parameter group name. Leave empty to use the engine default."
-
-# -----------------------------------------------
-# Conditions
-# -----------------------------------------------
-Conditions:
-  HasNotificationTopic: !Not [!Equals [!Ref NotificationTopicArn, ""]]
-  HasParameterGroup:    !Not [!Equals [!Ref CacheParameterGroupName, ""]]
-
 # -----------------------------------------------
 # Resources
 # AtRestEncryptionEnabled uses the AWS-managed key at no additional cost.
@@ -119,21 +97,21 @@ Conditions:
 # NumCacheClusters: 1 creates a single-node cluster (no replication).
 # -----------------------------------------------
 Resources:
-  CacheSubnetGroup01:
+  CacheSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
-      CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet-01"
+      CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet"
       Description: !Sub "Subnet group for ${ProjectName}-${Env} Redis cluster"
       SubnetIds:
         - !Ref SubnetId01
         - !Ref SubnetId02
 
-  RedisCluster01:
+  RedisCluster:
     Type: AWS::ElastiCache::ReplicationGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      ReplicationGroupId: !Sub "${ProjectName}-${Env}-redis-01"
+      ReplicationGroupId: !Sub "${ProjectName}-${Env}-redis"
       ReplicationGroupDescription: !Sub "${ProjectName}-${Env} Redis cluster"
       CacheNodeType: !Ref NodeType
       Engine: redis
@@ -142,11 +120,9 @@ Resources:
       AutomaticFailoverEnabled: false
       AtRestEncryptionEnabled: true
       TransitEncryptionEnabled: true
-      CacheSubnetGroupName: !Ref CacheSubnetGroup01
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
       SecurityGroupIds:
         - !Ref SecurityGroupId
-      NotificationTopicArn:    !If [HasNotificationTopic, !Ref NotificationTopicArn, !Ref AWS::NoValue]
-      CacheParameterGroupName: !If [HasParameterGroup, !Ref CacheParameterGroupName, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -157,14 +133,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  PrimaryEndpoint01:
+  PrimaryEndpoint:
     Description: "Redis primary endpoint address"
-    Value: !GetAtt RedisCluster01.PrimaryEndPoint.Address
+    Value: !GetAtt RedisCluster.PrimaryEndPoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryEndpoint"
 
-  PrimaryPort01:
+  PrimaryPort:
     Description: "Redis primary endpoint port"
-    Value: !GetAtt RedisCluster01.PrimaryEndPoint.Port
+    Value: !GetAtt RedisCluster.PrimaryEndPoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryPort"

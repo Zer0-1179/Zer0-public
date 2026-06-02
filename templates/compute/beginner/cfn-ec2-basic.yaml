@@ -5,13 +5,12 @@ Description: "EC2 instance with an IAM instance profile and encrypted root volum
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-ec2-<InstanceSuffix> \
+#   --stack-name <ProjectName>-<Env>-ec2 \
 #   --template-file cfn-ec2-basic.yaml \
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
-#     InstanceSuffix=web \
 #     AmiId=ami-xxxxxxxxxxxxxxxx \
 #     SubnetId=subnet-xxxxxxxx \
 #     SecurityGroupId=sg-xxxxxxxx
@@ -43,7 +42,6 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
-          - InstanceSuffix
       - Label:
           default: "Instance"
         Parameters:
@@ -55,16 +53,6 @@ Metadata:
           default: "Storage"
         Parameters:
           - RootVolumeSize
-      - Label:
-          default: "Advanced Options"
-        Parameters:
-          - EnableDetailedMonitoring
-          - EnableTerminationProtection
-          - ShutdownBehavior
-          - EbsOptimized
-          - HttpTokens
-          - HttpPutResponseHopLimit
-          - UserData
 
 # -----------------------------------------------
 # Parameters
@@ -84,13 +72,6 @@ Parameters:
       - dev
       - prd
     Description: "Deployment environment."
-
-  InstanceSuffix:
-    Type: String
-    Default: "01"
-    AllowedPattern: "^[a-z0-9-]+$"
-    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
-    Description: "Purpose or sequence identifier for this instance (e.g. web, bastion, 01)."
 
   AmiId:
     Type: AWS::EC2::Image::Id
@@ -121,67 +102,6 @@ Parameters:
     MaxValue: 16384
     Description: "Root EBS volume size in GiB."
 
-  EnableDetailedMonitoring:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable detailed (1-minute) CloudWatch monitoring. Default is basic (5-minute)."
-
-  EnableTerminationProtection:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Prevent accidental termination via API or console."
-
-  ShutdownBehavior:
-    Type: String
-    Default: stop
-    AllowedValues:
-      - stop
-      - terminate
-    Description: "Action on OS shutdown: stop (default) or terminate the instance."
-
-  EbsOptimized:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable EBS-optimized dedicated throughput. Not all instance types support this."
-
-  HttpTokens:
-    Type: String
-    Default: required
-    AllowedValues:
-      - required
-      - optional
-    Description: "IMDSv2 enforcement. required = IMDSv2 only (recommended). optional = allows IMDSv1."
-
-  HttpPutResponseHopLimit:
-    Type: Number
-    Default: 2
-    MinValue: 1
-    MaxValue: 64
-    Description: "HTTP PUT response hop limit for instance metadata."
-
-  UserData:
-    Type: String
-    Default: ""
-    Description: "Shell script to run on first launch. Leave empty to skip."
-
-# -----------------------------------------------
-# Conditions
-# -----------------------------------------------
-Conditions:
-  HasUserData:            !Not [!Equals [!Ref UserData, ""]]
-  IsEbsOptimized:         !Equals [!Ref EbsOptimized, "true"]
-  IsDetailedMonitoring:   !Equals [!Ref EnableDetailedMonitoring, "true"]
-  IsTerminationProtected: !Equals [!Ref EnableTerminationProtection, "true"]
-
 # -----------------------------------------------
 # Resources
 # Encrypted: true on the root volume uses the AWS-managed key (aws/ebs).
@@ -189,10 +109,10 @@ Conditions:
 # so you can connect without SSH keys.
 # -----------------------------------------------
 Resources:
-  Ec2InstanceRole01:
+  Ec2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-role-01"
+      RoleName: !Sub "${ProjectName}-${Env}-ec2-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -208,14 +128,14 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  Ec2InstanceProfile01:
+  Ec2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-profile-01"
+      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile"
       Roles:
-        - !Ref Ec2InstanceRole01
+        - !Ref Ec2InstanceRole
 
-  Ec2Instance01:
+  Ec2Instance:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref AmiId
@@ -223,17 +143,7 @@ Resources:
       SubnetId: !Ref SubnetId
       SecurityGroupIds:
         - !Ref SecurityGroupId
-      IamInstanceProfile: !Ref Ec2InstanceProfile01
-      EbsOptimized: !If [IsEbsOptimized, true, false]
-      Monitoring:
-        Enabled: !If [IsDetailedMonitoring, true, false]
-      DisableApiTermination: !If [IsTerminationProtected, true, false]
-      InstanceInitiatedShutdownBehavior: !Ref ShutdownBehavior
-      UserData: !If [HasUserData, !Base64 !Ref UserData, !Ref AWS::NoValue]
-      MetadataOptions:
-        HttpTokens: !Ref HttpTokens
-        HttpPutResponseHopLimit: !Ref HttpPutResponseHopLimit
-        HttpEndpoint: enabled
+      IamInstanceProfile: !Ref Ec2InstanceProfile
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -243,7 +153,7 @@ Resources:
             DeleteOnTermination: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-01"
+          Value: !Sub "${ProjectName}-${Env}-ec2"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
@@ -253,20 +163,20 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  Ec2InstanceId01:
+  InstanceId:
     Description: "EC2 instance ID"
-    Value: !Ref Ec2Instance01
+    Value: !Ref Ec2Instance
     Export:
       Name: !Sub "${AWS::StackName}-InstanceId"
 
-  PrivateIp01:
+  PrivateIp:
     Description: "Private IP address of the instance"
-    Value: !GetAtt Ec2Instance01.PrivateIp
+    Value: !GetAtt Ec2Instance.PrivateIp
     Export:
       Name: !Sub "${AWS::StackName}-PrivateIp"
 
-  RoleArn01:
+  RoleArn:
     Description: "EC2 IAM role ARN"
-    Value: !GetAtt Ec2InstanceRole01.Arn
+    Value: !GetAtt Ec2InstanceRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RoleArn"
