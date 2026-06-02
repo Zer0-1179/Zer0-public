@@ -65,6 +65,12 @@ Metadata:
         Parameters:
           - TargetLambdaArn
           - InputJson
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - DlqArn
+          - MaxRetryAttempts
+          - MaxEventAge
 
 # -----------------------------------------------
 # Parameters
@@ -120,6 +126,25 @@ Parameters:
     Default: ""
     Description: "Optional JSON string to pass as the event payload to the Lambda function. e.g. {\"key\":\"value\"}"
 
+  DlqArn:
+    Type: String
+    Default: ""
+    Description: "SQS queue ARN for failed invocations (dead-letter queue). Leave empty to disable."
+
+  MaxRetryAttempts:
+    Type: Number
+    Default: 185
+    MinValue: 0
+    MaxValue: 185
+    Description: "Maximum number of retry attempts for failed target invocations (0-185)."
+
+  MaxEventAge:
+    Type: Number
+    Default: 86400
+    MinValue: 60
+    MaxValue: 86400
+    Description: "Maximum time in seconds to keep an unprocessed event (60-86400). Events older than this are discarded."
+
 # -----------------------------------------------
 # Conditions
 # Boolean flags derived from parameter values.
@@ -128,6 +153,7 @@ Parameters:
 Conditions:
   HasLambdaTarget: !Not [!Equals [!Ref TargetLambdaArn, ""]]
   HasInput:        !Not [!Equals [!Ref InputJson, ""]]
+  HasDlq:          !Not [!Equals [!Ref DlqArn, ""]]
 
 # -----------------------------------------------
 # Resources
