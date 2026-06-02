@@ -5,11 +5,12 @@ Description: "RDS MySQL instance (single-AZ) with encrypted storage"
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-rds \
+#   --stack-name <ProjectName>-<Env>-rds-<DbSuffix> \
 #   --template-file cfn-rds-basic.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
+#     DbSuffix=main \
 #     SubnetId01=subnet-xxxxxxxx \
 #     SubnetId02=subnet-yyyyyyyy \
 #     SecurityGroupId=sg-xxxxxxxx \
@@ -38,6 +39,7 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - DbSuffix
       - Label:
           default: "Network"
         Parameters:
@@ -74,6 +76,13 @@ Parameters:
       - dev
       - prd
     Description: "Deployment environment."
+
+  DbSuffix:
+    Type: String
+    Default: main
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose or sequence identifier for this DB instance (e.g. main, replica, 01)."
 
   SubnetId01:
     Type: AWS::EC2::Subnet::Id
@@ -149,7 +158,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-01"
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-01"
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
       EngineVersion: "8.0.40"

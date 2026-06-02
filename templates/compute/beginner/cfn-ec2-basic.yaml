@@ -5,12 +5,13 @@ Description: "EC2 instance with an IAM instance profile and encrypted root volum
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-ec2 \
+#   --stack-name <ProjectName>-<Env>-ec2-<InstanceSuffix> \
 #   --template-file cfn-ec2-basic.yaml \
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
+#     InstanceSuffix=web \
 #     AmiId=ami-xxxxxxxxxxxxxxxx \
 #     SubnetId=subnet-xxxxxxxx \
 #     SecurityGroupId=sg-xxxxxxxx
@@ -42,6 +43,7 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - InstanceSuffix
       - Label:
           default: "Instance"
         Parameters:
@@ -72,6 +74,13 @@ Parameters:
       - dev
       - prd
     Description: "Deployment environment."
+
+  InstanceSuffix:
+    Type: String
+    Default: "01"
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose or sequence identifier for this instance (e.g. web, bastion, 01)."
 
   AmiId:
     Type: AWS::EC2::Image::Id
@@ -112,7 +121,7 @@ Resources:
   Ec2InstanceRole01:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${Env}-ec2-role-01"
+      RoleName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-role-01"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -131,7 +140,7 @@ Resources:
   Ec2InstanceProfile01:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile-01"
+      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-profile-01"
       Roles:
         - !Ref Ec2InstanceRole01
 
@@ -153,7 +162,7 @@ Resources:
             DeleteOnTermination: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-ec2-01"
+          Value: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
