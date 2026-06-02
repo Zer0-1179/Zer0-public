@@ -201,6 +201,9 @@ Resources:
         - !Sub "${ProjectName}-${Env}-sqs"
       MessageRetentionPeriod: !FindInMap [Config, !Ref Env, MessageRetentionPeriod]
       VisibilityTimeout: !Ref VisibilityTimeout
+      ReceiveMessageWaitTimeSeconds: !Ref ReceiveMessageWaitTimeSeconds
+      FifoQueue: !If [IsFifo, true, !Ref AWS::NoValue]
+      ContentBasedDeduplication: !If [IsDeduplication, true, !Ref AWS::NoValue]
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt Dlq01.Arn
         maxReceiveCount: !Ref MaxReceiveCount

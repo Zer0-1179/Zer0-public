@@ -77,6 +77,11 @@ Metadata:
           default: "Encryption (optional)"
         Parameters:
           - KmsKeyId
+      - Label:
+          default: "FIFO (optional)"
+        Parameters:
+          - FifoTopic
+          - ContentBasedDeduplication
 
 # -----------------------------------------------
 # Parameters
@@ -138,18 +143,36 @@ Parameters:
     Default: ""
     Description: "KMS Key ARN for topic encryption (optional). The key policy must allow sns.amazonaws.com as a principal."
 
+  FifoTopic:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Create a FIFO topic for strict message ordering. Topic name will automatically get .fifo suffix."
+
+  ContentBasedDeduplication:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable content-based deduplication for FIFO topics. Used only when FifoTopic=true."
+
 # -----------------------------------------------
 # Conditions
 # Boolean flags derived from parameter values.
 # Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
-  HasDisplayName:    !Not [!Equals [!Ref DisplayName, ""]]
-  HasKmsKey:         !Not [!Equals [!Ref KmsKeyId, ""]]
-  HasEmail01:        !Not [!Equals [!Ref EmailEndpoint01, ""]]
-  HasEmail02:        !Not [!Equals [!Ref EmailEndpoint02, ""]]
-  HasEmail03:        !Not [!Equals [!Ref EmailEndpoint03, ""]]
-  HasHttpsEndpoint:  !Not [!Equals [!Ref HttpsEndpoint, ""]]
+  HasDisplayName:      !Not [!Equals [!Ref DisplayName, ""]]
+  HasKmsKey:           !Not [!Equals [!Ref KmsKeyId, ""]]
+  HasEmail01:          !Not [!Equals [!Ref EmailEndpoint01, ""]]
+  HasEmail02:          !Not [!Equals [!Ref EmailEndpoint02, ""]]
+  HasEmail03:          !Not [!Equals [!Ref EmailEndpoint03, ""]]
+  HasHttpsEndpoint:    !Not [!Equals [!Ref HttpsEndpoint, ""]]
+  IsFifo:              !Equals [!Ref FifoTopic, "true"]
+  IsDeduplication:     !Equals [!Ref ContentBasedDeduplication, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -164,6 +187,8 @@ Resources:
       TopicName: !Sub "${ProjectName}-${Env}-${TopicSuffix}"
       DisplayName: !If [HasDisplayName, !Ref DisplayName, !Ref AWS::NoValue]
       KmsMasterKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+      FifoTopic: !If [IsFifo, true, !Ref AWS::NoValue]
+      ContentBasedDeduplication: !If [IsDeduplication, true, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
