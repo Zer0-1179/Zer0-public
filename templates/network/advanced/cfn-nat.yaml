@@ -5,11 +5,12 @@ Description: "NAT Gateway in a public subnet with a default route in the private
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-nat \
+#   --stack-name <ProjectName>-<Env>-nat-<NatSuffix> \
 #   --template-file cfn-nat.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
-#     Env=dev
+#     Env=dev \
+#     NatSuffix=az1
 #
 # Prerequisite (stack name must follow convention):
 #   VPC: {ProjectName}-{Env}-vpc
@@ -31,6 +32,7 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - NatSuffix
 
 # -----------------------------------------------
 # Parameters
@@ -52,6 +54,13 @@ Parameters:
       - prd
     Description: "Deployment environment. Used as part of the Name tag."
 
+  NatSuffix:
+    Type: String
+    Default: az1
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "AZ or sequence identifier for this NAT Gateway (e.g. az1, az2, 01)."
+
 # -----------------------------------------------
 # Resources
 # NAT Gateway is placed in PublicSubnet01.
@@ -65,7 +74,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-nat-eip-01"
+          Value: !Sub "${ProjectName}-${Env}-nat-${NatSuffix}-eip-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
@@ -79,7 +88,7 @@ Resources:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-ngw-01"
+          Value: !Sub "${ProjectName}-${Env}-ngw-${NatSuffix}-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

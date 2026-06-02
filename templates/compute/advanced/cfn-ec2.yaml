@@ -5,13 +5,14 @@ Description: "EC2 instance with IAM role (SSM + CloudWatch), configurable OS, su
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-ec2 \
+#   --stack-name <ProjectName>-<Env>-ec2-<InstanceSuffix> \
 #   --template-file cfn-ec2.yaml \
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
-#     SgSuffix=web
+#     SgSuffix=web \
+#     InstanceSuffix=web
 #
 # Prerequisites (stack names must follow convention):
 #   VPC:  {ProjectName}-{Env}-vpc
@@ -39,6 +40,7 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - InstanceSuffix
           - SgSuffix
       - Label:
           default: "Subnet Placement"
@@ -78,6 +80,13 @@ Parameters:
       - dev
       - prd
     Description: "Deployment environment."
+
+  InstanceSuffix:
+    Type: String
+    Default: "01"
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose or sequence identifier for this instance (e.g. web, bastion, api, 01)."
 
   SgSuffix:
     Type: String
@@ -159,7 +168,7 @@ Resources:
   Ec2InstanceRole01:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${Env}-ec2-role-01"
+      RoleName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-role-01"
       Description: "EC2 instance role for SSM Session Manager and CloudWatch Agent"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -180,7 +189,7 @@ Resources:
   Ec2InstanceProfile01:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile-01"
+      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-profile-01"
       Roles:
         - !Ref Ec2InstanceRole01
 
@@ -210,7 +219,7 @@ Resources:
             DeleteOnTermination: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-ec2-01"
+          Value: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

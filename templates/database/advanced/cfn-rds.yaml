@@ -5,11 +5,12 @@ Description: "RDS DB Instance (MySQL or PostgreSQL) with subnet group, encryptio
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-rds \
+#   --stack-name <ProjectName>-<Env>-rds-<DbSuffix> \
 #   --template-file cfn-rds.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
+#     DbSuffix=main \
 #     SgSuffix=db \
 #     DBEngine=mysql \
 #     DBEngineVersion=8.0.46 \
@@ -47,6 +48,7 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - DbSuffix
           - SgSuffix
       - Label:
           default: "Database Engine"
@@ -87,6 +89,13 @@ Parameters:
       - dev
       - prd
     Description: "Deployment environment. prd sets DeletionPolicy to Retain and increases backup retention."
+
+  DbSuffix:
+    Type: String
+    Default: main
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Purpose or sequence identifier for this DB instance (e.g. main, replica, 01)."
 
   SgSuffix:
     Type: String
@@ -192,14 +201,14 @@ Resources:
   DbSubnetGroup01:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub "${ProjectName}-${Env}-rds-subnet-group-01"
+      DBSubnetGroupName: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-subnet-group-01"
       DBSubnetGroupDescription: !Sub "${ProjectName}-${Env} DB subnet group"
       SubnetIds:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet01Id"
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-rds-subnet-group-01"
+          Value: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-subnet-group-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
@@ -210,7 +219,7 @@ Resources:
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-01"
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-01"
       Engine:              !Ref DBEngine
       EngineVersion:       !Ref DBEngineVersion
       DBInstanceClass:     !Ref DBInstanceClass
@@ -230,7 +239,7 @@ Resources:
       PubliclyAccessible:    false
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-rds-01"
+          Value: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

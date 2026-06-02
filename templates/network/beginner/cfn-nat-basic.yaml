@@ -5,11 +5,12 @@ Description: "NAT Gateway with Elastic IP in a public subnet"
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-nat \
+#   --stack-name <ProjectName>-<Env>-nat-<NatSuffix> \
 #   --template-file cfn-nat-basic.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
+#     NatSuffix=az1 \
 #     PublicSubnetId=subnet-xxxxxxxx \
 #     PrivateRouteTableId=rtb-xxxxxxxx
 #
@@ -41,6 +42,7 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - NatSuffix
       - Label:
           default: "Network"
         Parameters:
@@ -66,6 +68,13 @@ Parameters:
       - prd
     Description: "Deployment environment."
 
+  NatSuffix:
+    Type: String
+    Default: az1
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "AZ or sequence identifier for this NAT Gateway (e.g. az1, az2, 01)."
+
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: "Public subnet where the NAT Gateway will be placed."
@@ -86,7 +95,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-nat-eip-01"
+          Value: !Sub "${ProjectName}-${Env}-nat-${NatSuffix}-eip-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
@@ -99,7 +108,7 @@ Resources:
       AllocationId: !GetAtt ElasticIp01.AllocationId
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-nat-01"
+          Value: !Sub "${ProjectName}-${Env}-nat-${NatSuffix}-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
