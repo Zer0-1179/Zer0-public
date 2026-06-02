@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "DynamoDB table with on-demand billing and default encryption"
+Description: "DynamoDB table with on-demand billing and AES256 encryption"
 
 # -----------------------------------------------
 # DEPLOY
@@ -38,13 +38,6 @@ Metadata:
         Parameters:
           - PartitionKeyName
           - PartitionKeyType
-      - Label:
-          default: "Advanced Options"
-        Parameters:
-          - TableClass
-          - StreamEnabled
-          - StreamViewType
-          - PointInTimeRecovery
 
 # -----------------------------------------------
 # Parameters
@@ -86,47 +79,6 @@ Parameters:
       - B
     Description: "Partition key type. S = String, N = Number, B = Binary."
 
-  TableClass:
-    Type: String
-    Default: STANDARD
-    AllowedValues:
-      - STANDARD
-      - STANDARD_INFREQUENT_ACCESS
-    Description: "Table storage class. STANDARD_INFREQUENT_ACCESS reduces cost for rarely-accessed data."
-
-  StreamEnabled:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable DynamoDB Streams to capture item-level changes."
-
-  StreamViewType:
-    Type: String
-    Default: NEW_AND_OLD_IMAGES
-    AllowedValues:
-      - KEYS_ONLY
-      - NEW_IMAGE
-      - OLD_IMAGE
-      - NEW_AND_OLD_IMAGES
-    Description: "Stream record content. Used only when StreamEnabled=true."
-
-  PointInTimeRecovery:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable point-in-time recovery (PITR) for the table."
-
-# -----------------------------------------------
-# Conditions
-# -----------------------------------------------
-Conditions:
-  IsStreamEnabled: !Equals [!Ref StreamEnabled, "true"]
-  HasPitr:         !Equals [!Ref PointInTimeRecovery, "true"]
-
 # -----------------------------------------------
 # Resources
 # BillingMode PAY_PER_REQUEST (on-demand) requires no capacity planning.
@@ -134,7 +86,7 @@ Conditions:
 # DeletionProtectionEnabled: false allows stack deletion to remove the table.
 # -----------------------------------------------
 Resources:
-  DynamoDbTable01:
+  DynamoDbTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -147,16 +99,10 @@ Resources:
       KeySchema:
         - AttributeName: !Ref PartitionKeyName
           KeyType: HASH
-      # DynamoDB encrypts all data at rest by default using AWS-owned keys (free, no configuration required).
-      # To use an AWS managed KMS key instead, add: SSESpecification: { SSEEnabled: true, SSEType: KMS }
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: AES256
       DeletionProtectionEnabled: false
-      TableClass: !Ref TableClass
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: !If [HasPitr, true, false]
-      StreamSpecification: !If
-        - IsStreamEnabled
-        - StreamViewType: !Ref StreamViewType
-        - !Ref AWS::NoValue
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -167,14 +113,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  TableName01:
+  TableName:
     Description: "DynamoDB table name"
-    Value: !Ref DynamoDbTable01
+    Value: !Ref DynamoDbTable
     Export:
       Name: !Sub "${AWS::StackName}-TableName"
 
-  TableArn01:
+  TableArn:
     Description: "DynamoDB table ARN"
-    Value: !GetAtt DynamoDbTable01.Arn
+    Value: !GetAtt DynamoDbTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TableArn"

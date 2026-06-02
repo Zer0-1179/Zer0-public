@@ -53,16 +53,6 @@ Metadata:
           - ContainerPort
           - Cpu
           - Memory
-      - Label:
-          default: "Advanced Options"
-        Parameters:
-          - PlatformVersion
-          - EnableExecuteCommand
-          - EnableECSManagedTags
-          - PropagateTags
-          - EnableCircuitBreaker
-          - CircuitBreakerRollback
-          - LogGroupClass
 
 # -----------------------------------------------
 # Parameters
@@ -135,80 +125,13 @@ Parameters:
       - "8192"
     Description: "Fargate task memory in MiB."
 
-  PlatformVersion:
-    Type: String
-    Default: LATEST
-    AllowedValues:
-      - LATEST
-      - 1.4.0
-      - 1.3.0
-    Description: "Fargate platform version. LATEST is recommended."
-
-  EnableExecuteCommand:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable ECS Exec for interactive shell access to running containers."
-
-  EnableECSManagedTags:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Automatically tag tasks with cluster and service names."
-
-  PropagateTags:
-    Type: String
-    Default: NONE
-    AllowedValues:
-      - NONE
-      - SERVICE
-      - TASK_DEFINITION
-    Description: "Tag propagation source. NONE disables propagation."
-
-  EnableCircuitBreaker:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable deployment circuit breaker to stop failed deployments automatically."
-
-  CircuitBreakerRollback:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Roll back to the last stable deployment when the circuit breaker trips."
-
-  LogGroupClass:
-    Type: String
-    Default: STANDARD
-    AllowedValues:
-      - STANDARD
-      - INFREQUENT_ACCESS
-    Description: "Log group storage class. INFREQUENT_ACCESS reduces cost for rarely-queried logs."
-
-# -----------------------------------------------
-# Conditions
-# -----------------------------------------------
-Conditions:
-  IsCircuitBreakerOn: !Equals [!Ref EnableCircuitBreaker, "true"]
-  IsExecuteCommandOn: !Equals [!Ref EnableExecuteCommand, "true"]
-  IsManagedTagsOn:    !Equals [!Ref EnableECSManagedTags, "true"]
-  IsRollbackOn:       !Equals [!Ref CircuitBreakerRollback, "true"]
-
 # -----------------------------------------------
 # Resources
 # TaskExecutionRole allows ECS to pull images and write logs.
 # TaskRole is the runtime role for the container itself.
 # -----------------------------------------------
 Resources:
-  TaskExecutionRole01:
+  TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}-exec-role"
@@ -227,7 +150,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  TaskRole01:
+  TaskRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}-task-role"
@@ -244,20 +167,19 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LogGroup01:
+  LogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub "/ecs/${ProjectName}-${Env}-${ServiceSuffix}"
       RetentionInDays: 30
-      LogGroupClass: !Ref LogGroupClass
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
           Value: !Ref Env
 
-  TaskDefinition01:
+  TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
@@ -266,8 +188,8 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !GetAtt TaskExecutionRole01.Arn
-      TaskRoleArn: !GetAtt TaskRole01.Arn
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
         - Name: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
           Image: !Ref ContainerImage
@@ -277,7 +199,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref LogGroup01
+              awslogs-group: !Ref LogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
       Tags:
@@ -286,31 +208,21 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  EcsService01:
+  EcsService:
     Type: AWS::ECS::Service
     Properties:
       ServiceName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
       Cluster: !Ref ClusterName
-      TaskDefinition: !Ref TaskDefinition01
+      TaskDefinition: !Ref TaskDefinition
       DesiredCount: 1
       LaunchType: FARGATE
-      PlatformVersion: !Ref PlatformVersion
-      EnableExecuteCommand: !If [IsExecuteCommandOn, true, false]
-      EnableECSManagedTags: !If [IsManagedTagsOn, true, false]
-      PropagateTags: !Ref PropagateTags
-      DeploymentConfiguration:
-        MinimumHealthyPercent: 100
-        MaximumPercent: 200
-        DeploymentCircuitBreaker:
-          Enable: !If [IsCircuitBreakerOn, true, false]
-          Rollback: !If [IsRollbackOn, true, false]
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
             - !Ref SubnetId
           SecurityGroups:
             - !Ref SecurityGroupId
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -321,14 +233,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  ServiceName01:
+  ServiceName:
     Description: "ECS service name"
-    Value: !GetAtt EcsService01.Name
+    Value: !GetAtt EcsService.Name
     Export:
       Name: !Sub "${AWS::StackName}-ServiceName"
 
-  TaskDefinitionArn01:
+  TaskDefinitionArn:
     Description: "Task definition ARN"
-    Value: !Ref TaskDefinition01
+    Value: !Ref TaskDefinition
     Export:
       Name: !Sub "${AWS::StackName}-TaskDefinitionArn"

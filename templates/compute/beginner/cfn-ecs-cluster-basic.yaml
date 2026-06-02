@@ -28,8 +28,6 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
-          - ContainerInsights
-          - ExecuteCommandLogging
 
 # -----------------------------------------------
 # Parameters
@@ -50,38 +48,18 @@ Parameters:
       - prd
     Description: "Deployment environment."
 
-  ContainerInsights:
-    Type: String
-    Default: enabled
-    AllowedValues:
-      - enabled
-      - disabled
-    Description: "Enable CloudWatch Container Insights for metrics and logs. Incurs additional CloudWatch costs."
-
-  ExecuteCommandLogging:
-    Type: String
-    Default: DEFAULT
-    AllowedValues:
-      - NONE
-      - DEFAULT
-      - OVERRIDE
-    Description: "ECS Exec logging level. DEFAULT logs to CloudWatch. OVERRIDE allows custom configuration."
-
 # -----------------------------------------------
 # Resources
 # ContainerInsights enables CloudWatch metrics for the cluster.
 # -----------------------------------------------
 Resources:
-  EcsCluster01:
+  EcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${ProjectName}-${Env}-cluster-01"
+      ClusterName: !Sub "${ProjectName}-${Env}-cluster"
       ClusterSettings:
         - Name: containerInsights
-          Value: !Ref ContainerInsights
-      Configuration:
-        ExecuteCommandConfiguration:
-          Logging: !Ref ExecuteCommandLogging
+          Value: enabled
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -92,14 +70,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  ClusterName01:
+  ClusterName:
     Description: "ECS cluster name"
-    Value: !Ref EcsCluster01
+    Value: !Ref EcsCluster
     Export:
       Name: !Sub "${AWS::StackName}-ClusterName"
 
-  ClusterArn01:
+  ClusterArn:
     Description: "ECS cluster ARN"
-    Value: !GetAtt EcsCluster01.Arn
+    Value: !GetAtt EcsCluster.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ClusterArn"

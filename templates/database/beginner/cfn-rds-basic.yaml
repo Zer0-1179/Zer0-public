@@ -5,12 +5,11 @@ Description: "RDS MySQL instance (single-AZ) with encrypted storage"
 # DEPLOY
 # -----------------------------------------------
 # aws cloudformation deploy \
-#   --stack-name <ProjectName>-<Env>-rds-<DbSuffix> \
+#   --stack-name <ProjectName>-<Env>-rds \
 #   --template-file cfn-rds-basic.yaml \
 #   --parameter-overrides \
 #     ProjectName=my-project \
 #     Env=dev \
-#     DbSuffix=main \
 #     SubnetId01=subnet-xxxxxxxx \
 #     SubnetId02=subnet-yyyyyyyy \
 #     SecurityGroupId=sg-xxxxxxxx \
@@ -39,7 +38,6 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
-          - DbSuffix
       - Label:
           default: "Network"
         Parameters:
@@ -57,15 +55,6 @@ Metadata:
           default: "Storage"
         Parameters:
           - AllocatedStorage
-      - Label:
-          default: "Advanced Options"
-        Parameters:
-          - EnableIAMAuth
-          - AutoMinorVersionUpgrade
-          - CopyTagsToSnapshot
-          - PreferredBackupWindow
-          - PreferredMaintenanceWindow
-          - EnablePerformanceInsights
 
 # -----------------------------------------------
 # Parameters
@@ -85,13 +74,6 @@ Parameters:
       - dev
       - prd
     Description: "Deployment environment."
-
-  DbSuffix:
-    Type: String
-    Default: main
-    AllowedPattern: "^[a-z0-9-]+$"
-    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
-    Description: "Purpose or sequence identifier for this DB instance (e.g. main, replica, 01)."
 
   SubnetId01:
     Type: AWS::EC2::Subnet::Id
@@ -143,64 +125,13 @@ Parameters:
     MaxValue: 65536
     Description: "Allocated storage in GiB."
 
-  EnableIAMAuth:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable IAM database authentication."
-
-  AutoMinorVersionUpgrade:
-    Type: String
-    Default: "true"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Automatically apply minor engine version upgrades during the maintenance window."
-
-  CopyTagsToSnapshot:
-    Type: String
-    Default: "true"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Copy instance tags to automated and manual snapshots."
-
-  PreferredBackupWindow:
-    Type: String
-    Default: "03:00-04:00"
-    Description: "Daily backup window (UTC, format hh24:mi-hh24:mi)."
-
-  PreferredMaintenanceWindow:
-    Type: String
-    Default: "sun:04:00-sun:05:00"
-    Description: "Weekly maintenance window (UTC, format ddd:hh24:mi-ddd:hh24:mi)."
-
-  EnablePerformanceInsights:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Enable RDS Performance Insights (7-day free tier)."
-
-# -----------------------------------------------
-# Conditions
-# -----------------------------------------------
-Conditions:
-  IsIAMAuthEnabled:        !Equals [!Ref EnableIAMAuth, "true"]
-  IsAutoMinorUpgradeOn:    !Equals [!Ref AutoMinorVersionUpgrade, "true"]
-  IsCopyTagsOn:            !Equals [!Ref CopyTagsToSnapshot, "true"]
-  IsPerformanceInsightsOn: !Equals [!Ref EnablePerformanceInsights, "true"]
-
 # -----------------------------------------------
 # Resources
 # StorageEncrypted: true uses the AWS-managed key (aws/rds) at no additional cost.
 # BackupRetentionPeriod: 7 keeps automated backups for 7 days.
 # -----------------------------------------------
 Resources:
-  DbSubnetGroup01:
+  DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: !Sub "${ProjectName}-${Env}-rds subnet group"
@@ -213,15 +144,15 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  RdsInstance01:
+  RdsInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-01"
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds"
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: "8.0.40"
+      EngineVersion: "8.0"
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       DBName: !Ref DBName
@@ -232,15 +163,9 @@ Resources:
       PubliclyAccessible: false
       BackupRetentionPeriod: 7
       DeletionProtection: false
-      DBSubnetGroupName: !Ref DbSubnetGroup01
+      DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref SecurityGroupId
-      EnableIAMDatabaseAuthentication: !If [IsIAMAuthEnabled, true, false]
-      AutoMinorVersionUpgrade:         !If [IsAutoMinorUpgradeOn, true, false]
-      CopyTagsToSnapshot:              !If [IsCopyTagsOn, true, false]
-      PreferredBackupWindow:           !Ref PreferredBackupWindow
-      PreferredMaintenanceWindow:      !Ref PreferredMaintenanceWindow
-      EnablePerformanceInsights:       !If [IsPerformanceInsightsOn, true, false]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -251,20 +176,20 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  DbInstanceEndpoint01:
+  DBInstanceEndpoint:
     Description: "RDS endpoint address"
-    Value: !GetAtt RdsInstance01.Endpoint.Address
+    Value: !GetAtt RdsInstance.Endpoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-Endpoint"
 
-  DbInstancePort01:
+  DBInstancePort:
     Description: "RDS endpoint port"
-    Value: !GetAtt RdsInstance01.Endpoint.Port
+    Value: !GetAtt RdsInstance.Endpoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-Port"
 
-  DbInstanceId01:
+  DBInstanceId:
     Description: "RDS instance identifier"
-    Value: !Ref RdsInstance01
+    Value: !Ref RdsInstance
     Export:
       Name: !Sub "${AWS::StackName}-InstanceId"

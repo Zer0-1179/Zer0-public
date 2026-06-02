@@ -40,9 +40,6 @@ Metadata:
           - ProjectName
           - Env
           - RepoSuffix
-          - ImageTagMutability
-          - ScanOnPush
-          - RepositoryPolicy
 
 # -----------------------------------------------
 # Parameters
@@ -70,33 +67,6 @@ Parameters:
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
     Description: "Purpose identifier for this repository (e.g. app, api, worker)."
 
-  ImageTagMutability:
-    Type: String
-    Default: IMMUTABLE
-    AllowedValues:
-      - IMMUTABLE
-      - MUTABLE
-    Description: "IMMUTABLE: prevents overwriting existing tags (recommended). MUTABLE: allows tag overwrites."
-
-  ScanOnPush:
-    Type: String
-    Default: "true"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: "Scan images for vulnerabilities on push."
-
-  RepositoryPolicy:
-    Type: String
-    Default: ""
-    Description: "JSON repository policy document for cross-account access. Leave empty to skip."
-
-# -----------------------------------------------
-# Conditions
-# -----------------------------------------------
-Conditions:
-  HasRepoPolicy: !Not [!Equals [!Ref RepositoryPolicy, ""]]
-
 # -----------------------------------------------
 # Resources
 # EncryptionType: AES256 uses the AWS-managed key at no additional cost.
@@ -112,10 +82,9 @@ Resources:
       RepositoryName: !Sub "${ProjectName}-${Env}-${RepoSuffix}"
       EncryptionConfiguration:
         EncryptionType: AES256
-      ImageTagMutability: !Ref ImageTagMutability
+      ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
-        ScanOnPush: !Ref ScanOnPush
-      RepositoryPolicyText: !If [HasRepoPolicy, !Ref RepositoryPolicy, !Ref AWS::NoValue]
+        ScanOnPush: true
       Tags:
         - Key: Project
           Value: !Ref ProjectName
