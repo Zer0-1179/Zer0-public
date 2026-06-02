@@ -56,7 +56,7 @@ Resources:
   EcsCluster01:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${ProjectName}-${Env}-cluster"
+      ClusterName: !Sub "${ProjectName}-${Env}-cluster-01"
       ClusterSettings:
         - Name: containerInsights
           Value: enabled

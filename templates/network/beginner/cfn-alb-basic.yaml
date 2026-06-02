@@ -112,7 +112,7 @@ Resources:
   AlbTargetGroup01:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${ProjectName}-${Env}-tg"
+      Name: !Sub "${ProjectName}-${Env}-tg-01"
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: !Ref TargetPort
@@ -131,7 +131,7 @@ Resources:
   Alb01:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${ProjectName}-${Env}-alb"
+      Name: !Sub "${ProjectName}-${Env}-alb-01"
       Type: application
       Scheme: internet-facing
       Subnets:

@@ -192,14 +192,14 @@ Resources:
   DbSubnetGroup01:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub "${ProjectName}-${Env}-rds-subnet-group"
+      DBSubnetGroupName: !Sub "${ProjectName}-${Env}-rds-subnet-group-01"
       DBSubnetGroupDescription: !Sub "${ProjectName}-${Env} DB subnet group"
       SubnetIds:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet01Id"
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-rds-subnet-group"
+          Value: !Sub "${ProjectName}-${Env}-rds-subnet-group-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
@@ -210,7 +210,7 @@ Resources:
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds"
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-01"
       Engine:              !Ref DBEngine
       EngineVersion:       !Ref DBEngineVersion
       DBInstanceClass:     !Ref DBInstanceClass
@@ -230,7 +230,7 @@ Resources:
       PubliclyAccessible:    false
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-rds"
+          Value: !Sub "${ProjectName}-${Env}-rds-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

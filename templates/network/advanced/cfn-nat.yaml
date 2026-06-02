@@ -65,7 +65,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-nat-eip"
+          Value: !Sub "${ProjectName}-${Env}-nat-eip-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env
@@ -79,7 +79,7 @@ Resources:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-ngw"
+          Value: !Sub "${ProjectName}-${Env}-ngw-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

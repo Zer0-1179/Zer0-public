@@ -95,7 +95,7 @@ Resources:
   NlbTargetGroup01:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${ProjectName}-${Env}-nlb-tg"
+      Name: !Sub "${ProjectName}-${Env}-nlb-tg-01"
       VpcId: !Ref VpcId
       Protocol: TCP
       Port: !Ref TargetPort
@@ -113,7 +113,7 @@ Resources:
   Nlb01:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${ProjectName}-${Env}-nlb"
+      Name: !Sub "${ProjectName}-${Env}-nlb-01"
       Type: network
       Scheme: internet-facing
       Subnets:

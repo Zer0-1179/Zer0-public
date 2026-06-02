@@ -201,7 +201,7 @@ Resources:
   CacheSubnetGroup01:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
-      CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet-group"
+      CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet-group-01"
       Description: !Sub "${ProjectName} ${Env} Redis subnet group"
       SubnetIds:
         - !Ref SubnetId01
@@ -215,7 +215,7 @@ Resources:
   ReplicationGroup01:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
-      ReplicationGroupId: !Sub "${ProjectName}-${Env}"
+      ReplicationGroupId: !Sub "${ProjectName}-${Env}-redis-01"
       ReplicationGroupDescription: !Sub "${ProjectName} ${Env} Redis cluster"
       CacheNodeType: !Ref NodeType
       Engine: redis

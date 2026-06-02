@@ -131,7 +131,7 @@ Resources:
   KmsKeyAlias01:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub "alias/${ProjectName}-${Env}-kms"
+      AliasName: !Sub "alias/${ProjectName}-${Env}-kms-01"
       TargetKeyId: !Ref KmsKey01
 
 # -----------------------------------------------
