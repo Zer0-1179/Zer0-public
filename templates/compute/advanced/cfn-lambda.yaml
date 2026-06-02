@@ -53,6 +53,19 @@ Metadata:
         Parameters:
           - AdditionalPolicy01
           - AdditionalPolicy02
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - Architecture
+          - EphemeralStorageSize
+          - ReservedConcurrentExecutions
+          - TracingMode
+          - DlqArn
+          - EnableVpcConfig
+          - VpcSubnetIds
+          - VpcSecurityGroupIds
+          - LogFormat
+          - LogGroupClass
 
 # -----------------------------------------------
 # Parameters
@@ -138,12 +151,82 @@ Parameters:
     Default: ""
     Description: "Optional second managed policy ARN to attach to the execution role."
 
+  Architecture:
+    Type: String
+    Default: x86_64
+    AllowedValues:
+      - x86_64
+      - arm64
+    Description: "Instruction set architecture. arm64 (Graviton2) is typically 20% cheaper and faster."
+
+  EphemeralStorageSize:
+    Type: Number
+    Default: 512
+    MinValue: 512
+    MaxValue: 10240
+    Description: "/tmp ephemeral storage size in MB (512–10,240)."
+
+  ReservedConcurrentExecutions:
+    Type: String
+    Default: ""
+    Description: "Reserved concurrent executions. Leave empty for unreserved (default). 0 throttles all invocations."
+
+  TracingMode:
+    Type: String
+    Default: PassThrough
+    AllowedValues:
+      - PassThrough
+      - Active
+    Description: "X-Ray tracing mode. Active sends traces to X-Ray (incurs additional cost)."
+
+  DlqArn:
+    Type: String
+    Default: ""
+    Description: "SQS queue or SNS topic ARN for failed async invocations. Leave empty to disable."
+
+  EnableVpcConfig:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Place the function inside a VPC. Requires VpcSubnetIds and VpcSecurityGroupIds."
+
+  VpcSubnetIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: "Comma-separated subnet IDs for VPC access. Required when EnableVpcConfig=true."
+
+  VpcSecurityGroupIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: "Comma-separated security group IDs for VPC access. Required when EnableVpcConfig=true."
+
+  LogFormat:
+    Type: String
+    Default: Text
+    AllowedValues:
+      - Text
+      - JSON
+    Description: "CloudWatch Logs log format. JSON enables structured logging with log levels."
+
+  LogGroupClass:
+    Type: String
+    Default: STANDARD
+    AllowedValues:
+      - STANDARD
+      - INFREQUENT_ACCESS
+    Description: "Log group storage class. INFREQUENT_ACCESS reduces cost for rarely-queried logs."
+
 # -----------------------------------------------
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasPolicy01: !Not [!Equals [!Ref AdditionalPolicy01, ""]]
-  HasPolicy02: !Not [!Equals [!Ref AdditionalPolicy02, ""]]
+  HasPolicy01:              !Not [!Equals [!Ref AdditionalPolicy01, ""]]
+  HasPolicy02:              !Not [!Equals [!Ref AdditionalPolicy02, ""]]
+  HasDlq:                   !Not [!Equals [!Ref DlqArn, ""]]
+  HasVpcConfig:             !Equals [!Ref EnableVpcConfig, "true"]
+  HasReservedConcurrency:   !Not [!Equals [!Ref ReservedConcurrentExecutions, ""]]
 
 # -----------------------------------------------
 # Resources
@@ -186,6 +269,24 @@ Resources:
       Role: !GetAtt LambdaExecutionRole01.Arn
       Timeout: !Ref Timeout
       MemorySize: !Ref MemorySize
+      Architectures:
+        - !Ref Architecture
+      EphemeralStorage:
+        Size: !Ref EphemeralStorageSize
+      ReservedConcurrentExecutions: !If [HasReservedConcurrency, !Ref ReservedConcurrentExecutions, !Ref AWS::NoValue]
+      TracingConfig:
+        Mode: !Ref TracingMode
+      DeadLetterConfig: !If
+        - HasDlq
+        - TargetArn: !Ref DlqArn
+        - !Ref AWS::NoValue
+      VpcConfig: !If
+        - HasVpcConfig
+        - SubnetIds: !Ref VpcSubnetIds
+          SecurityGroupIds: !Ref VpcSecurityGroupIds
+        - !Ref AWS::NoValue
+      LoggingConfig:
+        LogFormat: !Ref LogFormat
       Code:
         # Replace the inline code below with your own logic.
         # After deploy, update with:
@@ -207,6 +308,7 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${LambdaFunction01}"
       RetentionInDays: !Ref LogRetentionDays
+      LogGroupClass: !Ref LogGroupClass
       Tags:
         - Key: Project
           Value: !Ref ProjectName

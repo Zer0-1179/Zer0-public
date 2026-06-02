@@ -55,6 +55,16 @@ Metadata:
           default: "Storage"
         Parameters:
           - RootVolumeSize
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - EnableDetailedMonitoring
+          - EnableTerminationProtection
+          - ShutdownBehavior
+          - EbsOptimized
+          - HttpTokens
+          - HttpPutResponseHopLimit
+          - UserData
 
 # -----------------------------------------------
 # Parameters
@@ -111,6 +121,67 @@ Parameters:
     MaxValue: 16384
     Description: "Root EBS volume size in GiB."
 
+  EnableDetailedMonitoring:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable detailed (1-minute) CloudWatch monitoring. Default is basic (5-minute)."
+
+  EnableTerminationProtection:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Prevent accidental termination via API or console."
+
+  ShutdownBehavior:
+    Type: String
+    Default: stop
+    AllowedValues:
+      - stop
+      - terminate
+    Description: "Action on OS shutdown: stop (default) or terminate the instance."
+
+  EbsOptimized:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable EBS-optimized dedicated throughput. Not all instance types support this."
+
+  HttpTokens:
+    Type: String
+    Default: required
+    AllowedValues:
+      - required
+      - optional
+    Description: "IMDSv2 enforcement. required = IMDSv2 only (recommended). optional = allows IMDSv1."
+
+  HttpPutResponseHopLimit:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 64
+    Description: "HTTP PUT response hop limit for instance metadata."
+
+  UserData:
+    Type: String
+    Default: ""
+    Description: "Shell script to run on first launch. Leave empty to skip."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  HasUserData:            !Not [!Equals [!Ref UserData, ""]]
+  IsEbsOptimized:         !Equals [!Ref EbsOptimized, "true"]
+  IsDetailedMonitoring:   !Equals [!Ref EnableDetailedMonitoring, "true"]
+  IsTerminationProtected: !Equals [!Ref EnableTerminationProtection, "true"]
+
 # -----------------------------------------------
 # Resources
 # Encrypted: true on the root volume uses the AWS-managed key (aws/ebs).
@@ -153,6 +224,16 @@ Resources:
       SecurityGroupIds:
         - !Ref SecurityGroupId
       IamInstanceProfile: !Ref Ec2InstanceProfile01
+      EbsOptimized: !If [IsEbsOptimized, true, false]
+      Monitoring:
+        Enabled: !If [IsDetailedMonitoring, true, false]
+      DisableApiTermination: !If [IsTerminationProtected, true, false]
+      InstanceInitiatedShutdownBehavior: !Ref ShutdownBehavior
+      UserData: !If [HasUserData, !Base64 !Ref UserData, !Ref AWS::NoValue]
+      MetadataOptions:
+        HttpTokens: !Ref HttpTokens
+        HttpPutResponseHopLimit: !Ref HttpPutResponseHopLimit
+        HttpEndpoint: enabled
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:

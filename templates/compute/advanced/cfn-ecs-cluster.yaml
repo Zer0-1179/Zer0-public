@@ -31,6 +31,7 @@ Metadata:
           default: "Observability"
         Parameters:
           - ContainerInsights
+          - ExecuteCommandLogging
 
 # -----------------------------------------------
 # Parameters
@@ -58,6 +59,15 @@ Parameters:
       - disabled
     Description: "Enable CloudWatch Container Insights for metrics and logs. Incurs additional CloudWatch costs."
 
+  ExecuteCommandLogging:
+    Type: String
+    Default: DEFAULT
+    AllowedValues:
+      - NONE
+      - DEFAULT
+      - OVERRIDE
+    Description: "ECS Exec logging level. DEFAULT logs to CloudWatch. OVERRIDE allows custom configuration."
+
 # -----------------------------------------------
 # Resources
 # -----------------------------------------------
@@ -69,6 +79,9 @@ Resources:
       ClusterSettings:
         - Name: containerInsights
           Value: !Ref ContainerInsights
+      Configuration:
+        ExecuteCommandConfiguration:
+          Logging: !Ref ExecuteCommandLogging
       CapacityProviders:
         - FARGATE
         - FARGATE_SPOT
