@@ -77,6 +77,13 @@ Metadata:
           - AtRestEncryption
           - TransitEncryption
           - KmsKeyId
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - NotificationTopicArn
+          - CacheParameterGroupName
+          - SlowLogEnabled
+          - SlowLogGroupName
 
 # -----------------------------------------------
 # Parameters
@@ -163,6 +170,29 @@ Parameters:
     Default: ""
     Description: "KMS Key ARN for at-rest encryption (optional). AtRestEncryption must be true. The key policy must allow elasticache.amazonaws.com as a principal."
 
+  NotificationTopicArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for ElastiCache event notifications. Leave empty to disable."
+
+  CacheParameterGroupName:
+    Type: String
+    Default: ""
+    Description: "Custom cache parameter group name. Leave empty to use the engine default."
+
+  SlowLogEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable Redis slow log delivery to CloudWatch Logs."
+
+  SlowLogGroupName:
+    Type: String
+    Default: ""
+    Description: "CloudWatch Log Group name for slow log delivery. Required when SlowLogEnabled=true."
+
 # -----------------------------------------------
 # Mappings
 # Static reference tables for snapshot retention per environment.
@@ -187,6 +217,10 @@ Conditions:
   EnableAtRestEncryption:   !Equals [!Ref AtRestEncryption,  "true"]
   EnableTransitEncryption:  !Equals [!Ref TransitEncryption, "true"]
   HasKmsKey:                !Not  [!Equals [!Ref KmsKeyId, ""]]
+  HasNotificationTopic:     !Not  [!Equals [!Ref NotificationTopicArn, ""]]
+  HasParameterGroup:        !Not  [!Equals [!Ref CacheParameterGroupName, ""]]
+  IsSlowLogEnabled:         !Equals [!Ref SlowLogEnabled, "true"]
+  HasSlowLogGroup:          !Not  [!Equals [!Ref SlowLogGroupName, ""]]
 
 # -----------------------------------------------
 # Resources
@@ -233,6 +267,17 @@ Resources:
       SnapshotRetentionLimit: !FindInMap [EnvConfig, !Ref Env, SnapshotRetentionLimit]
       SnapshotWindow: "18:00-19:00"
       PreferredMaintenanceWindow: "sun:19:00-sun:20:00"
+      NotificationTopicArn: !If [HasNotificationTopic, !Ref NotificationTopicArn, !Ref AWS::NoValue]
+      CacheParameterGroupName: !If [HasParameterGroup, !Ref CacheParameterGroupName, !Ref AWS::NoValue]
+      LogDeliveryConfigurations: !If
+        - IsSlowLogEnabled
+        - - DestinationDetails:
+                CloudWatchLogsDetails:
+                  LogGroup: !If [HasSlowLogGroup, !Ref SlowLogGroupName, !Sub "/elasticache/${ProjectName}-${Env}-slowlog"]
+            DestinationType: cloudwatch-logs
+            LogFormat: text
+            LogType: slow-log
+        - !Ref AWS::NoValue
       Tags:
         - Key: Project
           Value: !Ref ProjectName

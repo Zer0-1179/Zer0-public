@@ -28,6 +28,8 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - ContainerInsights
+          - ExecuteCommandLogging
 
 # -----------------------------------------------
 # Parameters
@@ -48,6 +50,23 @@ Parameters:
       - prd
     Description: "Deployment environment."
 
+  ContainerInsights:
+    Type: String
+    Default: enabled
+    AllowedValues:
+      - enabled
+      - disabled
+    Description: "Enable CloudWatch Container Insights for metrics and logs. Incurs additional CloudWatch costs."
+
+  ExecuteCommandLogging:
+    Type: String
+    Default: DEFAULT
+    AllowedValues:
+      - NONE
+      - DEFAULT
+      - OVERRIDE
+    Description: "ECS Exec logging level. DEFAULT logs to CloudWatch. OVERRIDE allows custom configuration."
+
 # -----------------------------------------------
 # Resources
 # ContainerInsights enables CloudWatch metrics for the cluster.
@@ -59,7 +78,10 @@ Resources:
       ClusterName: !Sub "${ProjectName}-${Env}-cluster-01"
       ClusterSettings:
         - Name: containerInsights
-          Value: enabled
+          Value: !Ref ContainerInsights
+      Configuration:
+        ExecuteCommandConfiguration:
+          Logging: !Ref ExecuteCommandLogging
       Tags:
         - Key: Project
           Value: !Ref ProjectName

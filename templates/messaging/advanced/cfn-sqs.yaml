@@ -60,6 +60,12 @@ Metadata:
           default: "Optional"
         Parameters:
           - QueueSuffix
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - ReceiveMessageWaitTimeSeconds
+          - FifoQueue
+          - ContentBasedDeduplication
 
 # -----------------------------------------------
 # Parameters
@@ -108,6 +114,29 @@ Parameters:
     Default: ""
     Description: "Optional suffix appended to the queue name (e.g. orders, events)."
 
+  ReceiveMessageWaitTimeSeconds:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 20
+    Description: "Long-polling wait time in seconds (0=short polling, 1-20=long polling). Long polling reduces empty receives and cost."
+
+  FifoQueue:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Create a FIFO queue for strict message ordering. Queue name will automatically get .fifo suffix."
+
+  ContentBasedDeduplication:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable content-based deduplication for FIFO queues. Used only when FifoQueue=true."
+
 # -----------------------------------------------
 # Mappings
 # Static lookup table for env-specific values.
@@ -131,9 +160,11 @@ Mappings:
 # Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
-  IsPrd:     !Equals [!Ref Env, prd]
-  HasSuffix: !Not [!Equals [!Ref QueueSuffix, ""]]
-  HasKmsKey: !Not [!Equals [!Ref KmsKeyId, ""]]
+  IsPrd:           !Equals [!Ref Env, prd]
+  HasSuffix:       !Not [!Equals [!Ref QueueSuffix, ""]]
+  HasKmsKey:       !Not [!Equals [!Ref KmsKeyId, ""]]
+  IsFifo:          !Equals [!Ref FifoQueue, "true"]
+  IsDeduplication: !Equals [!Ref ContentBasedDeduplication, "true"]
 
 # -----------------------------------------------
 # Resources

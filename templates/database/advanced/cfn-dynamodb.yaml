@@ -64,6 +64,9 @@ Metadata:
           - TtlAttributeName
           - PointInTimeRecovery
           - KmsKeyArn
+          - TableClass
+          - StreamEnabled
+          - StreamViewType
 
 # -----------------------------------------------
 # Parameters
@@ -157,6 +160,32 @@ Parameters:
     Default: ""
     Description: "KMS key ARN for encryption at rest. Leave empty to use the AWS managed key (aws/dynamodb)."
 
+  TableClass:
+    Type: String
+    Default: STANDARD
+    AllowedValues:
+      - STANDARD
+      - STANDARD_INFREQUENT_ACCESS
+    Description: "Table storage class. STANDARD_INFREQUENT_ACCESS reduces storage cost for rarely-accessed data."
+
+  StreamEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable DynamoDB Streams to capture item-level changes."
+
+  StreamViewType:
+    Type: String
+    Default: NEW_AND_OLD_IMAGES
+    AllowedValues:
+      - KEYS_ONLY
+      - NEW_IMAGE
+      - OLD_IMAGE
+      - NEW_AND_OLD_IMAGES
+    Description: "Stream record content. Used only when StreamEnabled=true."
+
 # -----------------------------------------------
 # Mappings
 # -----------------------------------------------
@@ -179,6 +208,7 @@ Conditions:
   HasTtl:         !Not [!Equals [!Ref TtlAttributeName, ""]]
   HasPitr:        !Equals [!Ref PointInTimeRecovery, "true"]
   HasKmsKey:      !Not [!Equals [!Ref KmsKeyArn, ""]]
+  IsStreamEnabled: !Equals [!Ref StreamEnabled, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -230,6 +260,11 @@ Resources:
           KMSMasterKeyId: !Ref KmsKeyArn
         - SSEEnabled: true
       DeletionProtectionEnabled: !FindInMap [Config, !Ref Env, DeletionProtectionEnabled]
+      TableClass: !Ref TableClass
+      StreamSpecification: !If
+        - IsStreamEnabled
+        - StreamViewType: !Ref StreamViewType
+        - !Ref AWS::NoValue
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-dynamodb-${TableSuffix}"

@@ -38,6 +38,13 @@ Metadata:
         Parameters:
           - PartitionKeyName
           - PartitionKeyType
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - TableClass
+          - StreamEnabled
+          - StreamViewType
+          - PointInTimeRecovery
 
 # -----------------------------------------------
 # Parameters
@@ -79,6 +86,47 @@ Parameters:
       - B
     Description: "Partition key type. S = String, N = Number, B = Binary."
 
+  TableClass:
+    Type: String
+    Default: STANDARD
+    AllowedValues:
+      - STANDARD
+      - STANDARD_INFREQUENT_ACCESS
+    Description: "Table storage class. STANDARD_INFREQUENT_ACCESS reduces cost for rarely-accessed data."
+
+  StreamEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable DynamoDB Streams to capture item-level changes."
+
+  StreamViewType:
+    Type: String
+    Default: NEW_AND_OLD_IMAGES
+    AllowedValues:
+      - KEYS_ONLY
+      - NEW_IMAGE
+      - OLD_IMAGE
+      - NEW_AND_OLD_IMAGES
+    Description: "Stream record content. Used only when StreamEnabled=true."
+
+  PointInTimeRecovery:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable point-in-time recovery (PITR) for the table."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  IsStreamEnabled: !Equals [!Ref StreamEnabled, "true"]
+  HasPitr:         !Equals [!Ref PointInTimeRecovery, "true"]
+
 # -----------------------------------------------
 # Resources
 # BillingMode PAY_PER_REQUEST (on-demand) requires no capacity planning.
@@ -102,6 +150,13 @@ Resources:
       # DynamoDB encrypts all data at rest by default using AWS-owned keys (free, no configuration required).
       # To use an AWS managed KMS key instead, add: SSESpecification: { SSEEnabled: true, SSEType: KMS }
       DeletionProtectionEnabled: false
+      TableClass: !Ref TableClass
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [HasPitr, true, false]
+      StreamSpecification: !If
+        - IsStreamEnabled
+        - StreamViewType: !Ref StreamViewType
+        - !Ref AWS::NoValue
       Tags:
         - Key: Project
           Value: !Ref ProjectName

@@ -48,6 +48,11 @@ Metadata:
           default: "Cache"
         Parameters:
           - NodeType
+      - Label:
+          default: "Advanced Options"
+        Parameters:
+          - NotificationTopicArn
+          - CacheParameterGroupName
 
 # -----------------------------------------------
 # Parameters
@@ -90,6 +95,23 @@ Parameters:
       - cache.r7g.large
     Description: "ElastiCache node type."
 
+  NotificationTopicArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for ElastiCache event notifications. Leave empty to disable."
+
+  CacheParameterGroupName:
+    Type: String
+    Default: ""
+    Description: "Custom cache parameter group name. Leave empty to use the engine default."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  HasNotificationTopic: !Not [!Equals [!Ref NotificationTopicArn, ""]]
+  HasParameterGroup:    !Not [!Equals [!Ref CacheParameterGroupName, ""]]
+
 # -----------------------------------------------
 # Resources
 # AtRestEncryptionEnabled uses the AWS-managed key at no additional cost.
@@ -123,6 +145,8 @@ Resources:
       CacheSubnetGroupName: !Ref CacheSubnetGroup01
       SecurityGroupIds:
         - !Ref SecurityGroupId
+      NotificationTopicArn:    !If [HasNotificationTopic, !Ref NotificationTopicArn, !Ref AWS::NoValue]
+      CacheParameterGroupName: !If [HasParameterGroup, !Ref CacheParameterGroupName, !Ref AWS::NoValue]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
