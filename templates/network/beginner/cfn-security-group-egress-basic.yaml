@@ -109,7 +109,7 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  SecurityGroupId:
+  SecurityGroupId01:
     Description: "Security group ID that the rule was added to"
     Value: !Ref SecurityGroupId
     Export:
