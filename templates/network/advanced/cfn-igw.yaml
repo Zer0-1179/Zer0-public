@@ -63,7 +63,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-igw"
+          Value: !Sub "${ProjectName}-${Env}-igw-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

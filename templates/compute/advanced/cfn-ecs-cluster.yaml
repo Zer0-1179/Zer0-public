@@ -65,7 +65,7 @@ Resources:
   EcsCluster01:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${ProjectName}-${Env}-ecs-cluster"
+      ClusterName: !Sub "${ProjectName}-${Env}-ecs-cluster-01"
       ClusterSettings:
         - Name: containerInsights
           Value: !Ref ContainerInsights
@@ -80,7 +80,7 @@ Resources:
           Weight: 1
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-ecs-cluster"
+          Value: !Sub "${ProjectName}-${Env}-ecs-cluster-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

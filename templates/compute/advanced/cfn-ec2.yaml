@@ -159,7 +159,7 @@ Resources:
   Ec2InstanceRole01:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${Env}-ec2-role"
+      RoleName: !Sub "${ProjectName}-${Env}-ec2-role-01"
       Description: "EC2 instance role for SSM Session Manager and CloudWatch Agent"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -180,7 +180,7 @@ Resources:
   Ec2InstanceProfile01:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile"
+      InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile-01"
       Roles:
         - !Ref Ec2InstanceRole01
 
@@ -210,7 +210,7 @@ Resources:
             DeleteOnTermination: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Env}-ec2"
+          Value: !Sub "${ProjectName}-${Env}-ec2-01"
         - Key: Project
           Value: !Ref ProjectName
         - Key: Env

@@ -149,7 +149,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds"
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-01"
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
       EngineVersion: "8.0.40"
