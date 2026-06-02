@@ -86,7 +86,7 @@ Parameters:
 # DeletionProtectionEnabled: false allows stack deletion to remove the table.
 # -----------------------------------------------
 Resources:
-  DynamoDbTable:
+  DynamoDbTable01:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -112,14 +112,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  TableName:
+  TableName01:
     Description: "DynamoDB table name"
-    Value: !Ref DynamoDbTable
+    Value: !Ref DynamoDbTable01
     Export:
       Name: !Sub "${AWS::StackName}-TableName"
 
-  TableArn:
+  TableArn01:
     Description: "DynamoDB table ARN"
-    Value: !GetAtt DynamoDbTable.Arn
+    Value: !GetAtt DynamoDbTable01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TableArn"

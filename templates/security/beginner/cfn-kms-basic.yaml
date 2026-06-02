@@ -62,7 +62,7 @@ Parameters:
 # The default key policy allows the root account full access.
 # -----------------------------------------------
 Resources:
-  KmsKey:
+  KmsKey01:
     Type: AWS::KMS::Key
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -86,30 +86,30 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  KmsAlias:
+  KmsAlias01:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub "alias/${ProjectName}-${Env}"
-      TargetKeyId: !Ref KmsKey
+      TargetKeyId: !Ref KmsKey01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  KeyId:
+  KeyId01:
     Description: "KMS key ID"
-    Value: !Ref KmsKey
+    Value: !Ref KmsKey01
     Export:
       Name: !Sub "${AWS::StackName}-KeyId"
 
-  KeyArn:
+  KeyArn01:
     Description: "KMS key ARN"
-    Value: !GetAtt KmsKey.Arn
+    Value: !GetAtt KmsKey01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-KeyArn"
 
-  AliasName:
+  AliasName01:
     Description: "KMS key alias"
-    Value: !Ref KmsAlias
+    Value: !Ref KmsAlias01
     Export:
       Name: !Sub "${AWS::StackName}-AliasName"

@@ -109,7 +109,7 @@ Parameters:
 # so you can connect without SSH keys.
 # -----------------------------------------------
 Resources:
-  Ec2InstanceRole:
+  Ec2InstanceRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-ec2-role"
@@ -128,14 +128,14 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  Ec2InstanceProfile:
+  Ec2InstanceProfile01:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub "${ProjectName}-${Env}-ec2-profile"
       Roles:
-        - !Ref Ec2InstanceRole
+        - !Ref Ec2InstanceRole01
 
-  Ec2Instance:
+  Ec2Instance01:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref AmiId
@@ -143,7 +143,7 @@ Resources:
       SubnetId: !Ref SubnetId
       SecurityGroupIds:
         - !Ref SecurityGroupId
-      IamInstanceProfile: !Ref Ec2InstanceProfile
+      IamInstanceProfile: !Ref Ec2InstanceProfile01
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -163,20 +163,20 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  InstanceId:
+  Ec2InstanceId01:
     Description: "EC2 instance ID"
-    Value: !Ref Ec2Instance
+    Value: !Ref Ec2Instance01
     Export:
       Name: !Sub "${AWS::StackName}-InstanceId"
 
-  PrivateIp:
+  PrivateIp01:
     Description: "Private IP address of the instance"
-    Value: !GetAtt Ec2Instance.PrivateIp
+    Value: !GetAtt Ec2Instance01.PrivateIp
     Export:
       Name: !Sub "${AWS::StackName}-PrivateIp"
 
-  RoleArn:
+  RoleArn01:
     Description: "EC2 IAM role ARN"
-    Value: !GetAtt Ec2InstanceRole.Arn
+    Value: !GetAtt Ec2InstanceRole01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RoleArn"

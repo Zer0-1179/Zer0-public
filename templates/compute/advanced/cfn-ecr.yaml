@@ -113,7 +113,7 @@ Conditions:
 # Resources
 # -----------------------------------------------
 Resources:
-  ECRRepository:
+  EcrRepository01:
     Type: AWS::ECR::Repository
     DeletionPolicy: !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
@@ -158,14 +158,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  RepositoryName:
+  RepositoryName01:
     Description: "ECR repository name"
-    Value: !Ref ECRRepository
+    Value: !Ref EcrRepository01
     Export:
       Name: !Sub "${AWS::StackName}-RepositoryName"
 
-  RepositoryUri:
+  RepositoryUri01:
     Description: "ECR repository URI"
-    Value: !GetAtt ECRRepository.RepositoryUri
+    Value: !GetAtt EcrRepository01.RepositoryUri
     Export:
       Name: !Sub "${AWS::StackName}-RepositoryUri"

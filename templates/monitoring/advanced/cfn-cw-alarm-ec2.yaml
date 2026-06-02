@@ -159,7 +159,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  CpuWarningAlarm:
+  CpuWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub
@@ -180,7 +180,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  CpuCriticalAlarm:
+  CpuCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub
@@ -201,7 +201,7 @@ Resources:
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
-  MemoryWarningAlarm:
+  MemoryWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub
@@ -222,7 +222,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  MemoryCriticalAlarm:
+  MemoryCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub
@@ -250,26 +250,26 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  CpuWarningAlarmArn:
+  CpuWarningAlarmArn01:
     Description: "CPU WARNING alarm ARN"
-    Value: !GetAtt CpuWarningAlarm.Arn
+    Value: !GetAtt CpuWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-CpuWarningAlarmArn"
 
-  CpuCriticalAlarmArn:
+  CpuCriticalAlarmArn01:
     Description: "CPU CRITICAL alarm ARN"
-    Value: !GetAtt CpuCriticalAlarm.Arn
+    Value: !GetAtt CpuCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-CpuCriticalAlarmArn"
 
-  MemoryWarningAlarmArn:
+  MemoryWarningAlarmArn01:
     Description: "Memory WARNING alarm ARN"
-    Value: !GetAtt MemoryWarningAlarm.Arn
+    Value: !GetAtt MemoryWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-MemoryWarningAlarmArn"
 
-  MemoryCriticalAlarmArn:
+  MemoryCriticalAlarmArn01:
     Description: "Memory CRITICAL alarm ARN"
-    Value: !GetAtt MemoryCriticalAlarm.Arn
+    Value: !GetAtt MemoryCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-MemoryCriticalAlarmArn"

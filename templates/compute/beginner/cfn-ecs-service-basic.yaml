@@ -131,7 +131,7 @@ Parameters:
 # TaskRole is the runtime role for the container itself.
 # -----------------------------------------------
 Resources:
-  TaskExecutionRole:
+  TaskExecutionRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}-exec-role"
@@ -150,7 +150,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  TaskRole:
+  TaskRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}-task-role"
@@ -167,7 +167,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LogGroup:
+  LogGroup01:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
@@ -179,7 +179,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  TaskDefinition:
+  TaskDefinition01:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
@@ -188,8 +188,8 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt TaskRole.Arn
+      ExecutionRoleArn: !GetAtt TaskExecutionRole01.Arn
+      TaskRoleArn: !GetAtt TaskRole01.Arn
       ContainerDefinitions:
         - Name: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
           Image: !Ref ContainerImage
@@ -199,7 +199,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref LogGroup
+              awslogs-group: !Ref LogGroup01
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
       Tags:
@@ -208,12 +208,12 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  EcsService:
+  EcsService01:
     Type: AWS::ECS::Service
     Properties:
       ServiceName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
       Cluster: !Ref ClusterName
-      TaskDefinition: !Ref TaskDefinition
+      TaskDefinition: !Ref TaskDefinition01
       DesiredCount: 1
       LaunchType: FARGATE
       NetworkConfiguration:
@@ -233,14 +233,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  ServiceName:
+  ServiceName01:
     Description: "ECS service name"
-    Value: !GetAtt EcsService.Name
+    Value: !GetAtt EcsService01.Name
     Export:
       Name: !Sub "${AWS::StackName}-ServiceName"
 
-  TaskDefinitionArn:
+  TaskDefinitionArn01:
     Description: "Task definition ARN"
-    Value: !Ref TaskDefinition
+    Value: !Ref TaskDefinition01
     Export:
       Name: !Sub "${AWS::StackName}-TaskDefinitionArn"

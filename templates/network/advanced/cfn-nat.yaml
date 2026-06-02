@@ -59,7 +59,7 @@ Parameters:
 # PrivateRoute sends all outbound traffic from private subnets through the NAT Gateway.
 # -----------------------------------------------
 Resources:
-  EIP:
+  ElasticIp01:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
@@ -71,10 +71,10 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  NatGateway:
+  NatGateway01:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt EIP.AllocationId
+      AllocationId: !GetAtt ElasticIp01.AllocationId
       SubnetId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
       Tags:
@@ -85,26 +85,26 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  PrivateRoute:
+  PrivateDefaultRoute01:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateRouteTableId"
       DestinationCidrBlock: "0.0.0.0/0"
-      NatGatewayId: !Ref NatGateway
+      NatGatewayId: !Ref NatGateway01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  NatGatewayId:
+  NatGatewayId01:
     Description: "NAT Gateway ID"
-    Value: !Ref NatGateway
+    Value: !Ref NatGateway01
     Export:
       Name: !Sub "${AWS::StackName}-NatGatewayId"
 
-  EipAddress:
+  ElasticIpAddress01:
     Description: "Elastic IP address of the NAT Gateway"
-    Value: !Ref EIP
+    Value: !Ref ElasticIp01
     Export:
       Name: !Sub "${AWS::StackName}-EipAddress"

@@ -194,7 +194,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
   # Task execution role — used by ECS to pull images and write logs
-  TaskExecutionRole:
+  TaskExecutionRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}-exec-role"
@@ -213,7 +213,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LogGroup:
+  LogGroup01:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
@@ -225,7 +225,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  TaskDefinition:
+  TaskDefinition01:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}"
@@ -234,7 +234,7 @@ Resources:
       NetworkMode: awsvpc
       Cpu: !Ref Cpu
       Memory: !Ref Memory
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ExecutionRoleArn: !GetAtt TaskExecutionRole01.Arn
       TaskRoleArn: !If [HasTaskRole, !Ref TaskRoleArn, !Ref AWS::NoValue]
       ContainerDefinitions:
         - Name: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}"
@@ -245,7 +245,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref LogGroup
+              awslogs-group: !Ref LogGroup01
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Essential: true
@@ -255,7 +255,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  ECSService:
+  EcsService01:
     Type: AWS::ECS::Service
     Properties:
       ServiceName: !Sub "${ProjectName}-${Env}-ecs-${ServiceSuffix}"
@@ -263,7 +263,7 @@ Resources:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-ecs-cluster-ClusterName"
       LaunchType: FARGATE
       DesiredCount: !Ref DesiredCount
-      TaskDefinition: !Ref TaskDefinition
+      TaskDefinition: !Ref TaskDefinition01
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
@@ -291,20 +291,20 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  ServiceName:
+  ServiceName01:
     Description: "ECS service name"
-    Value: !GetAtt ECSService.Name
+    Value: !GetAtt EcsService01.Name
     Export:
       Name: !Sub "${AWS::StackName}-ServiceName"
 
-  TaskDefinitionArn:
+  TaskDefinitionArn01:
     Description: "Task definition ARN (latest revision)"
-    Value: !Ref TaskDefinition
+    Value: !Ref TaskDefinition01
     Export:
       Name: !Sub "${AWS::StackName}-TaskDefinitionArn"
 
-  LogGroupName:
+  LogGroupName01:
     Description: "CloudWatch Log Group name"
-    Value: !Ref LogGroup
+    Value: !Ref LogGroup01
     Export:
       Name: !Sub "${AWS::StackName}-LogGroupName"

@@ -136,7 +136,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  Rule:
+  EventRule01:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${ProjectName}-${Env}-${RuleSuffix}"
@@ -150,14 +150,14 @@ Resources:
             Input: !If [HasInput, !Ref InputJson, !Ref AWS::NoValue]
         - !Ref AWS::NoValue
 
-  LambdaPermission:
+  LambdaPermission01:
     Condition: HasLambdaTarget
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref TargetLambdaArn
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt Rule.Arn
+      SourceArn: !GetAtt EventRule01.Arn
 
 # -----------------------------------------------
 # Outputs
@@ -166,14 +166,14 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  RuleArn:
+  RuleArn01:
     Description: "EventBridge rule ARN"
-    Value: !GetAtt Rule.Arn
+    Value: !GetAtt EventRule01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RuleArn"
 
-  RuleName:
+  RuleName01:
     Description: "EventBridge rule name"
-    Value: !Ref Rule
+    Value: !Ref EventRule01
     Export:
       Name: !Sub "${AWS::StackName}-RuleName"

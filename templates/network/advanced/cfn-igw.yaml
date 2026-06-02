@@ -58,7 +58,7 @@ Parameters:
 # to be attached to the VPC before it can be created.
 # -----------------------------------------------
 Resources:
-  InternetGateway:
+  InternetGateway01:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
@@ -69,28 +69,28 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  VPCGatewayAttachment:
+  VpcGatewayAttachment01:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-VpcId"
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId: !Ref InternetGateway01
 
-  PublicRoute:
+  PublicRoute01:
     Type: AWS::EC2::Route
-    DependsOn: VPCGatewayAttachment
+    DependsOn: VpcGatewayAttachment01
     Properties:
       RouteTableId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicRouteTableId"
       DestinationCidrBlock: "0.0.0.0/0"
-      GatewayId: !Ref InternetGateway
+      GatewayId: !Ref InternetGateway01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  InternetGatewayId:
+  InternetGatewayId01:
     Description: "Internet Gateway ID"
-    Value: !Ref InternetGateway
+    Value: !Ref InternetGateway01
     Export:
       Name: !Sub "${AWS::StackName}-InternetGatewayId"

@@ -189,7 +189,7 @@ Conditions:
 # BackupRetentionPeriod: 7 days (prd) / 1 day (dev).
 # -----------------------------------------------
 Resources:
-  DBSubnetGroup:
+  DbSubnetGroup01:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub "${ProjectName}-${Env}-rds-subnet-group"
@@ -205,7 +205,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  DBInstance:
+  DbInstance01:
     Type: AWS::RDS::DBInstance
     DeletionPolicy:      !If [IsPrd, Retain, Delete]
     UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
@@ -222,7 +222,7 @@ Resources:
       StorageEncrypted:    true
       MultiAZ:             !Ref MultiAZ
       Port:                !FindInMap [EngineConfig, !Ref DBEngine, Port]
-      DBSubnetGroupName:   !Ref DBSubnetGroup
+      DBSubnetGroupName:   !Ref DbSubnetGroup01
       VPCSecurityGroups:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
       BackupRetentionPeriod: !FindInMap [Config, !Ref Env, BackupRetentionPeriod]
@@ -240,20 +240,20 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  DBEndpoint:
+  DbEndpoint01:
     Description: "DB instance endpoint address"
-    Value: !GetAtt DBInstance.Endpoint.Address
+    Value: !GetAtt DbInstance01.Endpoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-DBEndpoint"
 
-  DBPort:
+  DbPort01:
     Description: "DB instance port"
-    Value: !GetAtt DBInstance.Endpoint.Port
+    Value: !GetAtt DbInstance01.Endpoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-DBPort"
 
-  DBInstanceId:
+  DbInstanceId01:
     Description: "DB instance identifier"
-    Value: !Ref DBInstance
+    Value: !Ref DbInstance01
     Export:
       Name: !Sub "${AWS::StackName}-DBInstanceId"

@@ -158,7 +158,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  Topic:
+  SnsTopic01:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub "${ProjectName}-${Env}-${TopicSuffix}"
@@ -174,7 +174,7 @@ Resources:
     Condition: HasEmail01
     Type: AWS::SNS::Subscription
     Properties:
-      TopicArn: !Ref Topic
+      TopicArn: !Ref SnsTopic01
       Protocol: email
       Endpoint: !Ref EmailEndpoint01
 
@@ -182,7 +182,7 @@ Resources:
     Condition: HasEmail02
     Type: AWS::SNS::Subscription
     Properties:
-      TopicArn: !Ref Topic
+      TopicArn: !Ref SnsTopic01
       Protocol: email
       Endpoint: !Ref EmailEndpoint02
 
@@ -190,15 +190,15 @@ Resources:
     Condition: HasEmail03
     Type: AWS::SNS::Subscription
     Properties:
-      TopicArn: !Ref Topic
+      TopicArn: !Ref SnsTopic01
       Protocol: email
       Endpoint: !Ref EmailEndpoint03
 
-  HttpsSubscription:
+  HttpsSubscription01:
     Condition: HasHttpsEndpoint
     Type: AWS::SNS::Subscription
     Properties:
-      TopicArn: !Ref Topic
+      TopicArn: !Ref SnsTopic01
       Protocol: https
       Endpoint: !Ref HttpsEndpoint
 
@@ -209,14 +209,14 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  TopicArn:
+  TopicArn01:
     Description: "SNS topic ARN. Pass this to WarningActionArn or CriticalActionArn in alarm templates."
-    Value: !Ref Topic
+    Value: !Ref SnsTopic01
     Export:
       Name: !Sub "${AWS::StackName}-TopicArn"
 
-  TopicName:
+  TopicName01:
     Description: "SNS topic name"
-    Value: !GetAtt Topic.TopicName
+    Value: !GetAtt SnsTopic01.TopicName
     Export:
       Name: !Sub "${AWS::StackName}-TopicName"

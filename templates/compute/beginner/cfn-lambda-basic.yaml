@@ -125,7 +125,7 @@ Parameters:
 # LambdaExecutionRole by adding them to ManagedPolicyArns.
 # -----------------------------------------------
 Resources:
-  LambdaExecutionRole:
+  LambdaExecutionRole01:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-${Env}-lambda-${FunctionSuffix}-role"
@@ -144,14 +144,14 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LambdaFunction:
+  LambdaFunction01:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${ProjectName}-${Env}-lambda-${FunctionSuffix}"
       Description: !Sub "Lambda function for ${ProjectName}-${Env}-${FunctionSuffix}"
       Runtime: !Ref Runtime
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt LambdaExecutionRole01.Arn
       Timeout: !Ref Timeout
       MemorySize: !Ref MemorySize
       Code:
@@ -169,11 +169,11 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LogGroup:
+  LogGroup01:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction01}"
       RetentionInDays: !Ref LogRetentionDays
       Tags:
         - Key: Project
@@ -185,26 +185,26 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  FunctionName:
+  FunctionName01:
     Description: "Lambda function name"
-    Value: !Ref LambdaFunction
+    Value: !Ref LambdaFunction01
     Export:
       Name: !Sub "${AWS::StackName}-FunctionName"
 
-  FunctionArn:
+  FunctionArn01:
     Description: "Lambda function ARN"
-    Value: !GetAtt LambdaFunction.Arn
+    Value: !GetAtt LambdaFunction01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-FunctionArn"
 
-  RoleArn:
+  RoleArn01:
     Description: "Lambda execution role ARN"
-    Value: !GetAtt LambdaExecutionRole.Arn
+    Value: !GetAtt LambdaExecutionRole01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-RoleArn"
 
-  LogGroupName:
+  LogGroupName01:
     Description: "CloudWatch Log Group name"
-    Value: !Ref LogGroup
+    Value: !Ref LogGroup01
     Export:
       Name: !Sub "${AWS::StackName}-LogGroupName"

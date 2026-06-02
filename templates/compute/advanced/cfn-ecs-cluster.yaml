@@ -62,7 +62,7 @@ Parameters:
 # Resources
 # -----------------------------------------------
 Resources:
-  ECSCluster:
+  EcsCluster01:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Sub "${ProjectName}-${Env}-ecs-cluster"
@@ -90,14 +90,14 @@ Resources:
 # Outputs
 # -----------------------------------------------
 Outputs:
-  ClusterName:
+  ClusterName01:
     Description: "ECS cluster name"
-    Value: !Ref ECSCluster
+    Value: !Ref EcsCluster01
     Export:
       Name: !Sub "${AWS::StackName}-ClusterName"
 
-  ClusterArn:
+  ClusterArn01:
     Description: "ECS cluster ARN"
-    Value: !GetAtt ECSCluster.Arn
+    Value: !GetAtt EcsCluster01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ClusterArn"

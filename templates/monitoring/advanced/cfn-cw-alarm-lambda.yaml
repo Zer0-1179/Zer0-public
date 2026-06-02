@@ -141,7 +141,7 @@ Conditions:
 # -----------------------------------------------
 Resources:
 
-  ErrorWarningAlarm:
+  ErrorWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-errors-warning"
@@ -160,7 +160,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  ErrorCriticalAlarm:
+  ErrorCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-errors-critical"
@@ -179,7 +179,7 @@ Resources:
       AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
 
-  ThrottleWarningAlarm:
+  ThrottleWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-throttles-warning"
@@ -198,7 +198,7 @@ Resources:
       AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
 
-  ThrottleCriticalAlarm:
+  ThrottleCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${ProjectName}-${Env}-lambda-${FunctionName}-throttles-critical"
@@ -224,26 +224,26 @@ Resources:
 # -----------------------------------------------
 Outputs:
 
-  ErrorWarningAlarmArn:
+  ErrorWarningAlarmArn01:
     Description: "Error WARNING alarm ARN"
-    Value: !GetAtt ErrorWarningAlarm.Arn
+    Value: !GetAtt ErrorWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ErrorWarningAlarmArn"
 
-  ErrorCriticalAlarmArn:
+  ErrorCriticalAlarmArn01:
     Description: "Error CRITICAL alarm ARN"
-    Value: !GetAtt ErrorCriticalAlarm.Arn
+    Value: !GetAtt ErrorCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ErrorCriticalAlarmArn"
 
-  ThrottleWarningAlarmArn:
+  ThrottleWarningAlarmArn01:
     Description: "Throttle WARNING alarm ARN"
-    Value: !GetAtt ThrottleWarningAlarm.Arn
+    Value: !GetAtt ThrottleWarningAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ThrottleWarningAlarmArn"
 
-  ThrottleCriticalAlarmArn:
+  ThrottleCriticalAlarmArn01:
     Description: "Throttle CRITICAL alarm ARN"
-    Value: !GetAtt ThrottleCriticalAlarm.Arn
+    Value: !GetAtt ThrottleCriticalAlarm01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ThrottleCriticalAlarmArn"

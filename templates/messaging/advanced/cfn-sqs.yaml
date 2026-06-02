@@ -143,7 +143,7 @@ Conditions:
 # AWS::NoValue removes the property when the condition is false.
 # -----------------------------------------------
 Resources:
-  DeadLetterQueue:
+  Dlq01:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !If
@@ -161,7 +161,7 @@ Resources:
         - Key: Region
           Value: !Ref AWS::Region
 
-  MainQueue:
+  SqsQueue01:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !If
@@ -171,7 +171,7 @@ Resources:
       MessageRetentionPeriod: !FindInMap [Config, !Ref Env, MessageRetentionPeriod]
       VisibilityTimeout: !Ref VisibilityTimeout
       RedrivePolicy:
-        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        deadLetterTargetArn: !GetAtt Dlq01.Arn
         maxReceiveCount: !Ref MaxReceiveCount
       SqsManagedSseEnabled: !If [HasKmsKey, !Ref AWS::NoValue, true]
       KmsMasterKeyId:        !If [HasKmsKey, !Ref KmsKeyId,   !Ref AWS::NoValue]
@@ -189,32 +189,32 @@ Resources:
 # Export allows other stacks to reference via !ImportValue.
 # -----------------------------------------------
 Outputs:
-  QueueUrl:
+  QueueUrl01:
     Description: "Main queue URL"
-    Value: !GetAtt MainQueue.QueueUrl
+    Value: !GetAtt SqsQueue01.QueueUrl
     Export:
       Name: !Sub "${AWS::StackName}-QueueUrl"
 
-  QueueArn:
+  QueueArn01:
     Description: "Main queue ARN"
-    Value: !GetAtt MainQueue.Arn
+    Value: !GetAtt SqsQueue01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-QueueArn"
 
-  QueueName:
+  QueueName01:
     Description: "Main queue name"
-    Value: !GetAtt MainQueue.QueueName
+    Value: !GetAtt SqsQueue01.QueueName
     Export:
       Name: !Sub "${AWS::StackName}-QueueName"
 
-  DlqUrl:
+  DlqUrl01:
     Description: "Dead Letter Queue URL"
-    Value: !GetAtt DeadLetterQueue.QueueUrl
+    Value: !GetAtt Dlq01.QueueUrl
     Export:
       Name: !Sub "${AWS::StackName}-DlqUrl"
 
-  DlqArn:
+  DlqArn01:
     Description: "Dead Letter Queue ARN"
-    Value: !GetAtt DeadLetterQueue.Arn
+    Value: !GetAtt Dlq01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-DlqArn"

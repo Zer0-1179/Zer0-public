@@ -152,7 +152,7 @@ Conditions:
 # Resources
 # -----------------------------------------------
 Resources:
-  Volume:
+  EbsVolume01:
     Type: AWS::EC2::Volume
     # DeletionPolicy: Delete ensures the volume is deleted when this stack is deleted.
     # Delete this stack BEFORE deleting the EC2 stack so CloudFormation detaches
@@ -175,25 +175,25 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  VolumeAttachment:
+  VolumeAttachment01:
     Type: AWS::EC2::VolumeAttachment
     Condition: HasEc2Instance
     Properties:
       InstanceId: !Ref Ec2InstanceId
-      VolumeId: !Ref Volume
+      VolumeId: !Ref EbsVolume01
       Device: !Ref DeviceName
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  VolumeId:
+  VolumeId01:
     Description: "EBS Volume ID"
-    Value: !Ref Volume
+    Value: !Ref EbsVolume01
     Export:
       Name: !Sub "${ProjectName}-${Env}-ebs-${EbsSuffix}-VolumeId"
 
-  DeviceName:
+  DeviceName01:
     Description: "Device name on the EC2 instance"
     Value: !Ref DeviceName
     Export:

@@ -135,7 +135,7 @@ Conditions:
 # Resources
 # -----------------------------------------------
 Resources:
-  TargetGroup:
+  AlbTargetGroup01:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-tg"
@@ -159,7 +159,7 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  LoadBalancer:
+  Alb01:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}"
@@ -185,10 +185,10 @@ Resources:
           Value: !Ref Env
 
   # HTTP:80 — forwards to TG when HTTP-only, redirects to HTTPS when certificate is set
-  HttpListener:
+  HttpListener01:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref LoadBalancer
+      LoadBalancerArn: !Ref Alb01
       Port: 80
       Protocol: HTTP
       DefaultActions:
@@ -202,14 +202,14 @@ Resources:
           TargetGroupArn: !If
             - HasHttps
             - !Ref AWS::NoValue
-            - !Ref TargetGroup
+            - !Ref AlbTargetGroup01
 
   # HTTPS:443 — created only when CertificateArn is provided
-  HttpsListener:
+  HttpsListener01:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HasHttps
     Properties:
-      LoadBalancerArn: !Ref LoadBalancer
+      LoadBalancerArn: !Ref Alb01
       Port: 443
       Protocol: HTTPS
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
@@ -217,26 +217,26 @@ Resources:
         - CertificateArn: !Ref CertificateArn
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !Ref AlbTargetGroup01
 
 # -----------------------------------------------
 # Outputs
 # -----------------------------------------------
 Outputs:
-  LoadBalancerArn:
+  AlbArn01:
     Description: "ALB ARN"
-    Value: !Ref LoadBalancer
+    Value: !Ref Alb01
     Export:
       Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-LoadBalancerArn"
 
-  LoadBalancerDnsName:
+  AlbDnsName01:
     Description: "ALB DNS name"
-    Value: !GetAtt LoadBalancer.DNSName
+    Value: !GetAtt Alb01.DNSName
     Export:
       Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-LoadBalancerDnsName"
 
-  TargetGroupArn:
+  TargetGroupArn01:
     Description: "Target Group ARN"
-    Value: !Ref TargetGroup
+    Value: !Ref AlbTargetGroup01
     Export:
       Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-TargetGroupArn"
