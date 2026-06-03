@@ -61,6 +61,10 @@ Metadata:
           - LogGroupName04
           - LogGroupName05
       - Label:
+          default: "Log Group Class (optional - applies to all groups)"
+        Parameters:
+          - LogGroupClass
+      - Label:
           default: "Encryption (optional - applies to all groups)"
         Parameters:
           - KmsKeyId
@@ -110,6 +114,14 @@ Parameters:
     Default: ""
     Description: "Log group 05 (optional). Leave empty to skip."
 
+  LogGroupClass:
+    Type: String
+    Default: STANDARD
+    AllowedValues:
+      - STANDARD
+      - INFREQUENT_ACCESS
+    Description: "STANDARD: full features. INFREQUENT_ACCESS: lower cost, subset of features. Cannot be changed after creation."
+
   KmsKeyId:
     Type: String
     Default: ""
@@ -157,6 +169,7 @@ Resources:
         - !Ref LogGroupName01
         - !Sub "/${ProjectName}/${Env}"
       RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
+      LogGroupClass: !Ref LogGroupClass
       KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
       Tags:
         - Key: Project

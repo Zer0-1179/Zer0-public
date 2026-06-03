@@ -47,6 +47,12 @@ Metadata:
           - ThroughputMode
           - ProvisionedThroughputMibps
       - Label:
+          default: "Lifecycle Management (optional)"
+        Parameters:
+          - TransitionToIA
+          - TransitionToArchive
+          - TransitionToPrimary
+      - Label:
           default: "Options"
         Parameters:
           - BackupEnabled
@@ -92,7 +98,7 @@ Parameters:
     AllowedValues:
       - generalPurpose
       - maxIO
-    Description: "generalPurpose: low latency (recommended). maxIO: high throughput for many clients."
+    Description: "generalPurpose: low latency (recommended). maxIO: high throughput for many clients. Cannot be changed after creation."
 
   ThroughputMode:
     Type: String
@@ -109,6 +115,46 @@ Parameters:
     MinValue: 0
     MaxValue: 1024
     Description: "Required when ThroughputMode=provisioned. Ignored otherwise. Min 1, Max 1024."
+
+  TransitionToIA:
+    Type: String
+    Default: AFTER_30_DAYS
+    AllowedValues:
+      - ""
+      - AFTER_1_DAY
+      - AFTER_7_DAYS
+      - AFTER_14_DAYS
+      - AFTER_30_DAYS
+      - AFTER_60_DAYS
+      - AFTER_90_DAYS
+      - AFTER_180_DAYS
+      - AFTER_270_DAYS
+      - AFTER_365_DAYS
+    Description: "Move files to Infrequent Access (IA) storage after this period. Leave empty to disable."
+
+  TransitionToArchive:
+    Type: String
+    Default: ""
+    AllowedValues:
+      - ""
+      - AFTER_1_DAY
+      - AFTER_7_DAYS
+      - AFTER_14_DAYS
+      - AFTER_30_DAYS
+      - AFTER_60_DAYS
+      - AFTER_90_DAYS
+      - AFTER_180_DAYS
+      - AFTER_270_DAYS
+      - AFTER_365_DAYS
+    Description: "Move files to Archive storage after this period. Leave empty to disable. Requires TransitionToIA."
+
+  TransitionToPrimary:
+    Type: String
+    Default: ""
+    AllowedValues:
+      - ""
+      - AFTER_1_ACCESS
+    Description: "Move files back to Standard storage after first access. AFTER_1_ACCESS enables Intelligent-Tiering."
 
   BackupEnabled:
     Type: String
@@ -127,12 +173,17 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsProvisioned: !Equals [!Ref ThroughputMode, "provisioned"]
-  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
-  IsBackupEnabled: !Equals [!Ref BackupEnabled, "true"]
+  IsProvisioned:       !Equals [!Ref ThroughputMode, "provisioned"]
+  HasKmsKey:           !Not [!Equals [!Ref KmsKeyArn, ""]]
+  IsBackupEnabled:     !Equals [!Ref BackupEnabled, "true"]
+  HasTransitionToIA:   !Not [!Equals [!Ref TransitionToIA, ""]]
+  HasTransitionToArchive: !Not [!Equals [!Ref TransitionToArchive, ""]]
+  HasTransitionToPrimary: !Not [!Equals [!Ref TransitionToPrimary, ""]]
 
 # -----------------------------------------------
 # Resources
+# LifecyclePolicies: each transition type must be a separate entry.
+# Only include entries when the parameter is non-empty to avoid validation errors.
 # -----------------------------------------------
 Resources:
   EfsFileSystem01:
@@ -145,6 +196,19 @@ Resources:
       ProvisionedThroughputInMibps: !If [IsProvisioned, !Ref ProvisionedThroughputMibps, !Ref AWS::NoValue]
       BackupPolicy:
         Status: !If [IsBackupEnabled, ENABLED, DISABLED]
+      LifecyclePolicies:
+        - !If
+          - HasTransitionToIA
+          - TransitionToIA: !Ref TransitionToIA
+          - !Ref AWS::NoValue
+        - !If
+          - HasTransitionToArchive
+          - TransitionToArchive: !Ref TransitionToArchive
+          - !Ref AWS::NoValue
+        - !If
+          - HasTransitionToPrimary
+          - TransitionToPrimaryStorageClass: !Ref TransitionToPrimary
+          - !Ref AWS::NoValue
       FileSystemTags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-efs-${EfsSuffix}"

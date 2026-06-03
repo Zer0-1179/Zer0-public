@@ -86,6 +86,12 @@ Metadata:
           - RoleType
           - AdditionalPolicy01
           - AdditionalPolicy02
+      - Label:
+          default: "Advanced (optional)"
+        Parameters:
+          - MaxSessionDuration
+          - PermissionsBoundary
+          - RolePath
 
 # -----------------------------------------------
 # Parameters
@@ -130,6 +136,23 @@ Parameters:
     Default: ""
     Description: "ARN of a second additional IAM managed policy to attach."
 
+  MaxSessionDuration:
+    Type: Number
+    Default: 3600
+    MinValue: 3600
+    MaxValue: 43200
+    Description: "Maximum session duration in seconds (3600=1h to 43200=12h). Default: 3600 (1 hour)."
+
+  PermissionsBoundary:
+    Type: String
+    Default: ""
+    Description: "ARN of an IAM policy to use as the permissions boundary for the role. Leave empty to skip."
+
+  RolePath:
+    Type: String
+    Default: "/"
+    Description: "IAM path for the role (e.g. / or /service-role/). Must start and end with /. Note: changing this value requires role replacement."
+
 # -----------------------------------------------
 # Mappings
 # Static reference tables for service principal and role name suffix per RoleType.
@@ -156,11 +179,12 @@ Mappings:
 # Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
-  IsLambda:   !Equals [!Ref RoleType, lambda]
-  IsEC2:      !Equals [!Ref RoleType, ec2]
-  IsECSExec:  !Equals [!Ref RoleType, ecs-exec]
-  HasPolicy01: !Not [!Equals [!Ref AdditionalPolicy01, ""]]
-  HasPolicy02: !Not [!Equals [!Ref AdditionalPolicy02, ""]]
+  IsLambda:               !Equals [!Ref RoleType, lambda]
+  IsEC2:                  !Equals [!Ref RoleType, ec2]
+  IsECSExec:              !Equals [!Ref RoleType, ecs-exec]
+  HasPolicy01:            !Not [!Equals [!Ref AdditionalPolicy01, ""]]
+  HasPolicy02:            !Not [!Equals [!Ref AdditionalPolicy02, ""]]
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundary, ""]]
 
 # -----------------------------------------------
 # Resources
@@ -168,6 +192,7 @@ Conditions:
 # ManagedPolicyArns: base policy is selected by RoleType; additional policies are optional.
 # !Ref AWS::NoValue inside a list removes that element from the list.
 # EC2 RoleType also creates an InstanceProfile required for EC2 instance association.
+# Path causes role replacement; MaxSessionDuration and PermissionsBoundary do not.
 # -----------------------------------------------
 Resources:
 
@@ -177,6 +202,9 @@ Resources:
       RoleName: !Sub
         - "${ProjectName}-${Env}-${Suffix}"
         - Suffix: !FindInMap [RoleConfig, !Ref RoleType, NameSuffix]
+      Path: !Ref RolePath
+      MaxSessionDuration: !Ref MaxSessionDuration
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref AWS::NoValue]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:

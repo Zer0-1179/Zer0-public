@@ -19,6 +19,10 @@ Description: "Ingress rules for an existing Security Group. Deploy after cfn-sec
 #   MySQL:    3306    PostgreSQL: 5432
 #   SSH:        22    RDP: 3389
 #
+# Protocol examples:
+#   tcp (default), udp, icmp, -1 (all traffic)
+#   For icmp: Port is the ICMP type (-1 for all types)
+#
 # Deploy order:
 #   1. cfn-vpc.yaml
 #   2. cfn-security-group.yaml         ({ProjectName}-{Env}-sg-{SgSuffix})
@@ -41,16 +45,20 @@ Metadata:
       - Label:
           default: "Ingress Rule 1 (required)"
         Parameters:
+          - Ingress1Protocol
           - Ingress1Port
           - Ingress1Cidr
+          - Ingress1CidrIpv6
       - Label:
           default: "Ingress Rule 2 (optional)"
         Parameters:
+          - Ingress2Protocol
           - Ingress2Port
           - Ingress2Cidr
       - Label:
           default: "Ingress Rule 3 (optional)"
         Parameters:
+          - Ingress3Protocol
           - Ingress3Port
           - Ingress3Cidr
 
@@ -80,53 +88,93 @@ Parameters:
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
+  Ingress1Protocol:
+    Type: String
+    Default: tcp
+    AllowedValues:
+      - tcp
+      - udp
+      - icmp
+      - icmpv6
+      - "-1"
+    Description: "IP protocol for rule 1. -1 allows all traffic on all ports."
+
   Ingress1Port:
     Type: Number
     Default: 80
-    MinValue: 0
+    MinValue: -1
     MaxValue: 65535
-    Description: "TCP port for ingress rule 1."
+    Description: "Port for rule 1. Use -1 for all ports (when Protocol=-1 or icmp)."
 
   Ingress1Cidr:
     Type: String
     Default: "0.0.0.0/0"
-    Description: "Source CIDR for ingress rule 1."
+    Description: "Source IPv4 CIDR for rule 1."
+
+  Ingress1CidrIpv6:
+    Type: String
+    Default: ""
+    Description: "Source IPv6 CIDR for rule 1 (e.g. ::/0). Leave empty to use IPv4 only."
+
+  Ingress2Protocol:
+    Type: String
+    Default: tcp
+    AllowedValues:
+      - tcp
+      - udp
+      - icmp
+      - icmpv6
+      - "-1"
+    Description: "IP protocol for rule 2."
 
   Ingress2Port:
     Type: String
     Default: "443"
-    Description: "TCP port for ingress rule 2. Leave empty to disable."
-    AllowedPattern: "^([0-9]{1,5})?$"
-    ConstraintDescription: "Port number (0-65535) or empty to disable."
+    Description: "Port for rule 2. Leave empty to disable."
+    AllowedPattern: "^(-1|[0-9]{1,5})?$"
+    ConstraintDescription: "Port number (0-65535), -1, or empty to disable."
 
   Ingress2Cidr:
     Type: String
     Default: "0.0.0.0/0"
-    Description: "Source CIDR for ingress rule 2."
+    Description: "Source CIDR for rule 2."
+
+  Ingress3Protocol:
+    Type: String
+    Default: tcp
+    AllowedValues:
+      - tcp
+      - udp
+      - icmp
+      - icmpv6
+      - "-1"
+    Description: "IP protocol for rule 3."
 
   Ingress3Port:
     Type: String
     Default: ""
-    Description: "TCP port for ingress rule 3. Leave empty to disable."
-    AllowedPattern: "^([0-9]{1,5})?$"
-    ConstraintDescription: "Port number (0-65535) or empty to disable."
+    Description: "Port for rule 3. Leave empty to disable."
+    AllowedPattern: "^(-1|[0-9]{1,5})?$"
+    ConstraintDescription: "Port number (0-65535), -1, or empty to disable."
 
   Ingress3Cidr:
     Type: String
     Default: "0.0.0.0/0"
-    Description: "Source CIDR for ingress rule 3."
+    Description: "Source CIDR for rule 3."
 
 # -----------------------------------------------
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasIngress02: !Not [!Equals [!Ref Ingress2Port, ""]]
-  HasIngress03: !Not [!Equals [!Ref Ingress3Port, ""]]
+  HasIngress02:      !Not [!Equals [!Ref Ingress2Port, ""]]
+  HasIngress03:      !Not [!Equals [!Ref Ingress3Port, ""]]
+  HasIngress1Ipv6:   !Not [!Equals [!Ref Ingress1CidrIpv6, ""]]
 
 # -----------------------------------------------
 # Resources
 # AWS::EC2::SecurityGroupIngress adds rules to an existing SG without modifying it.
 # Conditional resources (IngressRule02 / IngressRule03) are skipped when port is empty.
+# IPv6 rule is added separately when Ingress1CidrIpv6 is specified.
 # -----------------------------------------------
 Resources:
   IngressRule01:
@@ -134,11 +182,23 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: tcp
+      IpProtocol: !Ref Ingress1Protocol
       FromPort: !Ref Ingress1Port
       ToPort: !Ref Ingress1Port
       CidrIp: !Ref Ingress1Cidr
       Description: !Sub "Rule 1: port ${Ingress1Port} from ${Ingress1Cidr}"
+
+  IngressRule01Ipv6:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasIngress1Ipv6
+    Properties:
+      GroupId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
+      IpProtocol: !Ref Ingress1Protocol
+      FromPort: !Ref Ingress1Port
+      ToPort: !Ref Ingress1Port
+      CidrIpv6: !Ref Ingress1CidrIpv6
+      Description: !Sub "Rule 1 IPv6: port ${Ingress1Port} from ${Ingress1CidrIpv6}"
 
   IngressRule02:
     Type: AWS::EC2::SecurityGroupIngress
@@ -146,7 +206,7 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: tcp
+      IpProtocol: !Ref Ingress2Protocol
       FromPort: !Ref Ingress2Port
       ToPort: !Ref Ingress2Port
       CidrIp: !Ref Ingress2Cidr
@@ -158,7 +218,7 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: tcp
+      IpProtocol: !Ref Ingress3Protocol
       FromPort: !Ref Ingress3Port
       ToPort: !Ref Ingress3Port
       CidrIp: !Ref Ingress3Cidr
