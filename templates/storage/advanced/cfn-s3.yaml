@@ -54,10 +54,6 @@ Metadata:
           - Env
           - BucketSuffix
       - Label:
-          default: "Ownership & Access"
-        Parameters:
-          - ObjectOwnership
-      - Label:
           default: "Encryption (optional)"
         Parameters:
           - KmsKeyId
@@ -98,15 +94,6 @@ Parameters:
     Type: String
     Default: ""
     Description: "Optional suffix appended to the bucket name (e.g. data, logs)."
-
-  ObjectOwnership:
-    Type: String
-    Default: BucketOwnerEnforced
-    AllowedValues:
-      - BucketOwnerEnforced
-      - BucketOwnerPreferred
-      - ObjectWriter
-    Description: "BucketOwnerEnforced: disables ACLs (recommended). BucketOwnerPreferred: bucket owner owns uploaded objects if ACL is set. ObjectWriter: uploader owns the object."
 
   KmsKeyId:
     Type: String
@@ -153,10 +140,11 @@ Mappings:
 # Boolean flags derived from parameter values.
 # -----------------------------------------------
 Conditions:
-  IsPrd:         !Equals [!Ref Env, prd]
-  HasSuffix:     !Not [!Equals [!Ref BucketSuffix, ""]]
-  HasKmsKey:     !Not [!Equals [!Ref KmsKeyId, ""]]
-  HasAccessLogs: !Not [!Equals [!Ref AccessLogsBucket, ""]]
+  IsPrd:               !Equals [!Ref Env, prd]
+  HasSuffix:           !Not [!Equals [!Ref BucketSuffix, ""]]
+  HasKmsKey:           !Not [!Equals [!Ref KmsKeyId, ""]]
+  HasAccessLogs:       !Not [!Equals [!Ref AccessLogsBucket, ""]]
+  IsAccelerateEnabled: !Equals [!Ref AccelerateStatus, "Enabled"]
 
 # -----------------------------------------------
 # Resources
@@ -173,7 +161,6 @@ Resources:
         - HasSuffix
         - !Sub "${ProjectName}-${Env}-s3-${BucketSuffix}"
         - !Sub "${ProjectName}-${Env}-s3"
-      ObjectOwnership: !Ref ObjectOwnership
       VersioningConfiguration:
         Status: !FindInMap [Config, !Ref Env, VersioningStatus]
       BucketEncryption:
@@ -192,8 +179,10 @@ Resources:
         - DestinationBucketName: !Ref AccessLogsBucket
           LogFilePrefix: !Ref AccessLogsPrefix
         - !Ref AWS::NoValue
-      AccelerateConfiguration:
-        AccelerationStatus: !Ref AccelerateStatus
+      AccelerateConfiguration: !If
+        - IsAccelerateEnabled
+        - AccelerationStatus: Enabled
+        - !Ref AWS::NoValue
       LifecycleConfiguration:
         Rules:
           - Id: auto-expire
