@@ -193,6 +193,11 @@ Resources:
       AlarmActions:           !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:              !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
   MessageCountCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -215,6 +220,11 @@ Resources:
       AlarmActions:           !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:              !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
   MessageAgeWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -237,6 +247,11 @@ Resources:
       AlarmActions:           !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:              !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
   MessageAgeCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -259,6 +274,11 @@ Resources:
       AlarmActions:           !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:              !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
 # -----------------------------------------------
 # Outputs

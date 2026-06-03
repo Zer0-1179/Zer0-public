@@ -48,6 +48,7 @@ Metadata:
           default: "NAT Gateway"
         Parameters:
           - ConnectivityType
+          - NatSubnetSuffix
 
 # -----------------------------------------------
 # Parameters
@@ -84,11 +85,20 @@ Parameters:
       - private
     Description: "public: internet-facing NAT Gateway (requires EIP, ~$33/month). private: for VPC-to-VPC routing only (no EIP, no internet access)."
 
+  NatSubnetSuffix:
+    Type: String
+    Default: Public
+    AllowedValues:
+      - Public
+      - Private
+    Description: "Subnet placement. public NAT: Public (default). private NAT: Private (use Private subnet for VPC-to-VPC routing)."
+
 # -----------------------------------------------
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsPublic: !Equals [!Ref ConnectivityType, "public"]
+  IsPublic:         !Equals [!Ref ConnectivityType, "public"]
+  UsePublicSubnet:  !Equals [!Ref NatSubnetSuffix, "Public"]
 
 # -----------------------------------------------
 # Resources
@@ -115,8 +125,10 @@ Resources:
     Properties:
       ConnectivityType: !Ref ConnectivityType
       AllocationId: !If [IsPublic, !GetAtt ElasticIp01.AllocationId, !Ref AWS::NoValue]
-      SubnetId:
-        Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
+      SubnetId: !If
+        - UsePublicSubnet
+        - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
+        - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet01Id"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-ngw-${NatSuffix}-01"

@@ -153,7 +153,7 @@ Parameters:
     AllowedValues:
       - "true"
       - "false"
-    Description: "Enable Multi-Attach to allow the volume to be attached to multiple instances simultaneously. Only supported for io1/io2 volume types."
+    Description: "Enable Multi-Attach to allow the volume to be attached to multiple instances simultaneously. Only supported for io1/io2 volume types. Requires Nitro-based instances."
 
   AutoEnableIO:
     Type: String
