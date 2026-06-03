@@ -4,6 +4,7 @@ Description: "EBS Volume with attachment to an existing EC2 instance."
 # -----------------------------------------------
 # DEPLOY
 # -----------------------------------------------
+# New empty volume:
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-ebs-<EbsSuffix> \
 #   --template-file cfn-ebs.yaml \
@@ -12,6 +13,18 @@ Description: "EBS Volume with attachment to an existing EC2 instance."
 #     Env=dev \
 #     EbsSuffix=data \
 #     AvailabilityZone=ap-northeast-1a \
+#     Ec2InstanceId=i-0123456789abcdef0
+#
+# Volume from snapshot:
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-ebs-<EbsSuffix> \
+#   --template-file cfn-ebs.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     EbsSuffix=data \
+#     AvailabilityZone=ap-northeast-1a \
+#     SnapshotId=snap-0123456789abcdef0 \
 #     Ec2InstanceId=i-0123456789abcdef0
 #
 # EbsSuffix examples: data, logs, backup, 01, 02
@@ -51,6 +64,9 @@ Metadata:
           - AvailabilityZone
           - Iops
           - Throughput
+          - SnapshotId
+          - MultiAttachEnabled
+          - AutoEnableIO
       - Label:
           default: "Attachment"
         Parameters:
@@ -103,7 +119,7 @@ Parameters:
     Default: 20
     MinValue: 1
     MaxValue: 16384
-    Description: "Volume size in GiB. gp3/gp2: 1-16384. io1/io2: 4-16384. st1/sc1: 125-16384."
+    Description: "Volume size in GiB. gp3/gp2: 1-16384. io1/io2: 4-16384. st1/sc1: 125-16384. When SnapshotId is set, must be >= snapshot size."
 
   AvailabilityZone:
     Type: AWS::EC2::AvailabilityZone::Name
@@ -124,6 +140,29 @@ Parameters:
     MaxValue: 1000
     Description: "Throughput in MiB/s. 0 = use default (gp3: 125). Only applies to gp3."
 
+  SnapshotId:
+    Type: String
+    Default: ""
+    Description: "Snapshot ID to restore from (e.g. snap-0123456789abcdef0). Leave empty to create a new empty volume."
+    AllowedPattern: "^(snap-[0-9a-f]+)?$"
+    ConstraintDescription: "Must be a valid snapshot ID (snap-xxxxxxxx) or empty."
+
+  MultiAttachEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable Multi-Attach to allow the volume to be attached to multiple instances simultaneously. Only supported for io1/io2 volume types."
+
+  AutoEnableIO:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Automatically enable I/O if the volume's data is potentially inconsistent. Enable only if consistency is not a concern."
+
   Ec2InstanceId:
     Type: String
     Default: ""
@@ -143,10 +182,13 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasIops: !Not [!Equals [!Ref Iops, 0]]
-  HasThroughput: !Not [!Equals [!Ref Throughput, 0]]
-  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
-  HasEc2Instance: !Not [!Equals [!Ref Ec2InstanceId, ""]]
+  HasIops:             !Not [!Equals [!Ref Iops, 0]]
+  HasThroughput:       !Not [!Equals [!Ref Throughput, 0]]
+  HasKmsKey:           !Not [!Equals [!Ref KmsKeyArn, ""]]
+  HasEc2Instance:      !Not [!Equals [!Ref Ec2InstanceId, ""]]
+  HasSnapshot:         !Not [!Equals [!Ref SnapshotId, ""]]
+  IsMultiAttachEnabled: !Equals [!Ref MultiAttachEnabled, "true"]
+  IsAutoEnableIO:      !Equals [!Ref AutoEnableIO, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -163,8 +205,11 @@ Resources:
       AvailabilityZone: !Ref AvailabilityZone
       VolumeType: !Ref VolumeType
       Size: !Ref SizeGiB
+      SnapshotId: !If [HasSnapshot, !Ref SnapshotId, !Ref AWS::NoValue]
       Iops: !If [HasIops, !Ref Iops, !Ref AWS::NoValue]
       Throughput: !If [HasThroughput, !Ref Throughput, !Ref AWS::NoValue]
+      MultiAttachEnabled: !If [IsMultiAttachEnabled, true, false]
+      AutoEnableIO: !If [IsAutoEnableIO, true, false]
       Encrypted: true
       KmsKeyId: !If [HasKmsKey, !Ref KmsKeyArn, !Ref AWS::NoValue]
       Tags:

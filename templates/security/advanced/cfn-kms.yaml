@@ -43,6 +43,11 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+      - Label:
+          default: "Advanced (optional)"
+        Parameters:
+          - MultiRegion
+          - RotationPeriodInDays
 
 # -----------------------------------------------
 # Parameters
@@ -67,6 +72,21 @@ Parameters:
       - prd
     Description: "Deployment environment. prd sets DeletionPolicy to Retain and extends the pending deletion window to 30 days."
 
+  MultiRegion:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Create a multi-Region primary key that can be replicated to other AWS Regions. Cannot be changed after creation (requires replacement)."
+
+  RotationPeriodInDays:
+    Type: Number
+    Default: 365
+    MinValue: 90
+    MaxValue: 2560
+    Description: "Automatic key rotation period in days (90 to 2560). Default: 365 (1 year)."
+
 # -----------------------------------------------
 # Mappings
 # Static lookup table for env-specific values.
@@ -87,7 +107,8 @@ Mappings:
 # Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
-  IsPrd: !Equals [!Ref Env, prd]
+  IsPrd:        !Equals [!Ref Env, prd]
+  IsMultiRegion: !Equals [!Ref MultiRegion, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -108,6 +129,8 @@ Resources:
       Description: !Sub "General-purpose encryption key for ${ProjectName}-${Env}"
       Enabled: true
       EnableKeyRotation: true
+      RotationPeriodInDays: !Ref RotationPeriodInDays
+      MultiRegion: !If [IsMultiRegion, true, false]
       KeySpec: SYMMETRIC_DEFAULT
       KeyUsage: ENCRYPT_DECRYPT
       PendingWindowInDays: !FindInMap [Config, !Ref Env, PendingWindowInDays]

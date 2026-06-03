@@ -61,11 +61,14 @@ Metadata:
           default: "Common"
         Parameters:
           - EvaluationPeriods
+          - DatapointsToAlarm
+          - ActionsEnabled
       - Label:
           default: "Notifications (optional)"
         Parameters:
           - WarningActionArn
           - CriticalActionArn
+          - InsufficientDataActionArn
 
 # -----------------------------------------------
 # Parameters
@@ -123,6 +126,20 @@ Parameters:
     MinValue: 1
     Description: "Number of consecutive 1-minute periods that must breach the threshold before alarming."
 
+  DatapointsToAlarm:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: "M out of N evaluation (M value). 0 = use EvaluationPeriods (all periods must breach). Must be <= EvaluationPeriods."
+
+  ActionsEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Set to false to disable all alarm actions (useful during maintenance windows)."
+
   WarningActionArn:
     Type: String
     Default: ""
@@ -133,14 +150,22 @@ Parameters:
     Default: ""
     Description: "SNS topic ARN for CRITICAL severity (e.g. PagerDuty). Used for both ALARM and OK notifications."
 
+  InsufficientDataActionArn:
+    Type: String
+    Default: ""
+    Description: "SNS topic ARN for INSUFFICIENT_DATA state. Leave empty to skip."
+
 # -----------------------------------------------
 # Conditions
 # Boolean flags derived from parameter values.
 # Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
-  HasWarningAction:  !Not [!Equals [!Ref WarningActionArn, ""]]
-  HasCriticalAction: !Not [!Equals [!Ref CriticalActionArn, ""]]
+  HasWarningAction:           !Not [!Equals [!Ref WarningActionArn, ""]]
+  HasCriticalAction:          !Not [!Equals [!Ref CriticalActionArn, ""]]
+  HasInsufficientDataAction:  !Not [!Equals [!Ref InsufficientDataActionArn, ""]]
+  HasDatapointsToAlarm:       !Not [!Equals [!Ref DatapointsToAlarm, 0]]
+  IsActionsEnabled:           !Equals [!Ref ActionsEnabled, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -160,11 +185,14 @@ Resources:
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
+      DatapointsToAlarm: !If [HasDatapointsToAlarm, !Ref DatapointsToAlarm, !Ref AWS::NoValue]
       Threshold: !Ref MessageCountWarningThreshold
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
-      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      ActionsEnabled: !If [IsActionsEnabled, true, false]
+      AlarmActions:           !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:              !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
 
   MessageCountCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -179,11 +207,14 @@ Resources:
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
+      DatapointsToAlarm: !If [HasDatapointsToAlarm, !Ref DatapointsToAlarm, !Ref AWS::NoValue]
       Threshold: !Ref MessageCountCriticalThreshold
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
-      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      ActionsEnabled: !If [IsActionsEnabled, true, false]
+      AlarmActions:           !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:              !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
 
   MessageAgeWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -198,11 +229,14 @@ Resources:
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
+      DatapointsToAlarm: !If [HasDatapointsToAlarm, !Ref DatapointsToAlarm, !Ref AWS::NoValue]
       Threshold: !Ref MessageAgeWarningThreshold
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
-      OKActions:    !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      ActionsEnabled: !If [IsActionsEnabled, true, false]
+      AlarmActions:           !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      OKActions:              !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
+      InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
 
   MessageAgeCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -217,11 +251,14 @@ Resources:
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: !Ref EvaluationPeriods
+      DatapointsToAlarm: !If [HasDatapointsToAlarm, !Ref DatapointsToAlarm, !Ref AWS::NoValue]
       Threshold: !Ref MessageAgeCriticalThreshold
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
-      OKActions:    !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      ActionsEnabled: !If [IsActionsEnabled, true, false]
+      AlarmActions:           !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      OKActions:              !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
+      InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
 
 # -----------------------------------------------
 # Outputs

@@ -38,6 +38,10 @@ Metadata:
           - VpcCidr
           - PublicSubnetCidrs
           - PrivateSubnetCidrs
+      - Label:
+          default: "Advanced (optional)"
+        Parameters:
+          - InstanceTenancy
 
 # -----------------------------------------------
 # Parameters
@@ -80,6 +84,14 @@ Parameters:
     Default: "10.0.11.0/24,10.0.12.0/24"
     Description: "Comma-separated CIDR blocks for private subnets, one per AZ (e.g. 10.0.11.0/24,10.0.12.0/24)."
 
+  InstanceTenancy:
+    Type: String
+    Default: default
+    AllowedValues:
+      - default
+      - dedicated
+    Description: "default: instances run on shared hardware. dedicated: instances run on dedicated hardware. Changing from default to dedicated requires VPC replacement."
+
 # -----------------------------------------------
 # Mappings
 # AZIndex maps subnet identifiers to AZ selection indices.
@@ -115,6 +127,7 @@ Resources:
       CidrBlock: !Ref VpcCidr
       EnableDnsSupport: true
       EnableDnsHostnames: true
+      InstanceTenancy: !Ref InstanceTenancy
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-vpc"

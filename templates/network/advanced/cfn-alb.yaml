@@ -46,12 +46,29 @@ Metadata:
           - SgSuffix
           - AlbSuffix
           - Scheme
+          - IpAddressType
       - Label:
           default: "Target Group"
         Parameters:
           - TargetType
           - TargetPort
           - HealthCheckPath
+          - MatcherHttpCode
+          - DeregistrationDelay
+      - Label:
+          default: "Stickiness (optional)"
+        Parameters:
+          - StickinessEnabled
+          - StickinessType
+          - StickinessDuration
+      - Label:
+          default: "ALB Attributes (optional)"
+        Parameters:
+          - IdleTimeoutSeconds
+          - DeletionProtectionEnabled
+          - AccessLogsEnabled
+          - AccessLogsBucket
+          - AccessLogsPrefix
       - Label:
           default: "HTTPS (optional)"
         Parameters:
@@ -99,6 +116,15 @@ Parameters:
       - internal
     Description: "internet-facing uses public subnets. internal uses private subnets."
 
+  IpAddressType:
+    Type: String
+    Default: ipv4
+    AllowedValues:
+      - ipv4
+      - dualstack
+      - dualstack-without-public-ipv4
+    Description: "ipv4: IPv4 only. dualstack: IPv4 and IPv6. dualstack-without-public-ipv4: public IPv6 + private IPv4/IPv6."
+
   TargetType:
     Type: String
     Default: instance
@@ -119,6 +145,74 @@ Parameters:
     Default: "/"
     Description: "HTTP path for ALB health checks."
 
+  MatcherHttpCode:
+    Type: String
+    Default: "200"
+    Description: "HTTP response codes for health check success. Range (e.g. 200-299) or list (e.g. 200,302)."
+
+  DeregistrationDelay:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    MaxValue: 3600
+    Description: "Time in seconds to wait before deregistering a target. 0 for immediate deregistration."
+
+  StickinessEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable session stickiness (load balancer cookie). Routes repeat requests to the same target."
+
+  StickinessType:
+    Type: String
+    Default: lb_cookie
+    AllowedValues:
+      - lb_cookie
+      - app_cookie
+    Description: "lb_cookie: ALB-managed cookie. app_cookie: application-managed cookie (requires CookieName)."
+
+  StickinessDuration:
+    Type: Number
+    Default: 86400
+    MinValue: 1
+    MaxValue: 604800
+    Description: "Stickiness cookie duration in seconds (1s to 7 days). Default: 86400 (1 day)."
+
+  IdleTimeoutSeconds:
+    Type: Number
+    Default: 60
+    MinValue: 1
+    MaxValue: 4000
+    Description: "Connection idle timeout in seconds. Default: 60."
+
+  DeletionProtectionEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Prevent accidental deletion of the ALB. Enable for production."
+
+  AccessLogsEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable ALB access logs to S3. Requires AccessLogsBucket."
+
+  AccessLogsBucket:
+    Type: String
+    Default: ""
+    Description: "S3 bucket name for ALB access logs. Required when AccessLogsEnabled=true."
+
+  AccessLogsPrefix:
+    Type: String
+    Default: ""
+    Description: "S3 key prefix for access logs (e.g. alb-logs/my-project). Leave empty for root."
+
   CertificateArn:
     Type: String
     Default: ""
@@ -128,8 +222,11 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsInternetFacing: !Equals [!Ref Scheme, "internet-facing"]
-  HasHttps: !Not [!Equals [!Ref CertificateArn, ""]]
+  IsInternetFacing:          !Equals [!Ref Scheme, "internet-facing"]
+  HasHttps:                  !Not [!Equals [!Ref CertificateArn, ""]]
+  IsStickinessEnabled:       !Equals [!Ref StickinessEnabled, "true"]
+  IsDeletionProtectionEnabled: !Equals [!Ref DeletionProtectionEnabled, "true"]
+  IsAccessLogsEnabled:       !Equals [!Ref AccessLogsEnabled, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -151,6 +248,17 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: !Ref MatcherHttpCode
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: !Ref DeregistrationDelay
+        - Key: stickiness.enabled
+          Value: !Ref StickinessEnabled
+        - Key: stickiness.type
+          Value: !If [IsStickinessEnabled, !Ref StickinessType, lb_cookie]
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: !Ref StickinessDuration
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-tg"
@@ -165,6 +273,7 @@ Resources:
       Name: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}"
       Type: application
       Scheme: !Ref Scheme
+      IpAddressType: !Ref IpAddressType
       SecurityGroups:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
       Subnets:
@@ -176,6 +285,17 @@ Resources:
           - IsInternetFacing
           - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet02Id"
           - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: !Ref IdleTimeoutSeconds
+        - Key: deletion_protection.enabled
+          Value: !Ref DeletionProtectionEnabled
+        - Key: access_logs.s3.enabled
+          Value: !Ref AccessLogsEnabled
+        - Key: access_logs.s3.bucket
+          Value: !If [IsAccessLogsEnabled, !Ref AccessLogsBucket, ""]
+        - Key: access_logs.s3.prefix
+          Value: !Ref AccessLogsPrefix
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}"

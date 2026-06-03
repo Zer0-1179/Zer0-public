@@ -26,13 +26,23 @@ Description: "S3 Bucket with environment-based configuration (versioning, encryp
 #     Env=prd \
 #     BucketSuffix=data \
 #     KmsKeyId=$KMS_ARN
+#
+# With server access logging:
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-s3-<BucketSuffix> \
+#   --template-file cfn-s3.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=prd \
+#     BucketSuffix=data \
+#     AccessLogsBucket=my-project-prd-s3-logs \
+#     AccessLogsPrefix=data-bucket/
 # -----------------------------------------------
 
 # -----------------------------------------------
 # Metadata
 # Organizes the parameter input UI in the CloudFormation console.
 # ParameterGroups groups parameters visually.
-# ParameterLabels overrides the display name shown to users.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -42,22 +52,30 @@ Metadata:
         Parameters:
           - ProjectName
           - Env
+          - BucketSuffix
+      - Label:
+          default: "Ownership & Access"
+        Parameters:
+          - ObjectOwnership
       - Label:
           default: "Encryption (optional)"
         Parameters:
           - KmsKeyId
       - Label:
-          default: "Optional"
+          default: "Access Logs (optional)"
         Parameters:
-          - BucketSuffix
+          - AccessLogsBucket
+          - AccessLogsPrefix
+      - Label:
+          default: "Transfer Acceleration (optional)"
+        Parameters:
+          - AccelerateStatus
 
 # -----------------------------------------------
 # Parameters
 # Values passed in at deploy time.
 # AllowedValues restricts accepted input.
 # Default sets the fallback value when omitted.
-# NoEcho: true hides the value in the console and CLI output.
-# AWS-specific types (e.g. AWS::EC2::VPC::Id) show dropdowns in the console.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -76,15 +94,42 @@ Parameters:
       - prd
     Description: "Deployment environment. prd enables versioning and sets DeletionPolicy to Retain."
 
+  BucketSuffix:
+    Type: String
+    Default: ""
+    Description: "Optional suffix appended to the bucket name (e.g. data, logs)."
+
+  ObjectOwnership:
+    Type: String
+    Default: BucketOwnerEnforced
+    AllowedValues:
+      - BucketOwnerEnforced
+      - BucketOwnerPreferred
+      - ObjectWriter
+    Description: "BucketOwnerEnforced: disables ACLs (recommended). BucketOwnerPreferred: bucket owner owns uploaded objects if ACL is set. ObjectWriter: uploader owns the object."
+
   KmsKeyId:
     Type: String
     Default: ""
     Description: "KMS Key ARN or ID. Leave empty to use the AWS managed key (aws/s3)."
 
-  BucketSuffix:
+  AccessLogsBucket:
     Type: String
     Default: ""
-    Description: "Optional suffix appended to the bucket name (e.g. data, logs)."
+    Description: "Destination S3 bucket name for server access logs. Leave empty to disable logging."
+
+  AccessLogsPrefix:
+    Type: String
+    Default: ""
+    Description: "S3 key prefix for access logs (e.g. my-bucket/). Leave empty for root of the destination bucket."
+
+  AccelerateStatus:
+    Type: String
+    Default: Suspended
+    AllowedValues:
+      - Enabled
+      - Suspended
+    Description: "Enabled: S3 Transfer Acceleration for faster uploads via CloudFront edge locations. Additional cost applies."
 
 # -----------------------------------------------
 # Mappings
@@ -106,21 +151,17 @@ Mappings:
 # -----------------------------------------------
 # Conditions
 # Boolean flags derived from parameter values.
-# Supports AND / OR / NOT for complex logic.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
 # -----------------------------------------------
 Conditions:
-  IsPrd:     !Equals [!Ref Env, prd]
-  HasSuffix: !Not [!Equals [!Ref BucketSuffix, ""]]
-  HasKmsKey: !Not [!Equals [!Ref KmsKeyId, ""]]
+  IsPrd:         !Equals [!Ref Env, prd]
+  HasSuffix:     !Not [!Equals [!Ref BucketSuffix, ""]]
+  HasKmsKey:     !Not [!Equals [!Ref KmsKeyId, ""]]
+  HasAccessLogs: !Not [!Equals [!Ref AccessLogsBucket, ""]]
 
 # -----------------------------------------------
 # Resources
-# AWS resources to create.
 # DeletionPolicy: Retain (prd) keeps the bucket after stack deletion.
 #                 Delete (dev) removes the bucket with the stack.
-# Pseudo parameters like AWS::StackName and AWS::Region
-# are available without defining them in Parameters.
 # -----------------------------------------------
 Resources:
   S3Bucket01:
@@ -132,6 +173,7 @@ Resources:
         - HasSuffix
         - !Sub "${ProjectName}-${Env}-s3-${BucketSuffix}"
         - !Sub "${ProjectName}-${Env}-s3"
+      ObjectOwnership: !Ref ObjectOwnership
       VersioningConfiguration:
         Status: !FindInMap [Config, !Ref Env, VersioningStatus]
       BucketEncryption:
@@ -145,6 +187,13 @@ Resources:
         BlockPublicPolicy:     true
         IgnorePublicAcls:      true
         RestrictPublicBuckets: true
+      LoggingConfiguration: !If
+        - HasAccessLogs
+        - DestinationBucketName: !Ref AccessLogsBucket
+          LogFilePrefix: !Ref AccessLogsPrefix
+        - !Ref AWS::NoValue
+      AccelerateConfiguration:
+        AccelerationStatus: !Ref AccelerateStatus
       LifecycleConfiguration:
         Rules:
           - Id: auto-expire

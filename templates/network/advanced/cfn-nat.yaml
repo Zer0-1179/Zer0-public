@@ -1,9 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "NAT Gateway in a public subnet with a default route in the private route table. ~$33/month."
+Description: "NAT Gateway in a public subnet with a default route in the private route table."
 
 # -----------------------------------------------
 # DEPLOY
 # -----------------------------------------------
+# Public NAT (default, ~$33/month):
 # aws cloudformation deploy \
 #   --stack-name <ProjectName>-<Env>-nat-<NatSuffix> \
 #   --template-file cfn-nat.yaml \
@@ -12,12 +13,22 @@ Description: "NAT Gateway in a public subnet with a default route in the private
 #     Env=dev \
 #     NatSuffix=az1
 #
+# Private NAT (no EIP, no internet access, for VPC-to-VPC routing):
+# aws cloudformation deploy \
+#   --stack-name <ProjectName>-<Env>-nat-<NatSuffix> \
+#   --template-file cfn-nat.yaml \
+#   --parameter-overrides \
+#     ProjectName=my-project \
+#     Env=dev \
+#     NatSuffix=internal \
+#     ConnectivityType=private
+#
 # Prerequisite (stack name must follow convention):
 #   VPC: {ProjectName}-{Env}-vpc
 #
 # Deploy order:
 #   1. cfn-vpc.yaml   (VPC, subnets, route tables)
-#   2. cfn-igw.yaml   (internet access for public subnets)
+#   2. cfn-igw.yaml   (internet access for public subnets - public NAT only)
 #   3. cfn-nat.yaml   (this template)
 # -----------------------------------------------
 
@@ -33,6 +44,10 @@ Metadata:
           - ProjectName
           - Env
           - NatSuffix
+      - Label:
+          default: "NAT Gateway"
+        Parameters:
+          - ConnectivityType
 
 # -----------------------------------------------
 # Parameters
@@ -61,14 +76,29 @@ Parameters:
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
     Description: "AZ or sequence identifier for this NAT Gateway (e.g. az1, az2, 01)."
 
+  ConnectivityType:
+    Type: String
+    Default: public
+    AllowedValues:
+      - public
+      - private
+    Description: "public: internet-facing NAT Gateway (requires EIP, ~$33/month). private: for VPC-to-VPC routing only (no EIP, no internet access)."
+
+# -----------------------------------------------
+# Conditions
+# -----------------------------------------------
+Conditions:
+  IsPublic: !Equals [!Ref ConnectivityType, "public"]
+
 # -----------------------------------------------
 # Resources
 # NAT Gateway is placed in PublicSubnet01.
-# EIP provides a static outbound IP address.
+# EIP provides a static outbound IP address (public NAT only).
 # PrivateRoute sends all outbound traffic from private subnets through the NAT Gateway.
 # -----------------------------------------------
 Resources:
   ElasticIp01:
+    Condition: IsPublic
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
@@ -83,7 +113,8 @@ Resources:
   NatGateway01:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt ElasticIp01.AllocationId
+      ConnectivityType: !Ref ConnectivityType
+      AllocationId: !If [IsPublic, !GetAtt ElasticIp01.AllocationId, !Ref AWS::NoValue]
       SubnetId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet01Id"
       Tags:
@@ -113,7 +144,8 @@ Outputs:
       Name: !Sub "${AWS::StackName}-NatGatewayId"
 
   ElasticIpAddress01:
-    Description: "Elastic IP address of the NAT Gateway"
+    Condition: IsPublic
+    Description: "Elastic IP address of the NAT Gateway (public NAT only)"
     Value: !Ref ElasticIp01
     Export:
       Name: !Sub "${AWS::StackName}-EipAddress"

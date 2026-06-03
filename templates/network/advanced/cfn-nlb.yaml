@@ -50,6 +50,7 @@ Metadata:
           - SgSuffix
           - NlbSuffix
           - Scheme
+          - IpAddressType
       - Label:
           default: "Listener"
         Parameters:
@@ -60,6 +61,13 @@ Metadata:
         Parameters:
           - TargetType
           - TargetPort
+          - DeregistrationDelay
+          - PreserveClientIp
+      - Label:
+          default: "NLB Attributes (optional)"
+        Parameters:
+          - CrossZoneEnabled
+          - DeletionProtectionEnabled
       - Label:
           default: "TLS (required when Protocol=TLS)"
         Parameters:
@@ -107,6 +115,14 @@ Parameters:
       - internal
     Description: "internet-facing uses public subnets. internal uses private subnets."
 
+  IpAddressType:
+    Type: String
+    Default: ipv4
+    AllowedValues:
+      - ipv4
+      - dualstack
+    Description: "ipv4: IPv4 only. dualstack: IPv4 and IPv6."
+
   Protocol:
     Type: String
     Default: TCP
@@ -139,6 +155,37 @@ Parameters:
     MaxValue: 65535
     Description: "Port your backend (EC2 / container) listens on."
 
+  DeregistrationDelay:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    MaxValue: 3600
+    Description: "Time in seconds to wait before deregistering a target. 0 for immediate deregistration."
+
+  PreserveClientIp:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Preserve the source IP of the client. Default false for instance targets, true for ip targets."
+
+  CrossZoneEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable cross-zone load balancing. Routes traffic to targets in all AZs regardless of the AZ that receives the request."
+
+  DeletionProtectionEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Prevent accidental deletion of the NLB. Enable for production."
+
   CertificateArn:
     Type: String
     Default: ""
@@ -149,13 +196,13 @@ Parameters:
 # -----------------------------------------------
 Conditions:
   IsInternetFacing: !Equals [!Ref Scheme, "internet-facing"]
-  HasTls: !Equals [!Ref Protocol, "TLS"]
+  HasTls:           !Equals [!Ref Protocol, "TLS"]
 
 # -----------------------------------------------
 # Resources
+# TLS is terminated at the NLB; backend receives plain TCP.
 # -----------------------------------------------
 Resources:
-  # TLS is terminated at the NLB; backend receives plain TCP.
   NlbTargetGroup01:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -170,6 +217,11 @@ Resources:
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: !Ref DeregistrationDelay
+        - Key: preserve_client_ip.enabled
+          Value: !Ref PreserveClientIp
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}-tg"
@@ -184,6 +236,7 @@ Resources:
       Name: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}"
       Type: network
       Scheme: !Ref Scheme
+      IpAddressType: !Ref IpAddressType
       SecurityGroups:
         - Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
       Subnets:
@@ -195,6 +248,11 @@ Resources:
           - IsInternetFacing
           - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PublicSubnet02Id"
           - Fn::ImportValue: !Sub "${ProjectName}-${Env}-vpc-PrivateSubnet02Id"
+      LoadBalancerAttributes:
+        - Key: load_balancing.cross_zone.enabled
+          Value: !Ref CrossZoneEnabled
+        - Key: deletion_protection.enabled
+          Value: !Ref DeletionProtectionEnabled
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-nlb-${NlbSuffix}"
