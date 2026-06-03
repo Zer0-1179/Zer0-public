@@ -120,7 +120,6 @@ Parameters:
     Type: String
     Default: AFTER_30_DAYS
     AllowedValues:
-      - ""
       - AFTER_1_DAY
       - AFTER_7_DAYS
       - AFTER_14_DAYS
@@ -130,7 +129,7 @@ Parameters:
       - AFTER_180_DAYS
       - AFTER_270_DAYS
       - AFTER_365_DAYS
-    Description: "Move files to Infrequent Access (IA) storage after this period. Leave empty to disable."
+    Description: "Move files to Infrequent Access (IA) storage after this period. Always required (LifecyclePolicies must have at least one entry)."
 
   TransitionToArchive:
     Type: String
@@ -173,10 +172,9 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsProvisioned:       !Equals [!Ref ThroughputMode, "provisioned"]
-  HasKmsKey:           !Not [!Equals [!Ref KmsKeyArn, ""]]
-  IsBackupEnabled:     !Equals [!Ref BackupEnabled, "true"]
-  HasTransitionToIA:   !Not [!Equals [!Ref TransitionToIA, ""]]
+  IsProvisioned:          !Equals [!Ref ThroughputMode, "provisioned"]
+  HasKmsKey:              !Not [!Equals [!Ref KmsKeyArn, ""]]
+  IsBackupEnabled:        !Equals [!Ref BackupEnabled, "true"]
   HasTransitionToArchive: !Not [!Equals [!Ref TransitionToArchive, ""]]
   HasTransitionToPrimary: !Not [!Equals [!Ref TransitionToPrimary, ""]]
 
@@ -197,10 +195,7 @@ Resources:
       BackupPolicy:
         Status: !If [IsBackupEnabled, ENABLED, DISABLED]
       LifecyclePolicies:
-        - !If
-          - HasTransitionToIA
-          - TransitionToIA: !Ref TransitionToIA
-          - !Ref AWS::NoValue
+        - TransitionToIA: !Ref TransitionToIA
         - !If
           - HasTransitionToArchive
           - TransitionToArchive: !Ref TransitionToArchive

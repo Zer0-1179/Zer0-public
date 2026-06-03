@@ -207,6 +207,11 @@ Resources:
       AlarmActions:           !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:              !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
   CpuCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -231,6 +236,11 @@ Resources:
       AlarmActions:           !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:              !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
   MemoryWarningAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -255,6 +265,11 @@ Resources:
       AlarmActions:           !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       OKActions:              !If [HasWarningAction,  [!Ref WarningActionArn],  !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
   MemoryCriticalAlarm01:
     Type: AWS::CloudWatch::Alarm
@@ -279,6 +294,11 @@ Resources:
       AlarmActions:           !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       OKActions:              !If [HasCriticalAction, [!Ref CriticalActionArn], !Ref AWS::NoValue]
       InsufficientDataActions: !If [HasInsufficientDataAction, [!Ref InsufficientDataActionArn], !Ref AWS::NoValue]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Env
+          Value: !Ref Env
 
 # -----------------------------------------------
 # Outputs

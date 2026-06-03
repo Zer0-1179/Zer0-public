@@ -78,7 +78,7 @@ Parameters:
     AllowedValues:
       - "true"
       - "false"
-    Description: "Create a multi-Region primary key that can be replicated to other AWS Regions. Cannot be changed after creation (requires replacement)."
+    Description: "Create a multi-Region primary key that can be replicated to other AWS Regions. IMMUTABLE: changing this value after creation causes the update to fail (not replacement)."
 
   RotationPeriodInDays:
     Type: Number

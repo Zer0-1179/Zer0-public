@@ -171,14 +171,14 @@ Parameters:
     AllowedValues:
       - lb_cookie
       - app_cookie
-    Description: "lb_cookie: ALB-managed cookie. app_cookie: application-managed cookie (requires CookieName)."
+    Description: "lb_cookie: ALB-managed cookie. app_cookie: application-managed cookie (duration controlled by app, not ALB)."
 
   StickinessDuration:
     Type: Number
     Default: 86400
     MinValue: 1
     MaxValue: 604800
-    Description: "Stickiness cookie duration in seconds (1s to 7 days). Default: 86400 (1 day)."
+    Description: "Stickiness cookie duration in seconds for lb_cookie type (1s to 7 days). Default: 86400 (1 day). Ignored when StickinessType=app_cookie."
 
   IdleTimeoutSeconds:
     Type: Number
@@ -222,11 +222,12 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsInternetFacing:          !Equals [!Ref Scheme, "internet-facing"]
-  HasHttps:                  !Not [!Equals [!Ref CertificateArn, ""]]
-  IsStickinessEnabled:       !Equals [!Ref StickinessEnabled, "true"]
+  IsInternetFacing:            !Equals [!Ref Scheme, "internet-facing"]
+  HasHttps:                    !Not [!Equals [!Ref CertificateArn, ""]]
+  IsStickinessEnabled:         !Equals [!Ref StickinessEnabled, "true"]
+  IsLbCookie:                  !Equals [!Ref StickinessType, "lb_cookie"]
   IsDeletionProtectionEnabled: !Equals [!Ref DeletionProtectionEnabled, "true"]
-  IsAccessLogsEnabled:       !Equals [!Ref AccessLogsEnabled, "true"]
+  IsAccessLogsEnabled:         !Equals [!Ref AccessLogsEnabled, "true"]
 
 # -----------------------------------------------
 # Resources
@@ -258,7 +259,7 @@ Resources:
         - Key: stickiness.type
           Value: !If [IsStickinessEnabled, !Ref StickinessType, lb_cookie]
         - Key: stickiness.lb_cookie.duration_seconds
-          Value: !Ref StickinessDuration
+          Value: !If [IsLbCookie, !Ref StickinessDuration, 86400]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-tg"

@@ -64,6 +64,7 @@ Metadata:
           default: "Log Group Class (optional - applies to all groups)"
         Parameters:
           - LogGroupClass
+          - DeletionProtectionEnabled
       - Label:
           default: "Encryption (optional - applies to all groups)"
         Parameters:
@@ -122,6 +123,14 @@ Parameters:
       - INFREQUENT_ACCESS
     Description: "STANDARD: full features. INFREQUENT_ACCESS: lower cost, subset of features. Cannot be changed after creation."
 
+  DeletionProtectionEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Prevent log group deletion until explicitly disabled. Recommended for production to avoid accidental deletion."
+
   KmsKeyId:
     Type: String
     Default: ""
@@ -143,8 +152,9 @@ Mappings:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  IsPrd:             !Equals [!Ref Env, prd]
-  HasKmsKey:         !Not [!Equals [!Ref KmsKeyId, ""]]
+  IsPrd:                    !Equals [!Ref Env, prd]
+  HasKmsKey:                !Not [!Equals [!Ref KmsKeyId, ""]]
+  IsDeletionProtected:      !Equals [!Ref DeletionProtectionEnabled, "true"]
   HasCustomName01:   !Not [!Equals [!Ref LogGroupName01, ""]]
   HasLogGroup02:     !Not [!Equals [!Ref LogGroupName02, ""]]
   HasLogGroup03:     !Not [!Equals [!Ref LogGroupName03, ""]]
@@ -170,6 +180,7 @@ Resources:
         - !Sub "/${ProjectName}/${Env}"
       RetentionInDays: !FindInMap [Config, !Ref Env, RetentionInDays]
       LogGroupClass: !Ref LogGroupClass
+      DeletionProtectionEnabled: !If [IsDeletionProtected, true, false]
       KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
       Tags:
         - Key: Project
