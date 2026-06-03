@@ -293,10 +293,16 @@ Resources:
           Value: !Ref DeletionProtectionEnabled
         - Key: access_logs.s3.enabled
           Value: !Ref AccessLogsEnabled
-        - Key: access_logs.s3.bucket
-          Value: !If [IsAccessLogsEnabled, !Ref AccessLogsBucket, ""]
-        - Key: access_logs.s3.prefix
-          Value: !Ref AccessLogsPrefix
+        - !If
+          - IsAccessLogsEnabled
+          - Key: access_logs.s3.bucket
+            Value: !Ref AccessLogsBucket
+          - !Ref AWS::NoValue
+        - !If
+          - IsAccessLogsEnabled
+          - Key: access_logs.s3.prefix
+            Value: !Ref AccessLogsPrefix
+          - !Ref AWS::NoValue
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}"
