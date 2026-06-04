@@ -21,7 +21,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Set CSP dynamically so the nonce can be included.
   // CloudFront ResponseHeadersPolicy has Override:false for CSP,
   // so this header takes precedence over the static fallback.
-  response.headers.set('Cache-Control', 'no-cache, must-revalidate');
+  response.headers.set('Cache-Control', 'no-store');
 
   response.headers.set(
     'Content-Security-Policy',
