@@ -36,8 +36,8 @@ const CATEGORY_FILES = {
     beginner: ['cfn-sqs-basic.yaml', 'cfn-sns-basic.yaml', 'cfn-eventbridge-basic.yaml'],
   },
   monitoring: {
-    advanced: ['cfn-cw-logs.yaml', 'cfn-cw-alarm-ec2.yaml', 'cfn-cw-alarm-rds.yaml', 'cfn-cw-alarm-efs.yaml', 'cfn-cw-alarm-lambda.yaml', 'cfn-cw-alarm-sqs.yaml', 'cfn-cw-alarm-alb.yaml'],
-    beginner: ['cfn-cw-logs-basic.yaml', 'cfn-cw-alarm-ec2-basic.yaml', 'cfn-cw-alarm-rds-basic.yaml', 'cfn-cw-alarm-efs-basic.yaml', 'cfn-cw-alarm-lambda-basic.yaml', 'cfn-cw-alarm-sqs-basic.yaml', 'cfn-cw-alarm-alb-basic.yaml'],
+    advanced: ['cfn-cw-logs.yaml', 'cfn-cw-alarm-ec2.yaml', 'cfn-cw-alarm-rds.yaml', 'cfn-cw-alarm-efs.yaml', 'cfn-cw-alarm-lambda.yaml', 'cfn-cw-alarm-sqs.yaml', 'cfn-cw-alarm-alb.yaml', 'cfn-cw-alarm-auto-update.yaml'],
+    beginner: ['cfn-cw-logs-basic.yaml', 'cfn-cw-alarm-ec2-basic.yaml', 'cfn-cw-alarm-rds-basic.yaml', 'cfn-cw-alarm-efs-basic.yaml', 'cfn-cw-alarm-lambda-basic.yaml', 'cfn-cw-alarm-sqs-basic.yaml', 'cfn-cw-alarm-alb-basic.yaml', 'cfn-cw-alarm-auto-update-basic.yaml'],
   },
 };
 

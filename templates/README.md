@@ -72,6 +72,7 @@ SAM は使用しません。Lambda のコードデプロイは `aws lambda updat
 | `cfn-cw-alarm-lambda.yaml` | Lambda エラー・スロットル・Duration アラーム（計6アラーム）       | なし |
 | `cfn-cw-alarm-sqs.yaml`    | SQS キュー滞留・メッセージ経過時間 アラーム（計4アラーム）        | なし |
 | `cfn-cw-alarm-alb.yaml`    | ALB 5xxエラー・異常ホスト・レイテンシ アラーム（計6アラーム）     | なし |
+| `cfn-cw-alarm-auto-update.yaml` | EC2/FSxリストア後のCloudWatch Alarm ID自動更新（Lambda + EventBridge） | なし |
 
 ---
 
