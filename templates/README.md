@@ -72,7 +72,14 @@ SAM は使用しません。Lambda のコードデプロイは `aws lambda updat
 | `cfn-cw-alarm-lambda.yaml` | Lambda エラー・スロットル・Duration アラーム（計6アラーム）       | なし |
 | `cfn-cw-alarm-sqs.yaml`    | SQS キュー滞留・メッセージ経過時間 アラーム（計4アラーム）        | なし |
 | `cfn-cw-alarm-alb.yaml`    | ALB 5xxエラー・異常ホスト・レイテンシ アラーム（計6アラーム）     | なし |
-| `cfn-cw-alarm-auto-update.yaml` | EC2/FSxリストア後のCloudWatch Alarm ID自動更新（Lambda + EventBridge） | なし |
+
+**automation/** （Lambda による運用自動化。上記アラームとは別サブフォルダで管理）
+
+| ファイル名                           | 作成リソース                                                              | 依存 |
+| ------------------------------------ | ------------------------------------------------------------------------- | ---- |
+| `cfn-cw-alarm-auto-update.yaml`      | EC2/FSxリストア後のCloudWatch Alarm ID自動更新（Lambda + EventBridge）    | なし |
+| `cfn-cw-alarm-auto-update-basic.yaml`| 同上（初級版・ProjectNameのみパラメータ）                                 | なし |
+| `lambda_function.py`                 | 上記テンプレートで使用するLambdaコード（デプロイ後に`update-function-code`でアップロード） | — |
 
 ---
 
