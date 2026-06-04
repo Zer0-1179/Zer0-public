@@ -7,13 +7,13 @@ Description: Auto-update CloudWatch Alarm dimensions after EC2/FSx restore (Even
 # Step 1: Deploy this stack
 #   aws cloudformation deploy \
 #     --stack-name <ProjectName>-cw-alarm-updater \
-#     --template-file cfn-cw-alarm-auto-update.yaml \
+#     --template-file cfn-cw-alarm-auto-update-basic.yaml \
 #     --parameter-overrides ProjectName=my-project \
 #     --capabilities CAPABILITY_NAMED_IAM \
 #     --region ap-northeast-1
 #
 # Step 2: Upload the Lambda function code
-#   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/advanced/lambda_function.py
+#   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/automation/lambda_function.py
 #   zip lambda.zip lambda_function.py
 #   aws lambda update-function-code \
 #     --function-name my-project-cw-alarm-updater \
@@ -24,12 +24,14 @@ Description: Auto-update CloudWatch Alarm dimensions after EC2/FSx restore (Even
 #   EC2 / FSx  : Key=CWAlarmAutoUpdate  Value=<identifier>  (e.g. "web-server-01")
 #   CW Alarm   : Key=CWAlarmAutoUpdate  Value=<identifier>  (same value)
 #   Lambda fires automatically when EC2 reaches "running" or FSx reaches "AVAILABLE".
+#
+# To add a second Lambda alarm or extend to more resource types, use
+# cfn-cw-alarm-auto-update.yaml (advanced version) instead.
 # -----------------------------------------------
 
 # -----------------------------------------------
 # Metadata
 # Organizes the parameter input UI in the CloudFormation console.
-# ParameterGroups groups parameters visually.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -38,128 +40,26 @@ Metadata:
           default: Project
         Parameters:
           - ProjectName
-      - Label:
-          default: Monitoring Targets
-        Parameters:
-          - EnableEC2Monitoring
-          - EnableFSxMonitoring
-      - Label:
-          default: Lambda Settings
-        Parameters:
-          - EnableTagKey
-          - LogLevel
-          - LambdaTimeout
-          - LambdaMemory
-    ParameterLabels:
-      ProjectName:
-        default: Project Name
-      EnableEC2Monitoring:
-        default: Enable EC2 Monitoring
-      EnableFSxMonitoring:
-        default: Enable FSx Monitoring
-      EnableTagKey:
-        default: Opt-in Tag Key
-      LogLevel:
-        default: Log Level
-      LambdaTimeout:
-        default: Lambda Timeout (seconds)
-      LambdaMemory:
-        default: Lambda Memory (MB)
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
-# AllowedValues restricts accepted input.
-# Default sets the fallback value when omitted.
+# ProjectName is used as a prefix for all resource names.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
+    Default: my-project
     Description: >
       Project name used as a prefix for all resource names.
       Use lowercase letters, numbers, and hyphens only.
     AllowedPattern: "^[a-z0-9][a-z0-9\\-]*$"
-    MaxLength: 41
-    ConstraintDescription: >
-      Lowercase letters, numbers, and hyphens only. Max 41 characters.
-
-  EnableEC2Monitoring:
-    Type: String
-    Default: "true"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: >
-      Set to true to create an EventBridge rule that triggers Lambda when an EC2
-      instance reaches the "running" state (covers AMI restores and normal reboots).
-
-  EnableFSxMonitoring:
-    Type: String
-    Default: "true"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: >
-      Set to true to create an EventBridge rule that triggers Lambda when an FSx
-      file system reaches the "AVAILABLE" lifecycle state.
-
-  EnableTagKey:
-    Type: String
-    Default: CWAlarmAutoUpdate
-    Description: >
-      Tag key shared by EC2/FSx resources and their CloudWatch Alarms.
-      Set this tag on EC2/FSx with a unique identifier value (e.g. "web-server-01"),
-      and the same tag+value on each alarm you want auto-updated.
-    AllowedPattern: "^(?!aws:)[a-zA-Z0-9_./:=+\\-@]{1,128}$"
-    ConstraintDescription: >
-      1-128 characters. Cannot start with "aws:". Allowed: letters, numbers, _ . / : = + - @
-
-  LogLevel:
-    Type: String
-    Default: INFO
-    AllowedValues:
-      - DEBUG
-      - INFO
-      - WARNING
-      - ERROR
-    Description: >
-      Lambda log verbosity. Use DEBUG to log full event payloads.
-      Use WARNING or ERROR in production to reduce log volume.
-
-  LambdaTimeout:
-    Type: Number
-    Default: 60
-    MinValue: 10
-    MaxValue: 900
-    Description: >
-      Lambda execution timeout in seconds.
-      Increase this value if your account has a large number of CloudWatch Alarms
-      and the function times out before scanning all of them.
-
-  LambdaMemory:
-    Type: Number
-    Default: 128
-    AllowedValues:
-      - 128
-      - 256
-      - 512
-    Description: Lambda memory allocation in MB. 128 MB is sufficient for most use cases.
-
-# -----------------------------------------------
-# Conditions
-# Boolean flags derived from parameter values.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
-# HasEC2Monitoring: create the EC2 EventBridge rule and its Lambda permission
-# HasFSxMonitoring: create the FSx EventBridge rule and its Lambda permission
-# -----------------------------------------------
-Conditions:
-  HasEC2Monitoring: !Equals [!Ref EnableEC2Monitoring, "true"]
-  HasFSxMonitoring: !Equals [!Ref EnableFSxMonitoring, "true"]
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
 # -----------------------------------------------
 # Resources
-# DeletionPolicy defaults to Delete for all resources.
+# Lambda function (placeholder) + IAM role + EventBridge rules (EC2 + FSx).
 # After stack creation, upload lambda_function.py as a zip:
+#   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/automation/lambda_function.py
 #   zip lambda.zip lambda_function.py
 #   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
 # -----------------------------------------------
@@ -170,9 +70,6 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${ProjectName}-cw-alarm-updater"
       RetentionInDays: 90
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
 
   AlarmUpdaterRole01:
     Type: AWS::IAM::Role
@@ -210,9 +107,6 @@ Resources:
                 Action:
                   - tag:GetResources
                 Resource: "*"
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
 
   AlarmUpdaterFunction01:
     Type: AWS::Lambda::Function
@@ -222,26 +116,22 @@ Resources:
       Runtime: python3.13
       Handler: lambda_function.handler
       Role: !GetAtt AlarmUpdaterRole01.Arn
-      Timeout: !Ref LambdaTimeout
-      MemorySize: !Ref LambdaMemory
+      Timeout: 60
+      MemorySize: 128
       Environment:
         Variables:
-          ENABLE_TAG_KEY: !Ref EnableTagKey
-          LOG_LEVEL: !Ref LogLevel
+          ENABLE_TAG_KEY: CWAlarmAutoUpdate
+          LOG_LEVEL: INFO
       Code:
         # Placeholder — upload lambda_function.py after stack creation:
-        #   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/advanced/lambda_function.py
+        #   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/automation/lambda_function.py
         #   zip lambda.zip lambda_function.py
         #   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
         ZipFile: |
           def handler(event, context):
               return {"status": "placeholder — upload lambda_function.py via update-function-code"}
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
 
   EC2StateChangeRule01:
-    Condition: HasEC2Monitoring
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${ProjectName}-ec2-running"
@@ -260,7 +150,6 @@ Resources:
           Arn: !GetAtt AlarmUpdaterFunction01.Arn
 
   FSxLifecycleChangeRule01:
-    Condition: HasFSxMonitoring
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${ProjectName}-fsx-available"
@@ -279,7 +168,6 @@ Resources:
           Arn: !GetAtt AlarmUpdaterFunction01.Arn
 
   EC2RulePermission01:
-    Condition: HasEC2Monitoring
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref AlarmUpdaterFunction01
@@ -288,7 +176,6 @@ Resources:
       SourceArn: !GetAtt EC2StateChangeRule01.Arn
 
   FSxRulePermission01:
-    Condition: HasFSxMonitoring
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref AlarmUpdaterFunction01
@@ -299,15 +186,8 @@ Resources:
 # -----------------------------------------------
 # Outputs
 # Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
 # -----------------------------------------------
 Outputs:
-
-  AlarmUpdaterFunctionArn01:
-    Description: ARN of the CloudWatch Alarm auto-updater Lambda function
-    Value: !GetAtt AlarmUpdaterFunction01.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-FunctionArn"
 
   AlarmUpdaterFunctionName01:
     Description: Name of the CloudWatch Alarm auto-updater Lambda function
@@ -320,17 +200,3 @@ Outputs:
     Value: !Ref AlarmUpdaterLogGroup01
     Export:
       Name: !Sub "${AWS::StackName}-LogGroupName"
-
-  EC2StateChangeRuleArn01:
-    Condition: HasEC2Monitoring
-    Description: ARN of the EventBridge rule for EC2 state changes
-    Value: !GetAtt EC2StateChangeRule01.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-EC2RuleArn"
-
-  FSxLifecycleChangeRuleArn01:
-    Condition: HasFSxMonitoring
-    Description: ARN of the EventBridge rule for FSx lifecycle changes
-    Value: !GetAtt FSxLifecycleChangeRule01.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-FSxRuleArn"
