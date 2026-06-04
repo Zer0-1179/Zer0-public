@@ -533,6 +533,22 @@ export const templates: Template[] = [
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
   },
+  {
+    slug: 'cw-alarm-auto-update',
+    filename: 'cfn-cw-alarm-auto-update.yaml',
+    nameJa: 'CloudWatch アラーム自動更新',
+    nameEn: 'CloudWatch Alarm Auto-Updater',
+    descJa: 'EC2/FSxをAMI・スナップショットからリストアすると新IDが採番されCloudWatchアラームが無効になる問題を自動解消。タグで紐付けたアラームのディメンションを起動のたびに最新IDへ上書き。EC2/FSxの有効/無効をConditionsで切り替え可能。',
+    descEn: 'Fixes broken CloudWatch Alarms after EC2/FSx restore from AMI or snapshot. Automatically updates alarm dimensions to the new resource ID whenever the instance or file system starts. Separately enable or disable EC2/FSx monitoring via Conditions.',
+    descShortJa: 'リストア後のアラームID自動更新・EC2/FSx個別ON/OFF・タグで紐付け',
+    descShortEn: 'Auto-updates alarm dimensions after restore, EC2/FSx toggleable, tag-based linking',
+    services: ['Lambda', 'EventBridge', 'CloudWatch', 'IAM'],
+    tagsJa: ['上級', 'モニタリング', '自動化', 'Lambda', 'EventBridge'],
+    tagsEn: ['Advanced', 'Monitoring', 'Automation', 'Lambda', 'EventBridge'],
+    categoryJa: 'モニタリング',
+    categoryEn: 'Monitoring',
+    updatedAt: '2026-06-04',
+  },
 
   // ================================================================
   // 初級テンプレート（!Ref / !Sub / !GetAtt / !ImportValue のみ使用）
@@ -1032,6 +1048,22 @@ export const templates: Template[] = [
     categoryJa: 'ストレージ',
     categoryEn: 'Storage',
     updatedAt: '2026-05-30',
+  },
+  {
+    slug: 'cw-alarm-auto-update-basic',
+    filename: 'cfn-cw-alarm-auto-update-basic.yaml',
+    nameJa: 'CloudWatch アラーム自動更新（初級）',
+    nameEn: 'CloudWatch Alarm Auto-Updater (Basic)',
+    descJa: 'EC2/FSxリストア後にCloudWatchアラームのIDを自動更新するLambda+EventBridgeセット。ProjectNameのみパラメータ。タグで紐付けたアラームのディメンションを起動のたびに最新IDへ上書きするシンプル版。',
+    descEn: 'Lambda + EventBridge set that auto-updates CloudWatch Alarm dimensions after EC2/FSx restore. ProjectName-only parameter. Simple version with fixed defaults — both EC2 and FSx monitoring always enabled.',
+    descShortJa: 'ProjectNameのみ・EC2/FSxリストア後アラームID自動更新',
+    descShortEn: 'ProjectName only, auto-updates alarm dimensions after EC2/FSx restore',
+    services: ['Lambda', 'EventBridge', 'CloudWatch', 'IAM'],
+    tagsJa: ['初級', 'モニタリング', '自動化', 'Lambda', 'EventBridge'],
+    tagsEn: ['Beginner', 'Monitoring', 'Automation', 'Lambda', 'EventBridge'],
+    categoryJa: 'モニタリング',
+    categoryEn: 'Monitoring',
+    updatedAt: '2026-06-04',
   },
 ];
 

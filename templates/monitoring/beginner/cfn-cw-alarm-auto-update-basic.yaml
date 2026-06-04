@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Auto-update CloudWatch Alarm dimensions after EC2/FSx restore (EventBridge + Lambda)
+
+# -----------------------------------------------
+# DEPLOY
+# -----------------------------------------------
+# Step 1: Deploy this stack
+#   aws cloudformation deploy \
+#     --stack-name <ProjectName>-cw-alarm-updater \
+#     --template-file cfn-cw-alarm-auto-update-basic.yaml \
+#     --parameter-overrides ProjectName=my-project \
+#     --capabilities CAPABILITY_NAMED_IAM \
+#     --region ap-northeast-1
+#
+# Step 2: Upload the Lambda function code
+#   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/advanced/lambda_function.py
+#   zip lambda.zip lambda_function.py
+#   aws lambda update-function-code \
+#     --function-name my-project-cw-alarm-updater \
+#     --zip-file fileb://lambda.zip \
+#     --region ap-northeast-1
+#
+# Step 3: Tag your resources
+#   EC2 / FSx  : Key=CWAlarmAutoUpdate  Value=<identifier>  (e.g. "web-server-01")
+#   CW Alarm   : Key=CWAlarmAutoUpdate  Value=<identifier>  (same value)
+#   Lambda fires automatically when EC2 reaches "running" or FSx reaches "AVAILABLE".
+#
+# To add a second Lambda alarm or extend to more resource types, use
+# cfn-cw-alarm-auto-update.yaml (advanced version) instead.
+# -----------------------------------------------
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Project
+        Parameters:
+          - ProjectName
+
+# -----------------------------------------------
+# Parameters
+# ProjectName is used as a prefix for all resource names.
+# -----------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-project
+    Description: >
+      Project name used as a prefix for all resource names.
+      Use lowercase letters, numbers, and hyphens only.
+    AllowedPattern: "^[a-z0-9][a-z0-9\\-]*$"
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+
+# -----------------------------------------------
+# Resources
+# Lambda function (placeholder) + IAM role + EventBridge rules (EC2 + FSx).
+# After stack creation, upload lambda_function.py as a zip:
+#   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/advanced/lambda_function.py
+#   zip lambda.zip lambda_function.py
+#   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
+# -----------------------------------------------
+Resources:
+
+  AlarmUpdaterLogGroup01:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-cw-alarm-updater"
+      RetentionInDays: 90
+
+  AlarmUpdaterRole01:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-cw-alarm-updater-role"
+      Description: Execution role for the CloudWatch Alarm auto-updater Lambda function
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AlarmUpdaterPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:PutMetricAlarm
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - fsx:DescribeFileSystems
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - tag:GetResources
+                Resource: "*"
+
+  AlarmUpdaterFunction01:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-cw-alarm-updater"
+      Description: !Sub "CloudWatch Alarm ディメンションを EC2/FSx リストア後に自動更新 (${ProjectName})"
+      Runtime: python3.13
+      Handler: lambda_function.handler
+      Role: !GetAtt AlarmUpdaterRole01.Arn
+      Timeout: 60
+      MemorySize: 128
+      Environment:
+        Variables:
+          ENABLE_TAG_KEY: CWAlarmAutoUpdate
+          LOG_LEVEL: INFO
+      Code:
+        # Placeholder — upload lambda_function.py after stack creation:
+        #   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/monitoring/advanced/lambda_function.py
+        #   zip lambda.zip lambda_function.py
+        #   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
+        ZipFile: |
+          def handler(event, context):
+              return {"status": "placeholder — upload lambda_function.py via update-function-code"}
+
+  EC2StateChangeRule01:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-ec2-running"
+      Description: !Sub "EC2 起動イベントを検知して CloudWatch Alarm ディメンションを自動更新 (${ProjectName})"
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+        detail:
+          state:
+            - running
+      State: ENABLED
+      Targets:
+        - Id: AlarmUpdaterTarget
+          Arn: !GetAtt AlarmUpdaterFunction01.Arn
+
+  FSxLifecycleChangeRule01:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-fsx-available"
+      Description: !Sub "FSx 起動イベントを検知して CloudWatch Alarm ディメンションを自動更新 (${ProjectName})"
+      EventPattern:
+        source:
+          - aws.fsx
+        detail-type:
+          - FSx File System Lifecycle Change
+        detail:
+          lifecycle:
+            - AVAILABLE
+      State: ENABLED
+      Targets:
+        - Id: AlarmUpdaterTarget
+          Arn: !GetAtt AlarmUpdaterFunction01.Arn
+
+  EC2RulePermission01:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AlarmUpdaterFunction01
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EC2StateChangeRule01.Arn
+
+  FSxRulePermission01:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AlarmUpdaterFunction01
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt FSxLifecycleChangeRule01.Arn
+
+# -----------------------------------------------
+# Outputs
+# Values available after stack creation.
+# -----------------------------------------------
+Outputs:
+
+  AlarmUpdaterFunctionName01:
+    Description: Name of the CloudWatch Alarm auto-updater Lambda function
+    Value: !Ref AlarmUpdaterFunction01
+    Export:
+      Name: !Sub "${AWS::StackName}-FunctionName"
+
+  AlarmUpdaterLogGroupName01:
+    Description: CloudWatch Log Group for the Lambda function (retention 90 days)
+    Value: !Ref AlarmUpdaterLogGroup01
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroupName"
