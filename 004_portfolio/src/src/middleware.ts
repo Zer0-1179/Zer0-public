@@ -8,8 +8,8 @@ const SCRIPT_HASHES = [
   "'sha256-2mZe1216qSfXhWjWW7LgH/iaMAXbV60fBI2HwiXJGpM='", // BaseLayout font
   "'sha256-KXUDQAuXOeqRrd1aNG0JF4S5VtF/LiYF4RsHdHaWN1k='", // ja/templates/index
   "'sha256-1DhTENB/zpG3cKR7goiDvncDxumSdUUwJ02mq45dVno='", // en/templates/index
-  "'sha256-74wAY7f6t/WolUVjD/ElDUA9JanZoD7jdSzD7xKwAkk='", // ja/templates/[category]
-  "'sha256-4RbIuIrrunwDNwrAEyJbb9dLijWvl1eklMPgSj2215I='", // en/templates/[category]
+  "'sha256-f2FO/4ReRT1WxIUEXGfHLVDYsz+9UpuD/hrVHCDMyv0='", // ja/templates/[category]
+  "'sha256-k+KUCDvcl8Jg2X9tR7pXlJPr7qVgBr05Kqf65W8RYqg='", // en/templates/[category]
 ].join(' ');
 
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -21,6 +21,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Set CSP dynamically so the nonce can be included.
   // CloudFront ResponseHeadersPolicy has Override:false for CSP,
   // so this header takes precedence over the static fallback.
+  response.headers.set('Cache-Control', 'no-cache, must-revalidate');
+
   response.headers.set(
     'Content-Security-Policy',
     [
