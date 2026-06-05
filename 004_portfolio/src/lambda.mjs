@@ -18,7 +18,8 @@ const CATEGORY_FILES = {
     database:   ['cfn-dynamodb.yaml', 'cfn-rds.yaml', 'cfn-elasticache.yaml'],
     security:   ['cfn-kms.yaml', 'cfn-iam-role.yaml'],
     messaging:  ['cfn-sqs.yaml', 'cfn-sns.yaml', 'cfn-eventbridge.yaml'],
-    monitoring: ['cfn-cw-logs.yaml', 'cfn-cw-alarm-ec2.yaml', 'cfn-cw-alarm-rds.yaml', 'cfn-cw-alarm-efs.yaml', 'cfn-cw-alarm-lambda.yaml', 'cfn-cw-alarm-sqs.yaml', 'cfn-cw-alarm-alb.yaml', 'cfn-cw-alarm-auto-update.yaml'],
+    monitoring:  ['cfn-cw-logs.yaml', 'cfn-cw-alarm-ec2.yaml', 'cfn-cw-alarm-rds.yaml', 'cfn-cw-alarm-efs.yaml', 'cfn-cw-alarm-lambda.yaml', 'cfn-cw-alarm-sqs.yaml', 'cfn-cw-alarm-alb.yaml'],
+    automation:  ['cfn-cw-alarm-auto-update.yaml'],
   },
   beginner: {
     network:    ['cfn-vpc-basic.yaml', 'cfn-igw-basic.yaml', 'cfn-nat-basic.yaml', 'cfn-security-group-basic.yaml', 'cfn-security-group-ingress-basic.yaml', 'cfn-security-group-egress-basic.yaml', 'cfn-alb-basic.yaml', 'cfn-nlb-basic.yaml'],
@@ -27,7 +28,8 @@ const CATEGORY_FILES = {
     database:   ['cfn-dynamodb-basic.yaml', 'cfn-rds-basic.yaml', 'cfn-elasticache-basic.yaml'],
     security:   ['cfn-kms-basic.yaml', 'cfn-iam-role-basic.yaml'],
     messaging:  ['cfn-sqs-basic.yaml', 'cfn-sns-basic.yaml', 'cfn-eventbridge-basic.yaml'],
-    monitoring: ['cfn-cw-logs-basic.yaml', 'cfn-cw-alarm-ec2-basic.yaml', 'cfn-cw-alarm-rds-basic.yaml', 'cfn-cw-alarm-efs-basic.yaml', 'cfn-cw-alarm-lambda-basic.yaml', 'cfn-cw-alarm-sqs-basic.yaml', 'cfn-cw-alarm-alb-basic.yaml', 'cfn-cw-alarm-auto-update-basic.yaml'],
+    monitoring:  ['cfn-cw-logs-basic.yaml', 'cfn-cw-alarm-ec2-basic.yaml', 'cfn-cw-alarm-rds-basic.yaml', 'cfn-cw-alarm-efs-basic.yaml', 'cfn-cw-alarm-lambda-basic.yaml', 'cfn-cw-alarm-sqs-basic.yaml', 'cfn-cw-alarm-alb-basic.yaml'],
+    automation:  ['cfn-cw-alarm-auto-update-basic.yaml'],
   },
 };
 

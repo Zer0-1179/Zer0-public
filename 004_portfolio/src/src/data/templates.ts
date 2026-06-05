@@ -13,7 +13,8 @@ const CATEGORY_META: Category[] = [
   { slug: 'database',  labelJa: 'データベース',       labelEn: 'Database',   descJa: 'RDS・DynamoDB・ElastiCacheなど',         descEn: 'RDS, DynamoDB, ElastiCache, and more' },
   { slug: 'security',  labelJa: 'セキュリティ',       labelEn: 'Security',   descJa: 'KMS・IAM・WAF・Secrets Managerなど',    descEn: 'KMS, IAM, WAF, Secrets Manager, and more' },
   { slug: 'messaging', labelJa: 'メッセージング',     labelEn: 'Messaging',  descJa: 'SQS・SNS・EventBridgeなど',             descEn: 'SQS, SNS, EventBridge, and more' },
-  { slug: 'monitoring',labelJa: 'モニタリング',       labelEn: 'Monitoring', descJa: 'CloudWatch・CloudTrailなど',             descEn: 'CloudWatch, CloudTrail, and more' },
+  { slug: 'monitoring', labelJa: 'モニタリング',       labelEn: 'Monitoring', descJa: 'CloudWatch・CloudTrailなど',             descEn: 'CloudWatch, CloudTrail, and more' },
+  { slug: 'automation', labelJa: '自動化',             labelEn: 'Automation', descJa: 'Lambda・EventBridgeを使った自動化など',   descEn: 'Automation with Lambda, EventBridge, and more' },
 ];
 
 export type Template = {
@@ -543,10 +544,10 @@ export const templates: Template[] = [
     descShortJa: 'リストア後のアラームID自動更新・EC2/FSx個別ON/OFF・タグで紐付け',
     descShortEn: 'Auto-updates alarm dimensions after restore, EC2/FSx toggleable, tag-based linking',
     services: ['Lambda', 'EventBridge', 'CloudWatch', 'IAM'],
-    tagsJa: ['上級', 'モニタリング', '自動化', 'Lambda', 'EventBridge'],
-    tagsEn: ['Advanced', 'Monitoring', 'Automation', 'Lambda', 'EventBridge'],
-    categoryJa: 'モニタリング',
-    categoryEn: 'Monitoring',
+    tagsJa: ['上級', '自動化', 'Lambda', 'EventBridge'],
+    tagsEn: ['Advanced', 'Automation', 'Lambda', 'EventBridge'],
+    categoryJa: '自動化',
+    categoryEn: 'Automation',
     updatedAt: '2026-06-04',
   },
 
@@ -1059,10 +1060,10 @@ export const templates: Template[] = [
     descShortJa: 'ProjectNameのみ・EC2/FSxリストア後アラームID自動更新',
     descShortEn: 'ProjectName only, auto-updates alarm dimensions after EC2/FSx restore',
     services: ['Lambda', 'EventBridge', 'CloudWatch', 'IAM'],
-    tagsJa: ['初級', 'モニタリング', '自動化', 'Lambda', 'EventBridge'],
-    tagsEn: ['Beginner', 'Monitoring', 'Automation', 'Lambda', 'EventBridge'],
-    categoryJa: 'モニタリング',
-    categoryEn: 'Monitoring',
+    tagsJa: ['初級', '自動化', 'Lambda', 'EventBridge'],
+    tagsEn: ['Beginner', 'Automation', 'Lambda', 'EventBridge'],
+    categoryJa: '自動化',
+    categoryEn: 'Automation',
     updatedAt: '2026-06-04',
   },
 ];
