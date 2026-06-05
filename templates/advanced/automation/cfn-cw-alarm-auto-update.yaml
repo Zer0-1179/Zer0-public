@@ -13,7 +13,7 @@ Description: Auto-update CloudWatch Alarm dimensions after EC2/FSx restore (Even
 #     --region ap-northeast-1
 #
 # Step 2: Upload the Lambda function code
-#   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/advanced/monitoring/lambda_function.py
+#   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/advanced/automation/lambda_function.py
 #   zip lambda.zip lambda_function.py
 #   aws lambda update-function-code \
 #     --function-name my-project-cw-alarm-updater \
@@ -230,7 +230,7 @@ Resources:
           LOG_LEVEL: !Ref LogLevel
       Code:
         # Placeholder — upload lambda_function.py after stack creation:
-        #   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/advanced/monitoring/lambda_function.py
+        #   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/advanced/automation/lambda_function.py
         #   zip lambda.zip lambda_function.py
         #   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
         ZipFile: |
