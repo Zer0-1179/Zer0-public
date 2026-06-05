@@ -1,0 +1,983 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getCategoriesWithTemplates, getTemplatesByCategory } from '../../../data/templates';
+import { useTranslations } from '../../../i18n/utils';
+
+const t = useTranslations('ja');
+
+const DIFFICULTIES = ['advanced', 'beginner'] as const;
+
+const difficulties = DIFFICULTIES.map(diff => {
+  const cats = getCategoriesWithTemplates().map(cat => {
+    const files = getTemplatesByCategory(cat.slug)
+      .filter(t => t.tagsEn.includes(diff === 'advanced' ? 'Advanced' : 'Beginner'));
+    return { ...cat, files, count: files.length };
+  }).filter(c => c.count > 0);
+  return { diff, cats, count: cats.reduce((s, c) => s + c.count, 0) };
+});
+
+// For ZIP buttons that still use category slug
+const categories = getCategoriesWithTemplates().map((cat) => {
+  const files = getTemplatesByCategory(cat.slug);
+  return { ...cat, files, count: files.length };
+});
+
+const totalFiles = categories.reduce((s, c) => s + c.count, 0);
+---
+
+<BaseLayout title={t('templates.title')}>
+  <div class="mx-auto px-4 pb-0 md:pb-8">
+
+    <!-- Page header (hidden everywhere — explorer uses full height) -->
+    <div class="hidden">
+      <h1 class="text-3xl font-bold text-white mb-1.5">{t('templates.title')}</h1>
+      <div class="w-10 h-0.5 bg-accent mb-3"></div>
+      <p class="text-slate-400 text-sm">{t('templates.sub')}</p>
+    </div>
+
+    <!-- ═══════════════════ DESKTOP (md+) ═══════════════════ -->
+    <div
+      id="templates-explorer"
+      data-lang="ja"
+      class="hidden md:flex border border-navy-700/50 rounded-xl overflow-hidden"
+      style="height: calc(100vh - 80px); min-height: 520px"
+    >
+
+      <!-- ── Left: folder tree ── -->
+      <div id="tree-sidebar" class="w-[256px] xl:w-[280px] shrink-0 border-r border-navy-700/50 flex flex-col bg-navy-900/30">
+
+        <!-- Root bar -->
+        <div class="flex items-center justify-between px-3 py-2 border-b border-navy-700/40 bg-navy-900/60 shrink-0">
+          <button id="tree-root-btn" class="flex items-center gap-1.5 hover:text-accent transition-colors" title="README に戻る">
+            <svg class="w-4 h-4 text-accent/70" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+            </svg>
+            <span class="font-mono text-xs text-white">templates</span>
+            <span class="text-slate-600 text-xs">{totalFiles}</span>
+          </button>
+          <div class="flex items-center gap-0.5">
+            <button id="sidebar-toggle" class="p-1 text-slate-500 hover:text-accent hover:bg-navy-700/40 transition-colors rounded" title="サイドバーを折りたたむ">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+              </svg>
+            </button>
+            <a href="/api/templates/download/all.zip" download="cfn-templates-all.zip" title="すべてダウンロード"
+              class="p-1 text-slate-500 hover:text-accent hover:bg-navy-700/40 transition-colors rounded">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- Search -->
+        <div class="px-2 py-1.5 border-b border-navy-700/40 shrink-0">
+          <div class="flex items-center gap-1.5 px-2 py-1 bg-navy-900/60 border border-navy-700/50 rounded">
+            <svg class="w-3 h-3 text-slate-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+            </svg>
+            <input id="tree-search" type="text" placeholder="ファイル名を検索..."
+              class="bg-transparent text-slate-300 placeholder-slate-600 text-[11px] w-full outline-none" />
+            <button id="tree-search-clear" class="hidden text-slate-500 hover:text-white text-sm leading-none transition-colors">×</button>
+          </div>
+        </div>
+
+        <!-- Tree rows: difficulty → category → file -->
+        <div class="flex-1 overflow-y-auto py-1">
+          {difficulties.map(({ diff, cats, count }) => (
+            <div class="folder-group" data-slug={diff}>
+              <!-- Level 1: advanced / beginner -->
+              <div class="folder-toggle-row flex items-center hover:bg-navy-700/20 cursor-pointer select-none group/folder transition-colors">
+                <div class="flex items-center justify-center w-6 h-7 shrink-0 text-slate-600">
+                  <svg class="chevron w-2.5 h-2.5 transition-transform duration-150" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="flex items-center gap-1.5 flex-1 min-w-0 py-1.5">
+                  <svg class:list={['w-3.5 h-3.5 shrink-0', diff === 'advanced' ? 'text-orange-400/60' : 'text-blue-400/60']} viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                  </svg>
+                  <span class="text-xs truncate flex-1 text-slate-300">{diff}/</span>
+                  <span class="folder-count text-xs text-slate-600 shrink-0" data-total={count}>{count}</span>
+                </div>
+                <a
+                  href={`/api/templates/download/${diff}.zip`}
+                  download={`cfn-templates-${diff}.zip`}
+                  title={`${diff} をZIPダウンロード`}
+                  class="folder-zip-btn w-6 h-7 flex items-center justify-center shrink-0 text-slate-700 hover:text-accent transition-colors opacity-0 group-hover/folder:opacity-100"
+                  onclick="event.stopPropagation()"
+                >
+                  <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </a>
+              </div>
+
+              <div class="folder-files hidden">
+                {cats.map((cat) => (
+                  <!-- Level 2: category (network, compute, …) -->
+                  <div class="diff-group" data-diff={diff} data-cat={cat.slug}>
+                    <div class="diff-toggle-row flex items-center pl-5 hover:bg-navy-700/20 cursor-pointer select-none group/cat transition-colors">
+                      <div class="flex items-center justify-center w-5 h-6 shrink-0 text-slate-600">
+                        <svg class="diff-chevron w-2 h-2 transition-transform duration-150" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                      </div>
+                      <div class="flex items-center gap-1.5 flex-1 min-w-0 py-1">
+                        <svg class="w-3 h-3 text-accent/40 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                        </svg>
+                        <span class="text-xs text-slate-400 truncate flex-1">{cat.slug}/</span>
+                        <span class="text-xs text-slate-600 ml-auto pr-1">{cat.count}</span>
+                      </div>
+                      <a
+                        href={`/api/templates/download/${cat.slug}.zip`}
+                        download={`cfn-templates-${cat.slug}.zip`}
+                        title={`${cat.slug} をZIPダウンロード`}
+                        class="folder-zip-btn w-6 h-6 flex items-center justify-center shrink-0 text-slate-700 hover:text-accent transition-colors opacity-0 group-hover/cat:opacity-100"
+                        onclick="event.stopPropagation()"
+                      >
+                        <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                      </a>
+                    </div>
+                    <!-- Level 3: files -->
+                    <div class="diff-files hidden">
+                      {cat.files.map((tmpl) => (
+                        <button
+                          class="file-btn flex items-center gap-1.5 w-full pl-11 pr-2 py-1 text-left hover:bg-navy-700/20 transition-colors group/file"
+                          data-filename={tmpl.filename}
+                          data-name={tmpl.nameJa}
+                          data-short={tmpl.descShortJa}
+                          data-desc={tmpl.descJa}
+                          data-services={tmpl.services.join(',')}
+                          data-tags={tmpl.tagsJa.join(',')}
+                          data-cat={cat.slug}
+                          data-difficulty={diff}
+                          title={tmpl.descShortJa}
+                        >
+                          <svg class="w-3.5 h-3.5 text-slate-600 group-hover/file:text-slate-400 shrink-0 transition-colors" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                          </svg>
+                          <span class="file-label font-mono text-xs text-slate-500 group-hover/file:text-slate-200 truncate transition-colors">
+                            {tmpl.filename}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- ── Right: content pane ── -->
+      <div class="flex-1 overflow-hidden flex flex-col min-w-0">
+
+        <!-- Tab bar -->
+        <div class="flex items-center border-b border-navy-700/40 bg-navy-900/50 shrink-0">
+          <button id="sidebar-show" style="display:none" class="flex items-center justify-center w-8 self-stretch border-r border-navy-700/40 text-slate-500 hover:text-accent transition-colors shrink-0" title="サイドバーを開く">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          <button id="tab-readme"
+            class="flex items-center gap-1.5 px-3 py-2 text-xs font-mono border-b-2 border-accent text-white transition-colors">
+            <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+            </svg>
+            README.md
+          </button>
+          <button id="tab-file"
+            class="hidden flex items-center gap-1.5 px-3 py-2 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-white transition-colors">
+            <svg class="w-3.5 h-3.5 text-yellow-400/70 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+            </svg>
+            <span id="tab-file-name" class="max-w-48 truncate"></span>
+            <span id="tab-close" class="ml-1 text-slate-500 hover:text-white transition-colors">×</span>
+          </button>
+        </div>
+
+        <!-- README panel -->
+        <div id="readme-panel" class="flex-1 overflow-y-auto px-5 py-4 space-y-5 text-sm">
+
+          <!-- Header -->
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+              </svg>
+              <span class="font-mono text-sm text-slate-400">README.md</span>
+            </div>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              実際の運用プロジェクトで使用している CloudFormation テンプレートを汎用化して公開しています。
+              パラメータを指定するだけでそのままデプロイできます。
+            </p>
+          </div>
+
+          <!-- Category list -->
+          <div>
+            <p class="font-semibold text-slate-300 mb-2 text-xs">カテゴリ</p>
+            <div class="grid grid-cols-2 gap-1.5">
+              {categories.map((cat) => (
+                <div class="flex items-center justify-between px-2.5 py-1.5 bg-navy-900/50 border border-navy-700/40 rounded-lg">
+                  <span class="text-xs text-slate-300 font-mono truncate">{cat.slug}</span>
+                  <span class="text-[11px] text-slate-500 ml-2 shrink-0">{cat.count}件</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <!-- 3-step usage -->
+          <div>
+            <p class="font-semibold text-slate-300 mb-2 text-xs">使い方</p>
+            <ol class="space-y-2.5">
+              {([
+                ['ファイルを選択', '左のツリーからテンプレートを選ぶ'],
+                ['コードを確認', 'Ctrl+F でキーワード検索も可能'],
+                ['ダウンロード', 'Parameters を調整してデプロイ'],
+              ] as [string, string][]).map(([title, desc], i) => (
+                <li class="flex gap-3 items-start">
+                  <span class="shrink-0 w-5 h-5 rounded-full bg-accent/20 text-accent text-[10px] flex items-center justify-center font-bold">{i + 1}</span>
+                  <div class="text-xs leading-relaxed">
+                    <span class="text-slate-300 font-medium">{title}</span>
+                    <span class="text-slate-500"> — {desc}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <!-- Design principles -->
+          <div>
+            <p class="font-semibold text-slate-300 mb-2 text-xs">設計方針</p>
+            <ul class="space-y-1.5 text-slate-400 text-xs">
+              <li class="flex gap-2"><span class="text-accent shrink-0">•</span>ハードコードなし — 変更が想定される値はすべて <code class="text-accent/80 bg-navy-700/60 px-1 rounded">Parameters</code> に外出し</li>
+              <li class="flex gap-2"><span class="text-accent shrink-0">•</span><code class="text-accent/80 bg-navy-700/60 px-1 rounded">Env</code> パラメータで dev / stg / prd を自動切替（保持期間・DeletionPolicy）</li>
+              <li class="flex gap-2"><span class="text-accent shrink-0">•</span>最小権限 IAM・KMS 暗号化・スタック間参照（Outputs + ImportValue）対応済み</li>
+            </ul>
+          </div>
+
+          <!-- Deploy -->
+          <div>
+            <p class="font-semibold text-slate-300 mb-2 text-xs">デプロイ</p>
+            <pre class="bg-navy-900/60 border border-navy-700/50 rounded-lg px-4 py-3 text-xs text-slate-300 font-mono overflow-x-auto leading-relaxed">aws cloudformation deploy \
+  --stack-name &lt;stack-name&gt; \
+  --template-file &lt;template&gt;.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides ProjectName=&lt;name&gt; Env=prd</pre>
+          </div>
+
+          <!-- Warning -->
+          <div class="flex gap-2 text-slate-400 text-xs">
+            <span class="text-yellow-500/80 shrink-0">⚠</span>
+            <p><code class="text-accent/80 bg-navy-700/60 px-1 rounded">Env=prd</code> でデプロイしたリソースは <code class="text-accent/80 bg-navy-700/60 px-1 rounded">DeletionPolicy: Retain</code> が設定されています。スタックを削除してもリソースは残るため、不要になった場合は AWS コンソールまたは CLI から手動で削除してください。</p>
+          </div>
+        </div>
+
+        <!-- ── YAML viewer (GitHub-style) ── -->
+        <div id="yaml-viewer" class="hidden flex-1 overflow-hidden flex flex-col">
+
+          <!-- Breadcrumb bar -->
+          <div id="yv-breadcrumb"
+            class="px-4 py-2 bg-[#161b22] border-b border-[#30363d] flex items-center gap-0 text-xs font-mono text-[#6e7681] shrink-0 overflow-x-auto whitespace-nowrap">
+          </div>
+
+          <!-- Code search bar (Ctrl+F) -->
+          <div id="code-search-bar" class="hidden px-3 py-1.5 bg-[#161b22] border-b border-[#30363d] flex items-center gap-2 shrink-0">
+            <svg class="w-3.5 h-3.5 text-[#6e7681] shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+            </svg>
+            <input id="code-search-input" type="text" placeholder="ファイル内を検索... (Enter: 次へ / Shift+Enter: 前へ)"
+              class="bg-transparent text-[#c9d1d9] placeholder-[#6e7681] text-xs w-full outline-none" />
+            <span id="code-search-count" class="text-[#6e7681] text-xs whitespace-nowrap shrink-0"></span>
+            <button id="code-search-prev" class="text-[#6e7681] hover:text-white transition-colors shrink-0" title="前の一致">↑</button>
+            <button id="code-search-next" class="text-[#6e7681] hover:text-white transition-colors shrink-0" title="次の一致">↓</button>
+            <button id="code-search-close" class="text-[#6e7681] hover:text-white transition-colors shrink-0 text-sm leading-none">×</button>
+          </div>
+
+          <!-- File info bar -->
+          <div class="px-4 py-2 border-b border-navy-700/30 bg-navy-900/20 flex items-center justify-between gap-3 shrink-0">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <svg class="w-4 h-4 text-yellow-400/60 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+              </svg>
+              <span id="yv-name" class="font-mono text-[13px] text-accent font-medium shrink-0"></span>
+              <div id="yv-services" class="flex gap-1 flex-wrap"></div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span id="yv-stats" class="text-xs text-[#6e7681] font-mono whitespace-nowrap"></span>
+              <div class="flex items-center shrink-0">
+                <button id="yv-font-dec" class="px-1.5 py-1 text-slate-500 hover:text-white text-[11px] border border-navy-700/60 rounded-l transition-colors" title="フォント縮小">A-</button>
+                <button id="yv-font-reset" class="px-1.5 py-1 text-slate-500 hover:text-white text-[11px] border-t border-b border-navy-700/60 transition-colors" title="デフォルトサイズに戻す">A</button>
+                <button id="yv-font-inc" class="px-1.5 py-1 text-slate-500 hover:text-white text-[11px] border border-navy-700/60 rounded-r border-l-0 transition-colors" title="フォント拡大">A+</button>
+              </div>
+              <button id="yv-copy"
+                class="flex items-center gap-1 px-2 py-1 border border-navy-700/60 text-slate-400 text-xs rounded hover:text-white hover:border-navy-500 transition-colors">
+                <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                  <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                </svg>
+                コピー
+              </button>
+              <a id="yv-dl" href="#" download
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-accent hover:bg-accent-light text-navy-950 text-xs font-semibold rounded transition-colors">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+                ダウンロード
+              </a>
+            </div>
+          </div>
+
+          <!-- Description (compact) -->
+          <div class="px-4 py-1.5 border-b border-[#21262d] bg-[#0d1117]/50 shrink-0">
+            <p id="yv-short" class="text-[#8b949e] text-[11px] leading-relaxed"></p>
+          </div>
+
+          <!-- Code table with line numbers -->
+          <div class="flex-1 overflow-auto bg-[#0d1117]">
+            <table class="w-max min-w-full border-collapse font-mono text-[12.5px] leading-5">
+              <tbody id="yv-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ MOBILE (< md) ═══════════════════ -->
+    <div id="mobile-explorer" class="md:hidden flex flex-col border border-navy-700/50 rounded-xl overflow-hidden"
+      style="height: calc(100vh - 64px); height: calc(100svh - 64px); min-height: 480px">
+
+      <!-- State 1: Category list -->
+      <div id="mob-cat-view" class="flex-1 flex flex-col min-h-0">
+        <div class="shrink-0 flex items-center justify-between px-4 py-3 bg-navy-900/60 border-b border-navy-700/40">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-accent/70" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+            </svg>
+            <span class="font-mono text-sm text-white">templates</span>
+            <span class="text-slate-500 text-xs">({totalFiles})</span>
+          </div>
+          <a href="/api/templates/download/all.zip" download="cfn-templates-all.zip"
+            class="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-400 hover:text-accent border border-navy-700/50 rounded transition-colors">
+            <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+            全件 ZIP
+          </a>
+        </div>
+        <div class="flex-1 overflow-y-auto min-h-0">
+          {categories.map((cat) => (
+            <button
+              class="mob-cat-btn flex items-center justify-between w-full px-4 py-3.5 text-left border-b border-navy-700/20 hover:bg-navy-700/20 active:bg-navy-700/30 transition-colors"
+              data-slug={cat.slug}
+              data-count={cat.count}
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-accent/50" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                </svg>
+                <span class="text-sm text-slate-200">{cat.slug}</span>
+                <span class="mob-cat-count text-xs text-slate-500" data-total={cat.count}>({cat.count})</span>
+              </div>
+              <svg class="w-4 h-4 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <!-- State 2: File list -->
+      <div id="mob-file-view" class="flex-1 flex flex-col min-h-0" style="display:none">
+        <div class="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-navy-900/60 border-b border-navy-700/40">
+          <button id="mob-back-cat" class="p-1.5 text-slate-400 hover:text-white transition-colors">
+            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          <svg class="w-4 h-4 text-accent/50" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+          </svg>
+          <span id="mob-folder-name" class="font-mono text-sm text-white flex-1"></span>
+          <a id="mob-folder-zip" href="#" download
+            class="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-400 hover:text-accent border border-navy-700/50 rounded transition-colors">
+            <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+            ZIP
+          </a>
+        </div>
+        <div id="mob-file-list" class="flex-1 overflow-y-auto min-h-0"></div>
+      </div>
+
+      <!-- State 3: Code viewer -->
+      <div id="mob-code-view" class="flex-1 flex flex-col min-h-0" style="display:none">
+        <!-- Top bar -->
+        <div class="shrink-0 flex items-center gap-2 px-3 py-2 bg-navy-900/60 border-b border-navy-700/40">
+          <button id="mob-back-files" class="p-1.5 text-slate-400 hover:text-white transition-colors">
+            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          <svg class="w-3.5 h-3.5 text-yellow-400/70 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+          </svg>
+          <span id="mob-code-filename" class="font-mono text-xs text-white truncate flex-1"></span>
+          <button id="mob-copy" class="shrink-0 px-2.5 py-1.5 border border-navy-700/60 text-slate-400 text-xs rounded hover:text-white transition-colors">コピー</button>
+          <a id="mob-dl" href="#" download
+            class="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-accent text-navy-950 text-xs font-semibold rounded">
+            <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+            DL
+          </a>
+        </div>
+        <!-- Breadcrumb -->
+        <div id="mob-breadcrumb" class="shrink-0 px-4 py-1.5 bg-[#161b22] border-b border-[#30363d] text-[11px] font-mono text-[#6e7681] overflow-x-auto whitespace-nowrap"></div>
+        <!-- Stats + description -->
+        <div class="shrink-0 px-4 py-1.5 border-b border-navy-700/20 bg-[#0d1117]/60 flex items-center justify-between gap-2">
+          <p id="mob-short" class="text-[11px] text-[#8b949e] truncate flex-1"></p>
+          <span id="mob-stats" class="text-[11px] text-[#6e7681] font-mono whitespace-nowrap shrink-0"></span>
+        </div>
+        <!-- Code -->
+        <div class="flex-1 overflow-auto min-h-0 bg-[#0d1117]">
+          <table class="w-max min-w-full border-collapse font-mono text-[12.5px] leading-5">
+            <tbody id="mob-code-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // ── YAML syntax highlighter (VS Code Dark Modern) ──
+  function highlightLines(code: string): string[] {
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const sp = (c: string, t: string) => `<span style="color:${c}">${t}</span>`;
+    const C = { comment:'#6A9955', key:'#9CDCFE', str:'#CE9178', num:'#B5CEA8', kw:'#569CD6', tag:'#4EC9B0', anchor:'#DCDCAA' };
+
+    function tokenVal(v: string): string {
+      const t = v.trim();
+      if (!t) return esc(v);
+      if (t[0] === '!') {
+        const m = t.match(/^(![A-Za-z]+)(.*)?$/s);
+        if (m) {
+          const before = v.slice(0, v.indexOf('!'));
+          return esc(before) + sp(C.tag, esc(m[1])) + (m[2] ? sp(C.str, esc(m[2])) : '');
+        }
+      }
+      if (/^[&*][A-Za-z]/.test(t)) return sp(C.anchor, esc(v));
+      if (/^(true|false|yes|no|on|off|null|~)$/i.test(t)) return sp(C.kw, esc(v));
+      if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(t)) return sp(C.num, esc(v));
+      return sp(C.str, esc(v));
+    }
+
+    return code.split('\n').map((line: string) => {
+      if (!line.trim()) return '';
+      if (/^\s*#/.test(line)) return sp(C.comment, esc(line));
+      if (/^---/.test(line)) return sp(C.kw, esc(line));
+      const m = line.match(/^(\s*(?:-\s+)?)((?:[A-Za-z_$][A-Za-z0-9_.$:]*|"[^"]*"|'[^']*'))(\s*:\s*)(.*)?$/);
+      if (m) {
+        const [, pre, key, sep, raw = ''] = m;
+        const ci = raw.search(/ #/);
+        const val = ci !== -1 ? raw.slice(0, ci) : raw;
+        const ic  = ci !== -1 ? raw.slice(ci) : '';
+        return esc(pre) + sp(C.key, esc(key)) + esc(sep) + tokenVal(val) + (ic ? sp(C.comment, esc(ic)) : '');
+      }
+      const lm = line.match(/^(\s*-\s+)(.+)?$/);
+      if (lm) return esc(lm[1]) + (lm[2] ? tokenVal(lm[2]) : '');
+      return esc(line);
+    });
+  }
+
+  // ── Build code table ──
+  function buildCodeTable(tbody: HTMLElement, rawCode: string, fontSize = '12.5px', lineHeight = '1.25rem') {
+    const lines = rawCode.split('\n');
+    if (lines[lines.length - 1] === '') lines.pop();
+    const highlighted = highlightLines(rawCode);
+    const frag = document.createDocumentFragment();
+    lines.forEach((_, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-[#161b22] transition-colors';
+      const numTd = document.createElement('td');
+      numTd.className = 'select-none text-right pr-4 pl-4 text-[#6e7681] border-r border-[#21262d] align-top whitespace-nowrap w-12';
+      numTd.style.lineHeight = lineHeight;
+      numTd.style.fontSize = fontSize;
+      numTd.textContent = String(i + 1);
+      const codeTd = document.createElement('td');
+      codeTd.className = 'pl-4 pr-8 whitespace-pre align-top text-[#e6edf3]';
+      codeTd.style.lineHeight = lineHeight;
+      codeTd.style.fontSize = fontSize;
+      codeTd.innerHTML = highlighted[i] ?? '​';
+      tr.appendChild(numTd);
+      tr.appendChild(codeTd);
+      frag.appendChild(tr);
+    });
+    tbody.innerHTML = '';
+    tbody.appendChild(frag);
+  }
+
+  // ── Breadcrumb builder ──
+  function buildBreadcrumb(
+    el: HTMLElement,
+    cat: string, difficulty: string, filename: string,
+    onRoot: () => void
+  ) {
+    el.innerHTML = '';
+    const addBtn = (label: string, handler: () => void) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.className = 'hover:text-[#58a6ff] hover:underline transition-colors';
+      b.addEventListener('click', handler);
+      el.appendChild(b);
+    };
+    const addSep = () => {
+      const s = document.createElement('span');
+      s.textContent = ' / ';
+      s.className = 'text-[#484f58] mx-0.5';
+      el.appendChild(s);
+    };
+    const addSpan = (label: string, cls = '') => {
+      const s = document.createElement('span');
+      s.textContent = label;
+      s.className = cls;
+      el.appendChild(s);
+    };
+    addBtn('templates', onRoot); addSep();
+    addSpan(difficulty); addSep();
+    addSpan(cat); addSep();
+    addSpan(filename, 'text-[#c9d1d9] font-semibold');
+  }
+
+  // ── Stats formatter ──
+  function formatStats(text: string): string {
+    const split = text.split('\n');
+    const lines = split[split.length - 1] === '' ? split.length - 1 : split.length;
+    const bytes = new TextEncoder().encode(text).length;
+    const kb = bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB';
+    return `${lines} 行 · ${kb}`;
+  }
+
+  // ── Desktop: current raw code for copy ──
+  let currentRawCode = '';
+  let deskFetch: AbortController | null = null;
+
+  // ─────── Desktop state ───────
+  const readmePanel = document.getElementById('readme-panel')!;
+  const yamlViewer  = document.getElementById('yaml-viewer')!;
+  const tabReadme   = document.getElementById('tab-readme')!;
+  const tabFile     = document.getElementById('tab-file')!;
+  const tabFileName = document.getElementById('tab-file-name')!;
+  const tabClose    = document.getElementById('tab-close')!;
+  const yvBreadcrumb = document.getElementById('yv-breadcrumb')!;
+  const yvName      = document.getElementById('yv-name')!;
+  const yvShort     = document.getElementById('yv-short')!;
+  const yvServices  = document.getElementById('yv-services')!;
+  const yvStats     = document.getElementById('yv-stats')!;
+  const yvBody      = document.getElementById('yv-body')!;
+  const yvCopy      = document.getElementById('yv-copy')!;
+  const yvDl        = document.getElementById('yv-dl') as HTMLAnchorElement;
+  let activeFileBtn: Element | null = null;
+
+  function setActiveTab(which: 'readme' | 'file') {
+    const isReadme = which === 'readme';
+    tabReadme.classList.toggle('border-accent', isReadme);
+    tabReadme.classList.toggle('text-white', isReadme);
+    tabReadme.classList.toggle('border-transparent', !isReadme);
+    tabReadme.classList.toggle('text-slate-400', !isReadme);
+    tabFile.classList.toggle('border-accent', !isReadme);
+    tabFile.classList.toggle('text-white', !isReadme);
+    tabFile.classList.toggle('border-transparent', isReadme);
+    tabFile.classList.toggle('text-slate-400', isReadme);
+    readmePanel.classList.toggle('hidden', !isReadme);
+    yamlViewer.classList.toggle('hidden', isReadme);
+  }
+
+  function setNavActive(filename: string) {
+    if (activeFileBtn) {
+      activeFileBtn.classList.remove('bg-accent/10');
+      activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
+    }
+    const btn = document.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`);
+    if (btn) {
+      btn.classList.add('bg-accent/10');
+      btn.querySelector('.file-label')?.classList.add('text-accent');
+      // Open diff-group parent
+      const dg = btn.closest('.diff-group') as HTMLElement | null;
+      if (dg) {
+        const df    = dg.querySelector('.diff-files') as HTMLElement;
+        const dchev = dg.querySelector('.diff-chevron') as HTMLElement;
+        if (df?.classList.contains('hidden')) { df.classList.remove('hidden'); if (dchev) dchev.style.transform = 'rotate(90deg)'; }
+      }
+      // Open category parent
+      const group = btn.closest('.folder-group');
+      const files  = group?.querySelector('.folder-files') as HTMLElement | null;
+      const chev   = group?.querySelector('.chevron') as HTMLElement | null;
+      if (files?.classList.contains('hidden')) { files.classList.remove('hidden'); if (chev) chev.style.transform = 'rotate(90deg)'; }
+    }
+    activeFileBtn = btn;
+  }
+
+  function showYaml(filename: string, name: string, short: string, services: string, cat: string, difficulty: string) {
+    // Clear code search on file change
+    document.getElementById('code-search-bar')?.classList.add('hidden');
+    (document.getElementById('code-search-input') as HTMLInputElement|null)!.value = '';
+    yvBody.querySelectorAll<HTMLElement>('.cs-hl').forEach(tr => { tr.classList.remove('cs-hl','cs-cur'); tr.style.removeProperty('background-color'); });
+    tabFileName.textContent = filename;
+    tabFile.classList.remove('hidden');
+    setActiveTab('file');
+    setNavActive(filename);
+
+    yvName.textContent = name || filename;
+    yvShort.textContent = short;
+    yvServices.innerHTML = '';
+    (services || '').split(',').filter(Boolean).forEach((svc) => {
+      const s = document.createElement('span');
+      s.className = 'px-1.5 py-0.5 bg-navy-700/60 text-[#8b949e] text-xs rounded';
+      s.textContent = svc;
+      yvServices.appendChild(s);
+    });
+
+    buildBreadcrumb(yvBreadcrumb, cat, difficulty, filename,
+      () => { setActiveTab('readme'); }
+    );
+
+    yvDl.href     = '/api/templates/' + filename;
+    yvDl.download = filename;
+    yvStats.textContent = '読込中...';
+    yvBody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-[#6e7681] text-xs">読み込み中...</td></tr>';
+
+    if (deskFetch) deskFetch.abort();
+    deskFetch = new AbortController();
+    fetch('/api/templates/' + filename, { signal: deskFetch.signal })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then((txt) => {
+        currentRawCode = txt;
+        yvStats.textContent = formatStats(txt);
+        buildCodeTable(yvBody, txt, fontSizes[fontSizeIdx]);
+        (yvBody.closest('.overflow-auto') as HTMLElement | null)?.scrollTo(0, 0);
+      })
+      .catch((e: Error) => {
+        if (e.name === 'AbortError') return;
+        yvBody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 text-red-400 text-xs">エラー: ${e.message}</td></tr>`;
+      });
+  }
+
+  // Desktop event wiring
+  document.getElementById('tree-root-btn')!.addEventListener('click', () => setActiveTab('readme'));
+  tabReadme.addEventListener('click', () => setActiveTab('readme'));
+  tabFile.addEventListener('click', () => setActiveTab('file'));
+  tabClose.addEventListener('click', (e) => {
+    e.stopPropagation();
+    tabFile.classList.add('hidden');
+    setActiveTab('readme');
+    if (activeFileBtn) {
+      activeFileBtn.classList.remove('bg-accent/10');
+      activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
+      activeFileBtn = null;
+    }
+  });
+
+  document.querySelectorAll('.folder-toggle-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const group = row.closest('.folder-group');
+      if (!group) return;
+      const files   = group.querySelector('.folder-files') as HTMLElement;
+      const chevron = group.querySelector('.chevron') as HTMLElement;
+      const isOpen  = !files.classList.contains('hidden');
+      files.classList.toggle('hidden', isOpen);
+      if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
+    });
+  });
+
+  document.querySelectorAll('.folder-zip-btn').forEach((b) => b.addEventListener('click', (e) => e.stopPropagation()));
+
+  // Difficulty subfolder toggle
+  document.querySelectorAll('.diff-toggle-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const dg = row.closest('.diff-group');
+      if (!dg) return;
+      const df    = dg.querySelector('.diff-files') as HTMLElement;
+      const dchev = dg.querySelector('.diff-chevron') as HTMLElement;
+      const isOpen = !df.classList.contains('hidden');
+      df.classList.toggle('hidden', isOpen);
+      if (dchev) dchev.style.transform = isOpen ? '' : 'rotate(90deg)';
+    });
+  });
+
+  document.querySelectorAll<HTMLElement>('.file-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showYaml(
+        btn.dataset.filename!,
+        btn.dataset.name!,
+        btn.dataset.short!,
+        btn.dataset.services!,
+        btn.dataset.cat!,
+        btn.dataset.difficulty!,
+      );
+    });
+  });
+
+  yvCopy.addEventListener('click', () => {
+    if (!currentRawCode) return;
+    const done = () => {
+      yvCopy.textContent = 'コピー済！';
+      setTimeout(() => { yvCopy.innerHTML = '<svg class="w-3 h-3 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>コピー'; }, 2000);
+    };
+    if (navigator.clipboard) { navigator.clipboard.writeText(currentRawCode).then(done); }
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = currentRawCode;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta); done();
+    }
+  });
+
+  // ─────── Mobile state ───────
+  const mobCatView   = document.getElementById('mob-cat-view')!;
+  const mobFileView  = document.getElementById('mob-file-view')!;
+  const mobCodeView  = document.getElementById('mob-code-view')!;
+  const mobFolderName = document.getElementById('mob-folder-name')!;
+  const mobFolderZip  = document.getElementById('mob-folder-zip') as HTMLAnchorElement;
+  const mobFileList  = document.getElementById('mob-file-list')!;
+  const mobCodeFilename = document.getElementById('mob-code-filename')!;
+  const mobBreadcrumb   = document.getElementById('mob-breadcrumb')!;
+  const mobShort    = document.getElementById('mob-short')!;
+  const mobStats    = document.getElementById('mob-stats')!;
+  const mobCodeBody = document.getElementById('mob-code-body')!;
+  const mobCopy     = document.getElementById('mob-copy')!;
+  const mobDl       = document.getElementById('mob-dl') as HTMLAnchorElement;
+  let mobCurrentCat = '';
+  let mobCurrentRaw = '';
+  let mobFetch: AbortController | null = null;
+
+  interface TmplData { filename: string; name: string; short: string; desc: string; services: string; tags: string; cat: string; difficulty: string; }
+  const allTemplates: TmplData[] = Array.from(document.querySelectorAll<HTMLElement>('.file-btn')).map((el) => ({
+    filename: el.dataset.filename!,
+    name:     el.dataset.name!,
+    short:    el.dataset.short!,
+    desc:     el.dataset.desc!,
+    services: el.dataset.services!,
+    tags:     el.dataset.tags!,
+    cat:      el.dataset.cat!,
+    difficulty: el.dataset.difficulty!,
+  }));
+
+  function mobShowCats() {
+    mobCatView.style.display = 'flex';
+    mobFileView.style.display = 'none';
+    mobCodeView.style.display = 'none';
+  }
+
+  function mobShowFiles(catSlug: string) {
+    mobCurrentCat = catSlug;
+    mobFolderName.textContent = catSlug;
+    mobFolderZip.href = `/api/templates/download/${catSlug}.zip`;
+    mobFolderZip.download = `cfn-templates-${catSlug}.zip`;
+
+    const addFileBtn = (tmpl: TmplData) => {
+      const btn = document.createElement('button');
+      btn.className = 'flex items-center gap-3 w-full px-4 py-3.5 text-left border-b border-navy-700/20 hover:bg-navy-700/20 active:bg-navy-700/30 transition-colors';
+      btn.innerHTML = `<svg class="w-4 h-4 text-yellow-400/50 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" /></svg><div class="min-w-0 flex-1"><p class="font-mono text-sm text-slate-200 truncate">${tmpl.filename}</p><p class="text-xs text-slate-500 truncate mt-0.5">${tmpl.short}</p></div>`;
+      btn.addEventListener('click', () => mobShowCode(tmpl));
+      mobFileList.appendChild(btn);
+    };
+
+    const addDiffHeader = (diff: string, color: string) => {
+      const h = document.createElement('div');
+      h.className = 'flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono border-b border-navy-700/20 bg-navy-900/40';
+      h.innerHTML = `<svg class="w-3 h-3 ${color}" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg><span class="${color}">${diff}</span>`;
+      mobFileList.appendChild(h);
+    };
+
+    mobFileList.innerHTML = '';
+    const advanced = allTemplates.filter((t) => t.cat === catSlug && t.difficulty === 'advanced');
+    const beginner  = allTemplates.filter((t) => t.cat === catSlug && t.difficulty === 'beginner');
+
+    if (advanced.length > 0) { addDiffHeader('advanced', 'text-orange-400/70'); advanced.forEach(addFileBtn); }
+    if (beginner.length > 0) { addDiffHeader('beginner', 'text-blue-400/70'); beginner.forEach(addFileBtn); }
+    if (mobFileList.childElementCount === 0) {
+      mobFileList.innerHTML = '<p class="px-4 py-6 text-xs text-slate-500 text-center">該当なし</p>';
+    }
+
+    mobCatView.style.display = 'none';
+    mobFileView.style.display = 'flex';
+    mobCodeView.style.display = 'none';
+  }
+
+  function mobShowCode(tmpl: TmplData) {
+    mobCodeFilename.textContent = tmpl.filename;
+    mobDl.href = '/api/templates/' + tmpl.filename;
+    mobDl.download = tmpl.filename;
+    mobShort.textContent = tmpl.short;
+    mobStats.textContent = '読込中...';
+    mobCodeBody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-[#6e7681] text-xs">読み込み中...</td></tr>';
+
+    buildBreadcrumb(mobBreadcrumb, tmpl.cat, tmpl.difficulty, tmpl.filename,
+      () => mobShowCats()
+    );
+
+    mobCatView.style.display = 'none';
+    mobFileView.style.display = 'none';
+    mobCodeView.style.display = 'flex';
+
+    if (mobFetch) mobFetch.abort();
+    mobFetch = new AbortController();
+    fetch('/api/templates/' + tmpl.filename, { signal: mobFetch.signal })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then((txt) => {
+        mobCurrentRaw = txt;
+        mobStats.textContent = formatStats(txt);
+        buildCodeTable(mobCodeBody, txt, '12.5px', '1.25rem');
+        (mobCodeBody.closest('.overflow-auto') as HTMLElement | null)?.scrollTo(0, 0);
+      })
+      .catch((e: Error) => {
+        if (e.name === 'AbortError') return;
+        mobCodeBody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 text-red-400 text-xs">エラー: ${e.message}</td></tr>`;
+      });
+  }
+
+  // ── Font size toggle ──
+  const fontSizes = ['11px', '12.5px', '14px', '16px'];
+  let fontSizeIdx = (() => {
+    const s = localStorage.getItem('tmpl-font-size');
+    return s ? Math.max(0, Math.min(fontSizes.length - 1, Number(s))) : 1;
+  })();
+  document.getElementById('yv-font-dec')!.addEventListener('click', () => {
+    if (fontSizeIdx > 0) { fontSizeIdx--; localStorage.setItem('tmpl-font-size', String(fontSizeIdx)); if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]); }
+  });
+  document.getElementById('yv-font-reset')!.addEventListener('click', () => {
+    fontSizeIdx = 1; localStorage.setItem('tmpl-font-size', '1'); if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]);
+  });
+  document.getElementById('yv-font-inc')!.addEventListener('click', () => {
+    if (fontSizeIdx < fontSizes.length - 1) { fontSizeIdx++; localStorage.setItem('tmpl-font-size', String(fontSizeIdx)); if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]); }
+  });
+
+  // ── Code search (Ctrl+F) ──
+  const codeSearchBar = document.getElementById('code-search-bar')!;
+  const codeSearchInput = document.getElementById('code-search-input') as HTMLInputElement;
+  const codeSearchCount = document.getElementById('code-search-count')!;
+  let codeSearchMatches: HTMLElement[] = [];
+  let codeSearchIdx = 0;
+
+  function clearCSMatches() {
+    codeSearchMatches.forEach(tr => { tr.classList.remove('cs-hl','cs-cur'); tr.style.removeProperty('background-color'); });
+    codeSearchMatches = []; codeSearchCount.textContent = '';
+  }
+  function closeCodeSearch() { codeSearchBar.classList.add('hidden'); codeSearchInput.value = ''; clearCSMatches(); }
+  function updateCSCount() {
+    codeSearchCount.textContent = !codeSearchInput.value ? '' : codeSearchMatches.length === 0 ? '一致なし' : `${codeSearchIdx + 1} / ${codeSearchMatches.length}`;
+  }
+  function scrollToCSMatch() {
+    codeSearchMatches.forEach((tr, i) => { tr.classList.toggle('cs-cur', i === codeSearchIdx); tr.style.backgroundColor = i === codeSearchIdx ? '#3d3a14' : '#2a2a14'; });
+    codeSearchMatches[codeSearchIdx]?.scrollIntoView({ block: 'center' });
+    updateCSCount();
+  }
+  function doCodeSearch(q: string) {
+    clearCSMatches();
+    if (!q) return;
+    const ql = q.toLowerCase();
+    yvBody.querySelectorAll<HTMLElement>('tr').forEach(tr => {
+      if ((tr.querySelector('td:nth-child(2)')?.textContent ?? '').toLowerCase().includes(ql)) {
+        tr.classList.add('cs-hl'); tr.style.backgroundColor = '#2a2a14'; codeSearchMatches.push(tr);
+      }
+    });
+    if (codeSearchMatches.length) { codeSearchIdx = 0; scrollToCSMatch(); } else updateCSCount();
+  }
+
+  codeSearchInput.addEventListener('input', () => doCodeSearch(codeSearchInput.value));
+  codeSearchInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') { e.preventDefault(); if (!codeSearchMatches.length) return; codeSearchIdx = (codeSearchIdx + (e.shiftKey ? -1 : 1) + codeSearchMatches.length) % codeSearchMatches.length; scrollToCSMatch(); }
+    if (e.key === 'Escape') closeCodeSearch();
+  });
+  document.getElementById('code-search-prev')!.addEventListener('click', () => { if (!codeSearchMatches.length) return; codeSearchIdx = (codeSearchIdx - 1 + codeSearchMatches.length) % codeSearchMatches.length; scrollToCSMatch(); });
+  document.getElementById('code-search-next')!.addEventListener('click', () => { if (!codeSearchMatches.length) return; codeSearchIdx = (codeSearchIdx + 1) % codeSearchMatches.length; scrollToCSMatch(); });
+  document.getElementById('code-search-close')!.addEventListener('click', closeCodeSearch);
+
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f' && !yamlViewer.classList.contains('hidden')) {
+      e.preventDefault(); codeSearchBar.classList.remove('hidden'); codeSearchInput.focus(); codeSearchInput.select();
+    }
+  });
+
+  // ── Search ──
+  const treeSearch = document.getElementById('tree-search') as HTMLInputElement;
+  const treeSearchClear = document.getElementById('tree-search-clear')!;
+  treeSearch.addEventListener('input', () => {
+    const q = treeSearch.value.trim().toLowerCase();
+    treeSearchClear.classList.toggle('hidden', !q);
+    document.querySelectorAll<HTMLElement>('.folder-group').forEach((group) => {
+      let groupHit = false;
+      group.querySelectorAll<HTMLElement>('.diff-group').forEach((dg) => {
+        let diffHit = false;
+        dg.querySelectorAll<HTMLElement>('.file-btn').forEach((btn) => {
+          const match = !q || btn.dataset.filename!.toLowerCase().includes(q);
+          btn.style.display = match ? '' : 'none';
+          if (match) diffHit = true;
+        });
+        dg.style.display = diffHit ? '' : 'none';
+        if (diffHit && q) {
+          const df = dg.querySelector('.diff-files') as HTMLElement;
+          const dc = dg.querySelector('.diff-chevron') as HTMLElement;
+          if (df?.classList.contains('hidden')) { df.classList.remove('hidden'); if (dc) dc.style.transform = 'rotate(90deg)'; }
+        }
+        if (diffHit) groupHit = true;
+      });
+      group.style.display = groupHit ? '' : 'none';
+      if (groupHit && q) {
+        const ff = group.querySelector('.folder-files') as HTMLElement;
+        const ch = group.querySelector('.chevron') as HTMLElement;
+        if (ff?.classList.contains('hidden')) { ff.classList.remove('hidden'); if (ch) ch.style.transform = 'rotate(90deg)'; }
+      }
+    });
+  });
+  treeSearchClear.addEventListener('click', () => { treeSearch.value = ''; treeSearch.dispatchEvent(new Event('input')); treeSearch.focus(); });
+
+  // ── Sidebar collapse/expand
+  const treeSidebar = document.getElementById('tree-sidebar')!;
+  const sidebarToggle = document.getElementById('sidebar-toggle')!;
+  const sidebarShow = document.getElementById('sidebar-show')!;
+  sidebarToggle.addEventListener('click', () => {
+    treeSidebar.classList.add('hidden');
+    sidebarShow.style.display = 'flex';
+    localStorage.setItem('tmpl-sidebar', 'collapsed');
+  });
+  sidebarShow.addEventListener('click', () => {
+    treeSidebar.classList.remove('hidden');
+    sidebarShow.style.display = 'none';
+    localStorage.setItem('tmpl-sidebar', 'expanded');
+  });
+  if (localStorage.getItem('tmpl-sidebar') === 'collapsed') {
+    treeSidebar.classList.add('hidden');
+    sidebarShow.style.display = 'flex';
+  }
+
+
+  document.getElementById('mob-back-cat')!.addEventListener('click', () => mobShowCats());
+  document.getElementById('mob-back-files')!.addEventListener('click', () => mobShowFiles(mobCurrentCat));
+
+  document.querySelectorAll<HTMLElement>('.mob-cat-btn').forEach((btn) => {
+    btn.addEventListener('click', () => mobShowFiles(btn.dataset.slug!));
+  });
+
+  mobCopy.addEventListener('click', () => {
+    if (!mobCurrentRaw) return;
+    const done = () => { mobCopy.textContent = '✓'; setTimeout(() => { mobCopy.textContent = 'コピー'; }, 2000); };
+    if (navigator.clipboard) { navigator.clipboard.writeText(mobCurrentRaw).then(done); }
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = mobCurrentRaw;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta); done();
+    }
+  });
+</script>
