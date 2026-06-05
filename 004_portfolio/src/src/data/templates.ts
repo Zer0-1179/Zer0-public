@@ -31,7 +31,6 @@ export type Template = {
   categoryJa: string;
   categoryEn: string;
   updatedAt: string;
-  subdir?: string;
 };
 
 export const templates: Template[] = [
@@ -309,7 +308,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
-    subdir: 'logs',
   },
   {
     slug: 'iam-role',
@@ -454,7 +452,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-rds',
@@ -471,7 +468,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-efs',
@@ -488,7 +484,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-lambda',
@@ -505,7 +500,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-sqs',
@@ -522,7 +516,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-alb',
@@ -539,7 +532,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-29',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-auto-update',
@@ -556,7 +548,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-06-04',
-    subdir: 'automation',
   },
 
   // ================================================================
@@ -865,7 +856,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-30',
-    subdir: 'logs',
   },
   {
     slug: 'iam-role-basic',
@@ -946,7 +936,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-30',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-rds-basic',
@@ -963,7 +952,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-30',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-efs-basic',
@@ -980,7 +968,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-30',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-lambda-basic',
@@ -997,7 +984,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-30',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-sqs-basic',
@@ -1014,7 +1000,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-30',
-    subdir: 'alarms',
   },
   {
     slug: 'cw-alarm-alb-basic',
@@ -1031,7 +1016,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-05-30',
-    subdir: 'alarms',
   },
   {
     slug: 'efs-basic',
@@ -1080,7 +1064,6 @@ export const templates: Template[] = [
     categoryJa: 'モニタリング',
     categoryEn: 'Monitoring',
     updatedAt: '2026-06-04',
-    subdir: 'automation',
   },
 ];
 
