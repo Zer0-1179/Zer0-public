@@ -4,7 +4,8 @@ X AI Bot - Lambda Function
 4カテゴリ 共感・あるある系エンタメ 自動投稿Bot
 
 スケジュール:
-- 22:00 JST: ランダムカテゴリ (shigoto/fukugyo/jitsuwa/question) 1日1回
+- 月曜 22:00 JST: 50%でurl_reaction（Zenn/Qiita AI記事への感想投稿）、50%でローテーションカテゴリ
+- 木曜 22:00 JST: question固定（議論系・返信エンゲージメント最大化）
 - 日曜10:00 JST: Google Trendsトレンド投稿（AIと絡められる場合のみ）
 
 EventBridge Input:
@@ -1167,18 +1168,22 @@ def lambda_handler(event, context):
         else:
             print("[Trend] 絡められるキーワードなし → ローテーションカテゴリにフォールバック")
             category = pick_category(used_categories)
-    elif weekday in (1, 4):  # 火曜=1, 金曜=4
-        used_urls   = load_url_history()
-        url_article = fetch_url_reaction_article(used_urls)
-        if url_article:
-            category = "url_reaction"
-            print(f"[URL Reaction] 記事取得成功: 「{url_article['title'][:50]}」")
+    elif weekday == 0:  # 月曜=0: 50%でurl_reaction、50%でローテーション（固定化による予測可能性を下げる）
+        if random.random() < 0.5:
+            used_urls   = load_url_history()
+            url_article = fetch_url_reaction_article(used_urls)
+            if url_article:
+                category = "url_reaction"
+                print(f"[URL Reaction] 記事取得成功: 「{url_article['title'][:50]}」")
+            else:
+                print("[URL Reaction] 記事取得失敗 → ローテーションカテゴリにフォールバック")
+                category = pick_category(used_categories)
         else:
-            print("[URL Reaction] 記事取得失敗 → ローテーションカテゴリにフォールバック")
             category = pick_category(used_categories)
-    elif weekday == 2:  # 水曜=2: question固定（エンゲージメント最大化）
+            print(f"[Category] 月曜ローテーション選択: {category}")
+    elif weekday == 3:  # 木曜=3: question固定（エンゲージメント最大化。インプレッションが高い曜日に合わせる）
         category = "question"
-        print("[Category] 水曜固定: question")
+        print("[Category] 木曜固定: question")
     else:
         category = pick_category(used_categories)
     print(f"[Category] {category} (直近使用: {used_categories[-MAX_CATEGORY_HISTORY:]})")

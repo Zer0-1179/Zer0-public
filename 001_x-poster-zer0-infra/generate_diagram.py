@@ -52,7 +52,7 @@ def draw():
     HALF = 0.55
 
     nodes = [
-        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n夜 20:00 JST',        'x': 2.0,  'y': 4.0},
+        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n月・木 20:00 JST',     'x': 2.0,  'y': 4.0},
         {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\nx-poster-zer0-infra',       'x': 5.5,  'y': 4.0},
         {'id': 'bedrock', 'icon': 'bedrock',     'label': 'Bedrock\nClaude Haiku',             'x': 9.5,  'y': 6.0},
         {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\nAPI認証+履歴',                 'x': 9.5,  'y': 4.0},
