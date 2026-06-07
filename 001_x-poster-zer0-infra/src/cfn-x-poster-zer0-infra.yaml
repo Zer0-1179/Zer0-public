@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: X Poster Bot (zer0-infra) - Lambda + EventBridge Rule (posts AWS tips to @Zer0_Infra once daily at 20:00 JST)
+Description: X Poster Bot (zer0-infra) - Lambda + EventBridge Rule (posts AWS tips to @Zer0_Infra every Mon/Thu at 20:00 JST)
 
 Resources:
 

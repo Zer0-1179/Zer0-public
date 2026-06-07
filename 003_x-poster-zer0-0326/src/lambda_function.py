@@ -61,7 +61,7 @@ HASHTAG_POOL = [
     {"tag": "#AI副業",      "keywords": ["AI", "副業", "自動化", "収益", "案件"]},
 ]
 
-# 火曜・金曜のURL反応投稿用RSSフィード
+# 月曜のURL反応投稿用RSSフィード
 URL_REACTION_FEEDS = [
     {"url": "https://zenn.dev/topics/ai/feed",          "source": "zenn",  "label": "Zenn"},
     {"url": "https://zenn.dev/topics/chatgpt/feed",     "source": "zenn",  "label": "Zenn"},
