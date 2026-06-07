@@ -47,6 +47,10 @@ BINANCE_MAX = 1000                  # 1リクエストあたりの最大本数
 EMA_PERIOD  = 200
 EMA_SHORT   = 20
 RSI_PERIOD  = 14
+PULLBACK_LOOKBACK   = 6     # 押し目の深さを判定する直近本数(4h足6本=24時間)
+TREND_STRENGTH_PCT  = 0.05  # 200EMAからの乖離率がこれ以上 → 「強いトレンド」とみなす
+RSI_SHALLOW_MAX     = 60    # ショート押し目: 直近のRSI戻りピークがこれ未満 → 浅い押し目(強トレンド継続)
+RSI_SHALLOW_MIN     = 40    # ロング押し目: 直近のRSI押しの谷がこれ超 → 浅い押し目(強トレンド継続)
 ATR_PERIOD  = 8
 ST_MULT     = 2.5
 VOL_PERIOD      = 20
@@ -189,6 +193,11 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # 押し目→再加速トリガー: 20EMAを逆方向に抜けたあと、トレンド方向へ戻りクロス
     df["ema20_cross_up"]   = (df["close"] > df["ema20"]) & (df["close"].shift(1) <= df["ema20"].shift(1))
     df["ema20_cross_down"] = (df["close"] < df["ema20"]) & (df["close"].shift(1) >= df["ema20"].shift(1))
+
+    # トレンド強度（200EMAからの乖離率）と、直近の押し目の深さ（RSIの戻り高値/安値）
+    df["trend_strength"] = (df["close"] - df["ema200"]).abs() / df["ema200"]
+    df["rsi_max_lb"]     = df["rsi"].rolling(PULLBACK_LOOKBACK).max()
+    df["rsi_min_lb"]     = df["rsi"].rolling(PULLBACK_LOOKBACK).min()
     return df
 
 
@@ -448,7 +457,9 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                 elif (signal_mode == "flip_pullback"
                       and row["st_dir"] == 1
                       and row["ema20_cross_up"]
-                      and row["rsi"] > 50):
+                      and row["rsi"] > 50
+                      and row["trend_strength"] >= TREND_STRENGTH_PCT
+                      and row["rsi_min_lb"] > RSI_SHALLOW_MIN):
                     sig_type = "pullback"
                 else:
                     continue
@@ -460,7 +471,9 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                 elif (signal_mode == "flip_pullback"
                       and row["st_dir"] == -1
                       and row["ema20_cross_down"]
-                      and row["rsi"] < 50):
+                      and row["rsi"] < 50
+                      and row["trend_strength"] >= TREND_STRENGTH_PCT
+                      and row["rsi_max_lb"] < RSI_SHALLOW_MAX):
                     sig_type = "pullback"
                 else:
                     continue
