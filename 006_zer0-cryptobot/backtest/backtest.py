@@ -45,6 +45,8 @@ YEARS       = 2
 MAX_CANDLES = YEARS * 365 * 6       # 4h足で1日6本 → 2年=4380本
 BINANCE_MAX = 1000                  # 1リクエストあたりの最大本数
 EMA_PERIOD  = 200
+EMA_SHORT   = 20
+RSI_PERIOD  = 14
 ATR_PERIOD  = 8
 ST_MULT     = 2.5
 VOL_PERIOD      = 20
@@ -120,6 +122,17 @@ def calc_atr(df: pd.DataFrame, period: int) -> pd.Series:
     return tr.ewm(span=period, adjust=False).mean()
 
 
+def calc_rsi(series: pd.Series, period: int) -> pd.Series:
+    """Wilder の平滑化によるRSI"""
+    delta    = series.diff()
+    gain     = delta.clip(lower=0)
+    loss     = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
 def calc_supertrend(df: pd.DataFrame, atr: pd.Series, mult: float) -> pd.Series:
     """
     Supertrend の方向を計算して返す。
@@ -165,11 +178,17 @@ def calc_supertrend(df: pd.DataFrame, atr: pd.Series, mult: float) -> pd.Series:
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["ema200"]      = calc_ema(df["close"], EMA_PERIOD)
+    df["ema20"]       = calc_ema(df["close"], EMA_SHORT)
+    df["rsi"]         = calc_rsi(df["close"], RSI_PERIOD)
     df["atr"]         = calc_atr(df, ATR_PERIOD)
     df["st_dir"]      = calc_supertrend(df, df["atr"], ST_MULT)
     df["vol_avg20"]   = df["volume"].rolling(VOL_PERIOD).mean()
     df["st_flip_green"] = (df["st_dir"] == 1) & (df["st_dir"].shift(1) == -1)
     df["st_flip_red"]   = (df["st_dir"] == -1) & (df["st_dir"].shift(1) == 1)
+
+    # 押し目→再加速トリガー: 20EMAを逆方向に抜けたあと、トレンド方向へ戻りクロス
+    df["ema20_cross_up"]   = (df["close"] > df["ema20"]) & (df["close"].shift(1) <= df["ema20"].shift(1))
+    df["ema20_cross_down"] = (df["close"] < df["ema20"]) & (df["close"].shift(1) >= df["ema20"].shift(1))
     return df
 
 
@@ -180,7 +199,7 @@ class Trade:
     strategy="old" : TP1ライン(ATR×2)で30%利確 + 残り70%トレーリングSL
     strategy="new" : TP1ライン到達をトリガーにして全量トレーリングSL開始
     """
-    def __init__(self, coin, entry_time, entry, atr, invest, direction="long", strategy="old"):
+    def __init__(self, coin, entry_time, entry, atr, invest, direction="long", strategy="old", sig_type="flip"):
         self.coin        = coin
         self.entry_time  = entry_time
         self.entry       = entry
@@ -188,6 +207,7 @@ class Trade:
         self.invest      = invest
         self.direction   = direction
         self.strategy    = strategy
+        self.sig_type    = sig_type   # "flip"=転換シグナル / "pullback"=押し目継続シグナル
 
         if direction == "long":
             self.tp1      = entry + atr * TP1_MULT
@@ -388,11 +408,17 @@ class Trade:
                     self.closed      = True
 
 
-def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old") -> dict:
+def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
+                 signal_mode: str = "flip") -> dict:
     """
     全コインを統合してシミュレーションを実行する。
     BTCの200EMAで市場方向（ロング/ショート）を決定し、
     各コインのシグナルを方向に応じて収集・実行する。
+
+    signal_mode:
+      "flip"          : 既存仕様。Supertrend転換の瞬間のみエントリー
+      "flip_pullback" : 転換シグナルに加えて、進行中トレンドへの
+                        押し目継続シグナル（20EMA逆抜け→順方向再クロス＋RSI整合）も収集
     """
     min_idx = EMA_PERIOD + VOL_PERIOD + 5
 
@@ -412,16 +438,31 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old") ->
                 continue
             market_dir = "long" if btc_close.get(ts, 0) >= btc_ema200[ts] else "short"
 
-            # コイン条件（方向に応じて判定）
+            # コイン条件（方向に応じて判定）。シグナル種別を判定する
+            sig_type = None
             if market_dir == "long":
                 if row["close"] < row["ema200"]:
                     continue
-                if not row["st_flip_green"]:
+                if row["st_flip_green"]:
+                    sig_type = "flip"
+                elif (signal_mode == "flip_pullback"
+                      and row["st_dir"] == 1
+                      and row["ema20_cross_up"]
+                      and row["rsi"] > 50):
+                    sig_type = "pullback"
+                else:
                     continue
             else:  # short
                 if row["close"] >= row["ema200"]:
                     continue
-                if not row["st_flip_red"]:
+                if row["st_flip_red"]:
+                    sig_type = "flip"
+                elif (signal_mode == "flip_pullback"
+                      and row["st_dir"] == -1
+                      and row["ema20_cross_down"]
+                      and row["rsi"] < 50):
+                    sig_type = "pullback"
+                else:
                     continue
 
             if pd.isna(row["vol_avg20"]) or row["volume"] <= row["vol_avg20"]:
@@ -433,6 +474,7 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old") ->
                 "close":     row["close"],
                 "atr":       row["atr"],
                 "direction": market_dir,
+                "sig_type":  sig_type,
             })
 
     # シグナルを時刻でソート・辞書化（ts → list[signal]）
@@ -485,7 +527,7 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old") ->
 
             direction = sig["direction"]
             entry = sig["close"] * 0.99 if direction == "long" else sig["close"] * 1.01
-            t = Trade(sig["coin"], ts, entry, sig["atr"], invest, direction, strategy)
+            t = Trade(sig["coin"], ts, entry, sig["atr"], invest, direction, strategy, sig["sig_type"])
             active_trades.append(t)
 
     # 残ポジションを最終バー終値で強制決済
@@ -565,6 +607,19 @@ def calc_stats(trades: list, equity: list) -> dict:
     long_wins    = [t for t in long_trades  if t.pnl > 0]
     short_wins   = [t for t in short_trades if t.pnl > 0]
 
+    # シグナル種別集計（flip=転換 / pullback=押し目継続）
+    sig_stats = {}
+    for sig_type in ("flip", "pullback"):
+        st_trades = [t for t in trades if t.sig_type == sig_type]
+        if not st_trades:
+            continue
+        st_wins = [t for t in st_trades if t.pnl > 0]
+        sig_stats[sig_type] = {
+            "total":    len(st_trades),
+            "win_rate": len(st_wins) / len(st_trades) * 100,
+            "pnl":      sum(t.pnl for t in st_trades),
+        }
+
     return {
         "total":     len(trades),
         "wins":      len(wins),
@@ -577,6 +632,7 @@ def calc_stats(trades: list, equity: list) -> dict:
         "long_wr":     len(long_wins) / len(long_trades) * 100 if long_trades else 0,
         "short_total": len(short_trades),
         "short_wr":    len(short_wins) / len(short_trades) * 100 if short_trades else 0,
+        "sig":         sig_stats,
     }
 
 
@@ -604,6 +660,14 @@ def print_stats(stats: dict):
     for coin, cs in stats["coin"].items():
         print(f"    {coin:5s} | 計:{cs['total']:3d}(L:{cs['long']:2d}/S:{cs['short']:2d}) | "
               f"勝率:{cs['win_rate']:5.1f}% | 損益:{cs['pnl']:+.2f} USDT")
+
+    if stats.get("sig"):
+        print()
+        print("  シグナル種別内訳:")
+        labels = {"flip": "転換シグナル", "pullback": "押し目継続シグナル"}
+        for sig_type, ss in stats["sig"].items():
+            print(f"    {labels[sig_type]:12s} | 計:{ss['total']:3d}件 | "
+                  f"勝率:{ss['win_rate']:5.1f}% | 損益:{ss['pnl']:+.2f} USDT")
 
     print()
     ok_wr  = "✓" if stats["win_rate"] >= 50    else "✗"
@@ -772,16 +836,130 @@ def _run_compare(years: int):
     print(f"\n  比較チャート保存: {chart_path}")
 
 
+def _run_signal_compare(years: int):
+    """現行シグナル(転換のみ) vs 新シグナル(転換＋押し目継続) を同一データ・同一エグジット(fix=本番相当)で比較する"""
+    print(f"\nZer0-CryptoBot バックテスト シグナルモード比較（転換のみ vs 転換+押し目継続）（直近{years}年）")
+    print("=" * 65)
+
+    # データは一度だけ取得（両モードで共用）
+    candles = years * 365 * 6
+    btc_raw = fetch_klines(BTC_SYMBOL, total=candles)
+    btc_df  = add_indicators(btc_raw)
+    start   = btc_df["open_time"].iloc[0]
+    end     = btc_df["open_time"].iloc[-1]
+    print(f"BTC: {len(btc_df)} 本  {start} ～ {end}")
+
+    coin_dfs = {"BTC": btc_df}
+    for coin, symbol in [("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")]:
+        raw = fetch_klines(symbol, total=candles)
+        coin_dfs[coin] = add_indicators(raw)
+
+    MODE_LABELS = {
+        "flip":          "現行（転換シグナルのみ）",
+        "flip_pullback": "新（転換＋押し目継続シグナル）",
+    }
+    results = {}
+    for mode in ("flip", "flip_pullback"):
+        label = MODE_LABELS[mode]
+        print(f"\n--- {label} ---")
+        # エグジットは本番相当の "fix"(TP1 30%＋SL 70%) で固定し、シグナル収集方法だけを変える
+        res   = run_backtest(btc_df, coin_dfs, strategy="fix", signal_mode=mode)
+        stats = calc_stats(res["trades"], res["equity"])
+        print_stats(stats)
+        growth = (res["final_pool"] / INITIAL_CAPITAL - 1) * 100
+        print(f"  資本推移: {INITIAL_CAPITAL:,.0f}円 → {res['final_pool']:,.0f}円 ({growth:+.1f}%)")
+        results[mode] = {"stats": stats, "equity": res["equity"], "final": res["final_pool"],
+                         "growth": growth, "label": label}
+
+    # ── 比較サマリー ──────────────────────────────────────────────────────
+    print("\n" + "=" * 75)
+    print("  ★ シグナルモード 比較サマリー（エグジットは共通: fix戦略=本番相当）")
+    print("=" * 75)
+    print(f"  {'指標':<14} {'現行(転換のみ)':>15} {'新(転換+押し目)':>17}")
+    print("  " + "-" * 50)
+
+    def row2(lbl, key, fmt=".1f", suffix=""):
+        vals = [results[k]["stats"].get(key) if key != "growth" else results[k]["growth"]
+                for k in ("flip", "flip_pullback")]
+        print(f"  {lbl:<14} {vals[0]:>14{fmt}}{suffix} {vals[1]:>16{fmt}}{suffix}")
+
+    row2("勝率",         "win_rate",  suffix="%")
+    row2("PF",           "pf",        fmt=".2f")
+    row2("最大DD",       "max_dd",    suffix="%")
+    row2("資本成長率",   "growth",    suffix="%")
+    row2("総損益",       "total_pnl", fmt=".1f")
+    row2("総トレード数", "total",     fmt=".0f")
+
+    verdicts = []
+    for k in ("flip", "flip_pullback"):
+        s  = results[k]["stats"]
+        ok = s["win_rate"] >= 50 and s["pf"] >= 1.5 and s["max_dd"] <= 30
+        verdicts.append("合格" if ok else "不合格")
+    print(f"\n  判定: 現行={verdicts[0]}  新={verdicts[1]}")
+    print("=" * 75)
+
+    # ── 比較チャート（2パネル）────────────────────────────────────────────
+    colors = ["#FF6B35", "#4CAF50"]
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharey=False)
+    for ax, mode, color in zip(axes, ("flip", "flip_pullback"), colors):
+        eq     = results[mode]["equity"]
+        x      = list(range(len(eq)))
+        s      = results[mode]["stats"]
+        ok     = s["win_rate"] >= 50 and s["pf"] >= 1.5 and s["max_dd"] <= 30
+        growth = results[mode]["growth"]
+
+        ax.plot(x, eq, linewidth=2.0, color=color, zorder=3)
+        ax.axhline(0, color="#888", linewidth=1.0, linestyle="--", zorder=2)
+        ax.fill_between(x, eq, 0, where=[v >= 0 for v in eq], alpha=0.25, color=color)
+        ax.fill_between(x, eq, 0, where=[v < 0 for v in eq], alpha=0.35, color="#F44336")
+
+        verdict = "合格" if ok else "不合格"
+        ax.set_title(f"{results[mode]['label']}\n{verdict}", fontsize=10, fontweight="bold", pad=8)
+
+        stats_text = (
+            f"勝率: {s['win_rate']:.1f}%  PF: {s['pf']:.2f}  最大DD: {s['max_dd']:.1f}%\n"
+            f"トレード数: {s['total']}件  資本成長: {growth:+.1f}%\n"
+            f"L勝率: {s['long_wr']:.1f}%  S勝率: {s['short_wr']:.1f}%"
+        )
+        ax.text(0.02, 0.97, stats_text, transform=ax.transAxes,
+                fontsize=8.5, va="top", ha="left",
+                bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#BDBDBD", alpha=0.92))
+        ax.set_xlabel("トレード回数", fontsize=9)
+        ax.set_ylabel("累積損益（円）", fontsize=9)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:+,.0f}"))
+        ax.grid(True, alpha=0.25, linestyle="--")
+
+    s_str = pd.Timestamp(start).strftime("%Y年%m月")
+    e_str = pd.Timestamp(end).strftime("%Y年%m月")
+    fig.suptitle(
+        f"Zer0-CryptoBot  シグナルモード比較  直近{years}年（{s_str}〜{e_str}）\n"
+        f"現行: Supertrend転換の瞬間のみ／新: 転換＋進行中トレンドへの押し目再加速（20EMA再クロス＋RSI整合）も追加",
+        fontsize=12, fontweight="bold",
+    )
+    plt.tight_layout()
+    chart_path = "/root/Zer0/006_Zer0_CryptoBot/backtest/result_signal_compare.png"
+    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
+    print(f"\n  比較チャート保存: {chart_path}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--years",   type=int, default=YEARS, help="バックテスト期間（年）")
     parser.add_argument("--multi",   action="store_true", help="2/3/4/5年を一括比較")
     parser.add_argument("--compare", action="store_true", help="旧戦略 vs 新戦略 比較")
+    parser.add_argument("--signal-compare", action="store_true",
+                        help="現行シグナル(転換のみ) vs 新シグナル(転換+押し目継続) 比較")
     parser.add_argument("--strategy", default="old", choices=["old", "new"], help="使用戦略")
+    parser.add_argument("--signal-mode", default="flip", choices=["flip", "flip_pullback"],
+                        help="シグナル収集モード（単独実行時）")
     args = parser.parse_args()
 
     if args.compare:
         _run_compare(args.years)
+        return
+
+    if args.signal_compare:
+        _run_signal_compare(args.years)
         return
 
     if args.multi:
@@ -812,8 +990,8 @@ def main():
         print(f"      取得: {len(df)} 本  期間: {df['open_time'].iloc[0]} ～ {df['open_time'].iloc[-1]}")
 
     # バックテスト実行
-    print(f"\n[4/4] バックテスト実行中... (strategy={args.strategy})")
-    result  = run_backtest(btc_df, coin_dfs, args.strategy)
+    print(f"\n[4/4] バックテスト実行中... (strategy={args.strategy}, signal_mode={args.signal_mode})")
+    result  = run_backtest(btc_df, coin_dfs, args.strategy, args.signal_mode)
     trades  = result["trades"]
     equity     = result["equity"]
     timestamps = result["timestamps"]
