@@ -55,7 +55,7 @@ def draw():
     HALF = 0.55
 
     nodes = [
-        {'id': 'eb_eve', 'icon': 'eventbridge', 'label': 'EventBridge\n毎日 22:00 JST',        'x': 2.5,  'y': 5.5},
+        {'id': 'eb_eve', 'icon': 'eventbridge', 'label': 'EventBridge\n月・木 22:00 JST',      'x': 2.5,  'y': 5.5},
         {'id': 'eb_trd', 'icon': 'eventbridge', 'label': 'EventBridge\n日曜 10:00 JST',        'x': 2.5,  'y': 2.5},
         {'id': 'lambda', 'icon': 'lambda',      'label': 'Lambda\nx-poster-zer0-0326',         'x': 6.0,  'y': 4.0},
         {'id': 'bedrock','icon': 'bedrock',     'label': 'Bedrock\nClaude Haiku',              'x': 10.0, 'y': 6.0},
