@@ -35,7 +35,7 @@ echo "スタック名    : ${STACK_NAME}"
 echo "送信元メール  : ${SENDER_EMAIL}"
 echo "通知先メール  : ${RECIPIENT_EMAIL}"
 echo "ForceTest     : ${ENABLE_FORCE_TEST}"
-echo "スケジュール  : 4時間毎（UTC 0/4/8/12/16/20時）"
+echo "スケジュール  : Analyzer 4時間毎（UTC 0/4/8/12/16/20時） / Executor 30分毎（UTC :15,:45）"
 echo "=============================="
 echo ""
 

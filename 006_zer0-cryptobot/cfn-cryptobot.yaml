@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Zer0 CryptoBot - Automated BTC/ETH/SOL margin trading bot
-  using Binance signals and bitbank execution (4h interval).
+  Zer0 CryptoBot - Automated BTC/ETH/SOL margin trading bot.
+  Analyzer detects signals from Binance 4h candles; Executor manages
+  positions and places bitbank orders every 30 minutes.
 
 Parameters:
   SenderEmail:
@@ -13,7 +14,9 @@ Parameters:
   EnableForceTest:
     Type: String
     Default: "0"
-    AllowedValues: ["0", "1"]
+    AllowedValues:
+      - "0"
+      - "1"
     Description: "Enable force-test flags in Executor (0=off / 1=on). Set 1 only for test suite."
 
 Resources:

@@ -1,7 +1,7 @@
 # CFn テンプレート テスト状況レポート
 
-> 最終更新: 2026-05-31  
-> 対象: `004_portfolio/templates/` 以下の全 62 テンプレート  
+> 最終更新: 2026-06-04  
+> 対象: `004_portfolio/templates/` 以下の全 64 テンプレート  
 > テスト環境: ap-northeast-1 / ProjectName=cfntest / Env=dev
 
 ---
@@ -21,13 +21,13 @@
 
 | 区分 | ✅ 実デプロイ | △ validate のみ | 合計 |
 |------|:-----------:|:---------------:|:----:|
-| Beginner（初級） | 18 | 13 | 31 |
-| Advanced（上級） | 31 | 0 | 31 |
-| **合計** | **49** | **13** | **62** |
+| Beginner（初級） | 19 | 13 | 32 |
+| Advanced（上級） | 32 | 0 | 32 |
+| **合計** | **51** | **13** | **64** |
 
 **「全テンプレートがそのまま使えるか？」への回答**
-- ✅ Advanced 31本：全て実デプロイで CREATE_COMPLETE 確認済み
-- ✅ Beginner 18本：実デプロイで CREATE_COMPLETE 確認済み
+- ✅ Advanced 32本：全て実デプロイで CREATE_COMPLETE 確認済み
+- ✅ Beginner 19本：実デプロイで CREATE_COMPLETE 確認済み
 - △ Beginner 13本：構文は正しい。コスト大・依存リソース大のため実デプロイ未実施（Advanced 版で同等の構成が検証済み）
 
 ---
@@ -142,6 +142,13 @@
 | cfn-cw-alarm-efs.yaml | Advanced | ✅ 実デプロイ | FileSystemId 文字列指定で CREATE_COMPLETE | 2026-05-31 |
 | cfn-cw-alarm-rds-basic.yaml | Beginner | △ validate | RDS 依存のため validate のみ | 2026-05-31 |
 | cfn-cw-alarm-rds.yaml | Advanced | ✅ 実デプロイ | Mappings で DBInstanceClass → メモリ変換。WARNING/CRITICAL 2段階アラーム（CPU + FreeableMemory%）CREATE_COMPLETE | 2026-05-31 |
+
+### automation（自動化）
+
+| ファイル | 難易度 | テスト種別 | 確認内容 | テスト日 |
+|----------|--------|:----------:|----------|----------|
+| cfn-cw-alarm-auto-update-basic.yaml | Beginner | ✅ 実デプロイ | EC2/FSxリストア後の CloudWatch Alarm ID 自動更新（Lambda + EventBridge）CREATE_COMPLETE | 2026-06-03 |
+| cfn-cw-alarm-auto-update.yaml | Advanced | ✅ 実デプロイ | Conditions で EC2/FSx 監視を個別 ON/OFF 可能。CREATE_COMPLETE | 2026-06-03 |
 
 ---
 

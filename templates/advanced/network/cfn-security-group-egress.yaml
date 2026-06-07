@@ -11,7 +11,7 @@ Description: "Egress rules for an existing Security Group. Deploy after cfn-secu
 #     ProjectName=my-project \
 #     Env=dev \
 #     SgSuffix=web \
-#     Egress1Port=443
+#     Egress01Port=443
 #
 # NOTE:
 #   By default, AWS Security Groups allow all outbound traffic (0.0.0.0/0).
@@ -49,22 +49,22 @@ Metadata:
       - Label:
           default: "Egress Rule 1 (required)"
         Parameters:
-          - Egress1Protocol
-          - Egress1Port
-          - Egress1Cidr
-          - Egress1CidrIpv6
+          - Egress01Protocol
+          - Egress01Port
+          - Egress01Cidr
+          - Egress01CidrIpv6
       - Label:
           default: "Egress Rule 2 (optional)"
         Parameters:
-          - Egress2Protocol
-          - Egress2Port
-          - Egress2Cidr
+          - Egress02Protocol
+          - Egress02Port
+          - Egress02Cidr
       - Label:
           default: "Egress Rule 3 (optional)"
         Parameters:
-          - Egress3Protocol
-          - Egress3Port
-          - Egress3Cidr
+          - Egress03Protocol
+          - Egress03Port
+          - Egress03Cidr
 
 # -----------------------------------------------
 # Parameters
@@ -92,7 +92,7 @@ Parameters:
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
-  Egress1Protocol:
+  Egress01Protocol:
     Type: String
     Default: tcp
     AllowedValues:
@@ -103,24 +103,24 @@ Parameters:
       - "-1"
     Description: "IP protocol for rule 1. -1 allows all traffic on all ports."
 
-  Egress1Port:
+  Egress01Port:
     Type: Number
     Default: 443
     MinValue: -1
     MaxValue: 65535
     Description: "Port for rule 1. Use -1 for all ports (when Protocol=-1 or icmp)."
 
-  Egress1Cidr:
+  Egress01Cidr:
     Type: String
     Default: "0.0.0.0/0"
     Description: "Destination IPv4 CIDR for rule 1."
 
-  Egress1CidrIpv6:
+  Egress01CidrIpv6:
     Type: String
     Default: ""
     Description: "Destination IPv6 CIDR for rule 1 (e.g. ::/0). Leave empty to use IPv4 only."
 
-  Egress2Protocol:
+  Egress02Protocol:
     Type: String
     Default: tcp
     AllowedValues:
@@ -131,19 +131,19 @@ Parameters:
       - "-1"
     Description: "IP protocol for rule 2."
 
-  Egress2Port:
+  Egress02Port:
     Type: String
     Default: ""
     Description: "Port for rule 2. Leave empty to disable."
     AllowedPattern: "^(-1|[0-9]{1,5})?$"
     ConstraintDescription: "Port number (0-65535), -1, or empty to disable."
 
-  Egress2Cidr:
+  Egress02Cidr:
     Type: String
     Default: "0.0.0.0/0"
     Description: "Destination CIDR for rule 2."
 
-  Egress3Protocol:
+  Egress03Protocol:
     Type: String
     Default: tcp
     AllowedValues:
@@ -154,14 +154,14 @@ Parameters:
       - "-1"
     Description: "IP protocol for rule 3."
 
-  Egress3Port:
+  Egress03Port:
     Type: String
     Default: ""
     Description: "Port for rule 3. Leave empty to disable."
     AllowedPattern: "^(-1|[0-9]{1,5})?$"
     ConstraintDescription: "Port number (0-65535), -1, or empty to disable."
 
-  Egress3Cidr:
+  Egress03Cidr:
     Type: String
     Default: "0.0.0.0/0"
     Description: "Destination CIDR for rule 3."
@@ -170,15 +170,15 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasEgress02:    !Not [!Equals [!Ref Egress2Port, ""]]
-  HasEgress03:    !Not [!Equals [!Ref Egress3Port, ""]]
-  HasEgress1Ipv6: !Not [!Equals [!Ref Egress1CidrIpv6, ""]]
+  HasEgress02:    !Not [!Equals [!Ref Egress02Port, ""]]
+  HasEgress03:    !Not [!Equals [!Ref Egress03Port, ""]]
+  HasEgress01Ipv6: !Not [!Equals [!Ref Egress01CidrIpv6, ""]]
 
 # -----------------------------------------------
 # Resources
 # AWS::EC2::SecurityGroupEgress adds rules to an existing SG without modifying it.
 # Conditional resources (EgressRule02 / EgressRule03) are skipped when port is empty.
-# IPv6 rule is added separately when Egress1CidrIpv6 is specified.
+# IPv6 rule is added separately when Egress01CidrIpv6 is specified.
 # -----------------------------------------------
 Resources:
   EgressRule01:
@@ -186,23 +186,23 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Egress1Protocol
-      FromPort: !Ref Egress1Port
-      ToPort: !Ref Egress1Port
-      CidrIp: !Ref Egress1Cidr
-      Description: !Sub "Rule 1: port ${Egress1Port} to ${Egress1Cidr}"
+      IpProtocol: !Ref Egress01Protocol
+      FromPort: !Ref Egress01Port
+      ToPort: !Ref Egress01Port
+      CidrIp: !Ref Egress01Cidr
+      Description: !Sub "Rule 1: port ${Egress01Port} to ${Egress01Cidr}"
 
   EgressRule01Ipv6:
     Type: AWS::EC2::SecurityGroupEgress
-    Condition: HasEgress1Ipv6
+    Condition: HasEgress01Ipv6
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Egress1Protocol
-      FromPort: !Ref Egress1Port
-      ToPort: !Ref Egress1Port
-      CidrIpv6: !Ref Egress1CidrIpv6
-      Description: !Sub "Rule 1 IPv6: port ${Egress1Port} to ${Egress1CidrIpv6}"
+      IpProtocol: !Ref Egress01Protocol
+      FromPort: !Ref Egress01Port
+      ToPort: !Ref Egress01Port
+      CidrIpv6: !Ref Egress01CidrIpv6
+      Description: !Sub "Rule 1 IPv6: port ${Egress01Port} to ${Egress01CidrIpv6}"
 
   EgressRule02:
     Type: AWS::EC2::SecurityGroupEgress
@@ -210,11 +210,11 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Egress2Protocol
-      FromPort: !Ref Egress2Port
-      ToPort: !Ref Egress2Port
-      CidrIp: !Ref Egress2Cidr
-      Description: !Sub "Rule 2: port ${Egress2Port} to ${Egress2Cidr}"
+      IpProtocol: !Ref Egress02Protocol
+      FromPort: !Ref Egress02Port
+      ToPort: !Ref Egress02Port
+      CidrIp: !Ref Egress02Cidr
+      Description: !Sub "Rule 2: port ${Egress02Port} to ${Egress02Cidr}"
 
   EgressRule03:
     Type: AWS::EC2::SecurityGroupEgress
@@ -222,8 +222,8 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Egress3Protocol
-      FromPort: !Ref Egress3Port
-      ToPort: !Ref Egress3Port
-      CidrIp: !Ref Egress3Cidr
-      Description: !Sub "Rule 3: port ${Egress3Port} to ${Egress3Cidr}"
+      IpProtocol: !Ref Egress03Protocol
+      FromPort: !Ref Egress03Port
+      ToPort: !Ref Egress03Port
+      CidrIp: !Ref Egress03Cidr
+      Description: !Sub "Rule 3: port ${Egress03Port} to ${Egress03Cidr}"

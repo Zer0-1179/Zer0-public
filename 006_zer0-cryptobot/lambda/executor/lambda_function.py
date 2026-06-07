@@ -3,7 +3,7 @@ Zer0-CryptoBot Executor Lambda
 Phase A: 既存ポジション管理（約定確認 / TP1後トレーリングSL / 24h未約定キャンセル）
 Phase B: 新規シグナルの成行発注（動的ポジションサイズ）
 
-v3変更: 信用取引（ロング＋ショート）対応 / ペア変更: BTC/ETH/SOL
+v2変更: 信用取引（ロング＋ショート）対応 / ペア変更: BTC/ETH/SOL
 """
 
 import os
