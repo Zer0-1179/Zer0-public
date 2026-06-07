@@ -1,6 +1,6 @@
 # 001 X Poster Bot (@Zer0_Infra)
 
-> AWS最新ニュースを5ソースのRSSから収集し、Bedrock Claude で @Zer0_Infra の口調に変換してXへ毎日20時に自動投稿するサーバーレスBot。3段階の重複フィルタで品質を担保。
+> AWS最新ニュースを5ソースのRSSから収集し、Bedrock Claude で @Zer0_Infra の口調に変換してXへ毎週月・木20時に自動投稿するサーバーレスBot。3段階の重複フィルタで品質を担保。
 
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20EventBridge-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
@@ -10,7 +10,7 @@
 
 | 項目       | 内容                                                                   |
 | ---------- | ---------------------------------------------------------------------- |
-| 投稿頻度   | 毎日 20:00 JST（夜）の1回                                              |
+| 投稿頻度   | 毎週月・木 20:00 JST（夜）の週2回                                      |
 | 情報ソース | AWS公式ニュース / AWSブログ / クラスメソッド / Zenn / Qiita（5ソース） |
 | 取得期間   | 過去14日以内の記事のみ                                                 |
 | 重複排除   | URL完全一致 → キーワード → AWSサービス名の3段階                        |
@@ -23,7 +23,7 @@
 ![アーキテクチャ図](images/001_architecture.png)
 
 ```text
-EventBridge ルール（20:00 JST）
+EventBridge ルール（月・木 20:00 JST）
   └─▶ Lambda（Python 3.14）
         ├─ RSS/Atom 取得（AWS公式ニュース・AWSブログ・Classmethod・Zenn・Qiita）
         ├─ 14日フィルタ + 3段階重複排除
@@ -140,3 +140,4 @@ bash src/deploy.sh
 | 2026-05-22 | v1.2       | 3段階重複排除（URL/キーワード/サービス別クールダウン）実装。同内容の連続投稿を防止 |
 | 2026-05-25 | v1.3       | IAM最小権限化（AmazonBedrockFullAccess → カスタムポリシー）                        |
 | 2026-05-29 | v1.4       | スタック名・Lambda関数名を `x-poster-zer0-infra` にリネーム                        |
+| 2026-06-07 | v1.5       | 投稿頻度を毎日→毎週月・木に変更（エンゲージメント向上・Bot感の軽減が目的）         |
