@@ -11,8 +11,8 @@ Description: "Ingress rules for an existing Security Group. Deploy after cfn-sec
 #     ProjectName=my-project \
 #     Env=dev \
 #     SgSuffix=web \
-#     Ingress1Port=80 \
-#     Ingress2Port=443
+#     Ingress01Port=80 \
+#     Ingress02Port=443
 #
 # Common port examples:
 #   HTTP:       80    HTTPS: 443
@@ -45,22 +45,22 @@ Metadata:
       - Label:
           default: "Ingress Rule 1 (required)"
         Parameters:
-          - Ingress1Protocol
-          - Ingress1Port
-          - Ingress1Cidr
-          - Ingress1CidrIpv6
+          - Ingress01Protocol
+          - Ingress01Port
+          - Ingress01Cidr
+          - Ingress01CidrIpv6
       - Label:
           default: "Ingress Rule 2 (optional)"
         Parameters:
-          - Ingress2Protocol
-          - Ingress2Port
-          - Ingress2Cidr
+          - Ingress02Protocol
+          - Ingress02Port
+          - Ingress02Cidr
       - Label:
           default: "Ingress Rule 3 (optional)"
         Parameters:
-          - Ingress3Protocol
-          - Ingress3Port
-          - Ingress3Cidr
+          - Ingress03Protocol
+          - Ingress03Port
+          - Ingress03Cidr
 
 # -----------------------------------------------
 # Parameters
@@ -88,7 +88,7 @@ Parameters:
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
-  Ingress1Protocol:
+  Ingress01Protocol:
     Type: String
     Default: tcp
     AllowedValues:
@@ -99,24 +99,24 @@ Parameters:
       - "-1"
     Description: "IP protocol for rule 1. -1 allows all traffic on all ports."
 
-  Ingress1Port:
+  Ingress01Port:
     Type: Number
     Default: 80
     MinValue: -1
     MaxValue: 65535
     Description: "Port for rule 1. Use -1 for all ports (when Protocol=-1 or icmp)."
 
-  Ingress1Cidr:
+  Ingress01Cidr:
     Type: String
     Default: "0.0.0.0/0"
     Description: "Source IPv4 CIDR for rule 1."
 
-  Ingress1CidrIpv6:
+  Ingress01CidrIpv6:
     Type: String
     Default: ""
     Description: "Source IPv6 CIDR for rule 1 (e.g. ::/0). Leave empty to use IPv4 only."
 
-  Ingress2Protocol:
+  Ingress02Protocol:
     Type: String
     Default: tcp
     AllowedValues:
@@ -127,19 +127,19 @@ Parameters:
       - "-1"
     Description: "IP protocol for rule 2."
 
-  Ingress2Port:
+  Ingress02Port:
     Type: String
     Default: "443"
     Description: "Port for rule 2. Leave empty to disable."
     AllowedPattern: "^(-1|[0-9]{1,5})?$"
     ConstraintDescription: "Port number (0-65535), -1, or empty to disable."
 
-  Ingress2Cidr:
+  Ingress02Cidr:
     Type: String
     Default: "0.0.0.0/0"
     Description: "Source CIDR for rule 2."
 
-  Ingress3Protocol:
+  Ingress03Protocol:
     Type: String
     Default: tcp
     AllowedValues:
@@ -150,14 +150,14 @@ Parameters:
       - "-1"
     Description: "IP protocol for rule 3."
 
-  Ingress3Port:
+  Ingress03Port:
     Type: String
     Default: ""
     Description: "Port for rule 3. Leave empty to disable."
     AllowedPattern: "^(-1|[0-9]{1,5})?$"
     ConstraintDescription: "Port number (0-65535), -1, or empty to disable."
 
-  Ingress3Cidr:
+  Ingress03Cidr:
     Type: String
     Default: "0.0.0.0/0"
     Description: "Source CIDR for rule 3."
@@ -166,15 +166,15 @@ Parameters:
 # Conditions
 # -----------------------------------------------
 Conditions:
-  HasIngress02:      !Not [!Equals [!Ref Ingress2Port, ""]]
-  HasIngress03:      !Not [!Equals [!Ref Ingress3Port, ""]]
-  HasIngress1Ipv6:   !Not [!Equals [!Ref Ingress1CidrIpv6, ""]]
+  HasIngress02:      !Not [!Equals [!Ref Ingress02Port, ""]]
+  HasIngress03:      !Not [!Equals [!Ref Ingress03Port, ""]]
+  HasIngress01Ipv6:   !Not [!Equals [!Ref Ingress01CidrIpv6, ""]]
 
 # -----------------------------------------------
 # Resources
 # AWS::EC2::SecurityGroupIngress adds rules to an existing SG without modifying it.
 # Conditional resources (IngressRule02 / IngressRule03) are skipped when port is empty.
-# IPv6 rule is added separately when Ingress1CidrIpv6 is specified.
+# IPv6 rule is added separately when Ingress01CidrIpv6 is specified.
 # -----------------------------------------------
 Resources:
   IngressRule01:
@@ -182,23 +182,23 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Ingress1Protocol
-      FromPort: !Ref Ingress1Port
-      ToPort: !Ref Ingress1Port
-      CidrIp: !Ref Ingress1Cidr
-      Description: !Sub "Rule 1: port ${Ingress1Port} from ${Ingress1Cidr}"
+      IpProtocol: !Ref Ingress01Protocol
+      FromPort: !Ref Ingress01Port
+      ToPort: !Ref Ingress01Port
+      CidrIp: !Ref Ingress01Cidr
+      Description: !Sub "Rule 1: port ${Ingress01Port} from ${Ingress01Cidr}"
 
   IngressRule01Ipv6:
     Type: AWS::EC2::SecurityGroupIngress
-    Condition: HasIngress1Ipv6
+    Condition: HasIngress01Ipv6
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Ingress1Protocol
-      FromPort: !Ref Ingress1Port
-      ToPort: !Ref Ingress1Port
-      CidrIpv6: !Ref Ingress1CidrIpv6
-      Description: !Sub "Rule 1 IPv6: port ${Ingress1Port} from ${Ingress1CidrIpv6}"
+      IpProtocol: !Ref Ingress01Protocol
+      FromPort: !Ref Ingress01Port
+      ToPort: !Ref Ingress01Port
+      CidrIpv6: !Ref Ingress01CidrIpv6
+      Description: !Sub "Rule 1 IPv6: port ${Ingress01Port} from ${Ingress01CidrIpv6}"
 
   IngressRule02:
     Type: AWS::EC2::SecurityGroupIngress
@@ -206,11 +206,11 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Ingress2Protocol
-      FromPort: !Ref Ingress2Port
-      ToPort: !Ref Ingress2Port
-      CidrIp: !Ref Ingress2Cidr
-      Description: !Sub "Rule 2: port ${Ingress2Port} from ${Ingress2Cidr}"
+      IpProtocol: !Ref Ingress02Protocol
+      FromPort: !Ref Ingress02Port
+      ToPort: !Ref Ingress02Port
+      CidrIp: !Ref Ingress02Cidr
+      Description: !Sub "Rule 2: port ${Ingress02Port} from ${Ingress02Cidr}"
 
   IngressRule03:
     Type: AWS::EC2::SecurityGroupIngress
@@ -218,8 +218,8 @@ Resources:
     Properties:
       GroupId:
         Fn::ImportValue: !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId"
-      IpProtocol: !Ref Ingress3Protocol
-      FromPort: !Ref Ingress3Port
-      ToPort: !Ref Ingress3Port
-      CidrIp: !Ref Ingress3Cidr
-      Description: !Sub "Rule 3: port ${Ingress3Port} from ${Ingress3Cidr}"
+      IpProtocol: !Ref Ingress03Protocol
+      FromPort: !Ref Ingress03Port
+      ToPort: !Ref Ingress03Port
+      CidrIp: !Ref Ingress03Cidr
+      Description: !Sub "Rule 3: port ${Ingress03Port} from ${Ingress03Cidr}"
