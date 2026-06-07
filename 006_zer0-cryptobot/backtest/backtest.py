@@ -65,15 +65,15 @@ TRAIL_MULT = 1.5
 
 
 # ── Binance データ取得 ────────────────────────────────
-def fetch_klines(symbol: str, total: int = MAX_CANDLES) -> pd.DataFrame:
-    """Binance から 4h 足を oldest→newest の順で取得して DataFrame を返す"""
+def fetch_klines(symbol: str, total: int = MAX_CANDLES, interval: str = INTERVAL) -> pd.DataFrame:
+    """Binance から指定足を oldest→newest の順で取得して DataFrame を返す"""
     url = "https://api.binance.com/api/v3/klines"
     all_candles = []
     end_ms = None  # None = 現在時刻から遡る
 
     while len(all_candles) < total:
         need = min(BINANCE_MAX, total - len(all_candles))
-        params = {"symbol": symbol, "interval": INTERVAL, "limit": need}
+        params = {"symbol": symbol, "interval": interval, "limit": need}
         if end_ms:
             params["endTime"] = end_ms
 
@@ -199,6 +199,29 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["rsi_max_lb"]     = df["rsi"].rolling(PULLBACK_LOOKBACK).max()
     df["rsi_min_lb"]     = df["rsi"].rolling(PULLBACK_LOOKBACK).min()
     return df
+
+
+# ── 上位足（日足）トレンド確認フィルタ ────────────────────
+DAILY_INTERVAL = "1d"
+
+
+def add_daily_trend(df: pd.DataFrame) -> pd.DataFrame:
+    """日足のSupertrend方向を計算する（上位足トレンド確認フィルタ用、4hと同一パラメータ）"""
+    df = df.copy()
+    df["atr"]    = calc_atr(df, ATR_PERIOD)
+    df["st_dir"] = calc_supertrend(df, df["atr"], ST_MULT)
+    return df
+
+
+def build_daily_lookup(df_daily: pd.DataFrame) -> dict:
+    """日足の open_time(日付) → ST方向 の辞書を作る"""
+    return df_daily.set_index("open_time")["st_dir"].to_dict()
+
+
+def htf_direction(daily_lookup: dict, ts) -> int | None:
+    """4h足の時刻から、直近に確定済みの日足ST方向を取得する（先読み防止のため前日分を参照）"""
+    day = ts.floor("D") - pd.Timedelta(days=1)
+    return daily_lookup.get(day)
 
 
 # ── バックテストシミュレーション ───────────────────────
@@ -418,7 +441,7 @@ class Trade:
 
 
 def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
-                 signal_mode: str = "flip") -> dict:
+                 signal_mode: str = "flip", daily_lookup: dict | None = None) -> dict:
     """
     全コインを統合してシミュレーションを実行する。
     BTCの200EMAで市場方向（ロング/ショート）を決定し、
@@ -428,6 +451,10 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
       "flip"          : 既存仕様。Supertrend転換の瞬間のみエントリー
       "flip_pullback" : 転換シグナルに加えて、進行中トレンドへの
                         押し目継続シグナル（20EMA逆抜け→順方向再クロス＋RSI整合）も収集
+      "flip_htf"      : 転換シグナルに加えて、コイン自身の日足Supertrend方向が
+                        シグナル方向と一致することを要求する（上位足トレンド確認）
+
+    daily_lookup: {coin: {date: st_dir}}。flip_htf モードでのみ使用。
     """
     min_idx = EMA_PERIOD + VOL_PERIOD + 5
 
@@ -476,6 +503,12 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                       and row["rsi_max_lb"] < RSI_SHALLOW_MAX):
                     sig_type = "pullback"
                 else:
+                    continue
+
+            # 上位足（日足）トレンド確認: コイン自身の日足ST方向がシグナル方向と一致するか
+            if signal_mode == "flip_htf":
+                want_dir = 1 if market_dir == "long" else -1
+                if htf_direction((daily_lookup or {}).get(coin, {}), ts) != want_dir:
                     continue
 
             if pd.isna(row["vol_avg20"]) or row["volume"] <= row["vol_avg20"]:
@@ -955,6 +988,120 @@ def _run_signal_compare(years: int):
     print(f"\n  比較チャート保存: {chart_path}")
 
 
+def _run_htf_compare(years: int):
+    """現行(転換のみ) vs 新(転換+コイン自身の日足トレンド確認) を同一データ・同一エグジット(fix=本番相当)で比較する"""
+    print(f"\nZer0-CryptoBot バックテスト 上位足確認比較（転換のみ vs 転換+日足トレンド確認）（直近{years}年）")
+    print("=" * 65)
+
+    candles = years * 365 * 6
+    btc_raw = fetch_klines(BTC_SYMBOL, total=candles)
+    btc_df  = add_indicators(btc_raw)
+    start   = btc_df["open_time"].iloc[0]
+    end     = btc_df["open_time"].iloc[-1]
+    print(f"BTC: {len(btc_df)} 本  {start} ～ {end}")
+
+    coin_dfs   = {"BTC": btc_df}
+    daily_lookup: dict = {}
+    daily_candles = years * 365 + 250  # ATR/Supertrend ウォームアップ込み
+
+    coin_symbols = [("BTC", BTC_SYMBOL), ("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")]
+    for coin, symbol in coin_symbols:
+        if coin != "BTC":
+            raw = fetch_klines(symbol, total=candles)
+            coin_dfs[coin] = add_indicators(raw)
+        daily_raw = fetch_klines(symbol, total=daily_candles, interval=DAILY_INTERVAL)
+        daily_df  = add_daily_trend(daily_raw)
+        daily_lookup[coin] = build_daily_lookup(daily_df)
+        print(f"  {coin:5s} 日足: {len(daily_df)} 本  "
+              f"{daily_df['open_time'].iloc[0].strftime('%Y-%m-%d')} ～ {daily_df['open_time'].iloc[-1].strftime('%Y-%m-%d')}")
+
+    MODE_LABELS = {
+        "flip":     "現行（コイン自身の日足は未確認）",
+        "flip_htf": "新（コイン自身の日足トレンドと一致が必須）",
+    }
+    results = {}
+    for mode in ("flip", "flip_htf"):
+        label = MODE_LABELS[mode]
+        print(f"\n--- {label} ---")
+        res   = run_backtest(btc_df, coin_dfs, strategy="fix", signal_mode=mode, daily_lookup=daily_lookup)
+        stats = calc_stats(res["trades"], res["equity"])
+        print_stats(stats)
+        growth = (res["final_pool"] / INITIAL_CAPITAL - 1) * 100
+        print(f"  資本推移: {INITIAL_CAPITAL:,.0f}円 → {res['final_pool']:,.0f}円 ({growth:+.1f}%)")
+        results[mode] = {"stats": stats, "equity": res["equity"], "final": res["final_pool"],
+                         "growth": growth, "label": label}
+
+    # ── 比較サマリー ──────────────────────────────────────────────────────
+    print("\n" + "=" * 75)
+    print("  ★ 上位足確認 比較サマリー（エグジットは共通: fix戦略=本番相当）")
+    print("=" * 75)
+    print(f"  {'指標':<14} {'現行(日足未確認)':>16} {'新(日足一致必須)':>17}")
+    print("  " + "-" * 52)
+
+    def row2(lbl, key, fmt=".1f", suffix=""):
+        vals = [results[k]["stats"].get(key) if key != "growth" else results[k]["growth"]
+                for k in ("flip", "flip_htf")]
+        print(f"  {lbl:<14} {vals[0]:>15{fmt}}{suffix} {vals[1]:>16{fmt}}{suffix}")
+
+    row2("勝率",         "win_rate",  suffix="%")
+    row2("PF",           "pf",        fmt=".2f")
+    row2("最大DD",       "max_dd",    suffix="%")
+    row2("資本成長率",   "growth",    suffix="%")
+    row2("総損益",       "total_pnl", fmt=".1f")
+    row2("総トレード数", "total",     fmt=".0f")
+
+    verdicts = []
+    for k in ("flip", "flip_htf"):
+        s  = results[k]["stats"]
+        ok = s["win_rate"] >= 50 and s["pf"] >= 1.5 and s["max_dd"] <= 30
+        verdicts.append("合格" if ok else "不合格")
+    print(f"\n  判定: 現行={verdicts[0]}  新={verdicts[1]}")
+    print("=" * 75)
+
+    # ── 比較チャート（2パネル）────────────────────────────────────────────
+    colors = ["#FF6B35", "#9C27B0"]
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharey=False)
+    for ax, mode, color in zip(axes, ("flip", "flip_htf"), colors):
+        eq     = results[mode]["equity"]
+        x      = list(range(len(eq)))
+        s      = results[mode]["stats"]
+        ok     = s["win_rate"] >= 50 and s["pf"] >= 1.5 and s["max_dd"] <= 30
+        growth = results[mode]["growth"]
+
+        ax.plot(x, eq, linewidth=2.0, color=color, zorder=3)
+        ax.axhline(0, color="#888", linewidth=1.0, linestyle="--", zorder=2)
+        ax.fill_between(x, eq, 0, where=[v >= 0 for v in eq], alpha=0.25, color=color)
+        ax.fill_between(x, eq, 0, where=[v < 0 for v in eq], alpha=0.35, color="#F44336")
+
+        verdict = "合格" if ok else "不合格"
+        ax.set_title(f"{results[mode]['label']}\n{verdict}", fontsize=10, fontweight="bold", pad=8)
+
+        stats_text = (
+            f"勝率: {s['win_rate']:.1f}%  PF: {s['pf']:.2f}  最大DD: {s['max_dd']:.1f}%\n"
+            f"トレード数: {s['total']}件  資本成長: {growth:+.1f}%\n"
+            f"L勝率: {s['long_wr']:.1f}%  S勝率: {s['short_wr']:.1f}%"
+        )
+        ax.text(0.02, 0.97, stats_text, transform=ax.transAxes,
+                fontsize=8.5, va="top", ha="left",
+                bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#BDBDBD", alpha=0.92))
+        ax.set_xlabel("トレード回数", fontsize=9)
+        ax.set_ylabel("累積損益（円）", fontsize=9)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:+,.0f}"))
+        ax.grid(True, alpha=0.25, linestyle="--")
+
+    s_str = pd.Timestamp(start).strftime("%Y年%m月")
+    e_str = pd.Timestamp(end).strftime("%Y年%m月")
+    fig.suptitle(
+        f"Zer0-CryptoBot  上位足確認比較  直近{years}年（{s_str}〜{e_str}）\n"
+        f"現行: 4hシグナルのみ／新: 4hシグナル＋コイン自身の日足Supertrend方向の一致を要求（トリプルスクリーン型）",
+        fontsize=12, fontweight="bold",
+    )
+    plt.tight_layout()
+    chart_path = "/root/Zer0/006_Zer0_CryptoBot/backtest/result_htf_compare.png"
+    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
+    print(f"\n  比較チャート保存: {chart_path}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--years",   type=int, default=YEARS, help="バックテスト期間（年）")
@@ -962,8 +1109,10 @@ def main():
     parser.add_argument("--compare", action="store_true", help="旧戦略 vs 新戦略 比較")
     parser.add_argument("--signal-compare", action="store_true",
                         help="現行シグナル(転換のみ) vs 新シグナル(転換+押し目継続) 比較")
+    parser.add_argument("--htf-compare", action="store_true",
+                        help="現行(転換のみ) vs 新(転換+コイン自身の日足トレンド確認) 比較")
     parser.add_argument("--strategy", default="old", choices=["old", "new"], help="使用戦略")
-    parser.add_argument("--signal-mode", default="flip", choices=["flip", "flip_pullback"],
+    parser.add_argument("--signal-mode", default="flip", choices=["flip", "flip_pullback", "flip_htf"],
                         help="シグナル収集モード（単独実行時）")
     args = parser.parse_args()
 
@@ -973,6 +1122,10 @@ def main():
 
     if args.signal_compare:
         _run_signal_compare(args.years)
+        return
+
+    if args.htf_compare:
+        _run_htf_compare(args.years)
         return
 
     if args.multi:
