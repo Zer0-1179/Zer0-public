@@ -62,13 +62,13 @@ Resources:
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "placeholder"}
 
-  # ── EventBridge: 毎夜20時 JST (= UTC 11時) ──────────
+  # ── EventBridge: 毎週月・木 20時 JST (= UTC 11時) ──────────
   EveningRule:
     Type: AWS::Events::Rule
     Properties:
       Name: x-poster-zer0-infra-evening
-      Description: 毎夜20時（JST）にURL付き・ニュース紹介系を投稿
-      ScheduleExpression: "cron(0 11 * * ? *)"
+      Description: 毎週月・木 20時（JST）にURL付き・ニュース紹介系を投稿
+      ScheduleExpression: "cron(0 11 ? * MON,THU *)"
       State: ENABLED
       Targets:
         - Id: EveningTarget

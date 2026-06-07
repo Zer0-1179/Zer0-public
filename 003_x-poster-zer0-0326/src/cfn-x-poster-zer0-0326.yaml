@@ -110,13 +110,13 @@ Resources:
                 Action: lambda:InvokeFunction
                 Resource: !GetAtt PosterFunction.Arn
 
-  # EventBridge: 22:00 JST (UTC 13:00)
+  # EventBridge: 毎週月・木 22:00 JST (UTC 13:00)
   EveningSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: x-poster-zer0-0326-evening
-      Description: "毎日22:00 JSTにランダムカテゴリでAI関連ツイートを1件投稿"
-      ScheduleExpression: "cron(0 13 * * ? *)"
+      Description: "毎週月・木 22:00 JSTにランダムカテゴリでAI関連ツイートを1件投稿"
+      ScheduleExpression: "cron(0 13 ? * MON,THU *)"
       FlexibleTimeWindow:
         Mode: "OFF"
       Target:
@@ -149,7 +149,7 @@ Outputs:
     Value: !Ref PosterFunction
 
   EveningScheduleName:
-    Description: 毎日投稿スケジュール名（毎日22:00 JST）
+    Description: 定期投稿スケジュール名（毎週月・木 22:00 JST）
     Value: !Ref EveningSchedule
 
   TrendScheduleName:
