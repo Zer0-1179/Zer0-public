@@ -53,6 +53,8 @@ RSI_SHALLOW_MAX     = 60    # ショート押し目: 直近のRSI戻りピーク
 RSI_SHALLOW_MIN     = 40    # ロング押し目: 直近のRSI押しの谷がこれ超 → 浅い押し目(強トレンド継続)
 ATR_PERIOD  = 8
 ST_MULT     = 2.5
+ADX_PERIOD     = 14
+ADX_THRESHOLD  = 25   # ADXがこれ以上 → 「トレンドが効いている地合い」とみなす(レンジ相場のダマシを除外)
 VOL_PERIOD      = 20
 INITIAL_CAPITAL = 10000.0   # 初期資本（単位: 円換算の仮想値）
 POSITION_RATIO  = 0.90      # 使用率: 資本 × 90% を MAX_POSITIONS で均等割り
@@ -137,6 +139,27 @@ def calc_rsi(series: pd.Series, period: int) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
+def calc_adx(df: pd.DataFrame, period: int) -> pd.Series:
+    """Wilder の平滑化によるADX（トレンド強度。レンジ相場のダマシ除外フィルタ用）"""
+    high, low, close = df["high"], df["low"], df["close"]
+    up_move   = high.diff()
+    down_move = -low.diff()
+    plus_dm  = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=df.index)
+    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=df.index)
+
+    tr = pd.concat([
+        high - low,
+        (high - close.shift(1)).abs(),
+        (low - close.shift(1)).abs(),
+    ], axis=1).max(axis=1)
+
+    tr_w      = tr.ewm(alpha=1 / period, adjust=False).mean()
+    plus_di   = 100 * plus_dm.ewm(alpha=1 / period, adjust=False).mean() / tr_w
+    minus_di  = 100 * minus_dm.ewm(alpha=1 / period, adjust=False).mean() / tr_w
+    dx        = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+    return dx.ewm(alpha=1 / period, adjust=False).mean()
+
+
 def calc_supertrend(df: pd.DataFrame, atr: pd.Series, mult: float) -> pd.Series:
     """
     Supertrend の方向を計算して返す。
@@ -185,6 +208,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["ema20"]       = calc_ema(df["close"], EMA_SHORT)
     df["rsi"]         = calc_rsi(df["close"], RSI_PERIOD)
     df["atr"]         = calc_atr(df, ATR_PERIOD)
+    df["adx"]         = calc_adx(df, ADX_PERIOD)
     df["st_dir"]      = calc_supertrend(df, df["atr"], ST_MULT)
     df["vol_avg20"]   = df["volume"].rolling(VOL_PERIOD).mean()
     df["st_flip_green"] = (df["st_dir"] == 1) & (df["st_dir"].shift(1) == -1)
@@ -453,6 +477,8 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                         押し目継続シグナル（20EMA逆抜け→順方向再クロス＋RSI整合）も収集
       "flip_htf"      : 転換シグナルに加えて、コイン自身の日足Supertrend方向が
                         シグナル方向と一致することを要求する（上位足トレンド確認）
+      "flip_adx"      : 転換シグナルに加えて、ADXが閾値以上（トレンドが効いている地合い）
+                        であることを要求する（レンジ相場のダマシ転換を除外）
 
     daily_lookup: {coin: {date: st_dir}}。flip_htf モードでのみ使用。
     """
@@ -509,6 +535,11 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
             if signal_mode == "flip_htf":
                 want_dir = 1 if market_dir == "long" else -1
                 if htf_direction((daily_lookup or {}).get(coin, {}), ts) != want_dir:
+                    continue
+
+            # ADXトレンド強度フィルタ: レンジ相場（ADX低 = ダマシが多い）での転換シグナルを除外
+            if signal_mode == "flip_adx":
+                if pd.isna(row["adx"]) or row["adx"] < ADX_THRESHOLD:
                     continue
 
             if pd.isna(row["vol_avg20"]) or row["volume"] <= row["vol_avg20"]:
@@ -1102,6 +1133,110 @@ def _run_htf_compare(years: int):
     print(f"\n  比較チャート保存: {chart_path}")
 
 
+def _run_adx_compare(years: int):
+    """現行(転換のみ) vs 新(転換+ADXトレンド強度フィルタ) を同一データ・同一エグジット(fix=本番相当)で比較する"""
+    print(f"\nZer0-CryptoBot バックテスト ADXフィルタ比較（転換のみ vs 転換+ADXトレンド強度確認）（直近{years}年）")
+    print("=" * 65)
+
+    candles = years * 365 * 6
+    btc_raw = fetch_klines(BTC_SYMBOL, total=candles)
+    btc_df  = add_indicators(btc_raw)
+    start   = btc_df["open_time"].iloc[0]
+    end     = btc_df["open_time"].iloc[-1]
+    print(f"BTC: {len(btc_df)} 本  {start} ～ {end}  (ADX{ADX_PERIOD} 閾値:{ADX_THRESHOLD})")
+
+    coin_dfs = {"BTC": btc_df}
+    for coin, symbol in (("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")):
+        raw = fetch_klines(symbol, total=candles)
+        coin_dfs[coin] = add_indicators(raw)
+
+    MODE_LABELS = {
+        "flip":     "現行（ADX未確認）",
+        "flip_adx": f"新（ADX{ADX_THRESHOLD}以上が必須）",
+    }
+    results = {}
+    for mode in ("flip", "flip_adx"):
+        label = MODE_LABELS[mode]
+        print(f"\n--- {label} ---")
+        res   = run_backtest(btc_df, coin_dfs, strategy="fix", signal_mode=mode)
+        stats = calc_stats(res["trades"], res["equity"])
+        print_stats(stats)
+        growth = (res["final_pool"] / INITIAL_CAPITAL - 1) * 100
+        print(f"  資本推移: {INITIAL_CAPITAL:,.0f}円 → {res['final_pool']:,.0f}円 ({growth:+.1f}%)")
+        results[mode] = {"stats": stats, "equity": res["equity"], "final": res["final_pool"],
+                         "growth": growth, "label": label}
+
+    # ── 比較サマリー ──────────────────────────────────────────────────────
+    print("\n" + "=" * 75)
+    print("  ★ ADXフィルタ 比較サマリー（エグジットは共通: fix戦略=本番相当）")
+    print("=" * 75)
+    print(f"  {'指標':<14} {'現行(ADX未確認)':>16} {'新(ADX確認必須)':>17}")
+    print("  " + "-" * 52)
+
+    def row2(lbl, key, fmt=".1f", suffix=""):
+        vals = [results[k]["stats"].get(key) if key != "growth" else results[k]["growth"]
+                for k in ("flip", "flip_adx")]
+        print(f"  {lbl:<14} {vals[0]:>15{fmt}}{suffix} {vals[1]:>16{fmt}}{suffix}")
+
+    row2("勝率",         "win_rate",  suffix="%")
+    row2("PF",           "pf",        fmt=".2f")
+    row2("最大DD",       "max_dd",    suffix="%")
+    row2("資本成長率",   "growth",    suffix="%")
+    row2("総損益",       "total_pnl", fmt=".1f")
+    row2("総トレード数", "total",     fmt=".0f")
+
+    verdicts = []
+    for k in ("flip", "flip_adx"):
+        s  = results[k]["stats"]
+        ok = s["win_rate"] >= 50 and s["pf"] >= 1.5 and s["max_dd"] <= 30
+        verdicts.append("合格" if ok else "不合格")
+    print(f"\n  判定: 現行={verdicts[0]}  新={verdicts[1]}")
+    print("=" * 75)
+
+    # ── 比較チャート（2パネル）────────────────────────────────────────────
+    colors = ["#FF6B35", "#00897B"]
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharey=False)
+    for ax, mode, color in zip(axes, ("flip", "flip_adx"), colors):
+        eq     = results[mode]["equity"]
+        x      = list(range(len(eq)))
+        s      = results[mode]["stats"]
+        ok     = s["win_rate"] >= 50 and s["pf"] >= 1.5 and s["max_dd"] <= 30
+        growth = results[mode]["growth"]
+
+        ax.plot(x, eq, linewidth=2.0, color=color, zorder=3)
+        ax.axhline(0, color="#888", linewidth=1.0, linestyle="--", zorder=2)
+        ax.fill_between(x, eq, 0, where=[v >= 0 for v in eq], alpha=0.25, color=color)
+        ax.fill_between(x, eq, 0, where=[v < 0 for v in eq], alpha=0.35, color="#F44336")
+
+        verdict = "合格" if ok else "不合格"
+        ax.set_title(f"{results[mode]['label']}\n{verdict}", fontsize=10, fontweight="bold", pad=8)
+
+        stats_text = (
+            f"勝率: {s['win_rate']:.1f}%  PF: {s['pf']:.2f}  最大DD: {s['max_dd']:.1f}%\n"
+            f"トレード数: {s['total']}件  資本成長: {growth:+.1f}%\n"
+            f"L勝率: {s['long_wr']:.1f}%  S勝率: {s['short_wr']:.1f}%"
+        )
+        ax.text(0.02, 0.97, stats_text, transform=ax.transAxes,
+                fontsize=8.5, va="top", ha="left",
+                bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#BDBDBD", alpha=0.92))
+        ax.set_xlabel("トレード回数", fontsize=9)
+        ax.set_ylabel("累積損益（円）", fontsize=9)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:+,.0f}"))
+        ax.grid(True, alpha=0.25, linestyle="--")
+
+    s_str = pd.Timestamp(start).strftime("%Y年%m月")
+    e_str = pd.Timestamp(end).strftime("%Y年%m月")
+    fig.suptitle(
+        f"Zer0-CryptoBot  ADXフィルタ比較  直近{years}年（{s_str}〜{e_str}）\n"
+        f"現行: 4hシグナルのみ／新: 4hシグナル＋ADX{ADX_PERIOD}が{ADX_THRESHOLD}以上（トレンドが効いている地合い）の一致を要求",
+        fontsize=12, fontweight="bold",
+    )
+    plt.tight_layout()
+    chart_path = "/root/Zer0/006_Zer0_CryptoBot/backtest/result_adx_compare.png"
+    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
+    print(f"\n  比較チャート保存: {chart_path}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--years",   type=int, default=YEARS, help="バックテスト期間（年）")
@@ -1111,8 +1246,11 @@ def main():
                         help="現行シグナル(転換のみ) vs 新シグナル(転換+押し目継続) 比較")
     parser.add_argument("--htf-compare", action="store_true",
                         help="現行(転換のみ) vs 新(転換+コイン自身の日足トレンド確認) 比較")
+    parser.add_argument("--adx-compare", action="store_true",
+                        help="現行(転換のみ) vs 新(転換+ADXトレンド強度フィルタ) 比較")
     parser.add_argument("--strategy", default="old", choices=["old", "new"], help="使用戦略")
-    parser.add_argument("--signal-mode", default="flip", choices=["flip", "flip_pullback", "flip_htf"],
+    parser.add_argument("--signal-mode", default="flip",
+                        choices=["flip", "flip_pullback", "flip_htf", "flip_adx"],
                         help="シグナル収集モード（単独実行時）")
     args = parser.parse_args()
 
@@ -1126,6 +1264,10 @@ def main():
 
     if args.htf_compare:
         _run_htf_compare(args.years)
+        return
+
+    if args.adx_compare:
+        _run_adx_compare(args.years)
         return
 
     if args.multi:
