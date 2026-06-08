@@ -93,6 +93,8 @@ EventBridge（毎月1日・15日 21:00 JST）
     └── 005_architecture.png
 ```
 
+> **Note**: `src/fonts/NotoSansCJK-Regular.ttc`（図解PNGの日本語描画用フォント、約19MB）はファイルサイズの都合上このリポジトリには含まれていません。ローカルでデプロイする場合は [Noto Sans CJK](https://github.com/notofonts/noto-cjk) から取得し `src/fonts/` に配置してください。
+
 ## デプロイ
 
 ```bash
