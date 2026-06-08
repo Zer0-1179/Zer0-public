@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   X Poster Bot (zer0-0326) - AI topic auto-posting bot for @Zer0_0326
   Lambda + EventBridge Scheduler + Bedrock (Claude Haiku) + SSM Parameter Store
-  - Mon/Thu 22:00 JST: category post (url_reaction/rotation on Mon, question on Thu)
+  - Mon/Thu 20:00 JST: category post (url_reaction/rotation on Mon, question on Thu)
   - Every Sunday 10:00 JST: Google Trends post
 
 # ---- Parameters ----
@@ -149,7 +149,7 @@ Outputs:
     Value: !Ref PosterFunction
 
   EveningScheduleName:
-    Description: 定期投稿スケジュール名（毎週月・木 22:00 JST）
+    Description: 定期投稿スケジュール名（毎週月・木 20:00 JST）
     Value: !Ref EveningSchedule
 
   TrendScheduleName:
