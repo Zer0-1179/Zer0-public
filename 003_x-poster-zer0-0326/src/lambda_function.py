@@ -4,8 +4,8 @@ X AI Bot - Lambda Function
 4カテゴリ 共感・あるある系エンタメ 自動投稿Bot
 
 スケジュール:
-- 月曜 22:00 JST: 50%でurl_reaction（Zenn/Qiita AI記事への感想投稿）、50%でローテーションカテゴリ
-- 木曜 22:00 JST: question固定（議論系・返信エンゲージメント最大化）
+- 月曜 20:00 JST: 50%でurl_reaction（Zenn/Qiita AI記事への感想投稿）、50%でローテーションカテゴリ
+- 木曜 20:00 JST: question固定（議論系・返信エンゲージメント最大化）
 - 日曜10:00 JST: Google Trendsトレンド投稿（AIと絡められる場合のみ）
 
 EventBridge Input:
