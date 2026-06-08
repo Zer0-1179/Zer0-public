@@ -1,6 +1,6 @@
 # 003 X Poster Bot (@Zer0_0326)
 
-> AI活用術・会社員あるある系コンテンツを6カテゴリでローテーションしながら毎週月・木22:00に自動投稿するBot。曜日別投稿ロジック・Google Trends連動・直近7投稿での重複回避で飽きさせないコンテンツ設計を実現。
+> AI活用術・会社員あるある系コンテンツを6カテゴリでローテーションしながら毎週月・木20:00に自動投稿するBot。曜日別投稿ロジック・Google Trends連動・直近7投稿での重複回避で飽きさせないコンテンツ設計を実現。
 
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20EventBridge-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
@@ -10,7 +10,7 @@
 
 | 項目       | 内容                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------- |
-| 投稿頻度   | 毎週月・木 22:00 JST + 日曜 10:00 JST（trend）の計2スロット                                            |
+| 投稿頻度   | 毎週月・木 20:00 JST + 日曜 10:00 JST（trend）の計2スロット                                            |
 | カテゴリ数 | 6カテゴリ（shigoto/fukugyo/jitsuwa/question/suji/nichijo）+ 固定2スロット（url_reaction/trend）         |
 | 重複防止   | 直近7投稿で同カテゴリが連続しないようSSMで履歴管理                                                      |
 | 曜日別制御 | 月曜: url_reaction 50% / ローテーション 50% ・木曜: question固定 ・日曜: trend                          |
@@ -22,7 +22,7 @@
 ![アーキテクチャ図](images/003_architecture.png)
 
 ```text
-EventBridge Scheduler（月・木 22:00 JST / 日曜 10:00 JST）
+EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST）
   └─▶ Lambda（Python 3.14）
         ├─ 曜日判定 → カテゴリ選択（SSM 履歴参照）
         ├─ カテゴリ別データ取得
@@ -168,3 +168,4 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | 2026-05-10 | v1.4       | url_reaction の記事概要を150→300文字に拡張。Bedrockが具体的な感想を生成しやすくなるよう改善             |
 | 2026-05-29 | v1.5       | スタック名・Lambda関数名を `x-poster-zer0-0326` にリネーム。DRY_RUNテスト済み                           |
 | 2026-06-07 | v1.6       | 投稿頻度を毎日→毎週月・木に変更。曜日別ロジックを再設計（木=question固定、月=url_reaction/ローテーション50%出し分け）。エンゲージメント向上・Bot感の軽減が目的 |
+| 2026-06-08 | v1.7       | 夜投稿の時刻を 22:00 → 20:00 JST に変更。001（@Zer0_Infra）と投稿時刻を統一し管理をシンプル化                              |
