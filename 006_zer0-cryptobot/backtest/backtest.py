@@ -49,6 +49,7 @@ EMA_SHORT   = 20
 RSI_PERIOD  = 14
 PULLBACK_LOOKBACK   = 6     # 押し目の深さを判定する直近本数(4h足6本=24時間)
 TREND_STRENGTH_PCT  = 0.05  # 200EMAからの乖離率がこれ以上 → 「強いトレンド」とみなす
+LATE_ENTRY_BARS     = 2     # 遅延エントリー許容本数（転換足でVolume不足でも、この本数以内にVolume成立すればエントリー）
 RSI_SHALLOW_MAX     = 60    # ショート押し目: 直近のRSI戻りピークがこれ未満 → 浅い押し目(強トレンド継続)
 RSI_SHALLOW_MIN     = 40    # ロング押し目: 直近のRSI押しの谷がこれ超 → 浅い押し目(強トレンド継続)
 ATR_PERIOD  = 8
@@ -213,6 +214,14 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["vol_avg20"]   = df["volume"].rolling(VOL_PERIOD).mean()
     df["st_flip_green"] = (df["st_dir"] == 1) & (df["st_dir"].shift(1) == -1)
     df["st_flip_red"]   = (df["st_dir"] == -1) & (df["st_dir"].shift(1) == 1)
+
+    # 遅延エントリー用: 直近LATE_ENTRY_BARS本以内に転換があったか（転換足自身は含まない）
+    df["st_flip_green_recent"] = (
+        df["st_flip_green"].shift(1).rolling(LATE_ENTRY_BARS, min_periods=1).max().fillna(0) > 0
+    )
+    df["st_flip_red_recent"] = (
+        df["st_flip_red"].shift(1).rolling(LATE_ENTRY_BARS, min_periods=1).max().fillna(0) > 0
+    )
 
     # 押し目→再加速トリガー: 20EMAを逆方向に抜けたあと、トレンド方向へ戻りクロス
     df["ema20_cross_up"]   = (df["close"] > df["ema20"]) & (df["close"].shift(1) <= df["ema20"].shift(1))
@@ -507,6 +516,10 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                     continue
                 if row["st_flip_green"]:
                     sig_type = "flip"
+                elif (signal_mode == "flip_late"
+                      and row["st_dir"] == 1
+                      and row["st_flip_green_recent"]):
+                    sig_type = "late"
                 elif (signal_mode == "flip_pullback"
                       and row["st_dir"] == 1
                       and row["ema20_cross_up"]
@@ -521,6 +534,10 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                     continue
                 if row["st_flip_red"]:
                     sig_type = "flip"
+                elif (signal_mode == "flip_late"
+                      and row["st_dir"] == -1
+                      and row["st_flip_red_recent"]):
+                    sig_type = "late"
                 elif (signal_mode == "flip_pullback"
                       and row["st_dir"] == -1
                       and row["ema20_cross_down"]
@@ -1250,7 +1267,7 @@ def main():
                         help="現行(転換のみ) vs 新(転換+ADXトレンド強度フィルタ) 比較")
     parser.add_argument("--strategy", default="old", choices=["old", "new"], help="使用戦略")
     parser.add_argument("--signal-mode", default="flip",
-                        choices=["flip", "flip_pullback", "flip_htf", "flip_adx"],
+                        choices=["flip", "flip_pullback", "flip_htf", "flip_adx", "flip_late"],
                         help="シグナル収集モード（単独実行時）")
     args = parser.parse_args()
 

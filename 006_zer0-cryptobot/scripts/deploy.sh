@@ -61,7 +61,7 @@ echo "[2/3] Lambdaコードをデプロイ中（S3不使用）..."
 cd "${SCRIPT_DIR}/lambda/analyzer"
 pip install -r requirements.txt -t . -q 2>/dev/null || true
 zip -r /tmp/analyzer.zip lambda_function.py -q
-zip -r /tmp/analyzer.zip *.py 2>/dev/null | true
+zip -rq /tmp/analyzer.zip *.py 2>/dev/null || true
 # 依存パッケージがあれば同梱（requirements.txtの内容）
 if grep -v "^#\|^$" requirements.txt 2>/dev/null | grep -q .; then
   zip -r /tmp/analyzer.zip . -x "*.pyc" -x "__pycache__/*" -q

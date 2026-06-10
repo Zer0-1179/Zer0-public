@@ -15,6 +15,11 @@ SSM_STATE     = "/Zer0/CryptoBot/state"
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT = os.environ["SES_RECIPIENT_EMAIL"]
 AWS_REGION    = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
+TRADES_BUCKET = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
+TRADES_KEY    = "cryptobot/trades.jsonl"
+
+# ポジションを閉じる決済理由（TP1部分利確はポジション継続中の部分決済）
+CLOSING_REASONS = ("トレーリングSL", "SL（TP1後）", "損切り（SL約定）", "損切り（残30%成行）", "緊急決済")
 
 PAIR_LABELS   = {"btc_jpy": "BTC/JPY", "eth_jpy": "ETH/JPY", "sol_jpy": "SOL/JPY"}
 SIDE_LABELS   = {"long": "ロング", "short": "ショート"}
@@ -34,6 +39,55 @@ def get_current_price(pair: str) -> float | None:
     except Exception as e:
         print(f"価格取得失敗 {pair}: {e}")
         return None
+
+
+def load_trades() -> list[dict]:
+    """S3 の取引履歴（JSONL）を読み込む。ファイル未作成・読込失敗は空リスト。"""
+    try:
+        s3 = boto3.client("s3", region_name=AWS_REGION)
+        body = s3.get_object(Bucket=TRADES_BUCKET, Key=TRADES_KEY)["Body"].read().decode("utf-8")
+    except Exception as e:
+        print(f"取引履歴読み込みスキップ: {e}")
+        return []
+    trades = []
+    for line in body.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            trades.append(json.loads(line))
+        except json.JSONDecodeError:
+            print(f"不正な取引履歴行をスキップ: {line[:80]}")
+    return trades
+
+
+def summarize_trades(trades: list[dict], now: datetime) -> dict:
+    """実現損益の週次・累計サマリーを計算する。
+    勝率・PF はポジション単位（position_id でTP1部分利確とクローズを合算）。
+    クローズ記録がまだ無いポジション（TP1のみ）は勝敗計算から除外する。"""
+    week_ago   = now - timedelta(days=7)
+    weekly     = [t for t in trades if datetime.fromisoformat(t["ts"]) >= week_ago]
+    weekly_pnl = sum(t["pnl_jpy"] for t in weekly)
+
+    positions: dict[str, dict] = {}
+    for i, t in enumerate(trades):
+        pid = t.get("position_id") or f"_solo_{i}"
+        p = positions.setdefault(pid, {"pnl": 0.0, "closed": False})
+        p["pnl"] += t["pnl_jpy"]
+        if t.get("reason") in CLOSING_REASONS:
+            p["closed"] = True
+
+    closed  = [p["pnl"] for p in positions.values() if p["closed"]]
+    wins    = [v for v in closed if v > 0]
+    losses  = [v for v in closed if v <= 0]
+    return {
+        "total_pnl":    sum(t["pnl_jpy"] for t in trades),
+        "weekly_pnl":   weekly_pnl,
+        "weekly_count": len(weekly),
+        "closed_count": len(closed),
+        "win_rate":     len(wins) / len(closed) * 100 if closed else None,
+        "pf":           (sum(wins) / abs(sum(losses))) if losses and sum(losses) != 0 else None,
+    }
 
 
 def fmt_jpy(value: float) -> str:
@@ -99,6 +153,9 @@ def lambda_handler(event, context):
     total_pnl = sum(p["pnl"] for p in pos_infos if p["pnl"] is not None)
     has_pos   = bool(positions)
 
+    trades = load_trades()
+    stats  = summarize_trades(trades, now) if trades else None
+
     # ── テキスト本文 ──────────────────────────────────────────────────────────
     lines = [f"【Zer0-CryptoBot】週次サマリー - {timestamp}", ""]
     if not has_pos:
@@ -116,6 +173,17 @@ def lambda_handler(event, context):
                 lines.append(f"    含み損益:   {fmt_jpy(p['pnl'])} {fmt_pct(p['pnl'], p['cost'])}")
             lines.append("")
         lines.append(f"■ 含み損益合計: {fmt_jpy(total_pnl)}")
+    if stats:
+        win_str = f"{stats['win_rate']:.1f}%" if stats["win_rate"] is not None else "—"
+        pf_str  = f"{stats['pf']:.2f}" if stats["pf"] is not None else "—"
+        lines += [
+            "",
+            "■ 実現損益（確定分）",
+            f"  今週の確定損益: {fmt_jpy(stats['weekly_pnl'])}（決済 {stats['weekly_count']}件）",
+            f"  累計確定損益:   {fmt_jpy(stats['total_pnl'])}",
+            f"  クローズ済み:   {stats['closed_count']}ポジション / 勝率 {win_str} / PF {pf_str}",
+            "  （参考: バックテスト5年 勝率61.9% / PF1.62）",
+        ]
     lines += ["", "このメールは毎週日曜 09:00 JST に自動送信されます。"]
     body_text = "\n".join(lines)
 
@@ -154,6 +222,32 @@ def lambda_handler(event, context):
       </span>
     </div>"""
 
+    realized_block = ""
+    if stats:
+        win_str   = f"{stats['win_rate']:.1f}%" if stats["win_rate"] is not None else "—"
+        pf_str    = f"{stats['pf']:.2f}" if stats["pf"] is not None else "—"
+        wk_color  = "#27ae60" if stats["weekly_pnl"] >= 0 else "#e74c3c"
+        cum_color = "#27ae60" if stats["total_pnl"]  >= 0 else "#e74c3c"
+        realized_block = f"""
+    <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;">
+      <h3 style="color:#3ea8ff;margin:0 0 12px;">実現損益（確定分）</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr>
+          <td style="padding:6px;color:#888;">今週の確定損益</td>
+          <td style="padding:6px;color:{wk_color};font-weight:bold;">{fmt_jpy(stats['weekly_pnl'])}（決済 {stats['weekly_count']}件）</td>
+        </tr>
+        <tr>
+          <td style="padding:6px;color:#888;">累計確定損益</td>
+          <td style="padding:6px;color:{cum_color};font-weight:bold;">{fmt_jpy(stats['total_pnl'])}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px;color:#888;">クローズ済み</td>
+          <td style="padding:6px;">{stats['closed_count']}ポジション / 勝率 {win_str} / PF {pf_str}</td>
+        </tr>
+      </table>
+      <p style="color:#555;font-size:12px;margin:8px 0 0;">参考: バックテスト5年 勝率61.9% / PF1.62</p>
+    </div>"""
+
     body_html = f"""<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;background:#0d1b2e;color:#e0e0e0;padding:24px;margin:0;">
@@ -177,6 +271,7 @@ def lambda_handler(event, context):
       </table>
     </div>
     {total_block}
+    {realized_block}
     <p style="color:#555;font-size:12px;">このメールは毎週日曜 09:00 JST に自動送信されます。</p>
   </div>
 </body>
