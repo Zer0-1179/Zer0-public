@@ -105,6 +105,16 @@ Resources:
                   - s3:PutObject
                 Resource:
                   - !Sub "arn:aws:s3:::${TradesBucket}/cryptobot/*"
+              # ListBucket がないと存在しないキーの GetObject が NoSuchKey でなく
+              # AccessDenied になり、初回書き込み時の判定ができないため必要
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${TradesBucket}"
+                Condition:
+                  StringLike:
+                    s3:prefix: "cryptobot/*"
 
   # ── IAM ロール: FailureNotifier ───────────────────────────────────────────
   FailureNotifierRole:
@@ -328,6 +338,15 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub "arn:aws:s3:::${TradesBucket}/cryptobot/*"
+              # ListBucket がないと存在しないキーの GetObject が NoSuchKey でなく
+              # AccessDenied になるため必要（履歴ファイル未作成時の正常スキップ用）
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub "arn:aws:s3:::${TradesBucket}"
+                Condition:
+                  StringLike:
+                    s3:prefix: "cryptobot/*"
 
   # ── Lambda: WeeklySummary ─────────────────────────────────────────────────
   WeeklySummaryLogGroup:
