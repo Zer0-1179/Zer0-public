@@ -18,6 +18,10 @@ Parameters:
       - "0"
       - "1"
     Description: "Enable force-test flags in Executor (0=off / 1=on). Set 1 only for test suite."
+  TradesBucket:
+    Type: String
+    Default: zer0-dev-s3
+    Description: S3 bucket for realized trade history (JSONL). Executor appends, WeeklySummary reads.
 
 Resources:
 
@@ -95,6 +99,12 @@ Resources:
                   - lambda:InvokeFunction
                 Resource:
                   - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:Zer0-CryptoBot-FailureNotifier"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${TradesBucket}/cryptobot/*"
 
   # ── IAM ロール: FailureNotifier ───────────────────────────────────────────
   FailureNotifierRole:
@@ -227,6 +237,7 @@ Resources:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           ENABLE_FORCE_TEST: !Ref EnableForceTest
+          TRADES_BUCKET: !Ref TradesBucket
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -313,6 +324,10 @@ Resources:
                   - ses:SendEmail
                   - ses:SendRawEmail
                 Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${TradesBucket}/cryptobot/*"
 
   # ── Lambda: WeeklySummary ─────────────────────────────────────────────────
   WeeklySummaryLogGroup:
@@ -330,11 +345,12 @@ Resources:
       Timeout: 60
       MemorySize: 128
       Role: !GetAtt WeeklySummaryRole.Arn
-      Description: "Zer0-CryptoBot: 毎週日曜09:00JSTにポジション状況と含み損益をメールで送信する週次サマリー"
+      Description: "Zer0-CryptoBot: 毎週日曜09:00JSTにポジション状況と含み損益・実現損益をメールで送信する週次サマリー"
       Environment:
         Variables:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+          TRADES_BUCKET: !Ref TradesBucket
       Code:
         ZipFile: |
           def lambda_handler(event, context):

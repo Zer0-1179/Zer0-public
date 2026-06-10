@@ -1,0 +1,215 @@
+"""006_Zer0_CryptoBot アーキテクチャ図生成スクリプト"""
+import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from matplotlib import font_manager
+from matplotlib.patches import FancyBboxPatch
+
+for _fp in [
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+]:
+    if os.path.exists(_fp):
+        font_manager.fontManager.addfont(_fp)
+        matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
+        break
+
+_BASE     = os.path.dirname(os.path.abspath(__file__))
+_ICON_DIR = os.path.join(_BASE, '..', 'images', 'AWS-icon')
+_SVC = 'Architecture-Service-Icons_07312025'
+_GRP = 'Architecture-Group-Icons_07312025'
+
+ICONS = {
+    'eventbridge': f'{_SVC}/Arch_App-Integration/64/Arch_Amazon-EventBridge_64.png',
+    'lambda':      f'{_SVC}/Arch_Compute/64/Arch_AWS-Lambda_64.png',
+    'ssm':         f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Systems-Manager_64.png',
+    's3':          f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
+    'ses':         f'{_SVC}/Arch_Business-Applications/64/Arch_Amazon-Simple-Email-Service_64.png',
+    'region':      f'{_GRP}/Region_32.png',
+}
+
+_USER_PNG = os.path.join(_BASE, '..', '002_Zenn_Auto_Article_Bot', 'src', 'aws_icons', 'user.png')
+
+
+def _load(key):
+    if key == 'user':
+        return mpimg.imread(_USER_PNG) if os.path.exists(_USER_PNG) else None
+    path = os.path.join(_ICON_DIR, ICONS[key])
+    return mpimg.imread(path) if os.path.exists(path) else None
+
+
+def draw():
+    # ── レイアウト ──
+    # xlim=18, ylim=12.6  figsize=(18, 12.6)
+    # 外部API:   Binance(5.5,11.0)  bitbank(9.5,11.0)
+    # region:    EB列 x=2.0 (7.4/4.4/1.8)
+    #            analyzer(5.5,7.4) → executor(9.5,7.4) → fn(13.0,7.4)
+    #            s3(5.5,4.8)  ssm(9.5,4.8)  ses(13.0,4.8)
+    #            weekly(5.5,1.8)
+    # 通知先:    owner(16.4,4.8)
+    #
+    # 交差チェック済み:
+    #  eb_exec(2.0,4.4)→executor: x=4.95でy=5.58（s3アイコン上端5.35クリア）
+    #                              x=6.3でy=6.12（analyzerラベル下端6.2クリア）
+    #  executor→s3: eb_exec→executorとはexecutorノード上でのみ交点
+    #  weekly→ses: x=10.3でy=3.72（SSM 1行ラベル下端3.83クリア）
+    #  executor→ses / fn→ses / weekly→ses は ses ノードで収束（途中交差なし）
+    HALF = 0.55
+
+    nodes = [
+        {'id': 'binance', 'icon': 'user',        'label': 'Binance API\n4h OHLCV',       'x': 5.5,  'y': 11.0},
+        {'id': 'bitbank', 'icon': 'user',        'label': 'bitbank\nREST API',           'x': 9.5,  'y': 11.0},
+        {'id': 'eb_anl',  'icon': 'eventbridge', 'label': 'EventBridge\nAnalyzer 4時間毎', 'x': 2.0, 'y': 7.4},
+        {'id': 'eb_exe',  'icon': 'eventbridge', 'label': 'EventBridge\nExecutor 30分毎',  'x': 2.0, 'y': 4.4},
+        {'id': 'eb_wky',  'icon': 'eventbridge', 'label': 'EventBridge\n日曜 09:00 JST',   'x': 2.0, 'y': 1.8},
+        {'id': 'analyzer','icon': 'lambda',      'label': 'Lambda\nAnalyzer',            'x': 5.5,  'y': 7.4},
+        {'id': 'executor','icon': 'lambda',      'label': 'Lambda\nExecutor',            'x': 9.5,  'y': 7.4},
+        {'id': 'fn',      'icon': 'lambda',      'label': 'Lambda\nFailureNotifier',     'x': 13.0, 'y': 7.4},
+        {'id': 's3',      'icon': 's3',          'label': 'S3\n取引履歴 (JSONL)',         'x': 5.5,  'y': 4.8},
+        {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM（APIキー / State）',       'x': 9.5,  'y': 4.8},
+        {'id': 'ses',     'icon': 'ses',         'label': 'SES\n売買・週次通知',          'x': 13.0, 'y': 4.8},
+        {'id': 'weekly',  'icon': 'lambda',      'label': 'Lambda\nWeeklySummary',       'x': 5.5,  'y': 1.8},
+        {'id': 'owner',   'icon': 'user',        'label': 'メール通知先\n（オーナー）',   'x': 16.4, 'y': 4.8},
+    ]
+
+    edges = [
+        ('eb_anl',  'analyzer', ''),
+        ('analyzer','binance',  ''),
+        ('analyzer','executor', ''),
+        ('eb_exe',  'executor', ''),
+        ('executor','bitbank',  ''),
+        ('executor','ssm',      ''),
+        ('executor','s3',       ''),
+        ('executor','fn',       '失敗時'),
+        ('executor','ses',      ''),
+        ('fn',      'ses',      ''),
+        ('eb_wky',  'weekly',   ''),
+        ('weekly',  's3',       ''),
+        ('weekly',  'ses',      ''),
+        ('ses',     'owner',    ''),
+    ]
+
+    clusters = [
+        {
+            'label': '外部API', 'icon': None,
+            'x': 4.0, 'y': 9.4, 'w': 7.0, 'h': 2.7,
+            'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
+            'linestyle': '-', 'linewidth': 1.5,
+        },
+        {
+            'label': 'AWS (ap-northeast-1)', 'icon': 'region',
+            'x': 0.6, 'y': 0.2, 'w': 13.6, 'h': 8.3,
+            'color': '#F0F7EE', 'edgecolor': '#6BAE75',
+            'linestyle': '-', 'linewidth': 2.0,
+        },
+        {
+            'label': '通知先', 'icon': None,
+            'x': 15.2, 'y': 3.2, 'w': 2.4, 'h': 2.7,
+            'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
+            'linestyle': '-', 'linewidth': 1.5,
+        },
+    ]
+
+    # ── 自動パディング調整（事前計算済みのため発火しない想定） ──
+    _PAD_H   = HALF + 0.45
+    _PAD_TOP = HALF + 0.55
+    _PAD_BOT = HALF + 1.05
+    for cl in clusters:
+        for n in nodes:
+            nx, ny = n['x'], n['y']
+            if not (cl['x'] - 0.1 <= nx <= cl['x'] + cl['w'] + 0.1 and
+                    cl['y'] - 0.1 <= ny <= cl['y'] + cl['h'] + 0.1):
+                continue
+            if nx - cl['x'] < _PAD_H:
+                d = _PAD_H - (nx - cl['x']); cl['x'] -= d; cl['w'] += d
+            if (cl['x'] + cl['w']) - nx < _PAD_H:
+                cl['w'] += _PAD_H - ((cl['x'] + cl['w']) - nx)
+            if (cl['y'] + cl['h']) - ny < _PAD_TOP:
+                cl['h'] += _PAD_TOP - ((cl['y'] + cl['h']) - ny)
+            if ny - cl['y'] < _PAD_BOT:
+                d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
+
+    fig, ax = plt.subplots(figsize=(18, 12.6), dpi=150)
+    ax.set_xlim(0, 18)
+    ax.set_ylim(0, 12.6)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+    ax.set_title('006 Zer0-CryptoBot — 仮想通貨自動売買Bot 全体構成図',
+                 fontsize=13, fontweight='bold', pad=10, color='#232F3E')
+
+    ICON_SZ = 0.45
+    for cl in clusters:
+        has_icon = bool(cl.get('icon'))
+        rect = FancyBboxPatch(
+            (cl['x'], cl['y']), cl['w'], cl['h'],
+            boxstyle='round,pad=0.15',
+            facecolor=cl.get('color', '#EAF4FB'),
+            edgecolor=cl.get('edgecolor', '#8AAFCC'),
+            linewidth=cl.get('linewidth', 2.0),
+            linestyle=cl.get('linestyle', '-'),
+            zorder=1,
+        )
+        ax.add_patch(rect)
+        if has_icon:
+            img_c = _load(cl['icon'])
+            ix = cl['x'] + 0.15
+            iy = cl['y'] + cl['h'] - ICON_SZ - 0.05
+            if img_c is not None:
+                ax.imshow(img_c, extent=[ix, ix + ICON_SZ, iy, iy + ICON_SZ],
+                          aspect='auto', zorder=6, interpolation='bilinear')
+            tx = ix + ICON_SZ + 0.12
+            ty = cl['y'] + cl['h'] - ICON_SZ / 2 - 0.05
+        else:
+            tx = cl['x'] + 0.2
+            ty = cl['y'] + cl['h']
+        ax.text(tx, ty, cl['label'],
+                ha='left', va='center' if has_icon else 'bottom',
+                fontsize=7.5, color='#4A7FA5', style='italic', zorder=6)
+
+    node_map = {n['id']: n for n in nodes}
+    SHRINK = 42
+    for edge in edges:
+        from_id, to_id = edge[0], edge[1]
+        label = edge[2] if len(edge) > 2 else ''
+        n1, n2 = node_map[from_id], node_map[to_id]
+        ax.annotate(
+            '', xy=(n2['x'], n2['y']), xytext=(n1['x'], n1['y']),
+            arrowprops=dict(
+                arrowstyle='->', color='#555555', lw=1.5,
+                shrinkA=SHRINK, shrinkB=SHRINK,
+                connectionstyle='arc3,rad=0.0',
+            ),
+            zorder=3,
+        )
+        if label:
+            mx = (n1['x'] + n2['x']) / 2
+            my = (n1['y'] + n2['y']) / 2
+            ax.text(mx, my + 0.18, label, ha='center', va='bottom',
+                    fontsize=7, color='#666666',
+                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                              edgecolor='none', alpha=0.85),
+                    zorder=4)
+
+    for n in nodes:
+        x, y = n['x'], n['y']
+        img = _load(n['icon'])
+        if img is not None:
+            ax.imshow(img, extent=[x - HALF, x + HALF, y - HALF, y + HALF],
+                      aspect='auto', zorder=4, interpolation='bilinear')
+        ax.text(x, y - HALF - 0.2, n['label'],
+                ha='center', va='top', fontsize=7.5,
+                color='#232F3E', fontweight='bold', zorder=5)
+
+    out = os.path.join(_BASE, 'images', '006_architecture.png')
+    plt.tight_layout()
+    plt.savefig(out, dpi=150, bbox_inches='tight', facecolor='white', format='png')
+    plt.close(fig)
+    print(f'saved → {out}')
+
+
+if __name__ == '__main__':
+    draw()
