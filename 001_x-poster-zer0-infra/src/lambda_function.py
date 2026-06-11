@@ -65,26 +65,41 @@ FEW_SHOT_EVENING = """・「今回のプロジェクトでわざわざ指定時�
 ・「シェルのスクリプトの改行コードで問題がでた。ついでにPythonの改行コードについて調べたら、PythonはCRLFやLFが混在してても問題無いことを知った〜 Pythonはもっと勉強するべきだな〜」
 ・「wslってユーザごとにインストール必要なんだ🤔 EC2がwsl2に対応してればwslの共有もできるようだけど、wsl1しか対応してないからユーザ事にインストールしたわ〜 ほーんてかんじ」"""
 
-# 共感・問いかけフック（全タイプ共通ルール）
-EMPATHY_RULE = """- 末尾の締め方は以下のどれか1パターンをその内容に合わせて自然に選ぶ（毎回問いかけにしない）
-  【パターンA：問いかけ】読者に反応を促す一言
-    例：「みんなどこに落ち着いてる？」「同じ経験ある人いる？」「みんなはどっち派？」
-        「これ知ってた？」「現場でもこんな感じ？」「同じとこで詰まった人いる？」
-        「もっといい方法あったら教えて」「みんなの環境ではどう？」「自分だけじゃないよね？」
-        「これ試した人いる？」「どう対処してる？」「知らなかったの自分だけ？」「どう思う？」
-  【パターンB：共感・あるある】読者が「わかる」と思う一言で締める
-    例：「こういうの地味に助かるよね」「ある？こういうの」「わかりすぎる」
-        「これあるあるすぎる」「地味にハマりポイントなんだよな」「なんかわかる」
-        「こういうの誰も教えてくれないやつ」「現場あるあるすぎて笑える」
-        「これ気づいたとき少し得した気分になる」「地味だけど大事なやつ」
-        「知ってると知らないとで結構差が出る」「こういう細かいとこ好き」「わかる人にはわかる」
-  【パターンC：気づき・伝える】自分の感想や発見をそのまま伝えて自然に終わる
-    例：「これ知っておくだけで全然違う」「意外と知らない人多そう」「もっと早く知りたかった」
-        「なんか勉強になった」「これは素直にいいと思った」「じわじわ便利さがわかってくるやつ」
-        「こういうアップデート地味にうれしい」「思ったより簡単だった」
-        「ちゃんと理解してなかったことに気づいた」「これは覚えておきたい」
-        「知らなかった、得した」「これ結構使えそう」「少し試してみたくなった」
-  ※ 不自然になる場合は無理に入れなくてよい・パターンCで普通に終わってもよい"""
+# 末尾の締め方パターン（投稿ごとに1つ抽選してプロンプトに注入する）
+ENDING_PATTERNS = {
+    "question": """- 締め方：読者に反応を促す問いかけで終える
+  例：「みんなどこに落ち着いてる？」「同じ経験ある人いる？」「どう対処してる？」
+      「現場でもこんな感じ？」「もっといい方法あったら教えて」
+  ※ 不自然になる場合は無理に入れなくてよい""",
+    "empathy": """- 締め方：読者が「わかる」と思う一言で終える
+  例：「地味にハマりポイントなんだよな」「こういうの誰も教えてくれないやつ」
+      「知ってると知らないとで結構差が出る」「わかる人にはわかる」""",
+    "plain": """- 締め方：感想や気づきをそのまま言って普通に終わる。まとめようとしない
+  例：「もっと早く知りたかった」「これは覚えておきたい」「少し試してみたくなった」
+      「思ったより簡単だった」「これ結構使えそう」""",
+    "open": """- 締め方：きれいに締めない。言い切らずに余韻で終わってよい
+  例：「まあ様子見かな」「どうなんだろな」「あとで調べる」「うーん」""",
+}
+
+
+def pick_ending_rule() -> str:
+    """締め方パターンを重み付きで1つ選ぶ（問いかけ偏重を防ぐ）。"""
+    key = random.choices(
+        ["question", "empathy", "plain", "open"],
+        weights=[25, 25, 35, 15],
+    )[0]
+    return ENDING_PATTERNS[key]
+
+
+# AIっぽさを消すための共通ルール
+HUMAN_RULE = """- 同じ言い回し・同じリズムを毎回使わない（「〜なんだろう🤔」「面白いな〜」の多用禁止）
+- 文字数上限まで書こうとしない。短くても全然いい
+- 英単語の前後に不要な半角スペースを入れない（「AWS の」ではなく「AWSの」）
+- きれいに整いすぎた文にしない。多少雑な並びでいい"""
+
+# 事実の正確性ルール（誤情報を投稿しないための共通ルール）
+FACT_RULE = """- 事実の正確性が最優先。サービス仕様・対応リージョン・料金・制限値・機能の有無は、記事に書いてあることだけを使う
+- 記事に書かれていない仕様・数値を推測で断定しない。自信がない事実には触れない（感想・疑問の形ならOK）"""
 
 # classmethod_reaction の3パターン
 CLASSMETHOD_PATTERNS = [
@@ -176,9 +191,14 @@ def build_hashtags(main: dict, max_extra: int = 2) -> str:
     for kw in MAINSTREAM_KEYWORDS:
         if kw.upper() in text:
             tag = "#" + kw.replace(" ", "")
-            if tag not in seen:
-                matched.append(tag)
-                seen.add(tag)
+            # 同義サービスの正式名称は略称タグに寄せる
+            tag = {"#ElasticLoadBalancing": "#ELB", "#SystemsManager": "#SSM"}.get(tag, tag)
+            norm = tag.upper()
+            # 「#Bedrock」と「#AmazonBedrock」のような包含関係の重複は最初の方（短い方）だけ残す
+            if any(norm in s or s in norm for s in seen):
+                continue
+            matched.append(tag)
+            seen.add(norm)
     extra = random.sample(matched, min(max_extra, len(matched)))
     return " ".join(["#AWS"] + extra)
 
@@ -237,8 +257,75 @@ def is_too_old(article: dict) -> bool:
     return pub.astimezone(timezone.utc) < cutoff
 
 
-def build_prompt(post_type: str, main: dict, news_text: str) -> str:
+def fetch_article_text(url: str, max_chars: int = 2500) -> str:
+    """メイン記事ページの本文を取得しテキスト化する（事実確認用の抜粋）。失敗時は空文字。"""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            html = r.read().decode("utf-8", errors="ignore")
+        html = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+        text = re.sub(r"<[^>]+>", " ", html)
+        text = re.sub(r"\s+", " ", text).strip()
+        print(f"[Article] 本文取得: {len(text)}文字 → 抜粋{min(len(text), max_chars)}文字")
+        return text[:max_chars]
+    except Exception as e:
+        print(f"[Article] 本文取得失敗（RSS概要のみで続行）: {e}")
+        return ""
+
+
+def verify_tweet(bedrock, body: str, title: str, article_excerpt: str, max_len: int) -> str:
+    """生成ツイートの事実主張を記事本文と突き合わせて検証し、必要なら修正版を返す。"""
+    prompt = f"""あなたはAWS技術記事の監修者。以下のX投稿草案に含まれる「事実の主張」だけを検証してください。
+
+【根拠（記事タイトル）】{title}
+【根拠（記事本文抜粋）】
+{article_excerpt or "（本文取得失敗。タイトルのみが根拠）"}
+
+【投稿草案】
+{body}
+
+【検証ルール】
+- サービス仕様・対応リージョン・料金・制限値・機能の有無などの事実主張が、根拠と矛盾していないか確認する
+- 根拠に書かれておらず、AWSの一般知識としても確実といえない事実主張は、削除するか感想・疑問の形に書き換える
+- 個人の感想・体験談・問いかけ・口調・文体・絵文字・改行はそのまま維持する
+- {max_len}文字以内を維持する
+
+【出力形式】
+JSONのみを出力する。説明・見出し・修正理由は一切書かない。
+- 問題なし → {{"tweet": "<草案を一字も変えずそのまま>"}}
+- 修正あり → {{"tweet": "<修正後の本文>"}}"""
+    resp = bedrock.invoke_model(
+        modelId="jp.anthropic.claude-haiku-4-5-20251001-v1:0",
+        body=json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 400,
+            "messages": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": '{"tweet":'},  # プリフィルでJSON出力を強制
+            ]})
+    )
+    raw = '{"tweet":' + json.loads(resp["body"].read())["content"][0]["text"]
+    try:
+        checked = json.JSONDecoder().raw_decode(raw)[0]["tweet"].strip()
+    except Exception as e:
+        print(f"[Verify] 出力パース失敗（草案をそのまま使用）: {e}")
+        return body
+    if checked != body:
+        print(f"[Verify] 事実確認で修正あり:\n{checked}")
+    else:
+        print("[Verify] 事実確認OK（修正なし）")
+    return checked
+
+
+def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: str = "") -> str:
     title = main["title"]
+    if not article_excerpt:
+        article_excerpt = "（本文取得失敗。記事タイトルとRSS概要のみを根拠とし、それ以外の事実は書かない）"
+
+    # 投稿ごとに目安文字数と締め方を抽選する（毎回同じ長さ・同じ締めになるのを防ぐ）
+    if post_type in ("news_reaction", "aws_tips", "aws_question"):
+        length_rule = f"- {random.choice([50, 70, 90])}文字前後を目安に（最大100文字）"
+    else:
+        length_rule = f"- {random.choice([70, 100, 140])}文字前後を目安に（最大160文字）"
+    ending_rule = pick_ending_rule()
 
     if post_type == "news_reaction":
         return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調・温度感を完全に真似してAWSニュースへの一言コメントを書いてください。
@@ -250,6 +337,9 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 メイン：{title}
 参考：{news_text}
 
+【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
+{article_excerpt}
+
 【ルール】
 - 上の投稿例の人が書いたような自然な口調で
 - 「です・ます」は使わない（常体・口語）
@@ -258,8 +348,10 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 - 大げさな表現・まとめっぽい締めは不要
 - 絵文字は0〜1個
 - URLは含めない
-- 100文字以内でコンパクトに
-{EMPATHY_RULE}
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
 - ツイート本文のみ出力"""
 
     elif post_type == "aws_tips":
@@ -279,8 +371,10 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 - 大げさな表現・まとめっぽい締めは不要
 - 絵文字は0〜1個
 - URLは含めない
-- 100文字以内でコンパクトに
-{EMPATHY_RULE}
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
 - ツイート本文のみ出力"""
 
     elif post_type == "aws_question":
@@ -300,8 +394,10 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 - 大げさな表現・まとめっぽい締めは不要
 - 絵文字は0〜1個
 - URLは含めない
-- 100文字以内でコンパクトに
-{EMPATHY_RULE}
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
 - ツイート本文のみ出力"""
 
     elif post_type == "news_intro":
@@ -314,6 +410,9 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 メイン：{title}
 参考：{news_text}
 
+【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
+{article_excerpt}
+
 【ルール】
 - 上の投稿例の人が書いたような自然な口調で
 - 「です・ます」は使わない（常体・口語）
@@ -321,8 +420,10 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 - 大げさな表現・まとめっぽい締めは不要
 - 絵文字は0〜1個、多くても2個
 - URLは含めない（別途付加する）
-- 160文字以内
-{EMPATHY_RULE}
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
 - ツイート本文のみ出力"""
 
     elif post_type == "aws_failure":
@@ -335,6 +436,9 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 メイン：{title}
 参考：{news_text}
 
+【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
+{article_excerpt}
+
 【ルール】
 - このニュースに関連したサービスで自分がハマった・ヒヤッとした経験談や落とし穴を1つ
 - 「気をつけて」「これで詰まった」「やらかした」系の内容が理想
@@ -343,8 +447,10 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 - 大げさな表現・まとめっぽい締めは不要
 - 絵文字は0〜1個
 - URLは含めない（別途付加する）
-- 160文字以内
-{EMPATHY_RULE}
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
 - ツイート本文のみ出力"""
 
     elif post_type == "news_comparison":
@@ -357,6 +463,9 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 メイン：{title}
 参考：{news_text}
 
+【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
+{article_excerpt}
+
 【ルール】
 - このニュースに関連して「AとBどっちが好き？」「自分はこっち派」「こっちの方が実用的では？」系の意見や問いかけ
 - 読んだ人が思わず反応したくなる内容が理想
@@ -365,8 +474,10 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 - 大げさな表現・まとめっぽい締めは不要
 - 絵文字は0〜1個
 - URLは含めない（別途付加する）
-- 160文字以内
-{EMPATHY_RULE}
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
 - ツイート本文のみ出力"""
 
     elif post_type == "classmethod_reaction":
@@ -380,6 +491,9 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 タイトル：{title}
 参考：{news_text}
 
+【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
+{article_excerpt}
+
 【今回の投稿パターン】
 {pattern}
 
@@ -389,8 +503,10 @@ def build_prompt(post_type: str, main: dict, news_text: str) -> str:
 - 大げさな表現・まとめっぽい締めは不要
 - 絵文字は0〜1個
 - URLは含めない（別途付加する）
-- 160文字以内
-{EMPATHY_RULE}
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
 - ツイート本文のみ出力"""
 
     return ""
@@ -505,7 +621,10 @@ def lambda_handler(event, context):
     # ハッシュタグを記事内容から動的生成
     hashtags = build_hashtags(main)
 
-    prompt = build_prompt(post_type, main, news_text)
+    # メイン記事の本文を取得（生成のグラウンディング＋事実検証の根拠に使う）
+    article_text = fetch_article_text(main["url"])
+
+    prompt = build_prompt(post_type, main, news_text, article_text)
     suffix = (f"\n{main['url']}\n{hashtags}" if with_url else f"\n{hashtags}")
 
     bedrock = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
@@ -515,9 +634,17 @@ def lambda_handler(event, context):
             "messages": [{"role": "user", "content": prompt}]})
     )
     body = json.loads(resp["body"].read())["content"][0]["text"].strip()
+
+    # 投稿前に事実主張を記事本文と突き合わせて検証する
+    max_len = 100 if slot_key == "morning" else 160
+    body = verify_tweet(bedrock, body, main["title"], article_text, max_len)
+
     max_body = 280 - len(suffix) - 1
     if len(body) > max_body:
-        body = body[:max_body - 1] + "…"
+        # 文の途中でぶった切れないよう、直近の文末記号まで戻って切る
+        cut = body[:max_body]
+        idx = max(cut.rfind(s) for s in "。！？!?…〜笑")
+        body = cut[:idx + 1] if idx >= max_body // 2 else cut[:max_body - 1] + "…"
     tweet = f"{body}{suffix}"
     print(f"[Tweet]\n{tweet}\n[文字数] {len(tweet)}")
 
