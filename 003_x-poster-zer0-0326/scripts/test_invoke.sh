@@ -30,6 +30,7 @@ aws lambda invoke \
   --function-name "${FUNCTION_NAME}" \
   --region "${REGION}" \
   --invocation-type Event \
+  --cli-binary-format raw-in-base64-out \
   --payload "{\"mode\": \"${MODE}\"}" \
   /tmp/xai_test_result.json > /dev/null
 
