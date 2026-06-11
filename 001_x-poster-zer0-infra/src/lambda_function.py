@@ -50,7 +50,7 @@ SLOTS = {
     "evening": {
         "sources": ["aws_news", "aws_blog", "classmethod", "zenn", "qiita"],
         "with_url": True,
-        "types": ["news_intro", "aws_failure", "news_comparison", "classmethod_reaction"],
+        "types": ["news_intro", "aws_failure", "news_comparison", "classmethod_reaction", "thread_tips"],
     },
 }
 
@@ -182,9 +182,12 @@ def pick_post_type(slot_types: list, used_types: list) -> str:
     return random.choice(slot_types)
 
 
-def build_hashtags(main: dict, max_extra: int = 2) -> str:
-    """記事内容からハッシュタグを生成する。
-    #AWS は必ず含め、マッチしたサービス名から最大 max_extra 個をランダム追加する。"""
+def build_hashtags(main: dict) -> str:
+    """記事内容からハッシュタグを0〜1個生成する。
+    Xではタグの流入効果が薄く、複数タグはBot感・スパム感が出るため
+    最大1個・約35%はタグなしにする。"""
+    if random.random() < 0.35:
+        return ""
     text = (main.get("title", "") + " " + main.get("desc", "")).upper()
     matched = []
     seen = set()
@@ -199,8 +202,7 @@ def build_hashtags(main: dict, max_extra: int = 2) -> str:
                 continue
             matched.append(tag)
             seen.add(norm)
-    extra = random.sample(matched, min(max_extra, len(matched)))
-    return " ".join(["#AWS"] + extra)
+    return random.choice(matched) if matched else "#AWS"
 
 
 def is_japanese(text: str) -> bool:
@@ -313,6 +315,76 @@ JSONのみを出力する。説明・見出し・修正理由は一切書かな�
     else:
         print("[Verify] 事実確認OK（修正なし）")
     return checked
+
+
+def generate_thread(bedrock, prompt: str) -> list:
+    """スレッド投稿用のツイート配列を生成する（プリフィルでJSON出力を強制）。"""
+    resp = bedrock.invoke_model(
+        modelId="jp.anthropic.claude-haiku-4-5-20251001-v1:0",
+        body=json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 1000,
+            "messages": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": '{"tweets":'},
+            ]})
+    )
+    raw = '{"tweets":' + json.loads(resp["body"].read())["content"][0]["text"]
+    tweets = json.JSONDecoder().raw_decode(raw)[0]["tweets"]
+    tweets = [t.strip() for t in tweets if isinstance(t, str) and t.strip()][:4]
+    if len(tweets) < 2:
+        raise RuntimeError(f"スレッド生成失敗: {len(tweets)}件しか生成されなかった")
+    return tweets
+
+
+def verify_thread(bedrock, tweets: list, title: str, article_excerpt: str) -> list:
+    """スレッド全体の事実主張を記事本文と突き合わせて検証する。パース失敗時は元の配列を返す。"""
+    joined = json.dumps(tweets, ensure_ascii=False)
+    prompt = f"""あなたはAWS技術記事の監修者。以下のXスレッド投稿草案（JSON配列）に含まれる「事実の主張」だけを検証してください。
+
+【根拠（記事タイトル）】{title}
+【根拠（記事本文抜粋）】
+{article_excerpt or "（本文取得失敗。タイトルのみが根拠）"}
+
+【スレッド草案】
+{joined}
+
+【検証ルール】
+- サービス仕様・対応リージョン・料金・制限値・機能の有無などの事実主張が、根拠と矛盾していないか確認する
+- 根拠に書かれておらず、AWSの一般知識としても確実といえない事実主張は、削除するか感想・疑問の形に書き換える
+- 個人の感想・体験談・口調・文体・絵文字は維持し、ツイートの数も変えない
+
+【出力形式】
+JSONのみを出力する。説明・修正理由は一切書かない。
+{{"tweets": ["1ツイート目", "2ツイート目", ...]}}（問題なければ草案を一字も変えずそのまま）"""
+    resp = bedrock.invoke_model(
+        modelId="jp.anthropic.claude-haiku-4-5-20251001-v1:0",
+        body=json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 1000,
+            "messages": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": '{"tweets":'},
+            ]})
+    )
+    raw = '{"tweets":' + json.loads(resp["body"].read())["content"][0]["text"]
+    try:
+        checked = [t.strip() for t in json.JSONDecoder().raw_decode(raw)[0]["tweets"]
+                   if isinstance(t, str) and t.strip()]
+    except Exception as e:
+        print(f"[Verify] スレッド検証パース失敗（草案をそのまま使用）: {e}")
+        return tweets
+    if not checked:
+        return tweets
+    print("[Verify] スレッド事実確認" + ("で修正あり" if checked != tweets else "OK（修正なし）"))
+    return checked
+
+
+def post_tweet(auth, text: str, reply_to: str = None) -> str:
+    """X API v2でツイートを投稿し、tweet_idを返す。reply_to指定でリプライ投稿。"""
+    payload = {"text": text}
+    if reply_to:
+        payload["reply"] = {"in_reply_to_tweet_id": reply_to}
+    r = requests.post("https://api.twitter.com/2/tweets", auth=auth, json=payload, timeout=30)
+    print(f"[X] Status: {r.status_code}, Response: {r.text}")
+    r.raise_for_status()
+    return r.json().get("data", {}).get("id")
 
 
 def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: str = "") -> str:
@@ -480,6 +552,33 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 {ending_rule}
 - ツイート本文のみ出力"""
 
+    elif post_type == "thread_tips":
+        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調で、今日のAWSニュースに関連した実用Tips・ハマりポイントをスレッド（連投）形式で3〜4ツイート書いてください。
+
+【実際の投稿例（口調の参考）】
+{FEW_SHOT_EVENING}
+
+【今日のAWSニュース】
+メイン：{title}
+
+【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
+{article_excerpt}
+
+【ルール】
+- 1ツイート目はスクロールを止めるフック（「〜で詰まった話」「〜する前に知っといた方がいいこと」「〜やらかした話」など）。末尾に「🧵」か「↓」を付ける
+- 2ツイート目以降は1ツイート1ポイントで具体的に。読んだ人が保存したくなる実用性を意識する
+- 最後のツイートは軽い感想・余韻で締める（きれいにまとめない）
+- 各ツイートは120文字以内
+- 上の投稿例の口調（常体・口語）。「です・ます」禁止
+- 絵文字はスレッド全体で0〜2個
+- ハッシュタグは付けない
+- URLは含めない（最後に別途付加する）
+{HUMAN_RULE}
+{FACT_RULE}
+
+【出力形式】
+JSONのみ: {{"tweets": ["1ツイート目", "2ツイート目", "3ツイート目"]}}"""
+
     elif post_type == "classmethod_reaction":
         pattern = random.choice(CLASSMETHOD_PATTERNS)
         return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調・温度感を完全に真似して、クラスメソッドの技術記事への反応を書いてください。
@@ -566,8 +665,15 @@ def lambda_handler(event, context):
     # SSMから投稿履歴を読み込む
     history = load_history(ssm)
 
-    # 投稿タイプをSSM履歴ベースで選択
+    # 投稿タイプをSSM履歴ベースで選択（FORCE_TYPE環境変数でテスト用に上書き可能）
     post_type = pick_post_type(slot["types"], history.get("used_types", []))
+    force_type = os.environ.get("FORCE_TYPE")
+    if force_type:
+        if force_type in slot["types"]:
+            post_type = force_type
+            print(f"[Force] FORCE_TYPE={force_type}")
+        else:
+            print(f"[Warning] 無効なFORCE_TYPE: '{force_type}'（無視して {post_type} を使用）")
     print(f"[Start] {now.strftime('%Y-%m-%d %H:%M JST')} / {slot_key} / {post_type} / URL={'あり' if with_url else 'なし'}")
 
     api_key    = get_ssm(f"{prefix}/x-api-key")
@@ -618,46 +724,72 @@ def lambda_handler(event, context):
     other_pool = [a for a in pool if a["url"] != main["url"]]
     news_text = "\n".join(f"[{a['label']}] {a['title']}" for a in ([main] + other_pool)[:3])
 
-    # ハッシュタグを記事内容から動的生成
-    hashtags = build_hashtags(main)
-
     # メイン記事の本文を取得（生成のグラウンディング＋事実検証の根拠に使う）
     article_text = fetch_article_text(main["url"])
 
-    prompt = build_prompt(post_type, main, news_text, article_text)
-    suffix = (f"\n{main['url']}\n{hashtags}" if with_url else f"\n{hashtags}")
-
+    prompt  = build_prompt(post_type, main, news_text, article_text)
     bedrock = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
-    resp = bedrock.invoke_model(
-        modelId="jp.anthropic.claude-haiku-4-5-20251001-v1:0",
-        body=json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 400,
-            "messages": [{"role": "user", "content": prompt}]})
-    )
-    body = json.loads(resp["body"].read())["content"][0]["text"].strip()
+    dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
 
-    # 投稿前に事実主張を記事本文と突き合わせて検証する
-    max_len = 100 if slot_key == "morning" else 160
-    body = verify_tweet(bedrock, body, main["title"], article_text, max_len)
+    if post_type == "thread_tips":
+        # ── スレッド投稿：フック → 本文 → 締め＋URL の連投 ──
+        tweets = generate_thread(bedrock, prompt)
+        tweets = verify_thread(bedrock, tweets, main["title"], article_text)
+        # 外部リンクは本文1ツイート目に入れるとリーチが抑制されるため最終ツイートにのみ付ける
+        tweets[-1] = f"{tweets[-1]}\n{main['url']}"
+        preview = "\n---\n".join(tweets)
+        print(f"[Tweet] スレッド{len(tweets)}件\n{preview}")
 
-    max_body = 280 - len(suffix) - 1
-    if len(body) > max_body:
-        # 文の途中でぶった切れないよう、直近の文末記号まで戻って切る
-        cut = body[:max_body]
-        idx = max(cut.rfind(s) for s in "。！？!?…〜笑")
-        body = cut[:idx + 1] if idx >= max_body // 2 else cut[:max_body - 1] + "…"
-    tweet = f"{body}{suffix}"
-    print(f"[Tweet]\n{tweet}\n[文字数] {len(tweet)}")
+        if dry_run:
+            print("[DRY RUN] スキップ（SSM履歴は更新しません）")
+            return {"statusCode": 200, "post_type": post_type, "tweet": preview}
 
-    if os.environ.get("DRY_RUN", "false").lower() == "true":
-        print("[DRY RUN] スキップ（SSM履歴は更新しません）")
-        return {"statusCode": 200, "post_type": post_type, "tweet": tweet}
+        auth     = OAuth1(api_key, api_secret, acc_token, acc_secret)
+        tweet_id = None
+        prev_id  = None
+        for t in tweets:
+            prev_id  = post_tweet(auth, t, reply_to=prev_id)
+            tweet_id = tweet_id or prev_id
+        print(f"[Success] https://x.com/i/web/status/{tweet_id}")
+    else:
+        # ── 通常投稿：本文＋タグ0〜1個。URLはリプライにぶら下げる ──
+        hashtags = build_hashtags(main)
+        suffix   = f"\n{hashtags}" if hashtags else ""
 
-    auth = OAuth1(api_key, api_secret, acc_token, acc_secret)
-    r = requests.post("https://api.twitter.com/2/tweets", auth=auth, json={"text": tweet}, timeout=30)
-    print(f"[X] Status: {r.status_code}, Response: {r.text}")
-    r.raise_for_status()
-    tweet_id = r.json().get("data", {}).get("id")
-    print(f"[Success] https://x.com/i/web/status/{tweet_id}")
+        resp = bedrock.invoke_model(
+            modelId="jp.anthropic.claude-haiku-4-5-20251001-v1:0",
+            body=json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 400,
+                "messages": [{"role": "user", "content": prompt}]})
+        )
+        body = json.loads(resp["body"].read())["content"][0]["text"].strip()
+
+        # 投稿前に事実主張を記事本文と突き合わせて検証する
+        max_len = 100 if slot_key == "morning" else 160
+        body = verify_tweet(bedrock, body, main["title"], article_text, max_len)
+
+        max_body = 280 - len(suffix) - 1
+        if len(body) > max_body:
+            # 文の途中でぶった切れないよう、直近の文末記号まで戻って切る
+            cut = body[:max_body]
+            idx = max(cut.rfind(s) for s in "。！？!?…〜笑")
+            body = cut[:idx + 1] if idx >= max_body // 2 else cut[:max_body - 1] + "…"
+        tweet = f"{body}{suffix}"
+        print(f"[Tweet]\n{tweet}\n[文字数] {len(tweet)}")
+
+        if dry_run:
+            print("[DRY RUN] スキップ（SSM履歴は更新しません）")
+            return {"statusCode": 200, "post_type": post_type, "tweet": tweet}
+
+        auth     = OAuth1(api_key, api_secret, acc_token, acc_secret)
+        tweet_id = post_tweet(auth, tweet)
+        print(f"[Success] https://x.com/i/web/status/{tweet_id}")
+
+        # 外部リンクは本文に入れるとリーチが抑制されるためリプライにぶら下げる
+        if with_url:
+            try:
+                post_tweet(auth, main["url"], reply_to=tweet_id)
+            except Exception as e:
+                print(f"[X] URLリプライ投稿失敗（本文投稿は成功済みのため続行）: {e}")
 
     # 投稿成功後にSSM履歴を更新
     updated_urls = used_urls + [main["url"]]

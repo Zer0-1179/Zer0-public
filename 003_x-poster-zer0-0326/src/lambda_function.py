@@ -1139,7 +1139,7 @@ def get_x_credentials() -> dict:
     return creds
 
 
-def post_to_x(tweet_text: str, creds: dict) -> dict:
+def post_to_x(tweet_text: str, creds: dict, reply_to: str | None = None) -> dict:
     url   = "https://api.twitter.com/2/tweets"
     ts    = str(int(time.time()))
     nonce = base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")
@@ -1163,7 +1163,10 @@ def post_to_x(tweet_text: str, creds: dict) -> dict:
     auth_header = "OAuth " + ", ".join(
         f'{_percent_encode(k)}="{_percent_encode(v)}"' for k, v in sorted(oauth.items())
     )
-    payload = json.dumps({"text": tweet_text}).encode()
+    payload_dict = {"text": tweet_text}
+    if reply_to:
+        payload_dict["reply"] = {"in_reply_to_tweet_id": reply_to}
+    payload = json.dumps(payload_dict).encode()
     req = urllib.request.Request(url, data=payload, method="POST",
         headers={"Authorization": auth_header, "Content-Type": "application/json"})
     try:
@@ -1246,12 +1249,19 @@ def lambda_handler(event, context):
     raw = invoke_bedrock(prompt)
 
     if category == "url_reaction":
-        # 本文は100文字以内、URL+ハッシュタグをlambda_handler側で付加
+        # 本文は100文字以内。URLは本文に入れるとリーチが抑制されるため、投稿後にリプライへぶら下げる
         body  = trim_body_excluding_hashtags(raw, limit=100)
         htag  = pick_hashtag(body + " " + url_article["title"])
-        tweet = f"{body}\n{url_article['url']}\n{htag}"
+        tweet = f"{body}\n{htag}"
     else:
         tweet = trim_body_excluding_hashtags(raw)
+
+    # Bot感軽減: 約35%はハッシュタグなしで投稿する
+    if random.random() < 0.35:
+        stripped = re.sub(r'[ \t]*#\S+', '', tweet).rstrip()
+        if stripped:
+            tweet = stripped
+            print("[Hashtag] 今回はタグなしで投稿")
     print(f"[Tweet]\n{tweet}\n[文字数] {len(tweet)}")
 
     # ── DRY RUN ───────────────────────────────────────
@@ -1262,6 +1272,13 @@ def lambda_handler(event, context):
     # ── X投稿 ─────────────────────────────────────────
     creds  = get_x_credentials()
     result = post_to_x(tweet, creds)
+
+    # url_reaction: 記事URLをリプライにぶら下げる（本文に入れるとリーチが抑制されるため）
+    if category == "url_reaction":
+        try:
+            post_to_x(url_article["url"], creds, reply_to=result["data"]["id"])
+        except Exception as e:
+            print(f"[X] URLリプライ投稿失敗（本文投稿は成功済みのため続行）: {e}")
 
     # ── 履歴更新 ──────────────────────────────────────
     body_only = re.sub(r'#\S+', '', tweet).strip()
