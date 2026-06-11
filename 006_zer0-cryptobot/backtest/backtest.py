@@ -56,15 +56,24 @@ ATR_PERIOD  = 8
 ST_MULT     = 2.5
 ADX_PERIOD     = 14
 ADX_THRESHOLD  = 25   # ADXがこれ以上 → 「トレンドが効いている地合い」とみなす(レンジ相場のダマシを除外)
+MACD_FAST      = 12
+MACD_SLOW      = 26
+MACD_SIG       = 9
+RSI_MOM_LEVEL  = 50   # RSIモメンタム整合: ロングはRSI>50 / ショートはRSI<50 を要求
+RSI_OVEREXT_HI = 70   # RSI過熱回避: ロングはRSI<70（高値掴み防止）
+RSI_OVEREXT_LO = 30   # RSI過熱回避: ショートはRSI>30（売られすぎ追随防止）
+ST_SLOW_ATR    = 20   # ダブルSupertrend: 遅いSTのATR期間
+ST_SLOW_MULT   = 4.0  # ダブルSupertrend: 遅いSTの乗数（クリプト向け大きめ設定）
 VOL_PERIOD      = 20
 INITIAL_CAPITAL = 10000.0   # 初期資本（単位: 円換算の仮想値）
 POSITION_RATIO  = 0.90      # 使用率: 資本 × 90% を MAX_POSITIONS で均等割り
 MIN_INVEST      = 1000.0    # 最小発注額
 MAX_POSITIONS   = 3
 
-TP1_MULT   = 2.0
-SL_MULT    = 1.5
-TRAIL_MULT = 1.5
+# v2.8（2026-06-11採用）: 勝率向上検証で TP1 2.0→1.75 / SL 1.5→2.0 / トレール 1.5→1.0 に変更
+TP1_MULT   = 1.75
+SL_MULT    = 2.0
+TRAIL_MULT = 1.0
 
 
 # ── Binance データ取得 ────────────────────────────────
@@ -140,6 +149,13 @@ def calc_rsi(series: pd.Series, period: int) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
+def calc_macd(series: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """MACDライン・シグナルライン（12/26/9）"""
+    macd_line = calc_ema(series, MACD_FAST) - calc_ema(series, MACD_SLOW)
+    signal    = macd_line.ewm(span=MACD_SIG, adjust=False).mean()
+    return macd_line, signal
+
+
 def calc_adx(df: pd.DataFrame, period: int) -> pd.Series:
     """Wilder の平滑化によるADX（トレンド強度。レンジ相場のダマシ除外フィルタ用）"""
     high, low, close = df["high"], df["low"], df["close"]
@@ -211,6 +227,8 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["atr"]         = calc_atr(df, ATR_PERIOD)
     df["adx"]         = calc_adx(df, ADX_PERIOD)
     df["st_dir"]      = calc_supertrend(df, df["atr"], ST_MULT)
+    df["st_dir_slow"] = calc_supertrend(df, calc_atr(df, ST_SLOW_ATR), ST_SLOW_MULT)
+    df["macd"], df["macd_sig"] = calc_macd(df["close"])
     df["vol_avg20"]   = df["volume"].rolling(VOL_PERIOD).mean()
     df["st_flip_green"] = (df["st_dir"] == 1) & (df["st_dir"].shift(1) == -1)
     df["st_flip_red"]   = (df["st_dir"] == -1) & (df["st_dir"].shift(1) == 1)
@@ -488,6 +506,10 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                         シグナル方向と一致することを要求する（上位足トレンド確認）
       "flip_adx"      : 転換シグナルに加えて、ADXが閾値以上（トレンドが効いている地合い）
                         であることを要求する（レンジ相場のダマシ転換を除外）
+      "flip_rsimom"   : 転換シグナルに加えて、RSIの勢いが転換方向と一致（L:>50 / S:<50）
+      "flip_noext"    : 転換シグナルに加えて、RSIが過熱圏でない（L:<70 / S:>30）
+      "flip_macd"     : 転換シグナルに加えて、MACDライン/シグナルの位置関係が方向と一致
+      "flip_dst"      : 転換シグナルに加えて、遅いSupertrend(ATR20×4.0)の方向と一致
 
     daily_lookup: {coin: {date: st_dir}}。flip_htf モードでのみ使用。
     """
@@ -557,6 +579,32 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
             # ADXトレンド強度フィルタ: レンジ相場（ADX低 = ダマシが多い）での転換シグナルを除外
             if signal_mode == "flip_adx":
                 if pd.isna(row["adx"]) or row["adx"] < ADX_THRESHOLD:
+                    continue
+
+            # RSIモメンタム整合: 転換方向とRSIの勢いが一致するシグナルのみ採用
+            if signal_mode == "flip_rsimom":
+                if market_dir == "long" and not (row["rsi"] > RSI_MOM_LEVEL):
+                    continue
+                if market_dir == "short" and not (row["rsi"] < RSI_MOM_LEVEL):
+                    continue
+
+            # RSI過熱回避: 伸び切ったところでの転換シグナル（高値掴み/売られすぎ追随）を除外
+            if signal_mode == "flip_noext":
+                if market_dir == "long" and not (row["rsi"] < RSI_OVEREXT_HI):
+                    continue
+                if market_dir == "short" and not (row["rsi"] > RSI_OVEREXT_LO):
+                    continue
+
+            # MACD整合: MACDラインとシグナルラインの位置関係が転換方向と一致するもののみ
+            if signal_mode == "flip_macd":
+                if market_dir == "long" and not (row["macd"] > row["macd_sig"]):
+                    continue
+                if market_dir == "short" and not (row["macd"] < row["macd_sig"]):
+                    continue
+
+            # ダブルSupertrend: 同一足の遅いST(ATR20×4.0)の方向と一致するもののみ
+            if signal_mode == "flip_dst":
+                if row["st_dir_slow"] != (1 if market_dir == "long" else -1):
                     continue
 
             if pd.isna(row["vol_avg20"]) or row["volume"] <= row["vol_avg20"]:
@@ -1267,7 +1315,8 @@ def main():
                         help="現行(転換のみ) vs 新(転換+ADXトレンド強度フィルタ) 比較")
     parser.add_argument("--strategy", default="old", choices=["old", "new"], help="使用戦略")
     parser.add_argument("--signal-mode", default="flip",
-                        choices=["flip", "flip_pullback", "flip_htf", "flip_adx", "flip_late"],
+                        choices=["flip", "flip_pullback", "flip_htf", "flip_adx", "flip_late",
+                                 "flip_rsimom", "flip_noext", "flip_macd", "flip_dst"],
                         help="シグナル収集モード（単独実行時）")
     args = parser.parse_args()
 
@@ -1481,7 +1530,7 @@ def _run_multi():
     fig.suptitle(
         "Zer0-CryptoBot マルチ年バックテスト比較\n"
         "戦略: BTC 200EMA方向フィルター ＋ Supertrend転換 ＋ Volume増加 / "
-        "TP1(ATR×2, 30%) ＋ トレーリングSL(ATR×1.5, 70%)",
+        f"TP1(ATR×{TP1_MULT}, 30%) ＋ 初期SL(ATR×{SL_MULT}) ＋ トレーリングSL(ATR×{TRAIL_MULT}, 70%)",
         fontsize=13, fontweight="bold", y=0.99,
     )
     plt.tight_layout(rect=[0, 0.06, 1, 0.97])
