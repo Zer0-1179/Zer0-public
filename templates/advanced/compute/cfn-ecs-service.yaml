@@ -269,9 +269,10 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# DeletionPolicy: LogGroup is Retain. TaskExecutionRole pulls images and writes logs.
+# Cluster/ALB/VPC/SG imports require stacks named by the convention in the DEPLOY section above.
 # -----------------------------------------------
 Resources:
-  # Task execution role — used by ECS to pull images and write logs
   TaskExecutionRole01:
     Type: AWS::IAM::Role
     Properties:
@@ -375,6 +376,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
 # -----------------------------------------------
 Outputs:
   ServiceName01:
