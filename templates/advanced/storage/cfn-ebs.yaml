@@ -46,6 +46,7 @@ Description: "EBS Volume with attachment to an existing EC2 instance."
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -79,11 +80,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Used as part of the volume name. Lowercase letters, numbers, and hyphens only."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -94,6 +97,7 @@ Parameters:
       - stg
       - dev
       - prd
+    Description: "Deployment environment. Used as part of the volume name."
 
   EbsSuffix:
     Type: String
@@ -180,6 +184,7 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   HasIops:             !Not [!Equals [!Ref Iops, 0]]
@@ -192,6 +197,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # -----------------------------------------------
 Resources:
   EbsVolume01:
@@ -230,6 +236,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   VolumeId01:

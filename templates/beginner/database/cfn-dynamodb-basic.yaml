@@ -41,11 +41,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -84,9 +86,10 @@ Parameters:
 # BillingMode PAY_PER_REQUEST (on-demand) requires no capacity planning.
 # SSESpecification uses the AWS-managed key (aws/dynamodb) at no additional cost.
 # DeletionProtectionEnabled: false allows stack deletion to remove the table.
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # -----------------------------------------------
 Resources:
-  DynamoDbTable:
+  DynamoDbTable01:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -111,16 +114,17 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
-  TableName:
+  TableName01:
     Description: "DynamoDB table name"
-    Value: !Ref DynamoDbTable
+    Value: !Ref DynamoDbTable01
     Export:
       Name: !Sub "${AWS::StackName}-TableName"
 
-  TableArn:
+  TableArn01:
     Description: "DynamoDB table ARN"
-    Value: !GetAtt DynamoDbTable.Arn
+    Value: !GetAtt DynamoDbTable01.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TableArn"

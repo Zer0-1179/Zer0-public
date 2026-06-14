@@ -103,7 +103,7 @@ Parameters:
       - stg
       - dev
       - prd
-    Description: "Deployment environment. prd sets DeletionPolicy to Retain and increases backup retention."
+    Description: "Deployment environment. prd sets DeletionPolicy to Snapshot and increases backup retention."
 
   DbSuffix:
     Type: String
@@ -284,6 +284,7 @@ Mappings:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   IsPrd:                      !Equals [!Ref Env, prd]
@@ -297,9 +298,10 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # Subnets are imported from {ProjectName}-{Env}-vpc stack.
 # SG is imported from {ProjectName}-{Env}-sg-{SgSuffix} stack.
-# DeletionPolicy: Retain (prd) preserves the DB after stack deletion.
+# DeletionPolicy: Snapshot (prd) creates a final snapshot before deletion to protect data.
 # BackupRetentionPeriod: 7 days (prd) / 1 day (dev).
 # -----------------------------------------------
 Resources:
@@ -321,8 +323,8 @@ Resources:
 
   DbInstance01:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy:      !If [IsPrd, Retain, Delete]
-    UpdateReplacePolicy: !If [IsPrd, Retain, Delete]
+    DeletionPolicy:      !If [IsPrd, Snapshot, Delete]
+    UpdateReplacePolicy: !If [IsPrd, Snapshot, Delete]
     Properties:
       DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds-${DbSuffix}-01"
       Engine:              !Ref DBEngine
@@ -362,6 +364,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   DbEndpoint01:

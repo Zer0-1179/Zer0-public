@@ -29,6 +29,7 @@ Description: "EFS File System with Mount Targets across 2 AZs (private subnets).
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -60,6 +61,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # VpcId and SubnetIds are imported from {ProjectName}-{Env}-vpc stack automatically.
 # SecurityGroupId is imported from {ProjectName}-{Env}-sg-{SgSuffix} stack automatically.
 # -----------------------------------------------
@@ -67,6 +69,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Used as part of the file system name and import names. Lowercase letters, numbers, and hyphens only."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -77,6 +80,7 @@ Parameters:
       - stg
       - dev
       - prd
+    Description: "Deployment environment. Used as part of the file system name and import names."
 
   SgSuffix:
     Type: String
@@ -170,6 +174,7 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   IsProvisioned:          !Equals [!Ref ThroughputMode, "provisioned"]
@@ -180,12 +185,16 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
+# DeletionPolicy: Retain protects stored data; EFS does not support a Snapshot policy.
 # LifecyclePolicies: each transition type must be a separate entry.
 # Only include entries when the parameter is non-empty to avoid validation errors.
 # -----------------------------------------------
 Resources:
   EfsFileSystem01:
     Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Encrypted: true
       KmsKeyId: !If [HasKmsKey, !Ref KmsKeyArn, !Ref AWS::NoValue]
@@ -232,6 +241,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   FileSystemId01:

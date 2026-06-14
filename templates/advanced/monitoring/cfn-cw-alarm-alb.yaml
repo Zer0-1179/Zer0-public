@@ -180,6 +180,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # -----------------------------------------------
 Resources:
 
@@ -297,8 +298,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
 
