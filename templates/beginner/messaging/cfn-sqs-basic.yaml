@@ -41,11 +41,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -86,6 +88,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # SqsManagedSseEnabled: true uses SQS-managed encryption at no additional cost.
 # To add a second queue, copy the SqsQueue01 block and rename it SqsQueue02.
 # -----------------------------------------------
@@ -107,6 +110,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   QueueUrl01:
