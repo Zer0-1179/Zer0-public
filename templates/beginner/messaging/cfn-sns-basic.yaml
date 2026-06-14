@@ -102,16 +102,17 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
-  TopicArn:
+  TopicArn01:
     Description: "SNS topic ARN"
-    Value: !Ref SnsTopic
+    Value: !Ref SnsTopic01
     Export:
       Name: !Sub "${AWS::StackName}-TopicArn"
 
-  TopicName:
+  TopicName01:
     Description: "SNS topic name"
-    Value: !GetAtt SnsTopic.TopicName
+    Value: !GetAtt SnsTopic01.TopicName
     Export:
       Name: !Sub "${AWS::StackName}-TopicName"
