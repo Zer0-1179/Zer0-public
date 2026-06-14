@@ -27,6 +27,7 @@ Description: "ECR repository with image scanning, lifecycle policy, and env-base
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -54,6 +55,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Values passed in at deploy time. AllowedValues and Defaults are documented per-parameter.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -61,6 +63,7 @@ Parameters:
     Default: my-project
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Used as the resource name prefix (e.g. my-project)."
 
   Env:
     Type: String
@@ -113,6 +116,8 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [ConditionName, ValueIfTrue, ValueIfFalse] in Resources.
+# IsPrd controls DeletionPolicy: prd=Retain, others=Delete.
 # -----------------------------------------------
 Conditions:
   IsPrd:            !Equals [!Ref Env, prd]
@@ -121,6 +126,8 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# DeletionPolicy/UpdateReplacePolicy: Retain for prd, Delete for others (controlled by IsPrd condition).
+# LifecyclePolicy retains the last LifecycleKeepCount images and expires older ones.
 # -----------------------------------------------
 Resources:
   EcrRepository01:
@@ -131,7 +138,7 @@ Resources:
       RepositoryName: !Sub "${ProjectName}-${Env}-ecr-${RepoSuffix}"
       ImageTagMutability: !Ref ImageTagMutability
       ImageScanningConfiguration:
-        ScanOnPush: !If [HasKmsKey, !Ref ScanOnPush, !Ref ScanOnPush]
+        ScanOnPush: !Ref ScanOnPush
       EncryptionConfiguration: !If
         - HasKmsKey
         - EncryptionType: KMS
@@ -167,6 +174,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
 # -----------------------------------------------
 Outputs:
   RepositoryName01:

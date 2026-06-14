@@ -27,6 +27,7 @@ Description: "General-purpose Lambda function with execution role and CloudWatch
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -69,6 +70,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Values passed in at deploy time. AllowedValues and Defaults are documented per-parameter.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -76,6 +78,7 @@ Parameters:
     Default: my-project
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Used as the resource name prefix (e.g. my-project)."
 
   Env:
     Type: String
@@ -84,6 +87,7 @@ Parameters:
       - stg
       - dev
       - prd
+    Description: "Deployment environment (stg / dev / prd)."
 
   FunctionSuffix:
     Type: String
@@ -220,6 +224,7 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [ConditionName, ValueIfTrue, ValueIfFalse] in Resources.
 # -----------------------------------------------
 Conditions:
   HasPolicy01:              !Not [!Equals [!Ref AdditionalPolicy01, ""]]
@@ -230,6 +235,8 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# DeletionPolicy: LogGroup is Retain. Execution role attaches AWSLambdaBasicExecutionRole
+# plus up to two optional managed policies via AdditionalPolicy01/02.
 # -----------------------------------------------
 Resources:
   LambdaExecutionRole01:
@@ -252,7 +259,11 @@ Resources:
             - !Ref AdditionalPolicy02
           - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
             - !Ref AdditionalPolicy01
-        - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !If
+          - HasPolicy02
+          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+            - !Ref AdditionalPolicy02
+          - - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -317,6 +328,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
 # -----------------------------------------------
 Outputs:
   FunctionName01:
