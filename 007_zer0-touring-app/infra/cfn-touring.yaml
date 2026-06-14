@@ -15,6 +15,8 @@ Resources:
   # ── S3 バケット（静的サイト用） ────────────────────────────────
   TouringBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: zer0-touring-s3
       PublicAccessBlockConfiguration:
@@ -83,15 +85,6 @@ Resources:
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
                   # 実際に呼ばれる基盤モデル（マルチリージョン）
                   - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
-        - PolicyName: SSMGmapsUsage
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:PutParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0-touring/*"
         - PolicyName: DynamoDBRateLimit
           PolicyDocument:
             Version: "2012-10-17"
@@ -114,6 +107,8 @@ Resources:
   # ── DynamoDB レートリミットテーブル ───────────────────────────
   TouringRateLimitTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: zer0-touring-ratelimit
       BillingMode: PAY_PER_REQUEST
@@ -133,6 +128,8 @@ Resources:
   # ── DynamoDB シェアテーブル ───────────────────────────────────
   TouringShareTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: zer0-touring-share
       BillingMode: PAY_PER_REQUEST
@@ -209,6 +206,7 @@ Resources:
           - OPTIONS
         AllowHeaders:
           - Content-Type
+          - X-Admin-Token
         MaxAge: 86400
 
   # ── Lambda インテグレーション ──────────────────────────────────
@@ -285,7 +283,7 @@ Resources:
           ContentSecurityPolicy:
             # connect-src: Open-Meteo（天気）+ Wikipedia API（写真取得）+ Nominatim（出発地ジオコーディング）
             # img-src: Wikimedia（Wikipedia写真）
-            ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://ja.wikipedia.org https://nominatim.openstreetmap.org; img-src 'self' data: https://upload.wikimedia.org; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://ja.wikipedia.org https://nominatim.openstreetmap.org; img-src 'self' data: https://upload.wikimedia.org; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
             Override: true
         CustomHeadersConfig:
           Items:

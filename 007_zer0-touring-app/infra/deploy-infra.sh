@@ -89,7 +89,7 @@ echo "    API URL   : $API_URL"
 # Step 3: Lambda コードデプロイ
 # ────────────────────────────────────────────
 echo "=== [3/4] Lambda コードデプロイ ==="
-bash "$(dirname "$0")/../backend/deploy.sh"
+bash "../backend/deploy.sh"
 
 # ────────────────────────────────────────────
 # Step 4: フロントエンドビルド & S3 同期

@@ -3,6 +3,7 @@ import math
 import os
 import re
 import random
+import secrets
 import string
 import time
 import threading
@@ -17,13 +18,14 @@ from botocore.config import Config
 
 BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
-GMAPS_USAGE_PARAM   = "/zer0-touring/gmaps-usage"
-GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ（同時アクセス時のSSM非アトミック書き込みによる誤差対策）
+GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ
 DAILY_LIMIT         = int(os.environ.get("DAILY_LIMIT", "3"))
 RATE_LIMIT_TABLE    = "zer0-touring-ratelimit"
 SHARE_TABLE         = "zer0-touring-share"
 SITE_URL            = "https://touring.zer0-infra.com"
 ADMIN_TOKEN         = os.environ.get("ADMIN_TOKEN", "")
+
+JST = timezone(timedelta(hours=9))  # 日本標準時（UTC+9）
 
 ALLOWED_ORIGINS = {
     "https://touring.zer0-infra.com",
@@ -35,7 +37,6 @@ bedrock = boto3.client(
     region_name="ap-northeast-1",
     config=Config(read_timeout=60, connect_timeout=10),
 )
-ssm      = boto3.client("ssm",      region_name="ap-northeast-1")
 dynamodb = boto3.client("dynamodb", region_name="ap-northeast-1")
 
 # Nominatim は 1req/sec の制限があるためロックで直列化
@@ -48,8 +49,8 @@ def _get_cors_headers(event):
     return {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": allowed,
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     }
 
 
@@ -63,7 +64,7 @@ def _get_client_ip(event):
 
 def get_usage(ip):
     """今日の使用回数を読み取る（カウントを増やさない）。"""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(JST).strftime("%Y-%m-%d")
     pk    = f"{ip}#{today}"
     try:
         resp = dynamodb.get_item(
@@ -72,20 +73,19 @@ def get_usage(ip):
             ProjectionExpression="#c",
             ExpressionAttributeNames={"#c": "count"},
         )
-        used = int(resp.get("Item", {}).get("count", {}).get("N", 0))
+        return int(resp.get("Item", {}).get("count", {}).get("N", 0))
     except Exception as e:
         print(f"[get-usage] ERR {e}")
-        used = 0
-    return used
+        return 0
 
 
 def check_rate_limit(ip):
     """IP別・日別カウントを DynamoDB でアトミックに管理する。
     DAILY_LIMIT 以内なら True、超過なら False を返す。"""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(JST).strftime("%Y-%m-%d")
     pk    = f"{ip}#{today}"
-    # TTL = 翌々日0時UTC（日付またぎ直後も安全に消える）
-    ttl   = int((datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=2)).timestamp())
+    # TTL = 翌々日0時JST（日付またぎ直後も安全に消える）
+    ttl   = int((datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=2)).timestamp())
     try:
         dynamodb.update_item(
             TableName=RATE_LIMIT_TABLE,
@@ -239,8 +239,7 @@ def osrm_route(waypoints):
         with urllib.request.urlopen(req, timeout=8) as r:
             data = json.loads(r.read())
         if data.get("code") == "Ok" and data.get("routes"):
-            route = data["routes"][0]
-            dist_km = round(route["distance"] / 1000)
+            dist_km = round(data["routes"][0]["distance"] / 1000)
             # 日帰り圏外（500km超）は誤ジオコーディング起因として捨てる
             if dist_km > 500:
                 print(f"[osrm] SKIP unreasonable route: {dist_km}km")
@@ -253,29 +252,33 @@ def osrm_route(waypoints):
 
 
 def check_and_reserve_gmaps(n_courses=3):
-    """今月の Google Maps 残枠を確認し、n_courses 分を予約する。
+    """Google Maps 残枠を DynamoDB でアトミックに確認・予約する。
     使用可能なら True、無料枠超過または未設定なら False を返す。"""
     if not GOOGLE_MAPS_API_KEY:
         return False
-    current_month = datetime.now().strftime("%Y-%m")
+    current_month = datetime.now(JST).strftime("%Y-%m")
+    pk  = f"gmaps#{current_month}"
+    ttl = int((datetime.now(JST) + timedelta(days=60)).timestamp())  # 60日後に自動削除
     try:
-        try:
-            resp = ssm.get_parameter(Name=GMAPS_USAGE_PARAM)
-            data = json.loads(resp["Parameter"]["Value"])
-        except ssm.exceptions.ParameterNotFound:
-            data = {"month": "", "count": 0}
-
-        if data.get("month") != current_month:
-            data = {"month": current_month, "count": 0}
-
-        if data["count"] + n_courses > GMAPS_FREE_LIMIT:
-            print(f"[gmaps-usage] 無料枠上限 {data['count']}/{GMAPS_FREE_LIMIT} → OSRM使用")
-            return False
-
-        data["count"] += n_courses
-        ssm.put_parameter(Name=GMAPS_USAGE_PARAM, Value=json.dumps(data), Type="String", Overwrite=True)
-        print(f"[gmaps-usage] {current_month}: {data['count']}/{GMAPS_FREE_LIMIT}")
+        resp = dynamodb.update_item(
+            TableName=RATE_LIMIT_TABLE,
+            Key={"pk": {"S": pk}},
+            UpdateExpression="ADD #c :n SET #ttl = if_not_exists(#ttl, :ttl)",
+            ConditionExpression="attribute_not_exists(#c) OR #c < :limit",
+            ExpressionAttributeNames={"#c": "count", "#ttl": "ttl"},
+            ExpressionAttributeValues={
+                ":n":     {"N": str(n_courses)},
+                ":ttl":   {"N": str(ttl)},
+                ":limit": {"N": str(GMAPS_FREE_LIMIT - n_courses + 1)},
+            },
+            ReturnValues="UPDATED_NEW",
+        )
+        count = int(resp.get("Attributes", {}).get("count", {}).get("N", 0))
+        print(f"[gmaps-usage] {current_month}: {count}/{GMAPS_FREE_LIMIT}")
         return True
+    except dynamodb.exceptions.ConditionalCheckFailedException:
+        print(f"[gmaps-usage] 無料枠上限 {current_month} → OSRM使用")
+        return False
     except Exception as e:
         print(f"[gmaps-usage] ERR {e} → OSRM使用")
         return False
@@ -343,10 +346,11 @@ def _is_on_route(slat, slon, olat, olon, dlat, dlon, margin_deg=0.5):
 def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, reverse=False):
     """
     スポットリストをジオコードし、ルート上にないものを除外して lat/lon を付与する。
+    タイムアウト防止のため最大3件に制限する。
     reverse=True のとき帰路方向（dest→origin）でフィルタリング。
     """
     result = []
-    for spot in spots:
+    for spot in spots[:3]:  # Nominatim 直列化+スリープによるタイムアウトを防ぐため上限3件
         lat, lon = nominatim_geocode(spot["name"], origin_lat, origin_lon)
         if lat is None:
             continue
@@ -418,7 +422,8 @@ def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
 
 
 def _short_id(n=6):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
+    """暗号論的に安全なランダムIDを生成する。"""
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(n))
 
 def _fetch_wiki_photo(spot):
     if not spot:
@@ -429,7 +434,10 @@ def _fetch_wiki_photo(spot):
         with urllib.request.urlopen(req, timeout=5) as r:
             data = json.loads(r.read())
             thumb = data.get("thumbnail", {}).get("source", "")
-            return re.sub(r'/\d+px-', '/800px-', thumb) if thumb else None
+            # httpsスキーム以外は拒否（オープンリダイレクト・混在コンテンツ防止）
+            if not thumb or not thumb.startswith("https://"):
+                return None
+            return re.sub(r'/\d+px-', '/800px-', thumb)
     except Exception:
         return None
 
@@ -450,19 +458,29 @@ def _handle_share_post(event, cors):
         urllib.parse.quote(json.dumps(course, ensure_ascii=False), safe="").encode("ascii")
     ).decode("ascii")
 
-    dynamodb.put_item(
-        TableName=SHARE_TABLE,
-        Item={
-            "pk":          {"S": short_id},
-            "course_b64":  {"S": course_b64},
-            "photo_url":   {"S": photo_url or ""},
-            "name":        {"S": course.get("name", "ツーリングコース")},
-            "destination": {"S": course.get("destination", "")},
-            "duration":    {"S": str(course.get("duration_hours", ""))},
-            "tags":        {"S": json.dumps(course.get("tags", []), ensure_ascii=False)},
-            "ttl":         {"N": str(ttl)},
-        },
-    )
+    item = {
+        "pk":          {"S": short_id},
+        "course_b64":  {"S": course_b64},
+        "photo_url":   {"S": photo_url or ""},
+        "name":        {"S": course.get("name", "ツーリングコース")},
+        "destination": {"S": course.get("destination", "")},
+        "duration":    {"S": str(course.get("duration_hours", ""))},
+        "tags":        {"S": json.dumps(course.get("tags", []), ensure_ascii=False)},
+        "ttl":         {"N": str(ttl)},
+    }
+
+    try:
+        dynamodb.put_item(
+            TableName=SHARE_TABLE,
+            Item=item,
+            ConditionExpression="attribute_not_exists(pk)",  # ID衝突防止
+        )
+    except dynamodb.exceptions.ConditionalCheckFailedException:
+        # ID衝突（極めて稀）: 新IDで1回リトライ
+        short_id = _short_id(6)
+        item["pk"] = {"S": short_id}
+        dynamodb.put_item(TableName=SHARE_TABLE, Item=item)
+
     return {"statusCode": 200, "headers": cors,
             "body": json.dumps({"url": f"{SITE_URL}/s/{short_id}"})}
 
@@ -555,6 +573,10 @@ def lambda_handler(event, context):
             payload = {"used": used, "limit": DAILY_LIMIT, "remaining": max(0, DAILY_LIMIT - used)}
         return {"statusCode": 200, "headers": cors, "body": json.dumps(payload)}
 
+    # POST /api/suggest のみ許可（未知パスは 404 を返す）
+    if not (method == "POST" and path == "/api/suggest"):
+        return {"statusCode": 404, "headers": cors, "body": json.dumps({"error": "Not found"})}
+
     # レートリミット（IP別・日別）— 管理者トークンがあればスキップ
     client_ip = _get_client_ip(event)
     req_token = (event.get("headers") or {}).get("x-admin-token", "")
@@ -641,7 +663,7 @@ def lambda_handler(event, context):
             "body": json.dumps({"error": "Failed to parse AI response"}),
         }
 
-    # 今月の Google Maps 残枠を確認（3コース分予約）
+    # 今月の Google Maps 残枠を確認（n_courses 分を DynamoDB でアトミックに予約）
     use_gmaps = check_and_reserve_gmaps(n_courses=len(courses))
 
     # 距離・所要時間を実データに上書き（タイムアウト余裕がある場合のみ）

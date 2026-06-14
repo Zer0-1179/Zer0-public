@@ -52,7 +52,7 @@
 | AI提案         | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048）        |
 | 距離・走行時間 | **Google Maps Directions API**（優先・月10,000件無料） + Nominatim（OSM ジオコーディング）→ OSRM フォールバック |
 | API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                                 |
-| 使用数管理     | AWS SSM Parameter Store（`/zer0-touring/gmaps-usage`：Google Maps 月間使用カウント）                            |
+| 使用数管理     | Amazon DynamoDB（`zer0-touring-ratelimit` / `gmaps#{YYYY-MM}` キーで月間 Google Maps 使用数をアトミック管理）   |
 | レートリミット | Amazon DynamoDB（`zer0-touring-ratelimit`：IP 別・日別 3回制限 / TTL で翌々日自動削除）                         |
 | URL短縮・OGP   | Amazon DynamoDB（`zer0-touring-share`：6文字ID・30日 TTL / Lambda が OGP HTML + リダイレクトを返す）            |
 | 使用回数UI     | GET /api/status でトップ画面にドット形式の残回数バッジを表示（管理者モード対応）                                |
@@ -126,13 +126,13 @@ JSON.parse(decodeURIComponent(atob(param)))
 AI が推測した距離・時間を実際の道路データで上書きする。**月10,000件の無料枠内は Google Maps Directions API を優先**し、枠超過時は OSRM にフォールバックする。
 
 1. 目的地名を **Nominatim**（OpenStreetMap ジオコーダー）で GPS 座標に変換
-2. SSM で今月の Google Maps 使用カウントを確認・予約（9,900 超なら OSRM へ）
+2. **DynamoDB Conditional Update** で今月の Google Maps 使用カウントをアトミックに確認・予約（9,900 超なら OSRM へ）
 3. **Google Maps**: 高速道路を含む実走行時間・距離を取得
 4. **OSRM フォールバック**: 実道路距離を取得し、距離帯別平均速度で所要時間を算出
    - ≥80km: 70km/h（高速想定）/ 40〜80km: 55km/h / <40km: 40km/h
 5. ジオコーディング失敗・異常値（500km超）は AI 推定値にフォールバック
 
-GMAPS_FREE_LIMIT を 10,000 ではなく **9,900** にしているのは、Lambda が複数インスタンスで並列実行される場合に SSM への読み書きがアトミックでないため、同時アクセス時の二重カウント誤差を吸収するバッファ。
+GMAPS_FREE_LIMIT を 10,000 ではなく **9,900** にしているのは 100 件のバッファを確保するため。DynamoDB Conditional Update によりアトミックに増分するため並列実行時でも上限を正確に守れる。
 
 ### 7. 天気連動表示（現在地 + 目的地）
 
@@ -404,3 +404,4 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | 2026-05-20 | v1.5       | スタイルタグ（峠道・海沿い・温泉・グルメ・絶景・自然・歴史・ガッツリ走る・のんびり）9種類 + 3×3グリッドUI追加 |
 | 2026-05-22 | v1.6       | 現在地・目的地 天気比較ウィジェット（バイク走行アニメーション）+ 7日間週間天気予報ストリップ追加              |
 | 2026-05-25 | v1.7       | iOS Safariバックグラウンドリロード対応（`?course=` URL復元）+ popstate ネイティブ戻るジェスチャー対応         |
+| 2026-06-15 | v1.8       | セキュリティ改善: JST化・CSP 'unsafe-inline'除去・secrets.choice化・DeletionPolicy追加・GMaps使用量をDynamoDBアトミック管理へ移行 |
