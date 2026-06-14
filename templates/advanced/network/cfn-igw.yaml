@@ -22,6 +22,7 @@ Description: "Internet Gateway attached to a VPC with a default route in the pub
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -34,6 +35,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Values passed in at deploy time. ProjectName and Env identify the VPC stack to import from.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -87,6 +89,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
 # -----------------------------------------------
 Outputs:
   InternetGatewayId01:

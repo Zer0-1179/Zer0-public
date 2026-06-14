@@ -44,6 +44,7 @@ Metadata:
           - VpcId
           - SubnetId01
           - SubnetId02
+          - Scheme
       - Label:
           default: "Target Group"
         Parameters:
@@ -80,6 +81,14 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
     Description: "Second subnet for the NLB (AZ-c). Must be in a different AZ."
 
+  Scheme:
+    Type: String
+    Default: internet-facing
+    AllowedValues:
+      - internet-facing
+      - internal
+    Description: "internet-facing: accessible from the internet. internal: accessible within the VPC only."
+
   TargetPort:
     Type: Number
     Default: 80
@@ -115,7 +124,7 @@ Resources:
     Properties:
       Name: !Sub "${ProjectName}-${Env}-nlb-01"
       Type: network
-      Scheme: internet-facing
+      Scheme: !Ref Scheme
       Subnets:
         - !Ref SubnetId01
         - !Ref SubnetId02
@@ -143,13 +152,13 @@ Outputs:
     Description: "NLB DNS name"
     Value: !GetAtt Nlb01.DNSName
     Export:
-      Name: !Sub "${AWS::StackName}-DnsName"
+      Name: !Sub "${AWS::StackName}-LoadBalancerDnsName"
 
   NlbArn01:
     Description: "NLB ARN"
     Value: !Ref Nlb01
     Export:
-      Name: !Sub "${AWS::StackName}-Arn"
+      Name: !Sub "${AWS::StackName}-LoadBalancerArn"
 
   TargetGroupArn01:
     Description: "Target group ARN"

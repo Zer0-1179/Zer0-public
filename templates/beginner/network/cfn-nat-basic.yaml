@@ -129,10 +129,10 @@ Outputs:
     Description: "NAT Gateway ID"
     Value: !Ref NatGateway01
     Export:
-      Name: !Sub "${AWS::StackName}-NatGatewayId01"
+      Name: !Sub "${AWS::StackName}-NatGatewayId"
 
   ElasticIp01:
     Description: "Elastic IP address allocated to the NAT Gateway"
     Value: !Ref ElasticIp01
     Export:
-      Name: !Sub "${AWS::StackName}-ElasticIp01"
+      Name: !Sub "${AWS::StackName}-EipAddress"

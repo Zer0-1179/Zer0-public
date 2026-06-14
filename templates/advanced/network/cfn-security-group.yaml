@@ -26,6 +26,7 @@ Description: "Security Group (empty shell). Add rules with cfn-security-group-in
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -60,13 +61,15 @@ Parameters:
 
   SgSuffix:
     Type: String
-    Default: ""
+    Default: web
     Description: "Purpose identifier used in the name and stack name (e.g. web, db, bastion)."
     AllowedPattern: "^([a-z0-9-]+)?$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only, or empty."
 
 # -----------------------------------------------
 # Resources
+# Creates an empty security group. Add rules separately with cfn-security-group-ingress.yaml / egress.yaml.
+# Export Name is parameter-based (not StackName-based) so ingress/egress stacks can resolve it by name.
 # -----------------------------------------------
 Resources:
   SecurityGroup01:
@@ -86,6 +89,8 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Export Name uses parameter values (not StackName) so cfn-security-group-ingress/egress.yaml
+# can resolve it with !Sub "${ProjectName}-${Env}-sg-${SgSuffix}-SecurityGroupId".
 # -----------------------------------------------
 Outputs:
   SecurityGroupId01:

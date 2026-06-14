@@ -34,6 +34,7 @@ Description: "NAT Gateway in a public subnet with a default route in the private
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -52,6 +53,8 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Values passed in at deploy time. ConnectivityType controls public vs. private NAT.
+# NatSubnetSuffix selects which VPC subnet to place the NAT Gateway in.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -95,6 +98,9 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# IsPublic controls whether an EIP is created and attached to the NAT Gateway.
+# UsePublicSubnet controls which imported subnet ID to use for placement.
+# Use !If [IsPublic, ValueIfTrue, ValueIfFalse] / !If [UsePublicSubnet, ...] in Resources.
 # -----------------------------------------------
 Conditions:
   IsPublic:         !Equals [!Ref ConnectivityType, "public"]
@@ -147,6 +153,8 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
+# ElasticIpAddress01 is only exported when ConnectivityType=public.
 # -----------------------------------------------
 Outputs:
   NatGatewayId01:

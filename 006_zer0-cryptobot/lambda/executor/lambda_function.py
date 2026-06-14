@@ -22,6 +22,7 @@ from datetime import datetime, timezone, timedelta
 # ── 定数 ──────────────────────────────────────────────────────────────────────
 MIN_INVEST_JPY  = 1000          # 最小発注額（円）
 MAX_POSITIONS   = 3
+MAX_PER_SIDE    = 2   # ロング・ショートそれぞれの最大同時保有数
 CANCEL_AFTER_S  = 86400         # 未約定注文キャンセルまでの秒数（24時間）
 BITBANK_PUB     = "https://public.bitbank.cc"
 BITBANK_REST    = "https://api.bitbank.cc/v1"
@@ -30,9 +31,9 @@ SSM_API_SECRET  = "/Zer0/CryptoBot/bitbank/api_secret"
 SSM_STATE       = "/Zer0/CryptoBot/state"
 
 # 取引履歴（確定損益）の保存先
-TRADES_BUCKET   = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
-TRADES_KEY      = "cryptobot/trades.jsonl"
-JST             = timezone(timedelta(hours=9))
+TRADES_BUCKET      = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
+TRADES_KEY_PREFIX  = "cryptobot/trades/"  # 1決済1ファイル: prefix/{ts}_{pair}_{ns}.json
+JST                = timezone(timedelta(hours=9))
 
 # TP/SL 倍率（v2.8: 全期間バックテストで勝率62%→73%に改善する組合せへ変更）
 TP1_MULT    = 1.75  # TP1 = entry ± ATR × 1.75
@@ -40,6 +41,7 @@ SL_MULT     = 2.0   # 初期SL = entry ∓ ATR × 2.0
 TRAIL_MULT  = 1.0   # トレーリング幅 = 極値 ± ATR × 1.0
 TP1_RATIO   = 0.3   # TP1 の数量割合
 TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
+SL_SLIPPAGE = 0.003 # stop_limit SL の price オフセット率（急落/急騰での未約定防止）
 
 # 証拠金維持率閾値（total_margin_balance_percentage = 残高/建玉時価総額×100）
 # 通常の運用値: 3ポジション満杯で約55〜70%。実口座で確認済み（2026-04-28）
@@ -60,6 +62,11 @@ PAIRS = {
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT = os.environ["SES_RECIPIENT_EMAIL"]
 AWS_REGION    = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
+
+# ── モジュールスコープ boto3 クライアント（再利用でコールドスタートを削減）──────
+_ssm = boto3.client("ssm", region_name=AWS_REGION)
+_ses = boto3.client("ses", region_name=AWS_REGION)
+_s3  = boto3.client("s3",  region_name=AWS_REGION)
 
 
 class OrderVerificationError(Exception):
@@ -88,8 +95,7 @@ def price_val(price_str: str) -> float:
 
 # ── SSM ───────────────────────────────────────────────────────────────────────
 def get_ssm(name: str, decrypt: bool = False) -> str:
-    ssm = boto3.client("ssm", region_name=AWS_REGION)
-    return ssm.get_parameter(Name=name, WithDecryption=decrypt)["Parameter"]["Value"]
+    return _ssm.get_parameter(Name=name, WithDecryption=decrypt)["Parameter"]["Value"]
 
 
 def load_state() -> dict:
@@ -101,10 +107,9 @@ def load_state() -> dict:
 
 
 def save_state(state: dict):
-    ssm = boto3.client("ssm", region_name=AWS_REGION)
     for attempt in range(1, 4):
         try:
-            ssm.put_parameter(
+            _ssm.put_parameter(
                 Name=SSM_STATE, Value=json.dumps(state),
                 Type="String", Overwrite=True,
             )
@@ -144,13 +149,10 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
         "estimated":   estimated,
     }
     try:
-        s3 = boto3.client("s3", region_name=AWS_REGION)
-        try:
-            body = s3.get_object(Bucket=TRADES_BUCKET, Key=TRADES_KEY)["Body"].read().decode("utf-8")
-        except s3.exceptions.NoSuchKey:
-            body = ""
-        body += json.dumps(record, ensure_ascii=False) + "\n"
-        s3.put_object(Bucket=TRADES_BUCKET, Key=TRADES_KEY, Body=body.encode("utf-8"))
+        ts  = datetime.now(JST).strftime("%Y%m%dT%H%M%S")
+        key = f"{TRADES_KEY_PREFIX}{ts}_{pair}_{time.time_ns()}.json"
+        _s3.put_object(Bucket=TRADES_BUCKET, Key=key,
+                       Body=json.dumps(record, ensure_ascii=False).encode("utf-8"))
         log(f"{pair}: 取引履歴記録 {reason} pnl={pnl:+,.1f}円")
     except Exception as e:
         log(f"{pair}: 取引履歴記録失敗（取引処理は継続）: {e}")
@@ -165,8 +167,7 @@ def send_email(subject: str, body: str):
         + "</body></html>"
     )
     try:
-        ses = boto3.client("ses", region_name=AWS_REGION)
-        ses.send_email(
+        _ses.send_email(
             Source=SES_SENDER,
             Destination={"ToAddresses": [SES_RECIPIENT]},
             Message={
@@ -409,11 +410,9 @@ def get_available_margin(bb: BitbankClient, pair: str | None = None) -> float:
                 value = float(balances[0].get("long", "0"))
             log(f"新規建て可能額({pair or balances[0]['pair']}): {value:,.0f}円")
             return value
-        # フォールバック: total_margin_balance × 2（レバレッジ倍率）
-        total = float(margin.get("total_margin_balance", "0"))
-        value = total * 2
-        log(f"新規建て可能額（証拠金×2）: {value:,.0f}円")
-        return value
+        # フォールバック: available_balances が取れない場合は新規建てを抑制
+        log("available_balances 取得不可 → 新規建て抑制のため 0 を返す")
+        return 0.0
     except Exception as e:
         log(f"新規建て可能額取得失敗: {e}")
         return 0.0
@@ -466,8 +465,8 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
 def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     """証拠金維持率を確認する。
     - status が CALL/LOSSCUT: 緊急成行決済
-    - total_margin_balance_percentage が 120%以下: 緊急成行決済
-    - 150%以下: 警告メール送信（処理継続）
+    - total_margin_balance_percentage が MARGIN_EMRG_PCT(30%)以下: 緊急成行決済
+    - MARGIN_WARN_PCT(50%)以下: 警告メール送信（処理継続）
     - 建玉なし(null) / 取得失敗: スキップして True を返す"""
     try:
         margin = bb.get_margin_status()
@@ -538,8 +537,13 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
 
                 if status == "FULLY_FILLED":
                     log(f"{pair}({direction}): エントリー約定 → TP1/SL 発注")
-                    entry     = float(order["average_price"])
-                    amount    = float(order["executed_amount"])
+                    avg_price   = order.get("average_price")
+                    exec_amount = order.get("executed_amount")
+                    if not avg_price or not exec_amount:
+                        log(f"{pair}({direction}): 約定情報欠落（avg={avg_price}, amt={exec_amount}）→ スキップ")
+                        continue
+                    entry     = float(avg_price)
+                    amount    = float(exec_amount)
                     atr_ratio = pos["atr_jpy"] / pos["entry_price_signal"]
                     atr_jpy   = atr_ratio * entry
 
@@ -558,12 +562,14 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                             round_price(tp1_price,   cfg["price_prec"]),
                                             close_side, position_side=direction)
                     verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
-                    sl_price_str = round_price(sl_price, cfg["price_prec"])
+                    sl_trigger_str = round_price(sl_price, cfg["price_prec"])
+                    sl_limit_f     = sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
+                    sl_limit_str   = round_price(sl_limit_f, cfg["price_prec"])
                     o_sl  = bb.create_order(pair,
                                             round_amount(trail_amount, cfg["amount_prec"]),
-                                            sl_price_str,
+                                            sl_limit_str,
                                             close_side, position_side=direction,
-                                            trigger_price=sl_price_str)
+                                            trigger_price=sl_trigger_str)
                     verify_order(bb, pair, o_sl["order_id"], "初期SL注文（stop_limit）")
 
                     pos.update({
@@ -643,12 +649,14 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         trail_amount = pos["trail_amount"]
                         atr_jpy      = pos["atr_jpy"]
 
-                        trail_sl_price = entry
-                        trail_sl_str   = round_price(trail_sl_price, cfg["price_prec"])
+                        trail_sl_price    = entry
+                        trail_sl_str      = round_price(trail_sl_price, cfg["price_prec"])
+                        trail_limit_f     = trail_sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
+                        trail_limit_str   = round_price(trail_limit_f, cfg["price_prec"])
                         o_trail = bb.create_order(
                             pair,
                             round_amount(trail_amount, cfg["amount_prec"]),
-                            trail_sl_str,
+                            trail_limit_str,
                             close_side, position_side=direction,
                             trigger_price=trail_sl_str,
                         )
@@ -787,10 +795,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue
+                                    new_trail_limit_str = round_price(new_trail_f * (1 - SL_SLIPPAGE), cfg["price_prec"])
                                     new_order = bb.create_order(
                                         pair,
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
-                                        new_trail_str,
+                                        new_trail_limit_str,
                                         "sell", position_side="long",
                                         trigger_price=new_trail_str,
                                     )
@@ -816,10 +825,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue
+                                    new_trail_limit_str = round_price(new_trail_f * (1 + SL_SLIPPAGE), cfg["price_prec"])
                                     new_order = bb.create_order(
                                         pair,
                                         round_amount(pos["trail_amount"], cfg["amount_prec"]),
-                                        new_trail_str,
+                                        new_trail_limit_str,
                                         "buy", position_side="short",
                                         trigger_price=new_trail_str,
                                     )
@@ -873,11 +883,11 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
 
         direction  = sig.get("side", "long")
 
-        if direction == "long" and long_count >= 2:
-            log(f"{pair}: ロング上限({long_count}/2) → スキップ")
+        if direction == "long" and long_count >= MAX_PER_SIDE:
+            log(f"{pair}: ロング上限({long_count}/{MAX_PER_SIDE}) → スキップ")
             continue
-        if direction == "short" and short_count >= 2:
-            log(f"{pair}: ショート上限({short_count}/2) → スキップ")
+        if direction == "short" and short_count >= MAX_PER_SIDE:
+            log(f"{pair}: ショート上限({short_count}/{MAX_PER_SIDE}) → スキップ")
             continue
         cfg        = PAIRS[pair]
 

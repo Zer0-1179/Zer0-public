@@ -6,19 +6,17 @@ BTC 200EMAで市場方向（ロング/ショート）を判定、シグナルが
 
 import os
 import json
-import math
 import time
 import boto3
 import urllib.request
 import urllib.parse
 import urllib.error
-from datetime import datetime, timezone
 
 # ── 定数 ──────────────────────────────────────────────────────────────────────
 BINANCE_BASE   = "https://api.binance.com/api/v3/klines"
 BTC_SYMBOL     = "BTCUSDT"
 INTERVAL       = "4h"
-KLINES_LIMIT   = 201      # 200EMA 計算に必要な本数（末尾の未確定足を除外するため+1）
+KLINES_LIMIT   = 500      # 200EMA ウォームアップ用に余裕を持って取得（末尾の未確定足を除外するため+1）
 EMA_PERIOD     = 200
 ATR_PERIOD     = 8
 ST_MULT        = 2.5
@@ -35,6 +33,10 @@ SES_RECIPIENT = os.environ["SES_RECIPIENT_EMAIL"]
 EXECUTOR_NAME = os.environ["EXECUTOR_FUNCTION_NAME"]
 AWS_REGION    = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
 
+# ── モジュールスコープ boto3 クライアント ──────────────────────────────────────
+_ses    = boto3.client("ses",    region_name=AWS_REGION)
+_lambda = boto3.client("lambda", region_name=AWS_REGION)
+
 
 # ── ユーティリティ ────────────────────────────────────────────────────────────
 def log(msg: str):
@@ -50,8 +52,7 @@ def send_error_email(subject: str, body: str):
         + "</body></html>"
     )
     try:
-        ses = boto3.client("ses", region_name=AWS_REGION)
-        ses.send_email(
+        _ses.send_email(
             Source=SES_SENDER,
             Destination={"ToAddresses": [SES_RECIPIENT]},
             Message={
@@ -263,8 +264,7 @@ def lambda_handler(event, context):
     log(f"シグナル数: {len(signals)} → Executor invoke（メンテナンス含む）")
     try:
         payload = json.dumps({"signals": signals}).encode()
-        lambda_client = boto3.client("lambda", region_name=AWS_REGION)
-        lambda_client.invoke(
+        _lambda.invoke(
             FunctionName=EXECUTOR_NAME,
             InvocationType="Event",   # 非同期
             Payload=payload,

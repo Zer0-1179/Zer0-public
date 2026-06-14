@@ -32,6 +32,8 @@ Description: "Ingress rules for an existing Security Group. Deploy after cfn-sec
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups visually groups up to 3 ingress rules.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -80,6 +82,7 @@ Parameters:
       - stg
       - dev
       - prd
+    Description: "Deployment environment. Must match the Env used in cfn-security-group.yaml."
 
   SgSuffix:
     Type: String
@@ -87,6 +90,7 @@ Parameters:
     Description: "Must match the SgSuffix used in cfn-security-group.yaml."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Must match the ProjectName used in cfn-security-group.yaml."
 
   Ingress01Protocol:
     Type: String
@@ -164,6 +168,9 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# HasIngress02 / HasIngress03 skip optional rules when port is left empty.
+# HasIngress01Ipv6 adds a separate IPv6 rule for rule 1 when Ingress01CidrIpv6 is specified.
+# Use !If [ConditionName, ValueIfTrue, ValueIfFalse] to control conditional resources.
 # -----------------------------------------------
 Conditions:
   HasIngress02:      !Not [!Equals [!Ref Ingress02Port, ""]]
