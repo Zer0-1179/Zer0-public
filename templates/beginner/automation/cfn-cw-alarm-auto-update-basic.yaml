@@ -43,6 +43,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # ProjectName is used as a prefix for all resource names.
 # -----------------------------------------------
 Parameters:
@@ -57,6 +58,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # Lambda function (placeholder) + IAM role + EventBridge rules (EC2 + FSx).
 # After stack creation, upload lambda_function.py as a zip:
 #   curl -O https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates/advanced/automation/lambda_function.py
@@ -185,7 +187,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
 

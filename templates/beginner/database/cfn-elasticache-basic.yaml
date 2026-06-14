@@ -97,9 +97,10 @@ Parameters:
 # AtRestEncryptionEnabled uses the AWS-managed key at no additional cost.
 # TransitEncryptionEnabled encrypts data in transit (TLS).
 # NumCacheClusters: 1 creates a single-node cluster (no replication).
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # -----------------------------------------------
 Resources:
-  CacheSubnetGroup:
+  CacheSubnetGroup01:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
       CacheSubnetGroupName: !Sub "${ProjectName}-${Env}-redis-subnet"
@@ -108,10 +109,10 @@ Resources:
         - !Ref SubnetId01
         - !Ref SubnetId02
 
-  RedisCluster:
+  RedisCluster01:
     Type: AWS::ElastiCache::ReplicationGroup
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       ReplicationGroupId: !Sub "${ProjectName}-${Env}-redis"
       ReplicationGroupDescription: !Sub "${ProjectName}-${Env} Redis cluster"
@@ -122,7 +123,7 @@ Resources:
       AutomaticFailoverEnabled: false
       AtRestEncryptionEnabled: true
       TransitEncryptionEnabled: true
-      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      CacheSubnetGroupName: !Ref CacheSubnetGroup01
       SecurityGroupIds:
         - !Ref SecurityGroupId
       Tags:
@@ -133,16 +134,17 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
-  PrimaryEndpoint:
+  PrimaryEndpoint01:
     Description: "Redis primary endpoint address"
-    Value: !GetAtt RedisCluster.PrimaryEndPoint.Address
+    Value: !GetAtt RedisCluster01.PrimaryEndPoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryEndpoint"
 
-  PrimaryPort:
+  PrimaryPort01:
     Description: "Redis primary endpoint port"
-    Value: !GetAtt RedisCluster.PrimaryEndPoint.Port
+    Value: !GetAtt RedisCluster01.PrimaryEndPoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryPort"

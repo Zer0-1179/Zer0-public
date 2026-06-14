@@ -40,6 +40,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -80,6 +81,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # DeletionPolicy: Retain keeps the log group and its logs after stack deletion.
 # To add a second log group, copy the LogGroup01 block and rename it LogGroup02.
 # -----------------------------------------------
@@ -101,6 +103,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   LogGroupName01:

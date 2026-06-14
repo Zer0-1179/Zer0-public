@@ -47,12 +47,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Used as part of the file system name. Lowercase letters, numbers, and hyphens only."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -75,6 +76,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # Encrypted: true uses the AWS-managed key (no KMS cost).
 # PerformanceMode: generalPurpose is sufficient for most workloads.
 # -----------------------------------------------
@@ -108,6 +110,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   FileSystemId:

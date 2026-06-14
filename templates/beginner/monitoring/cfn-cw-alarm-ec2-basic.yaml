@@ -51,6 +51,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -86,6 +87,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # EvaluationPeriods * Period = 1 * 300s = 5 minutes before alarm fires.
 # To add a second alarm, copy the CpuAlarm01 block and rename it CpuAlarm02.
 # -----------------------------------------------
@@ -116,6 +118,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   AlarmName01:
