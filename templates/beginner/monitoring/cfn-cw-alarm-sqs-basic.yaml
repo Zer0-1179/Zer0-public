@@ -47,6 +47,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -82,6 +83,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # ApproximateAgeOfOldestMessage: age in seconds of the oldest message in the queue.
 # High values indicate the consumer is not processing messages fast enough.
 # -----------------------------------------------
@@ -109,6 +111,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   AlarmName01:

@@ -35,9 +35,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
-# AllowedValues restricts accepted input.
-# Default sets the fallback value when omitted.
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -65,6 +63,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # DeletionPolicy: Retain keeps the bucket after stack deletion.
 # Use SSEAlgorithm AES256 for AWS-managed encryption (no cost).
 # -----------------------------------------------
@@ -93,8 +92,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   BucketName:

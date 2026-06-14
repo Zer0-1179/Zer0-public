@@ -55,6 +55,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -90,6 +91,7 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # HTTPCode_ELB_5XX_Count: number of 5xx responses from the load balancer itself.
 # HTTPCode_Target_5XX_Count: number of 5xx responses from backend targets.
 # -----------------------------------------------
@@ -117,6 +119,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   AlarmName01:

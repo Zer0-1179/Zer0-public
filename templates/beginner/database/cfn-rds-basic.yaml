@@ -58,11 +58,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -129,9 +131,11 @@ Parameters:
 # Resources
 # StorageEncrypted: true uses the AWS-managed key (aws/rds) at no additional cost.
 # BackupRetentionPeriod: 7 keeps automated backups for 7 days.
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
+# DeletionPolicy: Snapshot creates a final snapshot before deletion to protect data.
 # -----------------------------------------------
 Resources:
-  DBSubnetGroup:
+  DbSubnetGroup01:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: !Sub "${ProjectName}-${Env}-rds subnet group"
@@ -144,10 +148,10 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
-  RdsInstance:
+  DbInstance01:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub "${ProjectName}-${Env}-rds"
       DBInstanceClass: !Ref DBInstanceClass
@@ -163,7 +167,7 @@ Resources:
       PubliclyAccessible: false
       BackupRetentionPeriod: 7
       DeletionProtection: false
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBSubnetGroupName: !Ref DbSubnetGroup01
       VPCSecurityGroups:
         - !Ref SecurityGroupId
       Tags:
@@ -174,22 +178,23 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
-  DBInstanceEndpoint:
+  DbEndpoint01:
     Description: "RDS endpoint address"
-    Value: !GetAtt RdsInstance.Endpoint.Address
+    Value: !GetAtt DbInstance01.Endpoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-Endpoint"
 
-  DBInstancePort:
+  DbPort01:
     Description: "RDS endpoint port"
-    Value: !GetAtt RdsInstance.Endpoint.Port
+    Value: !GetAtt DbInstance01.Endpoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-Port"
 
-  DBInstanceId:
+  DbInstanceId01:
     Description: "RDS instance identifier"
-    Value: !Ref RdsInstance
+    Value: !Ref DbInstance01
     Export:
       Name: !Sub "${AWS::StackName}-InstanceId"
