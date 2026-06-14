@@ -89,6 +89,8 @@ Parameters:
   TargetPort:
     Type: Number
     Default: 80
+    MinValue: 1
+    MaxValue: 65535
     Description: "Port the backend targets listen on."
 
   HealthCheckPath:
@@ -163,13 +165,13 @@ Outputs:
     Description: "ALB DNS name"
     Value: !GetAtt Alb01.DNSName
     Export:
-      Name: !Sub "${AWS::StackName}-DnsName"
+      Name: !Sub "${AWS::StackName}-LoadBalancerDnsName"
 
   AlbArn01:
     Description: "ALB ARN"
     Value: !Ref Alb01
     Export:
-      Name: !Sub "${AWS::StackName}-Arn"
+      Name: !Sub "${AWS::StackName}-LoadBalancerArn"
 
   TargetGroupArn01:
     Description: "Target group ARN"

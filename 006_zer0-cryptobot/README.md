@@ -38,7 +38,7 @@ EventBridge Scheduler（Analyzer: 4時間毎 / Executor: 30分毎）
   │     ├─ 決済時に取引履歴を S3 へ追記（確定損益を記録）
   │     └─ SSM State 更新
   │
-  ├─▶ FailureNotifier Lambda（DLQ トリガー）
+  ├─▶ FailureNotifier Lambda（Executor 非同期invoke 失敗時の OnFailure 先）
   │     └─ SES（エラーメール通知）
   │
   └─▶ WeeklySummary Lambda（毎週日曜 09:00 JST）
@@ -143,7 +143,7 @@ Executor が実行するたびに証拠金維持率を確認：
 | 状態管理         | AWS SSM Parameter Store（ポジション State・シグナル） |
 | 取引履歴         | Amazon S3（確定損益を JSONL で記録・週次集計に使用）  |
 | 通知             | Amazon SES（エラー通知・週次レポート）                |
-| 信頼性           | SQS DLQ + CloudWatch Alarm                            |
+| 信頼性           | Lambda EventInvokeConfig（非同期invoke失敗時にFailureNotifierへ自動通知・最大2回リトライ） |
 | データソース     | Binance API（REST）/ python-binance                   |
 | 取引所 API       | bitbank API（python-bitbankcc）                       |
 | IaC              | CloudFormation（22リソース全管理）                    |
@@ -157,7 +157,7 @@ Executor が実行するたびに証拠金維持率を確認：
 │   │   └── lambda_function.py
 │   ├── executor/        # 注文実行・SL管理
 │   │   └── lambda_function.py
-│   ├── failure_notifier/ # DLQ エラー通知
+│   ├── failure_notifier/ # 非同期invoke失敗時のエラー通知（OnFailure先）
 │   └── weekly_summary/  # 週次レポート
 ├── backtest/
 │   └── backtest.py      # 5年バックテスト

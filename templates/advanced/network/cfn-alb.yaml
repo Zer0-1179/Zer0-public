@@ -34,6 +34,8 @@ Description: "Application Load Balancer with Target Group. Supports HTTP and opt
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups visually separates General / Target Group / Stickiness / Attributes / HTTPS sections.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -83,6 +85,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -93,6 +96,7 @@ Parameters:
       - stg
       - dev
       - prd
+    Description: "Deployment environment. Used as part of the resource name."
 
   SgSuffix:
     Type: String
@@ -220,6 +224,11 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# IsInternetFacing selects public vs. private subnets for the ALB.
+# HasHttps switches HttpListener01 between forward and HTTP_301 redirect; creates HttpsListener01.
+# IsStickinessEnabled / IsLbCookie control target group stickiness attributes.
+# IsDeletionProtectionEnabled / IsAccessLogsEnabled set ALB-level attributes.
+# Use !If [ConditionName, ValueIfTrue, ValueIfFalse] in Resources.
 # -----------------------------------------------
 Conditions:
   IsInternetFacing:            !Equals [!Ref Scheme, "internet-facing"]
@@ -231,6 +240,10 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# AlbTargetGroup01: registered targets and health check settings.
+# Alb01: internet-facing or internal ALB; selects subnets via IsInternetFacing.
+# HttpListener01: port 80 — forwards to TG when HTTP-only; redirects 301 to HTTPS when HasHttps.
+# HttpsListener01: port 443 with TLS13 policy — created only when CertificateArn is provided.
 # -----------------------------------------------
 Resources:
   AlbTargetGroup01:
@@ -348,6 +361,8 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Export Names use parameter values (not StackName) for predictable cross-stack references.
+# Use Fn::ImportValue !Sub "${ProjectName}-${Env}-alb-${AlbSuffix}-<Key>" in downstream stacks.
 # -----------------------------------------------
 Outputs:
   AlbArn01:

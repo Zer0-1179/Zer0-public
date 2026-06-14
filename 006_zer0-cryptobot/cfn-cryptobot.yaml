@@ -196,19 +196,19 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/Zer0-CryptoBot-Analyzer
-      RetentionInDays: 1
+      RetentionInDays: 30
 
   ExecutorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/Zer0-CryptoBot-Executor
-      RetentionInDays: 1
+      RetentionInDays: 30
 
   FailureNotifierLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/Zer0-CryptoBot-FailureNotifier
-      RetentionInDays: 1
+      RetentionInDays: 30
 
   # ── Lambda: Analyzer ──────────────────────────────────────────────────────
   AnalyzerFunction:
@@ -242,6 +242,9 @@ Resources:
       MemorySize: 256
       Role: !GetAtt ExecutorRole.Arn
       Description: "Zer0-CryptoBot: bitbank注文発注・ポジション管理"
+      # Analyzer の非同期invoke と EventBridge の2系統から起動されるため、
+      # 同時実行で SSM State が後勝ち上書きされ孤児ポジションが発生するのを防ぐ
+      ReservedConcurrentExecutions: 1
       Environment:
         Variables:
           SES_SENDER_EMAIL: !Ref SenderEmail

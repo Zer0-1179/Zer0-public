@@ -38,6 +38,7 @@ Description: "Network Load Balancer with Target Group. Supports TCP, UDP, TLS, a
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:

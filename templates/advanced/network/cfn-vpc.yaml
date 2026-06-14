@@ -104,13 +104,6 @@ Mappings:
     "02": { Index: 1 }
 
 # -----------------------------------------------
-# Conditions
-# Boolean flags derived from parameter values.
-# -----------------------------------------------
-Conditions:
-  IsPrd: !Equals [!Ref Env, prd]
-
-# -----------------------------------------------
 # Resources
 # Transform: AWS::LanguageExtensions enables Fn::ForEach.
 # Fn::ForEach iterates over ["01", "02"] to create subnets and
