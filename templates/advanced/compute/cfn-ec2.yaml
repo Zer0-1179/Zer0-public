@@ -247,7 +247,7 @@ Resources:
   Ec2InstanceRole01:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-role-01"
+      RoleName: !Sub "${ProjectName}-${Env}-ec2-${InstanceSuffix}-role"
       Description: "EC2 instance role for SSM Session Manager and CloudWatch Agent"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -317,6 +317,8 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
+# PublicIp is empty when the instance is placed in a private subnet.
 # -----------------------------------------------
 Outputs:
   Ec2InstanceId01:
