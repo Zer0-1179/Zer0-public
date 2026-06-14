@@ -43,6 +43,7 @@ Description: "ECS Fargate service with task definition, execution role, and ALB 
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -85,6 +86,8 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Values passed in at deploy time. AllowedValues and Defaults are documented per-parameter.
+# Cluster/VPC/SG/ALB resources are imported via Fn::ImportValue using the stack naming convention.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -92,6 +95,7 @@ Parameters:
     Default: my-project
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Used as the resource name prefix (e.g. my-project)."
 
   Env:
     Type: String
@@ -100,6 +104,7 @@ Parameters:
       - stg
       - dev
       - prd
+    Description: "Deployment environment (stg / dev / prd)."
 
   ServiceSuffix:
     Type: String
@@ -252,6 +257,7 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [ConditionName, ValueIfTrue, ValueIfFalse] in Resources.
 # -----------------------------------------------
 Conditions:
   HasTaskRole:            !Not [!Equals [!Ref TaskRoleArn, ""]]

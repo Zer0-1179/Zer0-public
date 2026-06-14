@@ -79,7 +79,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      RepositoryName: !Sub "${ProjectName}-${Env}-${RepoSuffix}"
+      RepositoryName: !Sub "${ProjectName}-${Env}-ecr-${RepoSuffix}"
       EncryptionConfiguration:
         EncryptionType: AES256
       ImageTagMutability: IMMUTABLE
@@ -99,10 +99,10 @@ Outputs:
     Description: "ECR repository name"
     Value: !Ref EcrRepository01
     Export:
-      Name: !Sub "${AWS::StackName}-RepositoryName01"
+      Name: !Sub "${AWS::StackName}-RepositoryName"
 
   RepositoryUri01:
     Description: "ECR repository URI (use for docker push)"
     Value: !GetAtt EcrRepository01.RepositoryUri
     Export:
-      Name: !Sub "${AWS::StackName}-RepositoryUri01"
+      Name: !Sub "${AWS::StackName}-RepositoryUri"

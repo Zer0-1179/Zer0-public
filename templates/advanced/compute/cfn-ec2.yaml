@@ -31,6 +31,7 @@ Description: "EC2 instance with IAM role (SSM + CloudWatch), configurable OS, su
 
 # -----------------------------------------------
 # Metadata
+# Organizes the parameter input UI in the CloudFormation console.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -73,13 +74,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
-# Subnet and SG IDs are imported automatically using ProjectName + Env + SgSuffix.
+# Values passed in at deploy time. Subnet and SG IDs are imported automatically using ProjectName + Env + SgSuffix.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
-    Description: "Used as the Name tag prefix. Lowercase letters, numbers, and hyphens only."
+    Description: "Used as the resource name prefix (e.g. my-project). Lowercase letters, numbers, and hyphens only."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -224,6 +225,7 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [ConditionName, ValueIfTrue, ValueIfFalse] in Resources.
 # -----------------------------------------------
 Conditions:
   IsLinux:                !Equals [!Ref OsType, "Linux"]
@@ -236,6 +238,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# DeletionPolicy: not set (EC2 instance is deleted with the stack by default).
 # SubnetType and SubnetNumber are interpolated into the export name
 # to select the correct subnet (e.g. PublicSubnet01Id, PrivateSubnet02Id).
 # SG is resolved from {ProjectName}-{Env}-sg-{SgSuffix} stack.

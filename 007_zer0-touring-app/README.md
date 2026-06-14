@@ -320,13 +320,12 @@ OGP メタタグ付き HTML を返しアプリへリダイレクト。SNS シェ
 1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成（または既存選択）
 2. **Maps Platform → Directions API** を有効化
 3. 認証情報 → API キーを作成
-4. SSM に登録:
+4. Lambda 環境変数に設定:
 
 ```bash
-aws ssm put-parameter \
-  --name "/zer0-touring/google-maps-api-key" \
-  --value "YOUR_API_KEY" \
-  --type SecureString \
+aws lambda update-function-configuration \
+  --function-name zer0-touring-suggest \
+  --environment "Variables={BEDROCK_MODEL_ID=jp.anthropic.claude-haiku-4-5-20251001-v1:0,GOOGLE_MAPS_API_KEY=YOUR_API_KEY,DAILY_LIMIT=3}" \
   --region ap-northeast-1
 ```
 
@@ -337,11 +336,10 @@ aws ssm put-parameter \
 テスト時にIP制限（1日3回）を回避するための管理者トークン。
 
 ```bash
-# SSMに登録（任意の文字列）
-aws ssm put-parameter \
-  --name "/zer0-touring/admin-token" \
-  --value "YOUR_ADMIN_TOKEN" \
-  --type SecureString \
+# Lambda 環境変数に追加（GOOGLE_MAPS_API_KEY等と合わせて設定）
+aws lambda update-function-configuration \
+  --function-name zer0-touring-suggest \
+  --environment "Variables={BEDROCK_MODEL_ID=jp.anthropic.claude-haiku-4-5-20251001-v1:0,GOOGLE_MAPS_API_KEY=YOUR_GMAPS_KEY,DAILY_LIMIT=3,ADMIN_TOKEN=YOUR_ADMIN_TOKEN}" \
   --region ap-northeast-1
 
 # 使用方法（curl）
@@ -357,8 +355,8 @@ curl -X POST https://touring.zer0-infra.com/api/suggest \
 # Lambda ログ確認
 aws logs tail /aws/lambda/zer0-touring-suggest --follow --region ap-northeast-1
 
-# Google Maps 月間使用カウント確認
-aws ssm get-parameter --name "/zer0-touring/gmaps-usage" --region ap-northeast-1
+# Google Maps 月間使用カウント確認（DynamoDB管理）
+aws dynamodb get-item --table-name zer0-touring-ratelimit --key '{"pk":{"S":"gmaps#'$(date +%Y-%m)'"}}' --region ap-northeast-1
 
 # フロントエンド再デプロイ（コード変更後）
 cd 007_Zer0_TouringApp/frontend && npm run build && \
@@ -374,7 +372,7 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | 症状                             | 原因                             | 対処                                                                 |
 | -------------------------------- | -------------------------------- | -------------------------------------------------------------------- |
 | コース提案が返らない             | Bedrock モデルアクセス未承認     | AWS Console → Bedrock → モデルアクセスで Claude Haiku 4.5 を有効化   |
-| Google Maps の時間が表示されない | API キー未設定 or 枠超過         | SSM `/zer0-touring/google-maps-api-key` を確認。超過時は翌月自動復帰 |
+| Google Maps の時間が表示されない | API キー未設定 or 枠超過         | Lambda 環境変数 `GOOGLE_MAPS_API_KEY` を確認。超過時は翌月自動復帰   |
 | 1日3回制限に引っかかる（開発中） | IP レートリミット                | `X-Admin-Token` ヘッダーを付けてリクエスト                           |
 | GPS が取得できない（モバイル）   | HTTP 環境 or 権限拒否            | HTTPS（touring.zer0-infra.com）でアクセス。ブラウザの位置情報を許可  |
 | シェアURLが機能しない            | DynamoDB TTL 30日超過            | 再度コース提案 → シェアボタンから新しいURLを生成                     |
