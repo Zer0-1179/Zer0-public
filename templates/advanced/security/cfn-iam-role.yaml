@@ -70,7 +70,6 @@ Description: "IAM execution role for Lambda, EC2, ECS task, or ECS execution wit
 # -----------------------------------------------
 # Metadata
 # Organizes the parameter input UI in the CloudFormation console.
-# ParameterGroups groups parameters visually.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -95,9 +94,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
-# AllowedValues restricts accepted input.
-# Default sets the fallback value when omitted.
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -155,8 +152,7 @@ Parameters:
 
 # -----------------------------------------------
 # Mappings
-# Static reference tables for service principal and role name suffix per RoleType.
-# Usage: !FindInMap [RoleConfig, !Ref RoleType, Principal]
+# Static lookup table. Use !FindInMap [Table, Key, Item] to reference.
 # -----------------------------------------------
 Mappings:
   RoleConfig:
@@ -175,8 +171,7 @@ Mappings:
 
 # -----------------------------------------------
 # Conditions
-# Boolean flags derived from parameter values.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   IsLambda:               !Equals [!Ref RoleType, lambda]
@@ -188,6 +183,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # CAPABILITY_NAMED_IAM is required when deploying IAM resources with custom names.
 # ManagedPolicyArns: base policy is selected by RoleType; additional policies are optional.
 # !Ref AWS::NoValue inside a list removes that element from the list.
@@ -198,7 +194,9 @@ Resources:
 
   IamRole01:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
     Properties:
+      Description: "Execution role assumed by the service selected via RoleType."
       RoleName: !Sub
         - "${ProjectName}-${Env}-${Suffix}"
         - Suffix: !FindInMap [RoleConfig, !Ref RoleType, NameSuffix]
@@ -234,8 +232,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
 

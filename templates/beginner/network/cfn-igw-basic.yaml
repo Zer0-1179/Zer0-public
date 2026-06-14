@@ -50,6 +50,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
