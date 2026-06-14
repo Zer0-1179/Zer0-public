@@ -27,7 +27,6 @@ Description: "CloudWatch Alarms for Lambda - errors and throttles with WARNING/C
 # -----------------------------------------------
 # Metadata
 # Organizes the parameter input UI in the CloudFormation console.
-# ParameterGroups groups parameters visually.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -66,9 +65,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
-# AllowedValues restricts accepted input.
-# Default sets the fallback value when omitted.
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -152,8 +149,7 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
-# Boolean flags derived from parameter values.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   HasWarningAction:           !Not [!Equals [!Ref WarningActionArn, ""]]
@@ -164,6 +160,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # -----------------------------------------------
 Resources:
 
@@ -277,8 +274,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
 

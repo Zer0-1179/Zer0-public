@@ -40,11 +40,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Used as part of the role name. Lowercase letters, numbers, and hyphens only."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -66,13 +68,16 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # AWSLambdaBasicExecutionRole grants permission to write logs to CloudWatch.
 # To add more permissions, add managed policy ARNs to ManagedPolicyArns.
 # -----------------------------------------------
 Resources:
   LambdaRole01:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
     Properties:
+      Description: "Lambda execution role with basic CloudWatch Logs permissions."
       RoleName: !Sub "${ProjectName}-${Env}-lambda-${RoleSuffix}-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -91,6 +96,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   RoleName01:
