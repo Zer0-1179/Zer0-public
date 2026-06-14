@@ -83,6 +83,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -93,6 +94,7 @@ Parameters:
       - stg
       - dev
       - prd
+    Description: "Deployment environment. Used as part of the resource name."
 
   SgSuffix:
     Type: String
@@ -194,6 +196,8 @@ Parameters:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
+# IsInternetFacing selects public vs. private subnets. HasTls enables TLS termination at the NLB.
 # -----------------------------------------------
 Conditions:
   IsInternetFacing: !Equals [!Ref Scheme, "internet-facing"]
@@ -201,7 +205,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
-# TLS is terminated at the NLB; backend receives plain TCP.
+# Core AWS resources. TLS is terminated at the NLB; backend receives plain TCP.
 # -----------------------------------------------
 Resources:
   NlbTargetGroup01:
@@ -279,6 +283,8 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
+# Export Names use parameter values (not StackName) for predictable cross-stack references.
 # -----------------------------------------------
 Outputs:
   NlbArn01:

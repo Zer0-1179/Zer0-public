@@ -76,6 +76,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -94,7 +95,6 @@ Parameters:
     Description: "Must match the SgSuffix used in cfn-security-group.yaml."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
-    Description: "Must match the ProjectName used in cfn-security-group.yaml."
 
   Egress01Protocol:
     Type: String

@@ -49,7 +49,6 @@ Description: "ElastiCache Redis replication group with optional Multi-AZ replica
 # -----------------------------------------------
 # Metadata
 # Organizes the parameter input UI in the CloudFormation console.
-# ParameterGroups groups parameters visually.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -87,15 +86,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
-# AllowedValues restricts accepted input.
-# Default sets the fallback value when omitted.
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
-    Description: "Used as part of the replication group ID and subnet group name."
+    Description: "Project name used as a prefix for resource names (replication group ID and subnet group name)."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -195,8 +192,7 @@ Parameters:
 
 # -----------------------------------------------
 # Mappings
-# Static reference tables for snapshot retention per environment.
-# Usage: !FindInMap [EnvConfig, !Ref Env, SnapshotRetentionLimit]
+# Static lookup table. Use !FindInMap [Table, Key, Item] to reference.
 # -----------------------------------------------
 Mappings:
   EnvConfig:
@@ -209,8 +205,7 @@ Mappings:
 
 # -----------------------------------------------
 # Conditions
-# Boolean flags derived from parameter values.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   IsMultiNode:              !Not  [!Equals [!Ref NumCacheClusters, "1"]]
@@ -224,11 +219,10 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # SubnetGroup must reference subnets in at least 2 AZs for Multi-AZ support.
 # AutomaticFailoverEnabled and MultiAZEnabled require NumCacheClusters >= 2.
-# KmsKeyId is only applied when AtRestEncryptionEnabled is true.
-# Snapshot window: 18:00-19:00 UTC (03:00-04:00 JST).
-# Maintenance window: Sunday 19:00-20:00 UTC (04:00-05:00 JST).
+# Snapshot window: 18:00-19:00 UTC (03:00-04:00 JST). Maintenance: Sun 19:00-20:00 UTC.
 # -----------------------------------------------
 Resources:
 
@@ -248,6 +242,8 @@ Resources:
 
   ReplicationGroup01:
     Type: AWS::ElastiCache::ReplicationGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       ReplicationGroupId: !Sub "${ProjectName}-${Env}-redis-01"
       ReplicationGroupDescription: !Sub "${ProjectName} ${Env} Redis cluster"
@@ -286,8 +282,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # PrimaryEndpoint: use for both reads and writes (single node) or writes only (multi-node).
 # ReaderEndpoint: available only when NumCacheClusters >= 2; use for read-only operations.
 # -----------------------------------------------

@@ -32,8 +32,6 @@ Description: "Customer-managed KMS key for S3, EBS, RDS, EFS, CloudWatch Logs, S
 # -----------------------------------------------
 # Metadata
 # Organizes the parameter input UI in the CloudFormation console.
-# ParameterGroups groups parameters visually.
-# ParameterLabels overrides the display name shown to users.
 # -----------------------------------------------
 Metadata:
   AWS::CloudFormation::Interface:
@@ -51,9 +49,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
-# Values passed in at deploy time.
-# AllowedValues restricts accepted input.
-# Default sets the fallback value when omitted.
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -89,8 +85,7 @@ Parameters:
 
 # -----------------------------------------------
 # Mappings
-# Static lookup table for env-specific values.
-# Reference with: !FindInMap [TableName, Key, Item]
+# Static lookup table. Use !FindInMap [Table, Key, Item] to reference.
 # -----------------------------------------------
 Mappings:
   Config:
@@ -103,8 +98,7 @@ Mappings:
 
 # -----------------------------------------------
 # Conditions
-# Boolean flags derived from parameter values.
-# Used in Resources and Properties via: !If [ConditionName, IfTrue, IfFalse]
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   IsPrd:        !Equals [!Ref Env, prd]
@@ -112,6 +106,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # DeletionPolicy: Retain (prd) keeps the key after stack deletion.
 #                 Delete (dev) schedules key deletion with the stack.
 # PendingWindowInDays: minimum 7 days required before a key is deleted.
@@ -159,8 +154,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
-# Values available after stack creation.
-# Export allows other stacks to reference via !ImportValue.
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   KmsKeyArn01:

@@ -191,6 +191,7 @@ Parameters:
 
 # -----------------------------------------------
 # Mappings
+# Static lookup table. Use !FindInMap [Table, Key, Item] to reference.
 # -----------------------------------------------
 Mappings:
   Config:
@@ -203,6 +204,7 @@ Mappings:
 
 # -----------------------------------------------
 # Conditions
+# Boolean flags derived from parameters. Use !If [Condition, IfTrue, IfFalse] to branch.
 # -----------------------------------------------
 Conditions:
   IsPrd:          !Equals [!Ref Env, prd]
@@ -215,6 +217,7 @@ Conditions:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # -----------------------------------------------
 Resources:
   DynamoDbTable01:
@@ -278,6 +281,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Values available after stack creation. Use Fn::ImportValue to reference cross-stack.
 # -----------------------------------------------
 Outputs:
   TableName01:
