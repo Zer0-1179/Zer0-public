@@ -44,11 +44,13 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Defines input values passed at deploy time. AllowedValues constrain input.
 # -----------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: my-project
+    Description: "Project name used as a prefix for resource names."
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
 
@@ -75,10 +77,11 @@ Parameters:
 
 # -----------------------------------------------
 # Resources
+# Core AWS resources. DeletionPolicy is set per resource to control behavior on stack deletion.
 # To add a second email, copy the EmailSubscription01 block and rename it EmailSubscription02.
 # -----------------------------------------------
 Resources:
-  SnsTopic:
+  SnsTopic01:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub "${ProjectName}-${Env}-${TopicSuffix}"
@@ -93,7 +96,7 @@ Resources:
   EmailSubscription01:
     Type: AWS::SNS::Subscription
     Properties:
-      TopicArn: !Ref SnsTopic
+      TopicArn: !Ref SnsTopic01
       Protocol: email
       Endpoint: !Ref EmailAddress
 
