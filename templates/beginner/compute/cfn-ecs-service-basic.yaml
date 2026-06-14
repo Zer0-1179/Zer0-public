@@ -53,9 +53,15 @@ Metadata:
           - ContainerPort
           - Cpu
           - Memory
+      - Label:
+          default: "Service"
+        Parameters:
+          - DesiredCount
+          - LogRetentionDays
 
 # -----------------------------------------------
 # Parameters
+# Values passed in at deploy time. AllowedValues and Defaults are documented per-parameter.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -63,6 +69,7 @@ Parameters:
     Default: my-project
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Used as the resource name prefix (e.g. my-project)."
 
   Env:
     Type: String
@@ -101,6 +108,8 @@ Parameters:
   ContainerPort:
     Type: Number
     Default: 80
+    MinValue: 1
+    MaxValue: 65535
     Description: "Port the container listens on."
 
   Cpu:
@@ -124,6 +133,27 @@ Parameters:
       - "4096"
       - "8192"
     Description: "Fargate task memory in MiB."
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: "Number of task instances to run. Set to 0 to stop all tasks."
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues:
+      - 1
+      - 3
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 180
+      - 365
+    Description: "CloudWatch Logs retention period in days."
 
 # -----------------------------------------------
 # Resources
@@ -172,7 +202,7 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub "/ecs/${ProjectName}-${Env}-${ServiceSuffix}"
-      RetentionInDays: 30
+      RetentionInDays: !Ref LogRetentionDays
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -214,7 +244,7 @@ Resources:
       ServiceName: !Sub "${ProjectName}-${Env}-${ServiceSuffix}"
       Cluster: !Ref ClusterName
       TaskDefinition: !Ref TaskDefinition
-      DesiredCount: 1
+      DesiredCount: !Ref DesiredCount
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -231,6 +261,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
 # -----------------------------------------------
 Outputs:
   ServiceName:
