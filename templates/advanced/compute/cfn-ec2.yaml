@@ -235,6 +235,7 @@ Conditions:
   IsEbsOptimized:         !Equals [!Ref EbsOptimized, "true"]
   IsDetailedMonitoring:   !Equals [!Ref EnableDetailedMonitoring, "true"]
   IsTerminationProtected: !Equals [!Ref EnableTerminationProtection, "true"]
+  IsPublicSubnet:         !Equals [!Ref SubnetType, "Public"]
 
 # -----------------------------------------------
 # Resources
@@ -334,7 +335,8 @@ Outputs:
       Name: !Sub "${AWS::StackName}-PrivateIp"
 
   PublicIp01:
-    Description: "Public IP address (empty if placed in a private subnet)"
+    Condition: IsPublicSubnet
+    Description: "Public IP address (only available when SubnetType=Public)"
     Value: !GetAtt Ec2Instance01.PublicIp
     Export:
       Name: !Sub "${AWS::StackName}-PublicIp"

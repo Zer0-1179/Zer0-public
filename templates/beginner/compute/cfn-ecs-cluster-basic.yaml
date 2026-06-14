@@ -31,6 +31,7 @@ Metadata:
 
 # -----------------------------------------------
 # Parameters
+# Values passed in at deploy time. AllowedValues and Defaults are documented per-parameter.
 # -----------------------------------------------
 Parameters:
   ProjectName:
@@ -38,6 +39,7 @@ Parameters:
     Default: my-project
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Lowercase letters, numbers, and hyphens only."
+    Description: "Used as the resource name prefix (e.g. my-project)."
 
   Env:
     Type: String
@@ -56,7 +58,7 @@ Resources:
   EcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${ProjectName}-${Env}-cluster"
+      ClusterName: !Sub "${ProjectName}-${Env}-ecs-cluster"
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
@@ -68,6 +70,7 @@ Resources:
 
 # -----------------------------------------------
 # Outputs
+# Stack outputs available after deployment. Use Fn::ImportValue !Sub "${AWS::StackName}-<Key>" for cross-stack references.
 # -----------------------------------------------
 Outputs:
   ClusterName:
