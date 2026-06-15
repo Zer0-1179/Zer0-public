@@ -242,9 +242,7 @@ Resources:
       MemorySize: 256
       Role: !GetAtt ExecutorRole.Arn
       Description: "Zer0-CryptoBot: bitbank注文発注・ポジション管理"
-      # NOTE: ReservedConcurrentExecutions: 1 はアカウント上限(10)の制約で設定不可。
-      # Analyzer 非同期invoke と EventBridge 直接起動の同時実行リスクは低いため現状維持。
-      # 対応が必要な場合は Service Quota を 1000 に引き上げてから設定すること。
+      ReservedConcurrentExecutions: 1
       Environment:
         Variables:
           SES_SENDER_EMAIL: !Ref SenderEmail
