@@ -51,14 +51,14 @@ try {
         <p class="text-slate-400 mt-1 text-sm">{t('section.projects.sub')}</p>
       </div>
       <a href="/ja/projects/" class="text-accent text-sm hover:text-accent-light transition-colors hidden md:block">
-        実績をすべて見る →
+        {t('section.projects.link')}
       </a>
     </div>
     <div class="grid md:grid-cols-3 gap-5">
       {featured.map((p) => <ProjectCard project={p} />)}
     </div>
     <div class="mt-6 md:hidden">
-      <a href="/ja/projects/" class="text-accent text-sm hover:text-accent-light transition-colors">実績をすべて見る →</a>
+      <a href="/ja/projects/" class="text-accent text-sm hover:text-accent-light transition-colors">{t('section.projects.link')}</a>
     </div>
   </section>
 
@@ -98,7 +98,7 @@ try {
           <p class="text-slate-400 mt-1 text-sm">{t('section.articles.sub')}</p>
         </div>
         <a href="/ja/articles/" class="text-accent text-sm hover:text-accent-light transition-colors hidden md:block">
-          ブログをすべて見る →
+          {t('section.articles.link')}
         </a>
       </div>
       <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">

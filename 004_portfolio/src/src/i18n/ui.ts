@@ -33,6 +33,8 @@ export const ui = {
     'section.articles.sub': 'Zenn・noteで発信中',
     'section.templates': 'CFnテンプレート',
     'section.templates.sub': '実運用ベースのCloudFormationテンプレート集。パラメータを指定するだけで即デプロイ可能。',
+    'section.projects.link': '実績をすべて見る →',
+    'section.articles.link': 'ブログをすべて見る →',
     'section.templates.link': 'テンプレートをすべて見る →',
 
     'project.tech': '使用技術',
@@ -101,6 +103,8 @@ export const ui = {
     'section.articles.sub': 'Sharing on Zenn & note',
     'section.templates': 'CFn Templates',
     'section.templates.sub': 'Production-based CloudFormation templates — deploy instantly with just your parameters.',
+    'section.projects.link': 'All Projects →',
+    'section.articles.link': 'All Articles →',
     'section.templates.link': 'Browse all templates →',
 
     'project.tech': 'Tech Stack',
