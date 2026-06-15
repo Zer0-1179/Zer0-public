@@ -9,6 +9,11 @@ HISTORY_PARAM = "/xposter/posted-history"
 MAX_USED_URLS       = 28
 MAX_USED_TYPES      = 6
 MAX_ARTICLE_AGE_DAYS = 14
+TWEET_MAX_LEN       = 280
+
+# boto3クライアントはコールドスタート時に1度だけ生成して使い回す（関数内生成を避ける）
+SSM     = boto3.client("ssm")
+BEDROCK = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
 
 RSS_FEEDS = [
     {"url": "https://aws.amazon.com/jp/new/feed/", "source": "aws_news", "label": "AWS公式ニュース"},
@@ -372,8 +377,23 @@ JSONのみを出力する。説明・修正理由は一切書かない。
         return tweets
     if not checked:
         return tweets
+    # 検証でツイート数が変わった場合は連投構造が壊れるため草案を採用する
+    if len(checked) != len(tweets):
+        print(f"[Verify] スレッド件数が変化（{len(tweets)}→{len(checked)}）。草案をそのまま使用")
+        return tweets
     print("[Verify] スレッド事実確認" + ("で修正あり" if checked != tweets else "OK（修正なし）"))
     return checked
+
+
+def clamp_tweet(text: str, max_len: int = TWEET_MAX_LEN) -> str:
+    """ツイートをmax_len以内に収める。文末記号で自然に切れる位置を優先する。"""
+    if len(text) <= max_len:
+        return text
+    cut = text[:max_len]
+    idx = max(cut.rfind(s) for s in "。！？!?…〜笑")
+    if idx >= max_len // 2:
+        return cut[:idx + 1]
+    return cut[:max_len - 1] + "…"
 
 
 def post_tweet(auth, text: str, reply_to: str = None) -> str:
@@ -612,8 +632,7 @@ JSONのみ: {{"tweets": ["1ツイート目", "2ツイート目", "3ツイート�
 
 
 def get_ssm(name):
-    ssm = boto3.client("ssm")
-    return ssm.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"]
+    return SSM.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"]
 
 
 def fetch_rss(sources):
@@ -660,7 +679,7 @@ def lambda_handler(event, context):
     with_url = slot["with_url"]
 
     prefix = os.environ.get("SSM_PREFIX", "/xposter")
-    ssm    = boto3.client("ssm")
+    ssm    = SSM
 
     # SSMから投稿履歴を読み込む
     history = load_history(ssm)
@@ -728,15 +747,19 @@ def lambda_handler(event, context):
     article_text = fetch_article_text(main["url"])
 
     prompt  = build_prompt(post_type, main, news_text, article_text)
-    bedrock = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
+    bedrock = BEDROCK
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
 
     if post_type == "thread_tips":
         # ── スレッド投稿：フック → 本文 → 締め＋URL の連投 ──
         tweets = generate_thread(bedrock, prompt)
         tweets = verify_thread(bedrock, tweets, main["title"], article_text)
+        # 各ツイートを280文字以内にクランプ（モデル出力が上限超過しX APIに拒否されるのを防ぐ）
+        tweets = [clamp_tweet(t) for t in tweets]
         # 外部リンクは本文1ツイート目に入れるとリーチが抑制されるため最終ツイートにのみ付ける
-        tweets[-1] = f"{tweets[-1]}\n{main['url']}"
+        # URL分（改行+URL）を差し引いた長さに本文をクランプしてから付加する
+        url_suffix = f"\n{main['url']}"
+        tweets[-1] = clamp_tweet(tweets[-1], TWEET_MAX_LEN - len(url_suffix)) + url_suffix
         preview = "\n---\n".join(tweets)
         print(f"[Tweet] スレッド{len(tweets)}件\n{preview}")
 
@@ -767,12 +790,9 @@ def lambda_handler(event, context):
         max_len = 100 if slot_key == "morning" else 160
         body = verify_tweet(bedrock, body, main["title"], article_text, max_len)
 
-        max_body = 280 - len(suffix) - 1
-        if len(body) > max_body:
-            # 文の途中でぶった切れないよう、直近の文末記号まで戻って切る
-            cut = body[:max_body]
-            idx = max(cut.rfind(s) for s in "。！？!?…〜笑")
-            body = cut[:idx + 1] if idx >= max_body // 2 else cut[:max_body - 1] + "…"
+        # ハッシュタグ分を差し引いた長さに本文をクランプ（文末記号で自然に切る）
+        max_body = TWEET_MAX_LEN - len(suffix)
+        body = clamp_tweet(body, max_body)
         tweet = f"{body}{suffix}"
         print(f"[Tweet]\n{tweet}\n[文字数] {len(tweet)}")
 

@@ -172,9 +172,10 @@ def _draw_diagram(
             cluster['w'], cluster['h'],
             boxstyle='round,pad=0.15',
             facecolor=cluster.get('color', '#EAF4FB'),
-            edgecolor=cluster.get('edgecolor', '#8AAFCC'),
+            edgecolor=cluster.get('edgecolor', '#8AAFCC' if has_icon else '#AAAAAA'),
             linewidth=cluster.get('linewidth', 2.0 if has_icon else 1.5),
-            linestyle=cluster.get('linestyle', '-' if has_icon else '--'),
+            # プロジェクトルール: 点線は使わない。アイコン有無にかかわらず実線。
+            linestyle=cluster.get('linestyle', '-'),
             zorder=1,
         )
         ax.add_patch(rect)

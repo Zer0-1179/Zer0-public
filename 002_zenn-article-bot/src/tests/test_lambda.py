@@ -60,3 +60,26 @@ def test_get_recent_topics_invalid_json(monkeypatch):
 
     result = lambda_function.get_recent_topics()
     assert result == []
+
+
+def test_embed_cleanup_removes_single_brace_markers():
+    """PNG未生成時、単一波括弧 {DIAGRAM_N} マーカーが記事に残らないこと"""
+    article = "## はじめに\n本文\n\n{DIAGRAM_1}\n\n## 次\n{DIAGRAM_2}\n"
+    out = lambda_function._embed_image_placeholders(article, [], "Amazon S3")
+    assert "{DIAGRAM_1}" not in out
+    assert "{DIAGRAM_2}" not in out
+
+
+def test_embed_fallback_no_heading_does_not_raise():
+    """見出しが1つも無くてもIndexErrorを出さず画像を末尾に追記すること"""
+    article = "見出しのない本文だけのテキスト"
+    out = lambda_function._embed_image_placeholders(article, ["/tmp/x_1.png"], "Amazon S3")
+    assert "x_1.png" in out
+
+
+def test_embed_replaces_marker_with_placeholder():
+    """マーカーが画像プレースホルダーに置換されること"""
+    article = "## はじめに\n本文\n\n{DIAGRAM_1}\n\n## まとめ\n"
+    out = lambda_function._embed_image_placeholders(article, ["/tmp/diagram_1.png"], "Amazon S3")
+    assert "{DIAGRAM_1}" not in out
+    assert "diagram_1.png" in out
