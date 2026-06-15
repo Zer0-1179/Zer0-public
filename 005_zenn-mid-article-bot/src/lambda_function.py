@@ -37,9 +37,26 @@ OUTPUT_DIR = os.environ.get(
 S3_BUCKET  = os.environ.get("S3_BUCKET", "zer0-dev-s3")
 S3_PREFIX  = "zenn-mid-articles"
 
+# 出力フォルダの保持上限（超過分は古いものから削除）。
+# Lambda の /tmp はウォームスタート間で永続するため、削除しないとディスクが逼迫する。
+OUTPUT_KEEP_MAX = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
+
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/mid-article-bot/recent-topics"
 RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "4"))
+
+# ─── Bedrock 呼び出しパラメータ（定数化） ────────────────────────────────────
+BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
+TOPIC_SELECT_MAX_TOKENS   = 20        # トピックID（短い文字列）の選択用
+ARTICLE_MAX_TOKENS        = 24000     # 記事本文生成用
+# Claude Sonnet 概算単価（USD / 100万トークン）
+SONNET_INPUT_COST_PER_MTOK  = 3.0
+SONNET_OUTPUT_COST_PER_MTOK = 15.0
+# AWS公式ドキュメント取得
+DOCS_FETCH_TIMEOUT_SEC = 15
+DOCS_MAX_CHARS         = 6000
+# CFn テンプレートサイズ上限（ValidateTemplate の TemplateBody 上限）
+CFN_TEMPLATE_MAX_BYTES = 51200
 
 # ─── 中級者向けトピック定義（16記事分 ≒ 8ヶ月分） ────────────────────────────
 AWS_TOPICS = [
@@ -477,7 +494,7 @@ aws cloudformation describe-stacks --stack-name my-stack
 
 # ─── AWS公式ドキュメント取得 ──────────────────────────────────────────────────
 
-def fetch_aws_docs(service_id: str, max_chars: int = 6000) -> str:
+def fetch_aws_docs(service_id: str, max_chars: int = DOCS_MAX_CHARS) -> str:
     """AWS公式ドキュメントを取得してプレーンテキストを返す。失敗時は空文字列。"""
     import re
     import urllib.request
@@ -488,7 +505,7 @@ def fetch_aws_docs(service_id: str, max_chars: int = 6000) -> str:
         return ""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible)"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=DOCS_FETCH_TIMEOUT_SEC) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
 
         html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
@@ -565,8 +582,8 @@ architectureとusecaseが交互になるように選ぶと良いですが、純�
         contentType="application/json",
         accept="application/json",
         body=json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 20,
+            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
+            "max_tokens": TOPIC_SELECT_MAX_TOKENS,
             "messages": [{"role": "user", "content": prompt}],
         }),
     )
@@ -576,10 +593,16 @@ architectureとusecaseが交互になるように選ぶと良いですが、純�
     usage = result.get("usage", {})
     print(f"[Bedrock/topic] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
 
+    # 完全一致を優先し、なければ ID を含む応答（句読点等の付与）も許容する
     for topic in available:
         if topic["id"] == topic_id:
             return topic
+    for topic in available:
+        if topic["id"] in topic_id:
+            print(f"[Bedrock/topic] 部分一致で解決: '{topic_id}' → {topic['id']}")
+            return topic
 
+    print(f"[Bedrock/topic] 一致なし（'{topic_id}'）。ランダム選択にフォールバックします")
     return random.choice(available)
 
 
@@ -610,8 +633,8 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
         contentType="application/json",
         accept="application/json",
         body=json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 24000,
+            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
+            "max_tokens": ARTICLE_MAX_TOKENS,
             "messages": [{"role": "user", "content": prompt}],
         }),
     )
@@ -623,7 +646,10 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
     is_truncated = stop_reason == "max_tokens"
     in_tok  = usage.get('input_tokens', 0)
     out_tok = usage.get('output_tokens', 0)
-    cost_usd = (in_tok * 3.0 + out_tok * 15.0) / 1_000_000  # Sonnet pricing (概算)
+    cost_usd = (
+        in_tok  * SONNET_INPUT_COST_PER_MTOK
+        + out_tok * SONNET_OUTPUT_COST_PER_MTOK
+    ) / 1_000_000  # Sonnet pricing (概算)
     print(f"[Bedrock/article] in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
     if is_truncated:
         print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
@@ -712,6 +738,21 @@ def _next_article_number(output_dir: str) -> str:
     return f"{len(existing) + 1:03d}"
 
 
+def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
+    """output/ 内の記事フォルダが keep 個を超えたら古いものを削除する。
+    Lambda の /tmp はウォームスタート間で永続するため、放置するとディスクが逼迫する。
+    """
+    import glob
+    import shutil
+    folders = sorted(glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*")))
+    for folder in (folders[:-keep] if len(folders) > keep else []):
+        try:
+            shutil.rmtree(folder)
+            print(f"古い記事フォルダを削除: {os.path.basename(folder)}")
+        except Exception as e:
+            print(f"古い記事フォルダ削除エラー（無視して続行）: {os.path.basename(folder)} — {e}")
+
+
 def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[str]]:
     """記事を MD ファイルに保存し、構成図 PNG も生成する。(mdパス, pngパスリスト) を返す"""
     output_dir = os.path.expanduser(OUTPUT_DIR)
@@ -752,6 +793,8 @@ published: false
 
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_content)
+
+    _cleanup_old_articles(output_dir)
 
     return md_path, png_paths
 
@@ -814,8 +857,8 @@ def validate_cfn_in_article(article_text: str) -> list[str]:
         return []
 
     for i, block in complete:
-        if len(block.encode('utf-8')) > 51200:
-            issues.append(f"ブロック{i}: テンプレートサイズ超過（{len(block.encode('utf-8')):,}バイト > 51,200バイト上限）")
+        if len(block.encode('utf-8')) > CFN_TEMPLATE_MAX_BYTES:
+            issues.append(f"ブロック{i}: テンプレートサイズ超過（{len(block.encode('utf-8')):,}バイト > {CFN_TEMPLATE_MAX_BYTES:,}バイト上限）")
             continue
         try:
             cfn.validate_template(TemplateBody=block)

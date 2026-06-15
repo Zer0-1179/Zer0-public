@@ -613,6 +613,11 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
             lines = result.split("\n")
             target = _FALLBACK_HEADINGS[img_idx] if img_idx < len(_FALLBACK_HEADINGS) else None
             h2_positions = [i for i, line in enumerate(lines) if line.startswith("## ")]
+            if not h2_positions:
+                # 見出しが1つも無い場合は末尾に追記（IndexError 回避）
+                print(f"[WARNING] DIAGRAM_{n} のマーカー・見出しが見つからないため末尾に挿入します")
+                result = result.rstrip() + "\n\n" + placeholder
+                continue
             if target:
                 matched = [i for i, line in enumerate(lines)
                            if line.startswith("## ") and target in line]
@@ -635,8 +640,14 @@ def _next_article_number(output_dir: str) -> str:
         current = int(resp["Parameter"]["Value"])
     except ssm.exceptions.ParameterNotFound:
         current = 0
+    except (ValueError, TypeError) as e:
+        print(f"[WARNING] 記事番号カウンターの値が不正です。0から再開します: {e}")
+        current = 0
     next_num = current + 1
-    ssm.put_parameter(Name=SSM_COUNTER_PATH, Value=str(next_num), Type="String", Overwrite=True)
+    try:
+        ssm.put_parameter(Name=SSM_COUNTER_PATH, Value=str(next_num), Type="String", Overwrite=True)
+    except Exception as e:
+        print(f"[WARNING] 記事番号カウンターの保存に失敗（番号は採番済みとして続行）: {e}")
     return f"{next_num:03d}"
 
 

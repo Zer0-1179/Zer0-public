@@ -35,6 +35,10 @@ CATEGORIES           = ["recipe", "jissoku", "hikaku", "shippai", "fukugyo", "qu
 MAX_CATEGORY_HISTORY = 4   # 6カテゴリ中、直近4件を避けて選択
 MAX_USED_URLS        = 28
 URL_HISTORY_DAYS     = 90   # 使用済みURLの保持期間（日）
+NO_HASHTAG_RATE      = 0.35 # Bot感軽減: この確率でハッシュタグなし投稿にする
+URL_REACTION_RATE    = 0.5  # 月曜にurl_reactionを選ぶ確率（残りはローテーション）
+URL_REACTION_LIMIT   = 100  # url_reaction本文の文字数上限（URLはリプライにぶら下げる）
+BODY_LIMIT           = 140  # 通常カテゴリ本文の文字数上限（ハッシュタグ・URL除く）
 
 # カテゴリ別ハッシュタグ（リストの場合は投稿ごとにランダム選択）
 HASHTAGS = {
@@ -274,8 +278,10 @@ def load_url_history() -> list:
         return []
 
 
-def save_url_history(used_urls: list, new_url: str):
+def save_url_history(new_url: str):
     """SSMに使用済みURL履歴をタイムスタンプ付きで保存する。
+    タイムスタンプを保つため、load_url_history が返す整形済みリストではなく
+    SSMから生データを再取得してから追記する。
     MAX_USED_URLS件を超えた場合は古い方から削除する。"""
     param = f"{SSM_PREFIX}/history/url_reaction_urls"
     # タイムスタンプを保持するため、SSMから生データを再取得
@@ -958,7 +964,7 @@ AIの回答を信じて上司に即レスしたら間違ってた
 # ツイート処理
 # ─────────────────────────────────────────────────────
 
-def trim_body_excluding_hashtags(text: str, limit: int = 140) -> str:
+def trim_body_excluding_hashtags(text: str, limit: int = BODY_LIMIT) -> str:
     """本文（ハッシュタグ除く）を140文字以内に収め、ハッシュタグと再結合する。"""
     lines      = text.strip().split('\n')
     hashtag_re = re.compile(r'^(#\S+(\s+#\S+)*)$')
@@ -1102,7 +1108,7 @@ def lambda_handler(event, context):
             print("[Trend] 絡められるキーワードなし → ローテーションカテゴリにフォールバック")
             category = pick_category(used_categories)
     elif weekday == 0:  # 月曜=0: 50%でurl_reaction、50%でローテーション（固定化による予測可能性を下げる）
-        if random.random() < 0.5:
+        if random.random() < URL_REACTION_RATE:
             used_urls   = load_url_history()
             url_article = fetch_url_reaction_article(used_urls)
             if url_article:
@@ -1165,14 +1171,14 @@ def lambda_handler(event, context):
 
     if category == "url_reaction":
         # 本文は100文字以内。URLは本文に入れるとリーチが抑制されるため、投稿後にリプライへぶら下げる
-        body  = trim_body_excluding_hashtags(raw, limit=100)
+        body  = trim_body_excluding_hashtags(raw, limit=URL_REACTION_LIMIT)
         htag  = pick_hashtag(body + " " + url_article["title"])
         tweet = f"{body}\n{htag}"
     else:
         tweet = trim_body_excluding_hashtags(raw)
 
     # Bot感軽減: 約35%はハッシュタグなしで投稿する
-    if random.random() < 0.35:
+    if random.random() < NO_HASHTAG_RATE:
         stripped = re.sub(r'[ \t]*#\S+', '', tweet).rstrip()
         if stripped:
             tweet = stripped
@@ -1200,8 +1206,11 @@ def lambda_handler(event, context):
     keywords  = extract_keywords(body_only)
     save_history(category, history, keywords)
     if category == "url_reaction":
-        save_url_history(used_urls, url_article["url"])
-    else:
+        save_url_history(url_article["url"])
+    elif category in CATEGORIES:
+        # trend / url_reaction は固定スロットでありローテーション対象外。
+        # used_categories に書き込むと dedup ウィンドウ（直近MAX_CATEGORY_HISTORY件）を
+        # ローテーション外カテゴリで圧迫してしまうため、CATEGORIES のものだけ記録する。
         save_used_categories(used_categories, category)
 
     return {
