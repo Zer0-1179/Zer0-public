@@ -195,9 +195,9 @@ python3 backtest/backtest.py --years 5 --multi  # BTC/ETH/SOL 複数同時
 
 ```bash
 # EventBridge を無効化してBot停止（ポジションは保持）
-aws scheduler update-schedule --name zer0-cryptobot-analyzer \
+aws scheduler update-schedule --name Zer0-CryptoBot-Schedule \
   --state DISABLED --region ap-northeast-1
-aws scheduler update-schedule --name zer0-cryptobot-executor \
+aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
   --state DISABLED --region ap-northeast-1
 ```
 
@@ -221,4 +221,4 @@ aws scheduler update-schedule --name zer0-cryptobot-executor \
 | 2026-05-28 | v2.6       | エントリーを成行注文に変更                                                                                                                                                                                                                                                                                                          |
 | 2026-06-10 | v2.7       | 取引履歴記録機能追加（決済時にS3へ確定損益を追記・週次レポートで実現損益/勝率/PF集計）。戦略改善4案（ADX・日足HTF・遅延エントリー・XRP追加）をバックテスト再検証し全て不採用、現行戦略維持を確定。deploy.sh の SIGPIPE バグ修正（`\| true`→`\|\| true`）                                                                            |
 | 2026-06-11 | v2.8       | 勝率向上のためTP/SL倍率を変更（TP1 2.0→1.75 / 初期SL 1.5→2.0 / トレール 1.5→1.0）。全期間バックテストで勝率62%→73%・PF1.93・5年資本成長+234%に改善                                                                                                                                                                                  |
-| 2026-06-15 | v2.9       | コードレビュー反映: CloudWatch Logs 保持を1日→30日に延長（Analyzer/Executor/FailureNotifier）。README/仕様書の「SQS DLQ」誇大記載を実態（Lambda EventInvokeConfig の OnFailure 通知）に修正。※H-1（Executor 同時実行制限）はアカウントの Lambda 同時実行上限（10）により `ReservedConcurrentExecutions` 設定不可・CFnコメントに記録 |
+| 2026-06-15 | v2.9       | コードレビュー反映: CloudWatch Logs 保持を関数別に適正化（Executor 3日 / Analyzer・FailureNotifier 7日）。README/仕様書の「SQS DLQ」誇大記載を実態（Lambda EventInvokeConfig の OnFailure 通知）に修正。Service Quota 引き上げ後に Executor へ `ReservedConcurrentExecutions: 1` を設定（多重起動による二重発注を防止） |

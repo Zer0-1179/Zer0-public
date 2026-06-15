@@ -117,7 +117,7 @@ DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/
 cd src && python -m pytest tests/ -v
 
 # Lambda 手動実行（DRY_RUN: S3保存・SES送信をスキップ）
-aws lambda invoke --function-name zenn-article-generator \
+aws lambda invoke --function-name ZennArticleGenerator \
   --payload '{"dry_run": true}' /tmp/out.json --region ap-northeast-1
 
 # S3 から生成記事をローカルに取得
