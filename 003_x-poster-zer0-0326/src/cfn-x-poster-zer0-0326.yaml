@@ -70,7 +70,7 @@ Resources:
       MemorySize: 128
       Handler: lambda_function.lambda_handler
       Role: !GetAtt PosterRole.Arn
-      Description: "BedrockでAI関連ツイートを生成し@Zer0_0326へ自動投稿するBot（カテゴリ: shigoto/fukugyo/jitsuwa/question/suji/url_reaction/trend）"
+      Description: "BedrockでAI関連ツイートを生成し@Zer0_0326へ自動投稿するBot（カテゴリ: recipe/jissoku/hikaku/shippai/fukugyo/question/url_reaction/trend）"
       Environment:
         Variables:
           BEDROCK_MODEL_ID: !Ref BedrockModelId
