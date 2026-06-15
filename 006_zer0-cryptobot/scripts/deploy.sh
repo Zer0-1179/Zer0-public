@@ -119,7 +119,9 @@ aws cloudformation describe-stacks \
   --output table
 
 # GitHubへ自動同期
-bash /root/Zer0/sync_to_public.sh
+if [ "${SKIP_SYNC:-0}" != "1" ]; then
+  bash /root/Zer0/sync_to_public.sh
+fi
 
 echo ""
 echo "=============================="
