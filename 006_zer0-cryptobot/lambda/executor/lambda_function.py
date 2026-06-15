@@ -721,12 +721,13 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                              tp1_fill_price, realized_pnl)
                         continue
 
-                    # TP1未約定: CANCELLED 検出（外部キャンセル・異常系）
-                    elif o_tp1.get("status") in ("CANCELLED", "FAILED_TO_ORDER"):
-                        log(f"{pair}({direction}): TP1注文がキャンセル済み → SL確認")
+                    # TP1未約定: 取消済/拒否 検出（外部キャンセル・異常系）
+                    # bitbank API の status 値（CANCELED は L 1個）に一致させること。
+                    elif o_tp1.get("status") in ("CANCELED_UNFILLED", "CANCELED_PARTIALLY_FILLED", "REJECTED"):
+                        log(f"{pair}({direction}): TP1注文がキャンセル/拒否済み → SL確認")
                         try:
                             o_sl_chk = bb.get_order(pair, pos["sl_order_id"])
-                            if o_sl_chk.get("status") in ("CANCELLED", "FAILED_TO_ORDER"):
+                            if o_sl_chk.get("status") in ("CANCELED_UNFILLED", "CANCELED_PARTIALLY_FILLED", "REJECTED"):
                                 send_email(
                                     f"【Zer0-CryptoBot】🚨注文喪失 - {pair.upper()}",
                                     f"TP1・SL注文がともに喪失しています。手動対応が必要です。\n\n"
