@@ -695,7 +695,9 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
     """
     if not png_paths:
         import re as _re
-        cleaned, n = _re.subn(r'\n*\{\{DIAGRAM_\d+\}\}\n*', '\n\n', article)
+        # format() 後は単一波括弧 {DIAGRAM_N}、未展開時は二重波括弧 {{DIAGRAM_N}} の
+        # どちらが残っていても除去できるようにパターンを両対応にする。
+        cleaned, n = _re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
         if n:
             print(f"[WARNING] PNG未生成のためDIAGRAMマーカー{n}件を除去しました")
         return cleaned
@@ -717,7 +719,10 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
             target_heading = _FALLBACK_HEADINGS[img_idx] if img_idx < len(_FALLBACK_HEADINGS) else None
             h2_positions = [i for i, line in enumerate(lines) if line.startswith("## ")]
             if not h2_positions:
-                continue  # 見出しが1つもない場合は挿入をスキップ
+                # 見出しが1つもない場合は末尾に追記（スキップせずプレースホルダーを保持）
+                print(f"[WARNING] DIAGRAM_{n} のマーカー・見出しが見つからないため末尾に挿入します")
+                result = result.rstrip() + "\n\n" + placeholder
+                continue
 
             if target_heading:
                 matched = [i for i, line in enumerate(lines)

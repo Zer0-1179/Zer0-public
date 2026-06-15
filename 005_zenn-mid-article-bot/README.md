@@ -138,3 +138,4 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 | 2026-05-20 | v1.4       | Lambda Function URL（AWS_IAM認証）追加。EventBridgeスケジュールを止めずに任意タイミングでテスト実行可能に                                                                   |
 | 2026-06-01 | v1.5       | CFn `validate_template` 検証機能追加・バグ修正5件（重複トピック・TemplateBody上限・HTMLエスケープ・CFn例外取得・マーカー自動除去）・処理時間計測・Bedrockコスト概算ログ追加 |
 | 2026-06-15 | v1.6       | コードレビュー反映。/tmp 記事フォルダの自動削除（最新5件保持）を002と同様に追加しウォームスタート時のディスク逼迫を防止・トピック選択の部分一致フォールバック追加・Bedrockパラメータ/単価/サイズ上限のマジックナンバーを定数化 |
+| 2026-06-15 | v1.7       | バグ修正2件：① PNG未生成時のDIAGRAMマーカー除去正規表現を `\{\{?DIAGRAM_\d+\}\}?` に修正（`str.format()` 後の単一波括弧も除去対象に）② 見出しなし記事で `_embed_image_placeholders` が画像を無言スキップする問題を修正（末尾追記＋WARNING ログに変更） |
