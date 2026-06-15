@@ -473,8 +473,20 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
             amount = pos.get("total_amount", 0)
         elif status == "trailing":
             amount = pos.get("trail_amount", 0)
+        elif status == "buy_pending":
+            # エントリーは成行のため buy_pending でも建玉は約定済みのことが多い。
+            # 実際の約定数量を取得して決済する（未約定なら 0 → スキップ）。
+            try:
+                entry_order = bb.get_order(pair, pos["buy_order_id"])
+                fill = order_fill(entry_order)
+                amount = fill[1] if fill else 0
+            except Exception as ge:
+                log(f"{pair}: buy_pending 約定数量取得失敗 → スキップ: {ge}")
+                continue
+            if amount <= 0:
+                continue  # 未約定エントリーはキャンセル済みで決済不要
         else:
-            continue  # buy_pending はエントリー取り消しのみで決済不要
+            continue
 
         if amount > 0:
             amount_str = round_amount(amount, cfg["amount_prec"])
@@ -651,14 +663,17 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         log(f"{pair}({direction}): TP1 約定 → トレーリングSL 開始")
 
                         sl_already_filled = False
+                        sl_cancel_ok      = False
                         try:
                             bb.cancel_order(pair, pos["sl_order_id"])
+                            sl_cancel_ok = True
                         except Exception as ce:
                             log(f"{pair}: 旧SL キャンセル失敗: {ce}")
                             try:
                                 sl_chk = bb.get_order(pair, pos["sl_order_id"])
                                 sl_fill = order_fill(sl_chk)
-                                if sl_chk.get("status") == "FULLY_FILLED" and sl_fill:
+                                sl_status = sl_chk.get("status")
+                                if sl_status == "FULLY_FILLED" and sl_fill:
                                     sl_price_f, sl_amount_f = sl_fill
                                     sl_already_filled = True
                                     log(f"{pair}: 旧SL 既に約定 → TP1+SL両方確定 → 終了")
@@ -674,10 +689,21 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                                  sl_amount_f,
                                                  remaining)
                                     to_delete.append(pair)
+                                elif sl_status in ("CANCELED_UNFILLED",
+                                                   "CANCELED_PARTIALLY_FILLED", "REJECTED"):
+                                    # 既に消えている → 二重発注の心配なし。移行続行可。
+                                    sl_cancel_ok = True
                             except Exception:
                                 pass
 
                         if sl_already_filled:
+                            continue
+
+                        # 旧SL(70%)がまだ板に残っている可能性がある状態でトレーリングSLを
+                        # 追加すると 70%+70% の二重決済注文になる。キャンセル未確認なら
+                        # 今サイクルは移行を見送り、次回再試行する（active のまま据え置き）。
+                        if not sl_cancel_ok:
+                            log(f"{pair}: 旧SL キャンセル未確認 → トレーリング移行を次回へ延期")
                             continue
 
                         entry        = pos["entry_price"]
