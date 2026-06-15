@@ -103,7 +103,7 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub "/aws/lambda/${PortfolioLambdaFunction}"
-      RetentionInDays: 7
+      RetentionInDays: 3
       Tags:
         - Key: Project
           Value: Zer0-portfolio

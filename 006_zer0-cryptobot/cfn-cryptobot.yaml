@@ -196,19 +196,19 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/Zer0-CryptoBot-Analyzer
-      RetentionInDays: 30
+      RetentionInDays: 7
 
   ExecutorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/Zer0-CryptoBot-Executor
-      RetentionInDays: 30
+      RetentionInDays: 3
 
   FailureNotifierLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/Zer0-CryptoBot-FailureNotifier
-      RetentionInDays: 30
+      RetentionInDays: 7
 
   # ── Lambda: Analyzer ──────────────────────────────────────────────────────
   AnalyzerFunction:
