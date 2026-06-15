@@ -41,11 +41,21 @@ const { defaultSrc = '/images/profile.jpg', alt = 'Profile' } = Astro.props;
   input.addEventListener('change', () => {
     const file = input.files?.[0];
     if (!file) return;
+    // Reject files larger than 1 MB to avoid localStorage quota errors
+    if (file.size > 1024 * 1024) {
+      alert('画像は 1 MB 以下にしてください。');
+      input.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       img.src = dataUrl;
-      localStorage.setItem(STORAGE_KEY, dataUrl);
+      try {
+        localStorage.setItem(STORAGE_KEY, dataUrl);
+      } catch {
+        // Ignore storage quota errors silently
+      }
     };
     reader.readAsDataURL(file);
   });
