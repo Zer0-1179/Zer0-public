@@ -21,7 +21,7 @@ Parameters:
   TradesBucket:
     Type: String
     Default: zer0-dev-s3
-    Description: S3 bucket for realized trade history (JSONL). Executor appends, WeeklySummary reads.
+    Description: S3 bucket for realized trade history (one object per trade). Executor puts, WeeklySummary lists and reads.
 
 Resources:
 

@@ -151,7 +151,13 @@ def save_state(state: dict):
 def record_trade(pair: str, direction: str, reason: str, entry: float,
                  exit_price: float, amount: float, position_id: str | None = None,
                  estimated: bool = False):
-    """確定損益を S3 の取引履歴（JSONL・1決済1行）に追記する。
+    """確定損益を S3 に「1決済 = 1オブジェクト」で書き込む（put_object のみ）。
+
+    キーは {prefix}{ts}_{pair}_{time_ns}.json でナノ秒サフィックス付き。
+    get→modify→put の read-modify-write を一切行わないため、Executor の
+    同時実行（現状は ReservedConcurrentExecutions:1 で抑止）やリトライが
+    重なっても既存レコードを上書き・消失させない（追記消失レースが構造的に発生しない）。
+    集計は Analyzer / WeeklySummary 側で prefix の list_objects により行う。
     記録失敗で取引処理を止めないこと（ログのみ残して継続）。
     estimated=True は成行クローズ等で約定価格が取れず現在価格で代用した記録。"""
     if direction == "long":
@@ -794,9 +800,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                 trail_order = bb.get_order(pair, pos["trail_sl_order_id"])
 
                 trail_status = trail_order.get("status", "")
-                if trail_status == "FULLY_FILLED":
-                    exit_p = float(trail_order["average_price"])
-                    exit_a = float(trail_order["executed_amount"])
+                trail_fill = order_fill(trail_order) if trail_status == "FULLY_FILLED" else None
+                if trail_status == "FULLY_FILLED" and not trail_fill:
+                    log(f"{pair}({direction}): トレーリングSL FULLY_FILLED だが約定情報欠落 → 次回再評価")
+                elif trail_status == "FULLY_FILLED":
+                    exit_p, exit_a = trail_fill
                     log(f"{pair}({direction}): トレーリングSL 約定 → 終了 exit={exit_p}")
                     remaining = get_available_margin(bb, pair)
                     record_trade(pair, direction, "トレーリングSL",
