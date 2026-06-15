@@ -22,6 +22,11 @@ ATR_PERIOD     = 8
 ST_MULT        = 2.5
 VOL_PERIOD     = 20
 
+# dst（ダブルSupertrend）フィルター: 遅いSupertrend（ATR20×4.0）が
+# シグナル方向と同方向であることを要求する（ダマシ転換の除外。バックテストで PF +0.18）。
+ST_SLOW_ATR    = 20
+ST_SLOW_MULT   = 4.0
+
 PAIRS = {
     "btc_jpy": {"binance": "BTCUSDT"},
     "eth_jpy": {"binance": "ETHUSDT"},
@@ -111,22 +116,24 @@ def ema(values: list[float], period: int) -> list[float]:
     return result
 
 
-def calc_atr(candles: list[dict]) -> list[float]:
-    """ATR（True Range の EWM 平滑化、ATR_PERIOD 期間）"""
+def calc_atr(candles: list[dict], period: int = ATR_PERIOD) -> list[float]:
+    """ATR（True Range の EWM 平滑化、period 期間）"""
     tr = []
     for i in range(1, len(candles)):
         h = candles[i]["high"]
         l = candles[i]["low"]
         pc = candles[i - 1]["close"]
         tr.append(max(h - l, abs(h - pc), abs(l - pc)))
-    return ema(tr, ATR_PERIOD)
+    return ema(tr, period)
 
 
-def calc_supertrend(candles: list[dict], atr_values: list[float]) -> dict:
+def calc_supertrend(candles: list[dict], atr_values: list[float],
+                    mult: float = ST_MULT) -> dict:
     """
-    Supertrend(ATR_PERIOD, ST_MULT) を計算する。
+    Supertrend(ATR, mult) を計算する。
     atr_values は candles と同じ長さ（candles[0] に対する ATR は None 扱い）。
     ATR の先頭 1 要素は欠損のため、candles[1:] と atr_values を合わせる。
+    mult を変えることで遅いSupertrend（dstフィルター用）も同関数で計算できる。
     """
     n = len(atr_values)
     highs  = [c["high"]  for c in candles[1:]]
@@ -134,8 +141,8 @@ def calc_supertrend(candles: list[dict], atr_values: list[float]) -> dict:
     closes = [c["close"] for c in candles[1:]]
 
     hl2         = [(h + l) / 2 for h, l in zip(highs, lows)]
-    basic_upper = [hl + ST_MULT * a for hl, a in zip(hl2, atr_values)]
-    basic_lower = [hl - ST_MULT * a for hl, a in zip(hl2, atr_values)]
+    basic_upper = [hl + mult * a for hl, a in zip(hl2, atr_values)]
+    basic_lower = [hl - mult * a for hl, a in zip(hl2, atr_values)]
 
     final_upper = basic_upper[:]
     final_lower = basic_lower[:]
@@ -184,6 +191,10 @@ def analyze_coin(symbol: str, direction: str) -> dict | None:
     atr_values = calc_atr(candles)
     st         = calc_supertrend(candles, atr_values)
 
+    # dst（ダブルSupertrend）フィルター用: 遅いSupertrend（ATR20×4.0）の方向
+    atr_slow_values = calc_atr(candles, ST_SLOW_ATR)
+    st_slow         = calc_supertrend(candles, atr_slow_values, ST_SLOW_MULT)
+
     if direction == "long":
         if last_close < last_ema200:
             log(f"  {symbol}: 200EMA以下 ({last_close:.4f} < {last_ema200:.4f}) → ロングスキップ")
@@ -202,6 +213,13 @@ def analyze_coin(symbol: str, direction: str) -> dict | None:
             dir_str = "赤継続" if st["direction"] == -1 else "緑"
             log(f"  {symbol}: ST赤転換なし ({dir_str})")
             return None
+
+    # dst フィルター: 遅いSupertrend（ATR20×4.0）がシグナル方向と同方向か
+    want_slow_dir = 1 if direction == "long" else -1
+    if st_slow["direction"] != want_slow_dir:
+        slow_str = "緑" if st_slow["direction"] == 1 else "赤"
+        log(f"  {symbol}: dstフィルター棄却（遅いSupertrend={slow_str} ≠ {direction}方向）")
+        return None
 
     vol_avg  = sum(volumes[-VOL_PERIOD - 1:-1]) / VOL_PERIOD
     last_vol = volumes[-1]

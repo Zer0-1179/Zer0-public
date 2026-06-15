@@ -5,6 +5,8 @@ Phase B: 新規シグナルの成行発注（動的ポジションサイズ）
 
 v2変更: 信用取引（ロング＋ショート）対応 / ペア変更: BTC/ETH/SOL
 v2.8変更: TP/SL倍率を変更（TP1 2.0→1.75 / SL 1.5→2.0 / トレール 1.5→1.0）
+v3.1変更: 現実コスト（スリッページ＋手数料）込みバックテストで最適化
+          （TP1 1.75→1.25 / SL 2.0→2.5 / トレール 1.0→0.75）
 """
 
 import os
@@ -35,10 +37,10 @@ TRADES_BUCKET      = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
 TRADES_KEY_PREFIX  = "cryptobot/trades/"  # 1決済1ファイル: prefix/{ts}_{pair}_{ns}.json
 JST                = timezone(timedelta(hours=9))
 
-# TP/SL 倍率（v2.8: 全期間バックテストで勝率62%→73%に改善する組合せへ変更）
-TP1_MULT    = 1.75  # TP1 = entry ± ATR × 1.75
-SL_MULT     = 2.0   # 初期SL = entry ∓ ATR × 2.0
-TRAIL_MULT  = 1.0   # トレーリング幅 = 極値 ± ATR × 1.0
+# TP/SL 倍率（v3.1: 現実コスト込みグリッドスイープ＋ウォークフォワード検証で最適化）
+TP1_MULT    = 1.25  # TP1 = entry ± ATR × 1.25
+SL_MULT     = 2.5   # 初期SL = entry ∓ ATR × 2.5
+TRAIL_MULT  = 0.75  # トレーリング幅 = 極値 ± ATR × 0.75（最大効果・OOSでも頑健）
 TP1_RATIO   = 0.3   # TP1 の数量割合
 TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
 SL_SLIPPAGE = 0.003 # stop_limit SL の price オフセット率（急落/急騰での未約定防止）
