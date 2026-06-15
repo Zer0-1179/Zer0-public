@@ -75,6 +75,22 @@ TP1_MULT   = 1.75
 SL_MULT    = 2.0
 TRAIL_MULT = 1.0
 
+# ── H1: 建値の現実化（スリッページ＋手数料）─────────────────
+# エントリースリッページ: ロングは不利方向（高く約定）、ショートも不利方向（安く約定）に 0.1%
+SLIP_RATE = 0.001
+# 往復手数料率（マイナス=コスト控除、プラス=リベート収入）
+#   BTC: bitbank信用 成行テイカー 往復 0.06%（Taker 0.03%×2 をコストとして控除）→ -0.0006
+#   ETH/SOL: メイカーリベート 往復 -0.08%（-0.04%×2 が収入）→ +0.0008
+FEE_RATES = {"BTC": -0.0006, "ETH": 0.0008, "SOL": 0.0008}
+
+# ── M1: ATRベース ポジションサイジング ───────────────────────
+RISK_PCT       = 0.015   # 1トレードのリスク額 = 資本 × 1.5%
+LEVERAGE       = 2.0     # bitbank信用 レバレッジ2倍上限
+MIN_LOT = {"BTC": 0.0001, "ETH": 0.01, "SOL": 0.1}   # bitbank最小発注単位
+
+# ── 検証用 全期間データ本数（H3/M3/L1で使用）─────────────────
+MAX_4H_CANDLES = 5 * 365 * 6   # 5年分（available data上限の目安）
+
 
 # ── Binance データ取得 ────────────────────────────────
 def fetch_klines(symbol: str, total: int = MAX_CANDLES, interval: str = INTERVAL) -> pd.DataFrame:
@@ -282,7 +298,8 @@ class Trade:
     strategy="old" : TP1ライン(ATR×2)で30%利確 + 残り70%トレーリングSL
     strategy="new" : TP1ライン到達をトリガーにして全量トレーリングSL開始
     """
-    def __init__(self, coin, entry_time, entry, atr, invest, direction="long", strategy="old", sig_type="flip"):
+    def __init__(self, coin, entry_time, entry, atr, invest, direction="long", strategy="old",
+                 sig_type="flip", fee_rate=0.0, amount=None):
         self.coin        = coin
         self.entry_time  = entry_time
         self.entry       = entry
@@ -291,6 +308,9 @@ class Trade:
         self.direction   = direction
         self.strategy    = strategy
         self.sig_type    = sig_type   # "flip"=転換シグナル / "pullback"=押し目継続シグナル
+        self.fee_rate    = fee_rate   # H1: 往復手数料率（マイナス=コスト、プラス=リベート収入）
+        self.entry_idx   = None       # H2: エントリーバーのタイムライン位置（平均保有期間算出用）
+        self.exit_idx    = None       # H2: 決済バーのタイムライン位置
 
         if direction == "long":
             self.tp1      = entry + atr * TP1_MULT
@@ -301,18 +321,28 @@ class Trade:
             self.sl       = entry + atr * SL_MULT
             self.trail_sl = entry + atr * SL_MULT
 
+        self.risk_per_unit = atr * SL_MULT   # H2: 1単位あたりのリスク幅（平均R算出用）
+
         self.tp1_filled  = False   # old: TP1約定フラグ / new: TP1ライン到達フラグ
         self.tp1_pnl     = 0.0
         self.trail_high  = entry   # ロング:最高値 / ショート:最安値 追跡
 
-        self.pnl         = 0.0
+        self.pnl         = 0.0     # 手数料控除後（ネット）損益
         self.exit_time   = None
         self.exit_reason = ""
         self.closed      = False
 
-        self.amount       = invest / entry
+        # M1: amount を明示指定（リスクベースサイジング）した場合はそれを使う。
+        #     未指定なら従来どおり invest/entry（固定均等割り）。
+        self.amount       = amount if amount is not None else invest / entry
         self.tp1_amount   = self.amount * 0.3   # old のみ使用
         self.trail_amount = self.amount * 0.7   # old のみ使用
+
+    def _fee_cost(self) -> float:
+        """H1: 往復手数料額。FEE_RATESがプラス(リベート)なら損益にプラス、
+        マイナス(コスト)なら損益から控除される額を返す（pnlに加算する形）。
+        往復＝建玉notional × fee_rate。建玉notional = entry × amount。"""
+        return self.entry * self.amount * self.fee_rate
 
     def check_bar(self, bar_high, bar_low, bar_time):
         """1バーを処理。TP/SLヒット時に損益を計算してcloseする。"""
@@ -324,6 +354,9 @@ class Trade:
             self._check_bar_fix(bar_high, bar_low, bar_time)
         else:
             self._check_bar_old(bar_high, bar_low, bar_time)
+        # H1: 約定時に往復手数料を控除（リベートはプラス）
+        if self.closed:
+            self.pnl += self._fee_cost()
 
     def _check_bar_old(self, bar_high, bar_low, bar_time):
         """旧戦略: TP1(30%利確) + トレーリングSL(70%)"""
@@ -492,13 +525,29 @@ class Trade:
 
 
 def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
-                 signal_mode: str = "flip", daily_lookup: dict | None = None) -> dict:
+                 signal_mode="flip", daily_lookup: dict | None = None,
+                 sizing_mode: str = "fixed", fee_on: bool = True,
+                 slippage_on: bool = True, same_dir_limit: int | None = None,
+                 start_ts=None, end_ts=None) -> dict:
     """
     全コインを統合してシミュレーションを実行する。
     BTCの200EMAで市場方向（ロング/ショート）を決定し、
     各コインのシグナルを方向に応じて収集・実行する。
 
     signal_mode:
+      str        : 単一フィルタ（後方互換）。下記いずれか。
+      list/tuple : H3 複合フィルタ。AND結合（例 ["flip_rsimom","flip_noext"]）。
+                   要素から "flip_" 接頭辞を除いた各フィルタを全て満たすシグナルのみ採用。
+
+    sizing_mode:
+      "fixed" : 従来の固定均等割り（資本×90%÷3）
+      "risk"  : M1 ATRベース。リスク額=資本×1.5% / 数量=リスク額÷(SL乗数×ATR)
+
+    fee_on / slippage_on : H1 手数料・スリッページの有効化（後方互換のため切替可能）
+    same_dir_limit       : M2 同一方向の同時建て上限（None=無制限）
+    start_ts / end_ts    : L1 ウォークフォワード用の期間スライス（この範囲のシグナルのみ建てる）
+
+    フィルタ一覧:
       "flip"          : 既存仕様。Supertrend転換の瞬間のみエントリー
       "flip_pullback" : 転換シグナルに加えて、進行中トレンドへの
                         押し目継続シグナル（20EMA逆抜け→順方向再クロス＋RSI整合）も収集
@@ -514,6 +563,50 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
     daily_lookup: {coin: {date: st_dir}}。flip_htf モードでのみ使用。
     """
     min_idx = EMA_PERIOD + VOL_PERIOD + 5
+
+    # ── signal_mode を「アクティブフィルタ集合」に正規化（H3 複合対応）──
+    #   str  : 単一モード（後方互換）。"flip" は素のフラグ。"flip_X" は X フィルタ1個。
+    #   list : 複数の "flip_X" を AND 結合。
+    if isinstance(signal_mode, (list, tuple, set)):
+        mode_list = list(signal_mode)
+    else:
+        mode_list = [signal_mode]
+    # "flip_X" → "X"。素の "flip" はフィルタなし。
+    active_filters = {m[len("flip_"):] for m in mode_list if m.startswith("flip_") and m != "flip"}
+    has_pullback = "pullback" in active_filters
+    has_late     = "late" in active_filters
+
+    def passes_filters(row, market_dir, coin, ts) -> bool:
+        """active_filters に含まれる各フィルタを全て満たすか（flip/late/pullbackを除く）"""
+        if "htf" in active_filters:
+            want_dir = 1 if market_dir == "long" else -1
+            if htf_direction((daily_lookup or {}).get(coin, {}), ts) != want_dir:
+                return False
+        if "adx" in active_filters:
+            if pd.isna(row["adx"]) or row["adx"] < ADX_THRESHOLD:
+                return False
+        if "rsimom" in active_filters:
+            if market_dir == "long" and not (row["rsi"] > RSI_MOM_LEVEL):
+                return False
+            if market_dir == "short" and not (row["rsi"] < RSI_MOM_LEVEL):
+                return False
+        if "noext" in active_filters:
+            if market_dir == "long" and not (row["rsi"] < RSI_OVEREXT_HI):
+                return False
+            if market_dir == "short" and not (row["rsi"] > RSI_OVEREXT_LO):
+                return False
+        if "macd" in active_filters:
+            if market_dir == "long" and not (row["macd"] > row["macd_sig"]):
+                return False
+            if market_dir == "short" and not (row["macd"] < row["macd_sig"]):
+                return False
+        if "dst" in active_filters:
+            if row["st_dir_slow"] != (1 if market_dir == "long" else -1):
+                return False
+        return True
+
+    # M2: 各コインのPF優先度（高い順に同方向2銘柄を選択）。BTC>ETH>SOL
+    coin_priority = {"BTC": 0, "ETH": 1, "SOL": 2}
 
     # BTC の ema200 と close を時刻→値の辞書として保持
     btc_ema200 = btc_df.set_index("open_time")["ema200"].to_dict()
@@ -538,11 +631,11 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                     continue
                 if row["st_flip_green"]:
                     sig_type = "flip"
-                elif (signal_mode == "flip_late"
+                elif (has_late
                       and row["st_dir"] == 1
                       and row["st_flip_green_recent"]):
                     sig_type = "late"
-                elif (signal_mode == "flip_pullback"
+                elif (has_pullback
                       and row["st_dir"] == 1
                       and row["ema20_cross_up"]
                       and row["rsi"] > 50
@@ -556,11 +649,11 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                     continue
                 if row["st_flip_red"]:
                     sig_type = "flip"
-                elif (signal_mode == "flip_late"
+                elif (has_late
                       and row["st_dir"] == -1
                       and row["st_flip_red_recent"]):
                     sig_type = "late"
-                elif (signal_mode == "flip_pullback"
+                elif (has_pullback
                       and row["st_dir"] == -1
                       and row["ema20_cross_down"]
                       and row["rsi"] < 50
@@ -570,42 +663,9 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                 else:
                     continue
 
-            # 上位足（日足）トレンド確認: コイン自身の日足ST方向がシグナル方向と一致するか
-            if signal_mode == "flip_htf":
-                want_dir = 1 if market_dir == "long" else -1
-                if htf_direction((daily_lookup or {}).get(coin, {}), ts) != want_dir:
-                    continue
-
-            # ADXトレンド強度フィルタ: レンジ相場（ADX低 = ダマシが多い）での転換シグナルを除外
-            if signal_mode == "flip_adx":
-                if pd.isna(row["adx"]) or row["adx"] < ADX_THRESHOLD:
-                    continue
-
-            # RSIモメンタム整合: 転換方向とRSIの勢いが一致するシグナルのみ採用
-            if signal_mode == "flip_rsimom":
-                if market_dir == "long" and not (row["rsi"] > RSI_MOM_LEVEL):
-                    continue
-                if market_dir == "short" and not (row["rsi"] < RSI_MOM_LEVEL):
-                    continue
-
-            # RSI過熱回避: 伸び切ったところでの転換シグナル（高値掴み/売られすぎ追随）を除外
-            if signal_mode == "flip_noext":
-                if market_dir == "long" and not (row["rsi"] < RSI_OVEREXT_HI):
-                    continue
-                if market_dir == "short" and not (row["rsi"] > RSI_OVEREXT_LO):
-                    continue
-
-            # MACD整合: MACDラインとシグナルラインの位置関係が転換方向と一致するもののみ
-            if signal_mode == "flip_macd":
-                if market_dir == "long" and not (row["macd"] > row["macd_sig"]):
-                    continue
-                if market_dir == "short" and not (row["macd"] < row["macd_sig"]):
-                    continue
-
-            # ダブルSupertrend: 同一足の遅いST(ATR20×4.0)の方向と一致するもののみ
-            if signal_mode == "flip_dst":
-                if row["st_dir_slow"] != (1 if market_dir == "long" else -1):
-                    continue
+            # 複合フィルタ（htf/adx/rsimom/noext/macd/dst）を AND で全通過するか
+            if not passes_filters(row, market_dir, coin, ts):
+                continue
 
             if pd.isna(row["vol_avg20"]) or row["volume"] <= row["vol_avg20"]:
                 continue
@@ -631,13 +691,15 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
 
     # 統合タイムライン（全コインの全バー）
     all_ts = sorted(set(ts for df in coin_dfs.values() for ts in df["open_time"]))
+    ts_index = {ts: i for i, ts in enumerate(all_ts)}   # H2: バー位置（保有期間算出用）
 
     pool_nav      = INITIAL_CAPITAL
     active_trades: list[Trade] = []
     completed:     list[Trade] = []
     equity = [0.0]
+    skipped_signals = 0   # M2: 同方向上限で見送ったシグナル数
 
-    for ts in all_ts:
+    for bar_i, ts in enumerate(all_ts):
         # ── 既存ポジションの TP/SL チェック ──────────────────────────────
         newly_closed = []
         for t in active_trades:
@@ -646,6 +708,7 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                 continue
             t.check_bar(bar["high"], bar["low"], ts)
             if t.closed:
+                t.exit_idx = bar_i
                 newly_closed.append(t)
 
         for t in newly_closed:
@@ -654,8 +717,25 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
             pool_nav += t.pnl
             equity.append(pool_nav - INITIAL_CAPITAL)
 
+        # ── L1: ウォークフォワード期間外はエントリーしない（既存玉の決済は継続）──
+        if (start_ts is not None and ts < start_ts) or (end_ts is not None and ts > end_ts):
+            continue
+
         # ── シグナルチェック ───────────────────────────────────────────────
-        for sig in sig_by_ts.get(ts, []):
+        sigs = list(sig_by_ts.get(ts, []))
+
+        # M2: 同一足で3銘柄すべて同方向のシグナルが出た場合、上限まで PF優先(BTC>ETH>SOL)で絞る
+        if same_dir_limit is not None and sigs:
+            for d in ("long", "short"):
+                same = [s for s in sigs if s["direction"] == d]
+                if len(same) > same_dir_limit:
+                    same.sort(key=lambda s: coin_priority.get(s["coin"], 99))
+                    drop = same[same_dir_limit:]
+                    skipped_signals += len(drop)
+                    for s in drop:
+                        sigs.remove(s)
+
+        for sig in sigs:
             if len(active_trades) >= MAX_POSITIONS:
                 break
             if any(t.coin == sig["coin"] for t in active_trades):
@@ -664,12 +744,41 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
             if pool_nav < MIN_INVEST:
                 break
 
+            coin      = sig["coin"]
+            direction = sig["direction"]
+            atr       = sig["atr"]
+
+            # H1: スリッページ（建値を不利方向にずらす）
+            if slippage_on:
+                entry = sig["close"] * (1 + SLIP_RATE) if direction == "long" else sig["close"] * (1 - SLIP_RATE)
+            else:
+                entry = sig["close"] * 0.99 if direction == "long" else sig["close"] * 1.01
+
+            # サイジング: fixed=固定均等割り / risk=ATRベース(M1)
+            amount = None
             invest = pool_nav * POSITION_RATIO / MAX_POSITIONS
             invest = max(invest, MIN_INVEST)
+            if sizing_mode == "risk":
+                risk_amount = pool_nav * RISK_PCT
+                sl_dist = atr * SL_MULT
+                if sl_dist <= 0:
+                    continue
+                qty = risk_amount / sl_dist
+                # レバ2倍上限: notional ≤ pool_nav × LEVERAGE
+                max_qty = (pool_nav * LEVERAGE) / entry
+                qty = min(qty, max_qty)
+                # bitbank最小発注単位で floor
+                lot = MIN_LOT.get(coin, 0.0001)
+                qty = (int(qty / lot)) * lot
+                if qty <= 0:
+                    continue
+                amount = qty
+                invest = entry * qty   # 記録用
 
-            direction = sig["direction"]
-            entry = sig["close"] * 0.99 if direction == "long" else sig["close"] * 1.01
-            t = Trade(sig["coin"], ts, entry, sig["atr"], invest, direction, strategy, sig["sig_type"])
+            fee_rate = FEE_RATES.get(coin, 0.0) if fee_on else 0.0
+            t = Trade(coin, ts, entry, atr, invest, direction, strategy,
+                      sig["sig_type"], fee_rate=fee_rate, amount=amount)
+            t.entry_idx = bar_i
             active_trades.append(t)
 
     # 残ポジションを最終バー終値で強制決済
@@ -691,13 +800,16 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                 t.pnl = (last_close - t.entry) * t.amount
             else:
                 t.pnl = (t.entry - last_close) * t.amount
+        t.pnl += t._fee_cost()   # H1: EOD決済にも往復手数料を適用
         t.exit_reason = "EOD"
         t.closed = True
+        t.exit_idx = len(all_ts) - 1
         completed.append(t)
         pool_nav += t.pnl
         equity.append(pool_nav - INITIAL_CAPITAL)
 
-    return {"trades": completed, "equity": equity, "timestamps": [], "final_pool": pool_nav}
+    return {"trades": completed, "equity": equity, "timestamps": [],
+            "final_pool": pool_nav, "skipped_signals": skipped_signals}
 
 
 # ── 統計計算 ──────────────────────────────────────────
@@ -762,6 +874,51 @@ def calc_stats(trades: list, equity: list) -> dict:
             "pnl":      sum(t.pnl for t in st_trades),
         }
 
+    # ── H2: 追加指標 ──────────────────────────────────────
+    n = len(trades)
+    pnls = [t.pnl for t in trades]
+
+    # 平均R: 1トレード平均損益 ÷ 平均リスク額（リスク幅×数量）
+    avg_pnl  = sum(pnls) / n
+    risks    = [getattr(t, "risk_per_unit", 0.0) * t.amount for t in trades]
+    risks    = [r for r in risks if r > 0]
+    avg_risk = sum(risks) / len(risks) if risks else 0.0
+    avg_r    = avg_pnl / avg_risk if avg_risk else 0.0
+
+    # Sharpe比: 年率リターン ÷ 年率標準偏差（トレードごとのリターン系列を年率換算）
+    #   1トレードのリターン = pnl / 投下証拠金(invest)。1年あたりトレード数で年率化。
+    rets = [t.pnl / t.invest for t in trades if t.invest > 0]
+    if len(rets) > 1:
+        mean_r = sum(rets) / len(rets)
+        var_r  = sum((r - mean_r) ** 2 for r in rets) / (len(rets) - 1)
+        std_r  = var_r ** 0.5
+        # バー位置から実トレード期間を推定し年率化係数を求める
+        idxs = [t.entry_idx for t in trades if t.entry_idx is not None]
+        span_bars = (max(idxs) - min(idxs)) if len(idxs) > 1 else len(trades)
+        years_span = max(span_bars / (365 * 6), 1e-9)   # 4h足=1日6本
+        trades_per_year = len(rets) / years_span
+        ann_ret = mean_r * trades_per_year
+        ann_std = std_r * (trades_per_year ** 0.5)
+        sharpe  = ann_ret / ann_std if ann_std else 0.0
+    else:
+        sharpe = 0.0
+
+    # 最大連敗数（時系列順）。entry_idx順にソート。
+    ordered = sorted(trades, key=lambda t: (t.entry_idx if t.entry_idx is not None else 0))
+    max_consec_loss = 0
+    cur = 0
+    for t in ordered:
+        if t.pnl <= 0:
+            cur += 1
+            max_consec_loss = max(max_consec_loss, cur)
+        else:
+            cur = 0
+
+    # 平均保有期間（バー数）
+    holds = [t.exit_idx - t.entry_idx for t in trades
+             if t.entry_idx is not None and t.exit_idx is not None]
+    avg_hold = sum(holds) / len(holds) if holds else 0.0
+
     return {
         "total":     len(trades),
         "wins":      len(wins),
@@ -775,6 +932,10 @@ def calc_stats(trades: list, equity: list) -> dict:
         "short_total": len(short_trades),
         "short_wr":    len(short_wins) / len(short_trades) * 100 if short_trades else 0,
         "sig":         sig_stats,
+        "avg_r":           avg_r,
+        "sharpe":          sharpe,
+        "max_consec_loss": max_consec_loss,
+        "avg_hold":        avg_hold,
     }
 
 
@@ -791,6 +952,10 @@ def print_stats(stats: dict):
     print(f"  プロフィットファクター: {stats['pf']:.2f}")
     print(f"  最大ドローダウン      : {stats['max_dd']:.1f}%")
     print(f"  総損益(USDT)          : {stats['total_pnl']:+.2f}")
+    print(f"  平均R                 : {stats.get('avg_r', 0):+.2f}")
+    print(f"  Sharpe比(年率)        : {stats.get('sharpe', 0):.2f}")
+    print(f"  最大連敗数            : {stats.get('max_consec_loss', 0)}")
+    print(f"  平均保有期間(バー)    : {stats.get('avg_hold', 0):.1f}  (4h足→{stats.get('avg_hold', 0)*4:.0f}時間)")
     print()
 
     print(f"  方向別内訳:")
