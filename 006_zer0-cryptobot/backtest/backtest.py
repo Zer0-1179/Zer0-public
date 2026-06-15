@@ -748,6 +748,13 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
             direction = sig["direction"]
             atr       = sig["atr"]
 
+            # M2: 同方向の同時保有数が上限に達していたら見送り（既存玉も含めてカウント）
+            if same_dir_limit is not None:
+                same_dir_active = sum(1 for t in active_trades if t.direction == direction)
+                if same_dir_active >= same_dir_limit:
+                    skipped_signals += 1
+                    continue
+
             # H1: スリッページ（建値を不利方向にずらす）
             if slippage_on:
                 entry = sig["close"] * (1 + SLIP_RATE) if direction == "long" else sig["close"] * (1 - SLIP_RATE)
@@ -1467,6 +1474,145 @@ def _run_adx_compare(years: int):
     print(f"\n  比較チャート保存: {chart_path}")
 
 
+def _load_coin_dfs(years: int):
+    """指定年数の4h足を取得して指標付与した coin_dfs を返す（btc_df含む）"""
+    candles = years * 365 * 6
+    btc_df = add_indicators(fetch_klines(BTC_SYMBOL, total=candles))
+    coin_dfs = {"BTC": btc_df}
+    for coin, symbol in (("ETH", "ETHUSDT"), ("SOL", "SOLUSDT")):
+        coin_dfs[coin] = add_indicators(fetch_klines(symbol, total=candles))
+    return btc_df, coin_dfs
+
+
+def _run_combo_eval(years: int):
+    """H3: 既実装フィルタ(rsimom/noext/macd/dst)の2〜3個AND複合を全期間で総当たり検証。
+    トレード数20件未満の組み合わせは統計的有意性のため除外。"""
+    from itertools import combinations
+
+    print(f"\nZer0-CryptoBot H3 複合フィルタ総当たり検証（直近{years}年 / 全期間）")
+    print("=" * 78)
+    btc_df, coin_dfs = _load_coin_dfs(years)
+    start = btc_df["open_time"].iloc[0]
+    end   = btc_df["open_time"].iloc[-1]
+    print(f"  期間: {start} ～ {end}")
+
+    FILTERS = ["rsimom", "noext", "macd", "dst"]
+    MIN_TRADES = 20
+
+    # 単独 + 2個 + 3個 の組み合わせ（単独はベースライン比較用）
+    combos = []
+    combos.append(("flip",))                       # base
+    for f in FILTERS:
+        combos.append((f"flip_{f}",))
+    for r in (2, 3):
+        for c in combinations(FILTERS, r):
+            combos.append(tuple(f"flip_{x}" for x in c))
+
+    rows = []
+    for modes in combos:
+        mode_arg = list(modes) if len(modes) > 1 else modes[0]
+        res = run_backtest(btc_df, coin_dfs, strategy="fix", signal_mode=mode_arg,
+                           sizing_mode="fixed", fee_on=True, slippage_on=True,
+                           same_dir_limit=2)
+        stats = calc_stats(res["trades"], res["equity"])
+        label = "+".join(m.replace("flip_", "") for m in modes) if len(modes) > 1 else \
+                modes[0].replace("flip_", "") or "flip"
+        if modes == ("flip",):
+            label = "base(flip)"
+        rows.append({
+            "label": label, "n": stats.get("total", 0),
+            "wr": stats.get("win_rate", 0), "pf": stats.get("pf", 0),
+            "growth": (res["final_pool"] / INITIAL_CAPITAL - 1) * 100,
+        })
+
+    kept = [r for r in rows if r["n"] >= MIN_TRADES or r["label"] == "base(flip)"]
+    kept.sort(key=lambda r: r["pf"], reverse=True)
+
+    print(f"\n  {'組み合わせ':<22} {'件数':>5} {'勝率':>7} {'PF':>6} {'成長率':>9}")
+    print("  " + "-" * 56)
+    for r in kept:
+        flag = "" if r["n"] >= MIN_TRADES else "  (除外: n<20)"
+        print(f"  {r['label']:<22} {r['n']:>5} {r['wr']:>6.1f}% {r['pf']:>6.2f} {r['growth']:>+8.1f}%{flag}")
+    excluded = [r for r in rows if r["n"] < MIN_TRADES and r["label"] != "base(flip)"]
+    if excluded:
+        print(f"\n  ※ トレード数20件未満で除外: {', '.join(r['label'] for r in excluded)}")
+    print("=" * 78)
+
+
+def _run_walkforward(years: int):
+    """L1: 全期間を IS(前半/最適化) + OOS(後半/検証) に分割。
+    IS=前3年でTP/SLグリッド最適化 → OOS=後2年で同パラメータを検証し IS vs OOS の乖離を報告。"""
+    global TP1_MULT, SL_MULT, TRAIL_MULT
+    from itertools import product
+
+    total_years = max(years, 5)
+    print(f"\nZer0-CryptoBot L1 ウォークフォワード検証（全{total_years}年 → IS前3年 / OOS後2年）")
+    print("=" * 78)
+    btc_df, coin_dfs = _load_coin_dfs(total_years)
+    all_times = btc_df["open_time"]
+    start = all_times.iloc[0]
+    end   = all_times.iloc[-1]
+    split = start + pd.Timedelta(days=3 * 365)   # IS=前3年
+    print(f"  全期間 : {start} ～ {end}")
+    print(f"  IS期間 : {start} ～ {split}（最適化）")
+    print(f"  OOS期間: {split} ～ {end}（検証）")
+
+    TP1_GRID  = [1.25, 1.5, 1.75, 2.0, 2.25]
+    SL_GRID   = [1.5, 1.75, 2.0, 2.25, 2.5]
+    TRAIL_GRID = [0.75, 1.0, 1.25, 1.5]
+    base = (TP1_MULT, SL_MULT, TRAIL_MULT)
+
+    def evaluate(params, s_ts, e_ts):
+        global TP1_MULT, SL_MULT, TRAIL_MULT
+        TP1_MULT, SL_MULT, TRAIL_MULT = params
+        try:
+            res = run_backtest(btc_df, coin_dfs, strategy="fix", signal_mode="flip",
+                               sizing_mode="fixed", fee_on=True, slippage_on=True,
+                               same_dir_limit=2, start_ts=s_ts, end_ts=e_ts)
+        finally:
+            TP1_MULT, SL_MULT, TRAIL_MULT = base
+        return calc_stats(res["trades"], res["equity"]), (res["final_pool"] / INITIAL_CAPITAL - 1) * 100
+
+    # ── IS 最適化（PF最大、n≥20）──
+    print("\n  [IS] グリッド最適化中...")
+    best = None
+    for tp, sl, tr in product(TP1_GRID, SL_GRID, TRAIL_GRID):
+        stats, growth = evaluate((tp, sl, tr), start, split)
+        if stats.get("total", 0) < 20:
+            continue
+        score = stats["pf"]
+        if best is None or score > best["pf"]:
+            best = {"params": (tp, sl, tr), "pf": stats["pf"], "wr": stats["win_rate"],
+                    "n": stats["total"], "growth": growth}
+
+    if best is None:
+        print("  IS期間で有効な組み合わせなし")
+        return
+
+    bp = best["params"]
+    print(f"  [IS] 最適: TP1={bp[0]} SL={bp[1]} TRAIL={bp[2]} → "
+          f"PF={best['pf']:.2f} 勝率={best['wr']:.1f}% n={best['n']} 成長={best['growth']:+.1f}%")
+
+    # ── OOS 検証（同一パラメータ）──
+    oos_stats, oos_growth = evaluate(bp, split, end)
+    is_stats, _ = evaluate(bp, start, split)
+
+    print("\n  ── IS vs OOS 乖離 ──")
+    print(f"  {'指標':<10} {'IS(最適化)':>12} {'OOS(検証)':>12} {'乖離':>10}")
+    print("  " + "-" * 46)
+    def cmp(lbl, key, suf=""):
+        iv, ov = is_stats.get(key, 0), oos_stats.get(key, 0)
+        print(f"  {lbl:<10} {iv:>11.2f}{suf} {ov:>11.2f}{suf} {ov - iv:>+9.2f}{suf}")
+    cmp("勝率", "win_rate", "%")
+    cmp("PF", "pf")
+    cmp("最大DD", "max_dd", "%")
+    print(f"  {'成長率':<10} {best['growth']:>10.1f}% {oos_growth:>10.1f}% {oos_growth - best['growth']:>+8.1f}%")
+    degr = "頑健（OOSでも維持）" if oos_stats.get("pf", 0) >= 1.5 and oos_stats.get("win_rate", 0) >= 45 \
+           else "過適合の疑い（OOSで悪化）"
+    print(f"\n  判定: {degr}")
+    print("=" * 78)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--years",   type=int, default=YEARS, help="バックテスト期間（年）")
@@ -1478,11 +1624,21 @@ def main():
                         help="現行(転換のみ) vs 新(転換+コイン自身の日足トレンド確認) 比較")
     parser.add_argument("--adx-compare", action="store_true",
                         help="現行(転換のみ) vs 新(転換+ADXトレンド強度フィルタ) 比較")
+    parser.add_argument("--combo", action="store_true",
+                        help="H3: 複合フィルタ(2〜3個AND)を全期間で総当たり検証")
+    parser.add_argument("--walkforward", action="store_true",
+                        help="L1: IS(前3年最適化)→OOS(後2年検証) ウォークフォワード")
     parser.add_argument("--strategy", default="old", choices=["old", "new"], help="使用戦略")
     parser.add_argument("--signal-mode", default="flip",
                         choices=["flip", "flip_pullback", "flip_htf", "flip_adx", "flip_late",
                                  "flip_rsimom", "flip_noext", "flip_macd", "flip_dst"],
                         help="シグナル収集モード（単独実行時）")
+    parser.add_argument("--sizing", default="risk", choices=["fixed", "risk"],
+                        help="ポジションサイジング: risk=ATRベース(M1) / fixed=固定均等割り")
+    parser.add_argument("--no-realism", action="store_true",
+                        help="H1のスリッページ・手数料を無効化（旧来の建値0.99/1.01・手数料ゼロ）")
+    parser.add_argument("--same-dir-limit", type=int, default=2,
+                        help="M2: 同方向同時建て上限（既定2。0で無効化=無制限）")
     args = parser.parse_args()
 
     if args.compare:
@@ -1499,6 +1655,14 @@ def main():
 
     if args.adx_compare:
         _run_adx_compare(args.years)
+        return
+
+    if args.combo:
+        _run_combo_eval(args.years)
+        return
+
+    if args.walkforward:
+        _run_walkforward(args.years)
         return
 
     if args.multi:
@@ -1529,8 +1693,13 @@ def main():
         print(f"      取得: {len(df)} 本  期間: {df['open_time'].iloc[0]} ～ {df['open_time'].iloc[-1]}")
 
     # バックテスト実行
-    print(f"\n[4/4] バックテスト実行中... (strategy={args.strategy}, signal_mode={args.signal_mode})")
-    result  = run_backtest(btc_df, coin_dfs, args.strategy, args.signal_mode)
+    realism = not args.no_realism
+    same_dir = args.same_dir_limit if args.same_dir_limit > 0 else None
+    print(f"\n[4/4] バックテスト実行中... (strategy={args.strategy}, signal_mode={args.signal_mode}, "
+          f"sizing={args.sizing}, realism={realism}, same_dir_limit={same_dir})")
+    result  = run_backtest(btc_df, coin_dfs, args.strategy, args.signal_mode,
+                           sizing_mode=args.sizing, fee_on=realism, slippage_on=realism,
+                           same_dir_limit=same_dir)
     trades  = result["trades"]
     equity     = result["equity"]
     timestamps = result["timestamps"]
