@@ -15,8 +15,10 @@ SSM_STATE     = "/Zer0/CryptoBot/state"
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT = os.environ["SES_RECIPIENT_EMAIL"]
 AWS_REGION    = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
-TRADES_BUCKET = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
-TRADES_KEY    = "cryptobot/trades.jsonl"
+TRADES_BUCKET     = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
+# 取引履歴は Executor が「1決済=1オブジェクト」で put する（追記消失レース回避）。
+# 集計側は prefix を list_objects して各オブジェクトを読む。
+TRADES_KEY_PREFIX = "cryptobot/trades/"
 
 # ポジションを閉じる決済理由（TP1部分利確はポジション継続中の部分決済）
 CLOSING_REASONS = ("トレーリングSL", "SL（TP1後）", "損切り（SL約定）", "損切り（残30%成行）", "緊急決済")
@@ -42,22 +44,27 @@ def get_current_price(pair: str) -> float | None:
 
 
 def load_trades() -> list[dict]:
-    """S3 の取引履歴（JSONL）を読み込む。ファイル未作成・読込失敗は空リスト。"""
+    """S3 の取引履歴（1決済=1オブジェクト）を prefix 配下から全件読み込む。
+    オブジェクト未作成・読込失敗は空リスト/個別スキップで継続する。"""
+    s3 = boto3.client("s3", region_name=AWS_REGION)
+    keys: list[str] = []
     try:
-        s3 = boto3.client("s3", region_name=AWS_REGION)
-        body = s3.get_object(Bucket=TRADES_BUCKET, Key=TRADES_KEY)["Body"].read().decode("utf-8")
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=TRADES_BUCKET, Prefix=TRADES_KEY_PREFIX):
+            for obj in page.get("Contents", []):
+                if obj["Key"].endswith(".json"):
+                    keys.append(obj["Key"])
     except Exception as e:
-        print(f"取引履歴読み込みスキップ: {e}")
+        print(f"取引履歴一覧取得スキップ: {e}")
         return []
+
     trades = []
-    for line in body.splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    for key in keys:
         try:
-            trades.append(json.loads(line))
-        except json.JSONDecodeError:
-            print(f"不正な取引履歴行をスキップ: {line[:80]}")
+            raw = s3.get_object(Bucket=TRADES_BUCKET, Key=key)["Body"].read().decode("utf-8")
+            trades.append(json.loads(raw))
+        except Exception as e:
+            print(f"取引履歴オブジェクト読込スキップ {key}: {e}")
     return trades
 
 
