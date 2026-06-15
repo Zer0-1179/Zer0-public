@@ -141,7 +141,7 @@ Executor が実行するたびに証拠金維持率を確認：
 | 実行基盤         | AWS Lambda（Python 3.14）× 4関数                                                           |
 | スケジューリング | Amazon EventBridge Scheduler（2スケジュール）                                              |
 | 状態管理         | AWS SSM Parameter Store（ポジション State・シグナル）                                      |
-| 取引履歴         | Amazon S3（確定損益を JSONL で記録・週次集計に使用）                                       |
+| 取引履歴         | Amazon S3（確定損益を 1決済=1オブジェクトで記録・週次集計に使用）                          |
 | 通知             | Amazon SES（エラー通知・週次レポート）                                                     |
 | 信頼性           | Lambda EventInvokeConfig（非同期invoke失敗時にFailureNotifierへ自動通知・最大2回リトライ） |
 | データソース     | Binance API（REST）/ python-binance                                                        |
@@ -222,3 +222,4 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 | 2026-06-10 | v2.7       | 取引履歴記録機能追加（決済時にS3へ確定損益を追記・週次レポートで実現損益/勝率/PF集計）。戦略改善4案（ADX・日足HTF・遅延エントリー・XRP追加）をバックテスト再検証し全て不採用、現行戦略維持を確定。deploy.sh の SIGPIPE バグ修正（`\| true`→`\|\| true`）                                                                            |
 | 2026-06-11 | v2.8       | 勝率向上のためTP/SL倍率を変更（TP1 2.0→1.75 / 初期SL 1.5→2.0 / トレール 1.5→1.0）。全期間バックテストで勝率62%→73%・PF1.93・5年資本成長+234%に改善                                                                                                                                                                                  |
 | 2026-06-15 | v2.9       | コードレビュー反映: CloudWatch Logs 保持を関数別に適正化（Executor 3日 / Analyzer・FailureNotifier 7日）。README/仕様書の「SQS DLQ」誇大記載を実態（Lambda EventInvokeConfig の OnFailure 通知）に修正。Service Quota 引き上げ後に Executor へ `ReservedConcurrentExecutions: 1` を設定（多重起動による二重発注を防止） |
+| 2026-06-15 | v3.0       | コードレビュー MEDIUM 3件修正。**M-2**: 約定済み注文からの `average_price`/`executed_amount` 取得を `order_fill()` ヘルパーで安全化（欠落・0・型不正時は KeyError を握りつぶさず明示的に次回再評価へスキップ）。**M-3**: SOL/JPY の `price_prec` を 0→1 に修正（bitbank 実API の price_digits=1 = tick size 0.1円に一致。BTC/ETH は 0 のまま正）。**M-4**: 取引履歴を「1決済=1オブジェクト」put で書き込む設計（read-modify-write レースが構造的に発生しない）であることをコメントで明記。あわせて WeeklySummary の履歴読込を単一ファイル get_object から prefix の list_objects+get_object 集計へ修正し、Executor の書込形式と整合 |
