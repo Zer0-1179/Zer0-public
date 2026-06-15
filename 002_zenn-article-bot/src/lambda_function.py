@@ -591,7 +591,9 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
     """
     if not png_paths:
         import re as _re
-        cleaned, n = _re.subn(r'\n*\{\{DIAGRAM_\d+\}\}\n*', '\n\n', article)
+        # マーカーは format() 後に単一波括弧 {DIAGRAM_N} となる。
+        # 二重波括弧 {{...}} とのどちらが残っても除去できるようにする。
+        cleaned, n = _re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
         if n:
             print(f"[WARNING] PNG未生成のためDIAGRAMマーカー{n}件を除去しました")
         return cleaned
