@@ -53,10 +53,14 @@ MARGIN_EMRG_PCT = 30   # この値以下で全ポジション緊急成行決済
 FORCE_TEST_ENABLED = os.environ.get("ENABLE_FORCE_TEST", "0") == "1"
 
 # コイン別精度（price小数桁数, amount小数桁数）
+# price_prec は bitbank /spot/pairs の price_digits（= tick size）に一致させること。
+#   btc_jpy: 0桁（tick 1円） / eth_jpy: 0桁（tick 1円） / sol_jpy: 1桁（tick 0.1円）
+#   ※ sol_jpy を 0桁にすると tick size と不整合になり、丸めた価格で発注拒否や
+#     意図せぬ価格ずれが起きるため 1桁に設定する（2026-06-15 実APIで確認）。
 PAIRS = {
     "btc_jpy": {"price_prec": 0, "amount_prec": 4},
     "eth_jpy": {"price_prec": 0, "amount_prec": 4},
-    "sol_jpy": {"price_prec": 0, "amount_prec": 4},
+    "sol_jpy": {"price_prec": 1, "amount_prec": 4},
 }
 
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
@@ -91,6 +95,24 @@ def round_amount(value: float, prec: int) -> str:
 
 def price_val(price_str: str) -> float:
     return float(price_str)
+
+
+def order_fill(order: dict) -> tuple[float, float] | None:
+    """約定済み注文から (average_price, executed_amount) を安全に取り出す。
+    average_price / executed_amount が欠落・0・None の場合は None を返す
+    （未約定・部分約定で値が取れないケース。KeyError を握りつぶさず明示スキップする）。"""
+    avg = order.get("average_price")
+    amt = order.get("executed_amount")
+    if avg is None or amt is None:
+        return None
+    try:
+        avg_f = float(avg)
+        amt_f = float(amt)
+    except (TypeError, ValueError):
+        return None
+    if avg_f <= 0 or amt_f <= 0:
+        return None
+    return avg_f, amt_f
 
 
 # ── SSM ───────────────────────────────────────────────────────────────────────
@@ -614,7 +636,10 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                     else:
                         o_tp1 = bb.get_order(pair, pos["tp1_order_id"])
 
-                    if o_tp1.get("status") == "FULLY_FILLED":
+                    tp1_fill = order_fill(o_tp1) if o_tp1.get("status") == "FULLY_FILLED" else None
+                    if o_tp1.get("status") == "FULLY_FILLED" and not tp1_fill:
+                        log(f"{pair}({direction}): TP1 FULLY_FILLED だが約定情報欠落 → 次回再評価")
+                    elif o_tp1.get("status") == "FULLY_FILLED":
                         log(f"{pair}({direction}): TP1 約定 → トレーリングSL 開始")
 
                         sl_already_filled = False
@@ -624,19 +649,21 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             log(f"{pair}: 旧SL キャンセル失敗: {ce}")
                             try:
                                 sl_chk = bb.get_order(pair, pos["sl_order_id"])
-                                if sl_chk.get("status") == "FULLY_FILLED":
+                                sl_fill = order_fill(sl_chk)
+                                if sl_chk.get("status") == "FULLY_FILLED" and sl_fill:
+                                    sl_price_f, sl_amount_f = sl_fill
                                     sl_already_filled = True
                                     log(f"{pair}: 旧SL 既に約定 → TP1+SL両方確定 → 終了")
                                     remaining = get_available_margin(bb, pair)
                                     record_trade(pair, direction, "SL（TP1後）",
                                                  pos["entry_price"],
-                                                 float(sl_chk["average_price"]),
-                                                 float(sl_chk["executed_amount"]),
+                                                 sl_price_f,
+                                                 sl_amount_f,
                                                  pos.get("position_id"))
                                     notify_close(pair, direction, "SL（TP1後）",
-                                                 float(sl_chk["average_price"]),
+                                                 sl_price_f,
                                                  pos["entry_price"],
-                                                 float(sl_chk["executed_amount"]),
+                                                 sl_amount_f,
                                                  remaining)
                                     to_delete.append(pair)
                             except Exception:
@@ -674,8 +701,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             "highest_price": pos["tp1_price"] if direction == "long" else None,
                             "lowest_price":  pos["tp1_price"] if direction == "short" else None,
                         }
-                        tp1_fill_price    = float(o_tp1["average_price"])
-                        tp1_filled_amount = float(o_tp1["executed_amount"])
+                        tp1_fill_price, tp1_filled_amount = tp1_fill
                         if direction == "long":
                             realized_pnl = (tp1_fill_price - entry) * tp1_filled_amount
                         else:
@@ -711,7 +737,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                 "executed_amount": str(pos.get("trail_amount", 0))}
                     else:
                         o_sl = bb.get_order(pair, pos["sl_order_id"])
-                    if o_sl.get("status") == "FULLY_FILLED":
+                    sl_fill = order_fill(o_sl) if o_sl.get("status") == "FULLY_FILLED" else None
+                    if o_sl.get("status") == "FULLY_FILLED" and not sl_fill:
+                        log(f"{pair}({direction}): SL FULLY_FILLED だが約定情報欠落 → 次回再評価")
+                    elif o_sl.get("status") == "FULLY_FILLED":
+                        sl_fill_price, sl_fill_amount = sl_fill
                         log(f"{pair}({direction}): SL（損切り）約定 → TP1キャンセル → 残30%成行クローズ → 終了")
                         try:
                             bb.cancel_order(pair, pos["tp1_order_id"])
@@ -749,11 +779,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         remaining = get_available_margin(bb, pair)
                         record_trade(pair, direction, "損切り（SL約定）",
                                      pos["entry_price"],
-                                     float(o_sl["average_price"]),
+                                     sl_fill_price,
                                      pos["trail_amount"],
                                      pos.get("position_id"))
                         notify_close(pair, direction, "損切り",
-                                     float(o_sl["average_price"]),
+                                     sl_fill_price,
                                      pos["entry_price"],
                                      pos["trail_amount"],
                                      remaining)
