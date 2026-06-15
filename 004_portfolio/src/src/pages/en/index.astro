@@ -22,7 +22,7 @@ try {
     const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
     return items.slice(0, 3).map((m) => {
       const title = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ?? m[1].match(/<title>(.*?)<\/title>/)?.[1] ?? '';
-      const link = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? '';
+      const link = m[1].match(/<link>(.*?)<\/link>|<link .*?href="(.*?)"/)?.[1] ?? '';
       const date = m[1].match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? new Date().toISOString();
       return { title, link, date, source };
     });
