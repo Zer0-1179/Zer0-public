@@ -20,7 +20,6 @@ bedrock = boto3.client(
 ses = boto3.client("ses", region_name="ap-northeast-1")
 s3  = boto3.client("s3",  region_name="ap-northeast-1")
 ssm = boto3.client("ssm", region_name="ap-northeast-1")
-cfn = boto3.client("cloudformation", region_name="ap-northeast-1")
 
 # Lambda環境かどうかで出力先を切り替え
 _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
@@ -55,8 +54,6 @@ SONNET_OUTPUT_COST_PER_MTOK = 15.0
 # AWS公式ドキュメント取得
 DOCS_FETCH_TIMEOUT_SEC = 15
 DOCS_MAX_CHARS         = 6000
-# CFn テンプレートサイズ上限（ValidateTemplate の TemplateBody 上限）
-CFN_TEMPLATE_MAX_BYTES = 51200
 
 # ─── 中級者向けトピック定義（16記事分 ≒ 8ヶ月分） ────────────────────────────
 AWS_TOPICS = [
@@ -344,14 +341,14 @@ AWSの基本サービス（EC2/S3/IAM）は使ったことがある中級者。
 補足内容
 :::
 
-```yaml:cloudformation.yaml
-Resources:
-  MyFunction:
-    Type: AWS::Lambda::Function
+```bash:ステップ例
+# ── ①IAMロールを作成する ──────────────────────
+aws iam create-role --role-name my-app-role \
+  --assume-role-policy-document file://trust-policy.json
 ```
 
 ```bash:動作確認
-aws cloudformation describe-stacks --stack-name my-stack
+aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 ```
 
 ---
@@ -393,12 +390,18 @@ aws cloudformation describe-stacks --stack-name my-stack
 - `:::message` で「設計のポイント」を強調する
 
 ### ## 構成手順
-- **前提条件**: 必要なツール・権限（AWSアカウント、AWS CLI等）
-- **ステップ1〜5以上**: CloudFormationスニペットを中心に手順を説明
-  - コードは `yaml:cloudformation.yaml` 形式で記述する（SAMは使わない）
+- **前提条件**: 必要なツール・権限（AWSアカウント、AWS CLI、適切なIAM権限）
+- **作業ディレクトリと変数の設定（冒頭に必須）**: `bash:変数設定` ブロックで `APP_NAME` / `REGION` / `ACCOUNT_ID` を定義する
+- **ステップ1〜5以上**: AWS CLIコマンドを中心に手順を説明する
+  - 各ステップ冒頭に `# ── ①目的 ────` 形式のセクションコメントを付ける（番号は通し番号）
+  - コードブロックは `bash:ステップ名` 形式で記述する
+  - IAMポリシー等の長いJSONはすべてファイル参照（`file://policy.json`）で記述する
+  - 変数展開が必要なJSONファイルは unquoted heredoc（`<< EOF`）を使用し、リテラルは quoted heredoc（`<< 'EOF'`）を明示的に使い分ける
+  - リソース作成後に取得した ARN・URI は変数に保存して後続コマンドで参照する
   - 各ステップのつまずきポイントを `:::message` で注記する
-  - AWS CLIコマンドはファイル名付きコードブロックで記述し、**成功時のレスポンス例を必ず示す**
-- **デプロイ・動作確認**: 実際に動かして確認する手順
+  - AWS CLIコマンドは**成功時のレスポンス例を必ずコードブロックで示す**（「結果が表示されます」は使わない）
+- **クリーンアップ（末尾に必須）**: 作成したリソースを逆順に削除するコマンドを列挙する
+- **動作確認**: 実際に動かして確認する手順
 
 ### ## 設計上の考慮ポイント
 
@@ -465,7 +468,7 @@ aws cloudformation describe-stacks --stack-name my-stack
 
 ---
 
-## CloudFormation・IAM・コード品質の必須ルール
+## AWS CLI・IAM・コード品質の必須ルール
 
 ### IAM ポリシー（間違えやすい点）
 - `ec2:DescribeInstances` / `s3:ListBuckets` / `cloudwatch:GetMetricData` などリスト・Describe系アクションは**リソースレベル条件（`ec2:ResourceTag` 等）を非サポート**。これらは `Resource: '*'` のみで単独ステートメントに書く
@@ -476,12 +479,13 @@ aws cloudformation describe-stacks --stack-name my-stack
 - Lambda の Runtime は現時点の最新安定版を使う: `python3.13`（Python）/ `nodejs22.x`（Node.js）
 - `python3.12` や `nodejs20.x` 等の旧バージョンは使わない
 
-### CloudFormation の正確性
-- 記事内の CFn テンプレートは**実際にデプロイできる完全なリソース定義**を書く
-- `!Ref` / `!GetAtt` の参照先が同じテンプレート内に存在することを確認する
-- SNS → Lambda トリガーには `AWS::Lambda::Permission`（Principal: sns.amazonaws.com）が必須
-- 80%通知と100%通知で**アクションが異なる場合は SNS トピックを別々に作成する**（同一トピックに Lambda 購読を紐付けると全閾値でLambdaが発動する）
-- SNS メール購読（`Protocol: email`）はデプロイ後に**確認メールのクリックが必要**な旨を記事内で明記する
+### AWS CLI コマンドの正確性
+- 記事内のAWS CLIコマンドは**実際に実行できるもの**を書く（オプション名・引数の誤記に注意）
+- 変数は必ず `APP_NAME=` / `REGION=` / `ACCOUNT_ID=` で記事冒頭に定義し、以降の全コマンドで参照する
+- リソースを作成したら ARN・URI を中間変数に保存し、後続コマンドで参照する
+- SNS → Lambda のイベント連携には `aws lambda add-permission` によるリソースベースポリシーの追加が必須
+- IAMポリシーはすべてファイル参照（`file://policy.json`）で記述する
+- 削除コマンドは必ずクリーンアップセクションにまとめる
 
 ### AWS サービスの制約（よく見落とされる事実）
 - **Compute Optimizer**: メモリ使用率の分析には **CloudWatch Agent の別途インストールが必要**。Agent なしでは CPU・ネットワーク・ディスクのみ分析対象になる
@@ -822,56 +826,23 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
     return f"s3://{S3_BUCKET}/{s3_base}/"
 
 
-# ─── CFn テンプレート検証 ────────────────────────────────────────────────────
+# ─── AWS CLI コマンドチェック ────────────────────────────────────────────────
 
-def validate_cfn_in_article(article_text: str) -> list[str]:
-    """記事内の完全なCFnテンプレートをcloudformation:ValidateTemplateでチェックする"""
-    import re
-    import yaml as _yaml
-
-    # !Ref / !Sub / !GetAtt 等のCFnタグをsafe_loadで扱えるようにするローダー
-    class _CfnLoader(_yaml.SafeLoader):
-        pass
-    _CfnLoader.add_multi_constructor(
-        '!',
-        lambda loader, tag, node: (
-            loader.construct_scalar(node) if isinstance(node, _yaml.ScalarNode)
-            else loader.construct_sequence(node, deep=True) if isinstance(node, _yaml.SequenceNode)
-            else loader.construct_mapping(node, deep=True)
-        ),
-    )
-
+def validate_cli_in_article(article_text: str) -> list[str]:
+    """記事内にAWS CLIベースの構築手順が含まれているかチェックする"""
     issues = []
-    pattern = r'```(?:yaml|YAML)(?::[^\n]*)?\n(.*?)```'
-    blocks = re.findall(pattern, article_text, re.DOTALL)
-
-    complete = []
-    for i, block in enumerate(blocks, 1):
-        if 'Resources:' not in block:
-            continue
-        try:
-            parsed = _yaml.load(block, Loader=_CfnLoader)
-            if isinstance(parsed, dict) and 'Resources' in parsed:
-                if 'Outputs' not in parsed:
-                    print(f"[CFn検証] ブロック{i}: Outputs セクションなし（デプロイ後の値参照・クロススタック連携が困難）")
-                complete.append((i, block))
-        except _yaml.YAMLError as e:
-            issues.append(f"ブロック{i}: YAML構文エラー — {str(e)[:200]}")
-
-    if not complete and not issues:
-        return []
-
-    for i, block in complete:
-        if len(block.encode('utf-8')) > CFN_TEMPLATE_MAX_BYTES:
-            issues.append(f"ブロック{i}: テンプレートサイズ超過（{len(block.encode('utf-8')):,}バイト > {CFN_TEMPLATE_MAX_BYTES:,}バイト上限）")
-            continue
-        try:
-            cfn.validate_template(TemplateBody=block)
-        except Exception as e:
-            msg = e.response.get('Error', {}).get('Message', str(e)) if hasattr(e, 'response') else str(e)
-            issues.append(f"ブロック{i}: {msg[:300]}")
-
-    print(f"[CFn検証] 完全テンプレート{len(complete)}件検証 / 問題{len(issues)}件")
+    required = {
+        "APP_NAME=":   "変数設定（APP_NAME）",
+        "REGION=":     "変数設定（REGION）",
+        "ACCOUNT_ID=": "変数設定（ACCOUNT_ID）",
+        "aws ":        "AWS CLIコマンド",
+    }
+    for keyword, label in required.items():
+        if keyword not in article_text:
+            issues.append(f"{label}が見つかりません")
+    if "クリーンアップ" not in article_text:
+        issues.append("クリーンアップセクションがありません")
+    print(f"[CLI検証] 必須要素チェック完了 / 問題{len(issues)}件")
     return issues
 
 
@@ -919,7 +890,7 @@ Zennに投稿する前に内容を必ず確認してください。
 """ if is_truncated else ""
 
     cfn_warning_text = (
-        "⚠️ CFnテンプレート検証で問題が見つかりました:\n"
+        "⚠️ AWS CLIチェックで問題が見つかりました:\n"
         + "\n".join(f"  - {i}" for i in cfn_issues) + "\n"
     ) if cfn_issues else ""
 
@@ -958,13 +929,13 @@ Zennに投稿する前に内容を必ず確認してください。
 
     cfn_issues_html = (
         '<div style="background:#fde8e8;border:2px solid #e53e3e;padding:15px;border-radius:8px;margin:20px 0;">'
-        '<h3 style="color:#c53030;margin-top:0;">⚠️ CFnテンプレート検証で問題が見つかりました</h3>'
+        '<h3 style="color:#c53030;margin-top:0;">⚠️ AWS CLIチェックで問題が見つかりました</h3>'
         '<ul style="color:#c53030;margin:0;">'
         + "".join(f'<li><code>{i}</code></li>' for i in cfn_issues)
         + '</ul></div>'
     ) if cfn_issues else (
         '<div style="background:#e8f5e9;border:1px solid #66bb6a;padding:10px 15px;border-radius:8px;margin:20px 0;">'
-        '<p style="color:#2e7d32;margin:0;">✅ CFnテンプレート検証 — 問題なし</p>'
+        '<p style="color:#2e7d32;margin:0;">✅ AWS CLIチェック — 問題なし</p>'
         '</div>'
     )
 
@@ -1084,15 +1055,15 @@ def lambda_handler(event, context):
     print("Step 6: SSMにトピックを保存中...")
     save_topic_to_ssm(topic["id"])
 
-    # Step 7: CFnテンプレート検証
+    # Step 7: AWS CLIコマンドチェック
     _t = time.time()
-    print("Step 7: CFnテンプレートを検証中...")
+    print("Step 7: AWS CLIコマンドをチェック中...")
     try:
-        cfn_issues = validate_cfn_in_article(article)
+        cfn_issues = validate_cli_in_article(article)
         if cfn_issues:
-            print(f"  ⚠️ CFn問題検出: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
+            print(f"  ⚠️ CLI検証問題: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
         else:
-            print(f"  ✓ CFn検証問題なし [{time.time()-_t:.1f}s]")
+            print(f"  ✓ CLI検証問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
         print(f"  CFn検証スキップ（無視して続行）: {e}")
         cfn_issues = []
