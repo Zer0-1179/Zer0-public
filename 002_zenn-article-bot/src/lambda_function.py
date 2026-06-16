@@ -20,7 +20,6 @@ bedrock = boto3.client(
 ses = boto3.client("ses", region_name="ap-northeast-1")
 s3  = boto3.client("s3",  region_name="ap-northeast-1")
 ssm = boto3.client("ssm", region_name="ap-northeast-1")
-cfn = boto3.client("cloudformation", region_name="ap-northeast-1")
 
 # Lambda環境かどうかで出力先を切り替え
 _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
@@ -383,9 +382,10 @@ aws s3 ls
 - Lambda の Runtime は現時点の最新安定版を使う: `python3.13`（Python）/ `nodejs22.x`（Node.js）
 - 旧バージョン（`python3.12` / `nodejs20.x` 等）は使わない
 
-### CloudFormation・AWS CLI の正確性
+### AWS CLI の正確性
 - 記事内のコードは省略・疑似コードなしで、**実際に動く完全な記述**にする
 - CLIコマンドは `--region ap-northeast-1` を明示する
+- コマンドで使い回す値（バケット名・ロール名等）は冒頭の変数定義ブロックにまとめる（例: `BUCKET_NAME=my-app-bucket`）
 - SNS メール購読はデプロイ後に**確認メールのクリックが必要**な旨を記事内で必ず明記する
 
 ### AWS サービスの制約
@@ -724,56 +724,14 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
     return f"s3://{S3_BUCKET}/{s3_base}/"
 
 
-# ─── CFn テンプレート検証 ────────────────────────────────────────────────────
+# ─── AWS CLI コマンドチェック ────────────────────────────────────────────────
 
-def validate_cfn_in_article(article_text: str) -> list[str]:
-    """記事内の完全なCFnテンプレートをcloudformation:ValidateTemplateでチェックする"""
-    import re
-    import yaml as _yaml
-
-    # !Ref / !Sub / !GetAtt 等のCFnタグをsafe_loadで扱えるようにするローダー
-    class _CfnLoader(_yaml.SafeLoader):
-        pass
-    _CfnLoader.add_multi_constructor(
-        '!',
-        lambda loader, tag, node: (
-            loader.construct_scalar(node) if isinstance(node, _yaml.ScalarNode)
-            else loader.construct_sequence(node, deep=True) if isinstance(node, _yaml.SequenceNode)
-            else loader.construct_mapping(node, deep=True)
-        ),
-    )
-
+def validate_cli_in_article(article_text: str) -> list[str]:
+    """記事内にAWS CLIコマンドが含まれているかチェックする"""
     issues = []
-    pattern = r'```(?:yaml|YAML)(?::[^\n]*)?\n(.*?)```'
-    blocks = re.findall(pattern, article_text, re.DOTALL)
-
-    complete = []
-    for i, block in enumerate(blocks, 1):
-        if 'Resources:' not in block:
-            continue
-        try:
-            parsed = _yaml.load(block, Loader=_CfnLoader)
-            if isinstance(parsed, dict) and 'Resources' in parsed:
-                if 'Outputs' not in parsed:
-                    print(f"[CFn検証] ブロック{i}: Outputs セクションなし（デプロイ後の値参照・クロススタック連携が困難）")
-                complete.append((i, block))
-        except _yaml.YAMLError as e:
-            issues.append(f"ブロック{i}: YAML構文エラー — {str(e)[:200]}")
-
-    if not complete and not issues:
-        return []
-
-    for i, block in complete:
-        if len(block.encode('utf-8')) > 51200:
-            issues.append(f"ブロック{i}: テンプレートサイズ超過（{len(block.encode('utf-8')):,}バイト > 51,200バイト上限）")
-            continue
-        try:
-            cfn.validate_template(TemplateBody=block)
-        except Exception as e:
-            msg = e.response.get('Error', {}).get('Message', str(e)) if hasattr(e, 'response') else str(e)
-            issues.append(f"ブロック{i}: {msg[:300]}")
-
-    print(f"[CFn検証] 完全テンプレート{len(complete)}件検証 / 問題{len(issues)}件")
+    if "aws " not in article_text:
+        issues.append("AWS CLIコマンドが見つかりません")
+    print(f"[CLI検証] 必須要素チェック完了 / 問題{len(issues)}件")
     return issues
 
 
@@ -820,7 +778,7 @@ Zennに投稿する前に内容を必ず確認してください。
 """ if is_truncated else ""
 
     cfn_warning_text = (
-        "⚠️ CFnテンプレート検証で問題が見つかりました:\n"
+        "⚠️ AWS CLIチェックで問題が見つかりました:\n"
         + "\n".join(f"  - {i}" for i in cfn_issues) + "\n"
     ) if cfn_issues else ""
 
@@ -858,13 +816,13 @@ Zennに投稿する前に内容を必ず確認してください。
 
     cfn_issues_html = (
         '<div style="background:#fde8e8;border:2px solid #e53e3e;padding:15px;border-radius:8px;margin:20px 0;">'
-        '<h3 style="color:#c53030;margin-top:0;">⚠️ CFnテンプレート検証で問題が見つかりました</h3>'
+        '<h3 style="color:#c53030;margin-top:0;">⚠️ AWS CLIチェックで問題が見つかりました</h3>'
         '<ul style="color:#c53030;margin:0;">'
         + "".join(f'<li><code>{i}</code></li>' for i in cfn_issues)
         + '</ul></div>'
     ) if cfn_issues else (
         '<div style="background:#e8f5e9;border:1px solid #66bb6a;padding:10px 15px;border-radius:8px;margin:20px 0;">'
-        '<p style="color:#2e7d32;margin:0;">✅ CFnテンプレート検証 — 問題なし</p>'
+        '<p style="color:#2e7d32;margin:0;">✅ AWS CLIチェック — 問題なし</p>'
         '</div>'
     )
 
@@ -964,17 +922,17 @@ def run():
     s3_url    = upload_to_s3(md_path, png_paths, s3_folder)
     print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
 
-    # Step 5: CFnテンプレート検証
+    # Step 5: AWS CLIコマンドチェック
     _t = time.time()
-    print("Step 5: CFnテンプレートを検証中...")
+    print("Step 5: AWS CLIコマンドをチェック中...")
     try:
-        cfn_issues = validate_cfn_in_article(article)
+        cfn_issues = validate_cli_in_article(article)
         if cfn_issues:
-            print(f"  ⚠️ CFn問題検出: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
+            print(f"  ⚠️ CLI検証問題: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
         else:
-            print(f"  ✓ CFn検証問題なし [{time.time()-_t:.1f}s]")
+            print(f"  ✓ CLI検証問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
-        print(f"  CFn検証スキップ（無視して続行）: {e}")
+        print(f"  CLIチェックスキップ（無視して続行）: {e}")
         cfn_issues = []
 
     # Step 6: SES メール通知
