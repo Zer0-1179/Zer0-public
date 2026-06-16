@@ -147,3 +147,4 @@ bash scripts/download_article.sh
 | 2026-06-01 | v1.6       | CFn `validate_template` 検証機能追加・バグ修正5件（重複トピック・TemplateBody上限・HTMLエスケープ・CFn例外取得・マーカー自動除去）・処理時間計測・Bedrockコスト概算ログ追加                                                                                    |
 | 2026-06-15 | v1.7       | コードレビューによるバグ修正3件（PNG未生成時のマーカー除去が正規表現の波括弧不一致で機能していなかった不具合・見出しなし記事でのフォールバック `IndexError`・記事番号カウンターSSMの値破損/書込失敗ガード）・構成図クラスター枠を実線へ統一・回帰テスト3件追加 |
 | 2026-06-16 | v1.8       | 記事内構築手順をCFnテンプレート→AWS CLI中心に変更。プロンプト改修（AWS CLIコマンド変数化・コード例更新）・CFnバリデーション廃止→CLIコマンド存在チェックに置換・`cfn` Lambdaクライアント削除 |
+| 2026-06-16 | v1.9       | コードレビュー反映：`cloudformation:ValidateTemplate` IAM権限を削除（CLAUDE.md step5対応・CFnスタック再デプロイ済み） |

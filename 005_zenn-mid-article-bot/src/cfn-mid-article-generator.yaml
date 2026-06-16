@@ -76,10 +76,6 @@ Resources:
               - Effect: Allow
                 Action: sqs:SendMessage
                 Resource: !GetAtt MidArticleGeneratorDLQ.Arn
-              - Effect: Allow
-                Action:
-                  - cloudformation:ValidateTemplate
-                Resource: "*"
 
   MidArticleGeneratorFunction:
     Type: AWS::Lambda::Function

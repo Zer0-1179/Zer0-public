@@ -343,7 +343,7 @@ AWSの基本サービス（EC2/S3/IAM）は使ったことがある中級者。
 
 ```bash:ステップ例
 # ── ①IAMロールを作成する ──────────────────────
-aws iam create-role --role-name my-app-role \
+aws iam create-role --role-name my-app-role \\
   --assume-role-policy-document file://trust-policy.json
 ```
 
@@ -830,18 +830,33 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
 
 def validate_cli_in_article(article_text: str) -> list[str]:
     """記事内にAWS CLIベースの構築手順が含まれているかチェックする"""
+    import re as _re
     issues = []
-    required = {
+
+    # bashコードブロック内に限定してCLIコマンドを検索（散文中のaws言及と区別）
+    bash_blocks = "\n".join(_re.findall(r'```bash[^\n]*\n(.*?)```', article_text, _re.DOTALL))
+    required_in_bash = {
+        "aws ": "bashブロック内のAWS CLIコマンド",
+    }
+    for keyword, label in required_in_bash.items():
+        if keyword not in bash_blocks:
+            issues.append(f"{label}が見つかりません")
+
+    # 変数定義は記事全体から確認（変数設定ブロックは```bash外に書かれることもある）
+    required_in_text = {
         "APP_NAME=":   "変数設定（APP_NAME）",
         "REGION=":     "変数設定（REGION）",
         "ACCOUNT_ID=": "変数設定（ACCOUNT_ID）",
-        "aws ":        "AWS CLIコマンド",
     }
-    for keyword, label in required.items():
+    for keyword, label in required_in_text.items():
         if keyword not in article_text:
             issues.append(f"{label}が見つかりません")
-    if "クリーンアップ" not in article_text:
-        issues.append("クリーンアップセクションがありません")
+
+    # クリーンアップ節は同義語も許容（監視系トピックはクリーンアップ不要な場合もあるため警告のみ）
+    _CLEANUP_SYNONYMS = ("クリーンアップ", "後片付け", "リソース削除")
+    if not any(kw in article_text for kw in _CLEANUP_SYNONYMS):
+        issues.append("クリーンアップセクションがありません（不要なトピックの場合は無視してください）")
+
     print(f"[CLI検証] 必須要素チェック完了 / 問題{len(issues)}件")
     return issues
 
@@ -1065,7 +1080,7 @@ def lambda_handler(event, context):
         else:
             print(f"  ✓ CLI検証問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
-        print(f"  CFn検証スキップ（無視して続行）: {e}")
+        print(f"  CLIチェックスキップ（無視して続行）: {e}")
         cfn_issues = []
 
     # Step 8: メール通知
