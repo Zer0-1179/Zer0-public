@@ -16,8 +16,8 @@ Parameters:
     Description: Topic selection model (Haiku - lightweight)
   BedrockArticleModelId:
     Type: String
-    Default: jp.anthropic.claude-opus-4-8
-    Description: Article generation model (Opus - high quality)
+    Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Article generation model (Haiku - cost efficient)
   DiagramsLayerArn:
     Type: String
     Description: ARN of the matplotlib Lambda Layer for diagram generation
