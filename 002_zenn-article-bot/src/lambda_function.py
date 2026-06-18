@@ -28,7 +28,7 @@ _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 SES_SENDER_EMAIL    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT_EMAIL = os.environ["SES_RECIPIENT_EMAIL"]
 BEDROCK_MODEL_ID         = os.environ.get("BEDROCK_MODEL_ID",         "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
-BEDROCK_ARTICLE_MODEL_ID = os.environ.get("BEDROCK_ARTICLE_MODEL_ID", "jp.anthropic.claude-opus-4-8")
+BEDROCK_ARTICLE_MODEL_ID = os.environ.get("BEDROCK_ARTICLE_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 OUTPUT_DIR = os.environ.get(
     "OUTPUT_DIR",
     "/tmp/zenn_articles" if _IS_LAMBDA
@@ -608,7 +608,7 @@ def generate_article(topic: dict, today: str) -> tuple[str, str, bool]:
     is_truncated = stop_reason == "max_tokens"
     in_tok  = usage.get('input_tokens', 0)
     out_tok = usage.get('output_tokens', 0)
-    cost_usd = (in_tok * 15.0 + out_tok * 75.0) / 1_000_000  # Opus 4.8 pricing (概算)
+    cost_usd = (in_tok * 0.80 + out_tok * 4.0) / 1_000_000  # Haiku pricing (概算)
     print(f"[Bedrock/article] model={BEDROCK_ARTICLE_MODEL_ID} in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
     if is_truncated:
         print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
