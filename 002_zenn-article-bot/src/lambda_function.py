@@ -27,7 +27,8 @@ _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 # Environment variables
 SES_SENDER_EMAIL    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT_EMAIL = os.environ["SES_RECIPIENT_EMAIL"]
-BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
+BEDROCK_MODEL_ID         = os.environ.get("BEDROCK_MODEL_ID",         "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
+BEDROCK_ARTICLE_MODEL_ID = os.environ.get("BEDROCK_ARTICLE_MODEL_ID", "jp.anthropic.claude-opus-4-8")
 OUTPUT_DIR = os.environ.get(
     "OUTPUT_DIR",
     "/tmp/zenn_articles" if _IS_LAMBDA
@@ -39,7 +40,7 @@ OUTPUT_KEEP_MAX     = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
 
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/zenn-article-bot/recent-topics"
-RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "5"))
+RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "28"))
 
 AWS_TOPICS = [
     {
@@ -176,6 +177,43 @@ AWS_TOPICS = [
         "subtitle": "AWSアカウントの操作ログ管理・セキュリティ監査ガイド",
         "keywords": "証跡, イベント履歴, S3保存, EventBridge連携, セキュリティ監査, コンプライアンス, 不審な操作検知",
     },
+    # ─── サービス特化トピック ────────────────────────────────────────────────────
+    {
+        "id": "ec2_ssm",
+        "name": "Amazon EC2 × AWS Systems Manager",
+        "subtitle": "Session Managerでキーペアもbastionも不要な安全接続ガイド",
+        "keywords": "Session Manager, SSM Agent, IAMロール, ポートフォワーディング, 踏み台不要, VPCエンドポイント, 接続ログ",
+    },
+    {
+        "id": "ec2_ebs",
+        "name": "Amazon EC2 × Amazon EBS",
+        "subtitle": "ボリューム種類の使い分けと複数アタッチで性能を最大化するガイド",
+        "keywords": "gp3, io2, st1, sc1, スループット, IOPS, 複数ボリュームアタッチ, スナップショット, 暗号化",
+    },
+    {
+        "id": "lambda_layers",
+        "name": "AWS Lambda Layers",
+        "subtitle": "外部ライブラリ・共有コードをLayerで効率管理するガイド",
+        "keywords": "Layer, 依存関係, zip, Python, Node.js, バージョン管理, 共有ライブラリ, デプロイパッケージ削減",
+    },
+    {
+        "id": "s3_lifecycle",
+        "name": "Amazon S3 ライフサイクルポリシー",
+        "subtitle": "ストレージクラス自動移行でコストを最適化するガイド",
+        "keywords": "ライフサイクルルール, Standard-IA, Glacier, Intelligent-Tiering, 自動削除, コスト削減, バージョニング",
+    },
+    {
+        "id": "vpc_endpoint",
+        "name": "Amazon VPC エンドポイント",
+        "subtitle": "インターネットを通らずAWSサービスへプライベート接続するガイド",
+        "keywords": "ゲートウェイ型, インターフェイス型, PrivateLink, S3エンドポイント, DynamoDB, セキュリティ, 通信コスト削減",
+    },
+    {
+        "id": "cloudwatch_insights",
+        "name": "Amazon CloudWatch Logs Insights",
+        "subtitle": "クエリ言語でログを高速検索・集計・可視化するガイド",
+        "keywords": "クエリ構文, fields, filter, stats, sort, limit, エラー分析, レイテンシ集計, ダッシュボード連携",
+    },
 ]
 
 # ─── AWS公式ドキュメント URL マップ ───────────────────────────────────────────
@@ -202,6 +240,12 @@ DOCS_URL_MAP: dict[str, str] = {
     "route53":        "https://docs.aws.amazon.com/ja_jp/Route53/latest/DeveloperGuide/Welcome.html",
     "kinesis":        "https://docs.aws.amazon.com/ja_jp/streams/latest/dev/introduction.html",
     "cloudtrail":     "https://docs.aws.amazon.com/ja_jp/awscloudtrail/latest/userguide/cloudtrail-user-guide.html",
+    "ec2_ssm":        "https://docs.aws.amazon.com/ja_jp/systems-manager/latest/userguide/session-manager.html",
+    "ec2_ebs":        "https://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/AmazonEBS.html",
+    "lambda_layers":  "https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/chapter-layers.html",
+    "s3_lifecycle":   "https://docs.aws.amazon.com/ja_jp/AmazonS3/latest/userguide/object-lifecycle-mgmt.html",
+    "vpc_endpoint":   "https://docs.aws.amazon.com/ja_jp/vpc/latest/privatelink/what-is-privatelink.html",
+    "cloudwatch_insights": "https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/logs/AnalyzingLogData.html",
 }
 
 # ─── Zennフロントマター用メタ情報 ─────────────────────────────────────────────
@@ -227,12 +271,33 @@ _ZENN_META: dict[str, dict] = {
     "elasticache":   {"emoji": "⚡",  "topics": ["aws", "elasticache", "redis", "キャッシュ"]},
     "route53":       {"emoji": "🌍",  "topics": ["aws", "route53", "dns", "ネットワーク"]},
     "kinesis":       {"emoji": "🌊",  "topics": ["aws", "kinesis", "ストリーミング", "データ"]},
-    "cloudtrail":    {"emoji": "🔍",  "topics": ["aws", "cloudtrail", "セキュリティ", "監査"]},
+    "cloudtrail":          {"emoji": "🔍",  "topics": ["aws", "cloudtrail", "セキュリティ", "監査"]},
+    "ec2_ssm":             {"emoji": "🔑",  "topics": ["aws", "ec2", "ssm", "セキュリティ"]},
+    "ec2_ebs":             {"emoji": "💽",  "topics": ["aws", "ec2", "ebs", "ストレージ"]},
+    "lambda_layers":       {"emoji": "🧩",  "topics": ["aws", "lambda", "サーバーレス", "python"]},
+    "s3_lifecycle":        {"emoji": "♻️",  "topics": ["aws", "s3", "コスト最適化", "クラウド"]},
+    "vpc_endpoint":        {"emoji": "🔒",  "topics": ["aws", "vpc", "privatelink", "ネットワーク"]},
+    "cloudwatch_insights": {"emoji": "🔎",  "topics": ["aws", "cloudwatch", "ログ分析", "監視"]},
 }
 
 ARTICLE_PROMPT_TEMPLATE = """
 あなたはZennで多くの「いいね」を獲得している技術ライターです。
 「読んでよかった」と思わせる記事を書いてください。テンプレートを埋める作業ではなく、読者の課題を解決する記事です。
+
+## 出力形式（必須）
+出力の**1行目**を次の形式にしてください。
+
+TITLE: ここに記事タイトルを書く
+
+タイトルのルール:
+- 読者が「自分ごと」に感じる具体的な表現（「〜したい人向け」「〜で詰まったら」等）
+- サービス名をそのままコピーしない（「AWS Lambdaとは」のような汎用タイトルは避ける）
+- 30〜50文字程度
+- 例: 「AWS Lambdaのコールドスタートを1秒以下に抑える3つの方法」
+
+その後、空行を1行挟んで記事本文（## はじめに から始まる）を書いてください。
+
+---
 
 ## テーマ
 {topic_name}：{topic_subtitle}
@@ -507,8 +572,8 @@ def select_topic_with_bedrock(excluded_ids: list[str]) -> dict:
 
 # ─── 記事生成 ─────────────────────────────────────────────────────────────────
 
-def generate_article(topic: dict, today: str) -> tuple[str, bool]:
-    """Bedrock を使って記事を生成する。(article_text, is_truncated) を返す"""
+def generate_article(topic: dict, today: str) -> tuple[str, str, bool]:
+    """Bedrock を使って記事を生成する。(article_text, title, is_truncated) を返す"""
     docs_content = fetch_aws_docs(topic["id"])
     docs_section = (
         "## AWS公式ドキュメント（根拠情報）\n"
@@ -526,7 +591,7 @@ def generate_article(topic: dict, today: str) -> tuple[str, bool]:
     )
 
     response = bedrock.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
+        modelId=BEDROCK_ARTICLE_MODEL_ID,
         contentType="application/json",
         accept="application/json",
         body=json.dumps({
@@ -543,14 +608,26 @@ def generate_article(topic: dict, today: str) -> tuple[str, bool]:
     is_truncated = stop_reason == "max_tokens"
     in_tok  = usage.get('input_tokens', 0)
     out_tok = usage.get('output_tokens', 0)
-    cost_usd = (in_tok * 0.80 + out_tok * 4.0) / 1_000_000  # Haiku pricing (概算)
-    print(f"[Bedrock/article] in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
+    cost_usd = (in_tok * 15.0 + out_tok * 75.0) / 1_000_000  # Opus 4.8 pricing (概算)
+    print(f"[Bedrock/article] model={BEDROCK_ARTICLE_MODEL_ID} in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
     if is_truncated:
         print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
 
+    # 1行目の TITLE: を抽出してから本文を分離する
+    title = f"{topic['name']}：{topic['subtitle']}"  # デフォルト（抽出失敗時のフォールバック）
+    text_stripped = text.lstrip()
+    if text_stripped.startswith("TITLE:"):
+        first_line, _, rest = text_stripped.partition("\n")
+        extracted = first_line[len("TITLE:"):].strip()
+        if extracted:
+            title = extracted
+            print(f"[Title] 抽出成功: {title}")
+        text = rest.lstrip()
+    else:
+        print(f"[Title] TITLE: 行が見つからず。フォールバックタイトルを使用: {title}")
+
     # Bedrock が記事冒頭に YAML frontmatter を付けることがあるため除去する
     if text.lstrip().startswith("---"):
-        # 2つ目の "---" までをスキップ
         lines = text.lstrip().splitlines(keepends=True)
         end = 1
         for i in range(1, len(lines)):
@@ -559,7 +636,7 @@ def generate_article(topic: dict, today: str) -> tuple[str, bool]:
                 break
         text = "".join(lines[end:]).lstrip()
 
-    return text, is_truncated
+    return text, title, is_truncated
 
 
 # ─── MD 生成（画像プレースホルダー付き） ─────────────────────────────────────
@@ -661,7 +738,7 @@ def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
         print(f"古い記事フォルダを削除: {os.path.basename(folder)}")
 
 
-def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[str]]:
+def save_to_local(topic: dict, article: str, timestamp: str, title: str = "") -> tuple[str, list[str]]:
     """記事を MD ファイルに保存し、構成図 PNG も生成する。(mdパス, pngパスリスト) を返す"""
     output_dir = os.path.expanduser(OUTPUT_DIR)
     os.makedirs(output_dir, exist_ok=True)
@@ -685,9 +762,10 @@ def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[
     # Zennフロントマター用メタ情報
     meta = _ZENN_META.get(topic["id"], {"emoji": "☁️", "topics": ["aws", "クラウド"]})
     topics_json = json.dumps(meta["topics"], ensure_ascii=False)
+    frontmatter_title = title if title else f"{topic['name']}：{topic['subtitle']}"
 
     full_content = f"""---
-title: "{topic['name']}：{topic['subtitle']}"
+title: "{frontmatter_title}"
 emoji: "{meta['emoji']}"
 type: "tech"
 topics: {topics_json}
@@ -904,14 +982,14 @@ def run():
     # Step 2: 記事生成
     _t = time.time()
     print("Step 2: 記事を生成中（2,000〜3,500文字）...")
-    article, is_truncated = generate_article(topic, today)
+    article, title, is_truncated = generate_article(topic, today)
     char_count = len(article)
-    print(f"  記事生成完了: {char_count:,}文字 [{time.time()-_t:.1f}s]")
+    print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")
 
     # Step 3: ローカル保存（MD + PNG）
     _t = time.time()
     print("Step 3: ファイル保存中（記事MD + 構成図PNG）...")
-    md_path, png_paths = save_to_local(topic, article, timestamp)
+    md_path, png_paths = save_to_local(topic, article, timestamp, title)
     print(f"  MD保存完了: {md_path}")
     print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]" if png_paths else f"  PNG生成: スキップ [{time.time()-_t:.1f}s]")
 

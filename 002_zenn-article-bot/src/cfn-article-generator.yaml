@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Zenn Article Auto-Generation System - Generates AWS beginner articles via Bedrock Claude Haiku
+  Zenn Article Auto-Generation System - Generates AWS beginner articles via Bedrock Claude Opus
   on the 1st and 3rd Thursday of each month at 21:00 JST and sends email notifications via SES
 
 Parameters:
@@ -13,6 +13,11 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Topic selection model (Haiku - lightweight)
+  BedrockArticleModelId:
+    Type: String
+    Default: jp.anthropic.claude-opus-4-8
+    Description: Article generation model (Opus - high quality)
   DiagramsLayerArn:
     Type: String
     Description: ARN of the matplotlib Lambda Layer for diagram generation
@@ -49,8 +54,8 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
                   - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-opus-4-8"
                   - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
-                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
               - Effect: Allow
                 Action:
                   - aws-marketplace:ViewSubscriptions
@@ -92,6 +97,8 @@ Resources:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_ARTICLE_MODEL_ID: !Ref BedrockArticleModelId
+          RECENT_TOPICS_LIMIT: "28"
           MATPLOTLIB_BACKEND: Agg
           S3_BUCKET: zer0-dev-s3
       DeadLetterConfig:
