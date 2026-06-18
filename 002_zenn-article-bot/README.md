@@ -148,3 +148,4 @@ bash scripts/download_article.sh
 | 2026-06-15 | v1.7       | コードレビューによるバグ修正3件（PNG未生成時のマーカー除去が正規表現の波括弧不一致で機能していなかった不具合・見出しなし記事でのフォールバック `IndexError`・記事番号カウンターSSMの値破損/書込失敗ガード）・構成図クラスター枠を実線へ統一・回帰テスト3件追加 |
 | 2026-06-16 | v1.8       | 記事内構築手順をCFnテンプレート→AWS CLI中心に変更。プロンプト改修（AWS CLIコマンド変数化・コード例更新）・CFnバリデーション廃止→CLIコマンド存在チェックに置換・`cfn` Lambdaクライアント削除                                                                    |
 | 2026-06-16 | v1.9       | コードレビュー反映：`cloudformation:ValidateTemplate` IAM権限を削除（CLAUDE.md step5対応・CFnスタック再デプロイ済み）                                                                                                                                          |
+| 2026-06-18 | v2.0       | サブトピック追加（ec2_ssm / ec2_ebs / lambda_layers / s3_lifecycle / vpc_endpoint / cloudwatch_insights）・トピック重複除外数を5→28（全トピック数）に拡大・記事生成モデルをHaiku→Opus 4.8に変更・動的タイトル生成（`TITLE:` 行をBedrockが出力→フロントマターに反映） |
