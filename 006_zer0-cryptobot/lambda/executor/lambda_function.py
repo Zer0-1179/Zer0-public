@@ -44,6 +44,8 @@ TRAIL_MULT  = 0.75  # トレーリング幅 = 極値 ± ATR × 0.75（最大効�
 TP1_RATIO   = 0.3   # TP1 の数量割合
 TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
 SL_SLIPPAGE = 0.003 # stop_limit SL の price オフセット率（急落/急騰での未約定防止）
+FILL_POLL_INTERVAL_S = 2   # 成行約定待機ポーリング間隔（秒）
+FILL_POLL_TIMEOUT_S  = 30  # 成行約定待機タイムアウト（秒）
 
 # 証拠金維持率閾値（total_margin_balance_percentage = 残高/建玉時価総額×100）
 # 通常の運用値: 3ポジション満杯で約55〜70%。実口座で確認済み（2026-04-28）
@@ -423,6 +425,62 @@ def verify_order(bb: BitbankClient, pair: str, order_id: int, context: str = "")
     raise OrderVerificationError(f"{pair} order {order_id} ({context}) unverifiable")
 
 
+def _apply_entry_fill(bb: "BitbankClient", pair: str, pos: dict, order: dict, cfg: dict):
+    """約定済みエントリー注文からTP1/SLを発注し pos を active に更新する（破壊的）。
+    (entry, amount, sl_price, tp1_price) を返す。notify_entry_fill は呼び出し側が行う。"""
+    avg_price   = order.get("average_price")
+    exec_amount = order.get("executed_amount")
+    if not avg_price or not exec_amount:
+        raise ValueError(f"約定情報欠落（avg={avg_price}, amt={exec_amount}）")
+
+    direction  = pos["direction"]
+    close_side = "sell" if direction == "long" else "buy"
+    entry      = float(avg_price)
+    amount     = float(exec_amount)
+    atr_ratio  = pos["atr_jpy"] / pos["entry_price_signal"]
+    atr_jpy    = atr_ratio * entry
+
+    if direction == "long":
+        tp1_price = entry + atr_jpy * TP1_MULT
+        sl_price  = entry - atr_jpy * SL_MULT
+    else:
+        tp1_price = entry - atr_jpy * TP1_MULT
+        sl_price  = entry + atr_jpy * SL_MULT
+
+    tp1_amount   = round(amount * TP1_RATIO,   cfg["amount_prec"])
+    trail_amount = round(amount * TRAIL_RATIO, cfg["amount_prec"])
+
+    o_tp1 = bb.create_order(pair,
+                            round_amount(tp1_amount, cfg["amount_prec"]),
+                            round_price(tp1_price,   cfg["price_prec"]),
+                            close_side, position_side=direction)
+    verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
+    sl_trigger_str = round_price(sl_price, cfg["price_prec"])
+    sl_limit_f     = sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
+    sl_limit_str   = round_price(sl_limit_f, cfg["price_prec"])
+    o_sl = bb.create_order(pair,
+                           round_amount(trail_amount, cfg["amount_prec"]),
+                           sl_limit_str,
+                           close_side, position_side=direction,
+                           trigger_price=sl_trigger_str)
+    verify_order(bb, pair, o_sl["order_id"], "初期SL注文（stop_limit）")
+
+    pos.update({
+        "status":        "active",
+        "entry_price":   entry,
+        "total_amount":  amount,
+        "atr_jpy":       atr_jpy,
+        "tp1_price":     tp1_price,
+        "tp1_amount":    tp1_amount,
+        "trail_amount":  trail_amount,
+        "sl_price":      sl_price,
+        "tp1_order_id":  o_tp1["order_id"],
+        "sl_order_id":   o_sl["order_id"],
+        "tp1_filled":    False,
+    })
+    return entry, amount, sl_price, tp1_price
+
+
 def get_available_margin(bb: BitbankClient, pair: str | None = None) -> float:
     """新規建て可能額（JPY）を返す。
     available_balances[pair]["long"] は証拠金 × レバレッジ後の建玉可能額。"""
@@ -579,56 +637,13 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
 
                 if status == "FULLY_FILLED":
                     log(f"{pair}({direction}): エントリー約定 → TP1/SL 発注")
-                    avg_price   = order.get("average_price")
-                    exec_amount = order.get("executed_amount")
-                    if not avg_price or not exec_amount:
-                        log(f"{pair}({direction}): 約定情報欠落（avg={avg_price}, amt={exec_amount}）→ スキップ")
+                    try:
+                        entry, amount, sl_price, tp1_price = _apply_entry_fill(bb, pair, pos, order, cfg)
+                        remaining = get_available_margin(bb, pair)
+                        notify_entry_fill(pair, direction, entry, amount, sl_price, tp1_price, remaining)
+                    except ValueError as ve:
+                        log(f"{pair}({direction}): {ve} → スキップ")
                         continue
-                    entry     = float(avg_price)
-                    amount    = float(exec_amount)
-                    atr_ratio = pos["atr_jpy"] / pos["entry_price_signal"]
-                    atr_jpy   = atr_ratio * entry
-
-                    if direction == "long":
-                        tp1_price = entry + atr_jpy * TP1_MULT
-                        sl_price  = entry - atr_jpy * SL_MULT
-                    else:
-                        tp1_price = entry - atr_jpy * TP1_MULT
-                        sl_price  = entry + atr_jpy * SL_MULT
-
-                    tp1_amount   = round(amount * TP1_RATIO,   cfg["amount_prec"])
-                    trail_amount = round(amount * TRAIL_RATIO, cfg["amount_prec"])
-
-                    o_tp1 = bb.create_order(pair,
-                                            round_amount(tp1_amount, cfg["amount_prec"]),
-                                            round_price(tp1_price,   cfg["price_prec"]),
-                                            close_side, position_side=direction)
-                    verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
-                    sl_trigger_str = round_price(sl_price, cfg["price_prec"])
-                    sl_limit_f     = sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
-                    sl_limit_str   = round_price(sl_limit_f, cfg["price_prec"])
-                    o_sl  = bb.create_order(pair,
-                                            round_amount(trail_amount, cfg["amount_prec"]),
-                                            sl_limit_str,
-                                            close_side, position_side=direction,
-                                            trigger_price=sl_trigger_str)
-                    verify_order(bb, pair, o_sl["order_id"], "初期SL注文（stop_limit）")
-
-                    pos.update({
-                        "status":        "active",
-                        "entry_price":   entry,
-                        "total_amount":  amount,
-                        "atr_jpy":       atr_jpy,
-                        "tp1_price":     tp1_price,
-                        "tp1_amount":    tp1_amount,
-                        "trail_amount":  trail_amount,
-                        "sl_price":      sl_price,
-                        "tp1_order_id":  o_tp1["order_id"],
-                        "sl_order_id":   o_sl["order_id"],
-                        "tp1_filled":    False,
-                    })
-                    remaining = get_available_margin(bb, pair)
-                    notify_entry_fill(pair, direction, entry, amount, sl_price, tp1_price, remaining)
 
                 elif time.time() - pos["buy_timestamp"] > CANCEL_AFTER_S:
                     log(f"{pair}({direction}): 24時間未約定 → キャンセル")
@@ -1002,8 +1017,34 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                 long_count += 1
             else:
                 short_count += 1
+
+            # 成行約定を待って即時 TP1/SL 発注（最大 FILL_POLL_TIMEOUT_S 秒）
+            pos = state["positions"][pair]
+            filled_order = None
+            deadline = time.time() + FILL_POLL_TIMEOUT_S
+            while time.time() < deadline:
+                try:
+                    o = bb.get_order(pair, order["order_id"])
+                    if o.get("status") == "FULLY_FILLED":
+                        filled_order = o
+                        break
+                except Exception as pe:
+                    log(f"{pair}: 約定ポーリングエラー: {pe}")
+                time.sleep(FILL_POLL_INTERVAL_S)
+
+            if filled_order:
+                log(f"{pair}({direction}): 成行即時約定確認 → TP1/SL即時発注")
+                try:
+                    entry, amount, sl_price, tp1_price = _apply_entry_fill(bb, pair, pos, filled_order, cfg)
+                    remaining = get_available_margin(bb, pair)
+                    notify_entry_fill(pair, direction, entry, amount, sl_price, tp1_price, remaining)
+                except Exception as fe:
+                    log(f"{pair}: TP1/SL即時発注失敗（buy_pendingで継続）: {fe}")
+            else:
+                log(f"{pair}({direction}): 成行約定待機タイムアウト({FILL_POLL_TIMEOUT_S}s) → buy_pendingで次回確認")
+
         except OrderVerificationError:
-            pass  # verify_order 内でメール送信済み
+            pass  # verify_order 内でメール送���済み
         except Exception as e:
             log(f"{pair} 注文エラー: {e}")
             send_email(
