@@ -53,6 +53,7 @@ Resources:
       Role: !GetAtt PosterRole.Arn
       Timeout: 120
       MemorySize: 256
+      ReservedConcurrentExecutions: 1
       Environment:
         Variables:
           SSM_PREFIX: /xposter
