@@ -115,9 +115,7 @@ CLASSMETHOD_PATTERNS = [
 
 
 def pick_mainstream_article(articles: list) -> dict:
-    """王道サービスへの言及数でスコアリングし、最もスコアの高い記事を返す。
-    zenn・qiita はスコア1未満の記事を除外する。除外後に候補が0件の場合は
-    aws_news・aws_blog のみにフォールバックする。"""
+    """zenn/qiita はスコア1以上のみ対象。候補0件なら公式ソースのみにフォールバック。"""
     if not articles:
         raise RuntimeError("全RSSフィードから記事が取得できませんでした")
     def score(article):
@@ -149,7 +147,7 @@ def pick_mainstream_article(articles: list) -> dict:
 
 
 def load_history(ssm_client) -> dict:
-    """SSMから投稿履歴を読み込む。パラメータが存在しない場合は空の履歴を返す。"""
+    """パラメータ未存在時は空の履歴を返す。"""
     try:
         value = ssm_client.get_parameter(Name=HISTORY_PARAM)["Parameter"]["Value"]
         return json.loads(value)
@@ -162,7 +160,6 @@ def load_history(ssm_client) -> dict:
 
 
 def save_history(ssm_client, history: dict):
-    """SSMに投稿履歴を保存する。"""
     history["last_updated"] = datetime.now(JST).isoformat()
     ssm_client.put_parameter(
         Name=HISTORY_PARAM,
@@ -174,8 +171,7 @@ def save_history(ssm_client, history: dict):
 
 
 def pick_post_type(slot_types: list, used_types: list) -> str:
-    """used_types（直近MAX_USED_TYPES件）に含まれていないタイプからランダム選択。
-    全タイプが直近に含まれている場合は最も古く使われたタイプを選ぶ。"""
+    """直近使用済みを避けて選択。全タイプが使用済みなら最古のタイプを返す。"""
     recent = used_types[-MAX_USED_TYPES:]
     unused = [t for t in slot_types if t not in recent]
     if unused:
@@ -188,9 +184,7 @@ def pick_post_type(slot_types: list, used_types: list) -> str:
 
 
 def build_hashtags(main: dict) -> str:
-    """記事内容からハッシュタグを0〜1個生成する。
-    Xではタグの流入効果が薄く、複数タグはBot感・スパム感が出るため
-    最大1個・約35%はタグなしにする。"""
+    """複数タグはBot感シグナルのため最大1個・35%はタグなし。"""
     if random.random() < 0.35:
         return ""
     text = (main.get("title", "") + " " + main.get("desc", "")).upper()
@@ -211,19 +205,15 @@ def build_hashtags(main: dict) -> str:
 
 
 def is_japanese(text: str) -> bool:
-    """テキストに日本語文字（ひらがな・カタカナ・漢字）が含まれるか判定する。"""
     return bool(re.search(r'[ぁ-んァ-ン一-龥]', text))
 
 
 def extract_topic_keywords(title: str) -> list:
-    """MAINSTREAM_KEYWORDSからタイトルにマッチするキーワードを抽出してUPPERで返す"""
     text = title.upper()
     return [kw.upper() for kw in MAINSTREAM_KEYWORDS if kw.upper() in text]
 
 
 def is_topic_duplicate(article: dict, used_keywords: list) -> bool:
-    """extract_topic_keywordsの結果とused_keywordsの直近40件を比較し、
-    1つ以上被っていればTrueを返す"""
     keywords = extract_topic_keywords(article.get("title", ""))
     if not keywords:
         return False
@@ -236,7 +226,6 @@ SERVICE_COOLDOWN_DAYS = 3
 
 
 def is_service_in_cooldown(article: dict, used_services: dict) -> bool:
-    """記事の主要サービスが直近SERVICE_COOLDOWN_DAYS日以内に投稿済みであればTrueを返す"""
     keywords = extract_topic_keywords(article.get("title", ""))
     today = datetime.now(JST).date()
     for kw in keywords:
@@ -249,7 +238,7 @@ def is_service_in_cooldown(article: dict, used_services: dict) -> bool:
 
 
 def is_too_old(article: dict) -> bool:
-    """公開日がMAX_ARTICLE_AGE_DAYS日より古い場合Trueを返す。日付不明の場合はFalse"""
+    """日付不明の場合はFalseを返す（古い記事扱いにしない）。"""
     pub_str = article.get("pub_date", "")
     if not pub_str:
         return False
@@ -260,12 +249,14 @@ def is_too_old(article: dict) -> bool:
             pub = datetime.fromisoformat(pub_str)
         except Exception:
             return False
+    if pub.tzinfo is None:
+        pub = pub.replace(tzinfo=timezone.utc)
     cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_ARTICLE_AGE_DAYS)
-    return pub.astimezone(timezone.utc) < cutoff
+    return pub < cutoff
 
 
 def fetch_article_text(url: str, max_chars: int = 2500) -> str:
-    """メイン記事ページの本文を取得しテキスト化する（事実確認用の抜粋）。失敗時は空文字。"""
+    """本文取得。失敗時は空文字を返す（RSSのみで続行できるため）。"""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as r:
@@ -281,7 +272,7 @@ def fetch_article_text(url: str, max_chars: int = 2500) -> str:
 
 
 def verify_tweet(bedrock, body: str, title: str, article_excerpt: str, max_len: int) -> str:
-    """生成ツイートの事実主張を記事本文と突き合わせて検証し、必要なら修正版を返す。"""
+    """事実主張を記事と照合し、誤りがあれば修正版を返す。"""
     prompt = f"""あなたはAWS技術記事の監修者。以下のX投稿草案に含まれる「事実の主張」だけを検証してください。
 
 【根拠（記事タイトル）】{title}
@@ -323,7 +314,7 @@ JSONのみを出力する。説明・見出し・修正理由は一切書かな�
 
 
 def generate_thread(bedrock, prompt: str) -> list:
-    """スレッド投稿用のツイート配列を生成する（プリフィルでJSON出力を強制）。"""
+    """プリフィルでJSON出力を強制してツイート配列を生成する。"""
     resp = bedrock.invoke_model(
         modelId="jp.anthropic.claude-haiku-4-5-20251001-v1:0",
         body=json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 1000,
@@ -341,7 +332,7 @@ def generate_thread(bedrock, prompt: str) -> list:
 
 
 def verify_thread(bedrock, tweets: list, title: str, article_excerpt: str) -> list:
-    """スレッド全体の事実主張を記事本文と突き合わせて検証する。パース失敗時は元の配列を返す。"""
+    """スレッド事実検証。パース失敗・件数変化時は元の配列を返す。"""
     joined = json.dumps(tweets, ensure_ascii=False)
     prompt = f"""あなたはAWS技術記事の監修者。以下のXスレッド投稿草案（JSON配列）に含まれる「事実の主張」だけを検証してください。
 
@@ -386,7 +377,7 @@ JSONのみを出力する。説明・修正理由は一切書かない。
 
 
 def clamp_tweet(text: str, max_len: int = TWEET_MAX_LEN) -> str:
-    """ツイートをmax_len以内に収める。文末記号で自然に切れる位置を優先する。"""
+    """文末記号境界を優先して切り、mid-sentence truncation を避ける。"""
     if len(text) <= max_len:
         return text
     cut = text[:max_len]
@@ -397,7 +388,6 @@ def clamp_tweet(text: str, max_len: int = TWEET_MAX_LEN) -> str:
 
 
 def post_tweet(auth, text: str, reply_to: str = None) -> str:
-    """X API v2でツイートを投稿し、tweet_idを返す。reply_to指定でリプライ投稿。"""
     payload = {"text": text}
     if reply_to:
         payload["reply"] = {"in_reply_to_tweet_id": reply_to}
@@ -770,10 +760,16 @@ def lambda_handler(event, context):
         auth     = OAuth1(api_key, api_secret, acc_token, acc_secret)
         tweet_id = None
         prev_id  = None
-        for t in tweets:
-            prev_id  = post_tweet(auth, t, reply_to=prev_id)
-            tweet_id = tweet_id or prev_id
-        print(f"[Success] https://x.com/i/web/status/{tweet_id}")
+        post_err = None
+        try:
+            for t in tweets:
+                prev_id  = post_tweet(auth, t, reply_to=prev_id)
+                tweet_id = tweet_id or prev_id
+        except Exception as e:
+            post_err = e
+            print(f"[X] スレッド投稿エラー（部分投稿の可能性あり）: {e}")
+        if tweet_id:
+            print(f"[Success] https://x.com/i/web/status/{tweet_id}")
     else:
         # ── 通常投稿：本文＋タグ0〜1個。URLはリプライにぶら下げる ──
         hashtags = build_hashtags(main)
@@ -805,25 +801,28 @@ def lambda_handler(event, context):
         print(f"[Success] https://x.com/i/web/status/{tweet_id}")
 
         # 外部リンクは本文に入れるとリーチが抑制されるためリプライにぶら下げる
-        if with_url:
+        if with_url and tweet_id:
             try:
                 post_tweet(auth, main["url"], reply_to=tweet_id)
             except Exception as e:
                 print(f"[X] URLリプライ投稿失敗（本文投稿は成功済みのため続行）: {e}")
 
-    # 投稿成功後にSSM履歴を更新
-    updated_urls = used_urls + [main["url"]]
-    history["used_urls"]  = updated_urls[-MAX_USED_URLS:]
-    updated_types = history.get("used_types", []) + [post_type]
-    history["used_types"] = updated_types[-MAX_USED_TYPES:]
-    new_keywords = extract_topic_keywords(main["title"])
-    history["used_keywords"] = (history.get("used_keywords", []) + new_keywords)[-40:]
-    # サービス別クールダウン履歴を更新
-    today_str = datetime.now(JST).date().isoformat()
-    for kw in new_keywords:
-        used_services[kw] = today_str
-    cutoff = (datetime.now(JST).date() - timedelta(days=30)).isoformat()
-    history["used_services"] = {k: v for k, v in used_services.items() if v > cutoff}
-    save_history(ssm, history)
+    # スレッド途中エラーでも投稿済みツイートがあれば履歴を保存して重複防止
+    if post_type != "thread_tips" or tweet_id:
+        updated_urls = used_urls + [main["url"]]
+        history["used_urls"]  = updated_urls[-MAX_USED_URLS:]
+        updated_types = history.get("used_types", []) + [post_type]
+        history["used_types"] = updated_types[-MAX_USED_TYPES:]
+        new_keywords = extract_topic_keywords(main["title"])
+        history["used_keywords"] = (history.get("used_keywords", []) + new_keywords)[-40:]
+        today_str = datetime.now(JST).date().isoformat()
+        for kw in new_keywords:
+            used_services[kw] = today_str
+        cutoff = (datetime.now(JST).date() - timedelta(days=30)).isoformat()
+        history["used_services"] = {k: v for k, v in used_services.items() if v > cutoff}
+        save_history(ssm, history)
+
+    if post_type == "thread_tips" and post_err:
+        raise post_err
 
     return {"statusCode": 200, "post_type": post_type, "tweet_id": tweet_id}

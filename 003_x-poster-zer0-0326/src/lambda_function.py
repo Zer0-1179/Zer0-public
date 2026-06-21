@@ -1,18 +1,4 @@
-"""
-X AI Bot - Lambda Function
-@Zer0_0326 — AIに頼りながらなんとか生きてる普通の会社員
-実用系（プロンプトレシピ/実録/比較/失敗談/副業/問いかけ）自動投稿Bot
-全投稿に「持ち帰れる具体」を1つ入れる方針（保存・ブクマ狙い）
-
-スケジュール:
-- 月曜 20:00 JST: 50%でurl_reaction（Zenn/Qiita AI記事への感想投稿）、50%でローテーションカテゴリ
-- 木曜 20:00 JST: question固定（議論系・返信エンゲージメント最大化）
-- 日曜10:00 JST: Google Trendsトレンド投稿（AIと絡められる場合のみ）
-
-EventBridge Input:
-  {"mode": "random"}  -- ランダムカテゴリ
-  {"mode": "trend"}   -- Google Trendsトレンド（フォールバックあり）
-"""
+"""X auto-post bot @Zer0_0326 — AI lifestyle content via Bedrock (Mon/Thu 20:00, Sun 10:00 JST)."""
 
 import json, os, random, re, time, urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
@@ -964,10 +950,13 @@ AIの回答を信じて上司に即レスしたら間違ってた
 # ツイート処理
 # ─────────────────────────────────────────────────────
 
+_HASHTAG_LINE_RE = re.compile(r'^(#\S+(\s+#\S+)*)$')
+
+
 def trim_body_excluding_hashtags(text: str, limit: int = BODY_LIMIT) -> str:
-    """本文（ハッシュタグ除く）を140文字以内に収め、ハッシュタグと再結合する。"""
+    """末尾ハッシュタグ行を分離し、本文を limit 文字以内に収めて再結合する。"""
     lines      = text.strip().split('\n')
-    hashtag_re = re.compile(r'^(#\S+(\s+#\S+)*)$')
+    hashtag_re = _HASHTAG_LINE_RE
 
     tag_lines = []
     for line in reversed(lines):
@@ -1140,6 +1129,7 @@ def lambda_handler(event, context):
                 print("[Force] FORCE_CATEGORY=url_reaction")
             else:
                 print("[Warning] FORCE_CATEGORY=url_reaction 記事取得失敗（ローテーションで続行）")
+                category = pick_category(used_categories)
         else:
             print(f"[Warning] 無効なFORCE_CATEGORY: '{force_cat}'（無視）")
     print(f"[Category] {category} (直近使用: {used_categories[-MAX_CATEGORY_HISTORY:]})")
@@ -1172,13 +1162,14 @@ def lambda_handler(event, context):
     if category == "url_reaction":
         # 本文は100文字以内。URLは本文に入れるとリーチが抑制されるため、投稿後にリプライへぶら下げる
         body  = trim_body_excluding_hashtags(raw, limit=URL_REACTION_LIMIT)
+        body  = re.sub(r'\n#\S+', '', body).rstrip()  # drop model-inserted hashtag lines
         htag  = pick_hashtag(body + " " + url_article["title"])
         tweet = f"{body}\n{htag}"
     else:
         tweet = trim_body_excluding_hashtags(raw)
 
-    # Bot感軽減: 約35%はハッシュタグなしで投稿する
-    if random.random() < NO_HASHTAG_RATE:
+    # Bot感軽減: 約35%はハッシュタグなしで投稿する（url_reaction は除く）
+    if category != "url_reaction" and random.random() < NO_HASHTAG_RATE:
         stripped = re.sub(r'[ \t]*#\S+', '', tweet).rstrip()
         if stripped:
             tweet = stripped
