@@ -1120,6 +1120,9 @@ def lambda_handler(event, context):
             log(f"Phase B: 新規シグナル処理 ({len(signals)} 件)")
             state = place_new_orders(bb, state, signals, event)
         else:
+            # signals が空 = Analyzer 未呼び出し（EventBridge の :15/:45 直接起動）か
+            # Analyzer が失敗してシグナルなしで invoke した場合。
+            # いずれも Phase A（既存ポジション管理）は継続し、新規建てのみスキップする。
             log("Phase B: シグナルなし → スキップ")
 
         save_state(state)
