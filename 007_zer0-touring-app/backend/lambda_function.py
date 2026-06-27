@@ -565,7 +565,7 @@ def lambda_handler(event, context):
     if method == "GET" and path == "/api/status":
         client_ip = _get_client_ip(event)
         req_token = (event.get("headers") or {}).get("x-admin-token", "")
-        is_admin  = bool(ADMIN_TOKEN and req_token == ADMIN_TOKEN)
+        is_admin  = bool(ADMIN_TOKEN and secrets.compare_digest(req_token, ADMIN_TOKEN))
         if is_admin:
             payload = {"used": 0, "limit": DAILY_LIMIT, "remaining": DAILY_LIMIT, "admin": True}
         else:
@@ -580,7 +580,7 @@ def lambda_handler(event, context):
     # レートリミット（IP別・日別）— 管理者トークンがあればスキップ
     client_ip = _get_client_ip(event)
     req_token = (event.get("headers") or {}).get("x-admin-token", "")
-    is_admin  = bool(ADMIN_TOKEN and req_token == ADMIN_TOKEN)
+    is_admin  = bool(ADMIN_TOKEN and secrets.compare_digest(req_token, ADMIN_TOKEN))
     if not is_admin and not check_rate_limit(client_ip):
         return {
             "statusCode": 429,

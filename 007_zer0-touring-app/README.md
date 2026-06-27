@@ -403,3 +403,4 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | 2026-05-22 | v1.6       | 現在地・目的地 天気比較ウィジェット（バイク走行アニメーション）+ 7日間週間天気予報ストリップ追加                                  |
 | 2026-05-25 | v1.7       | iOS Safariバックグラウンドリロード対応（`?course=` URL復元）+ popstate ネイティブ戻るジェスチャー対応                             |
 | 2026-06-15 | v1.8       | セキュリティ改善: JST化・CSP 'unsafe-inline'除去・secrets.choice化・DeletionPolicy追加・GMaps使用量をDynamoDBアトミック管理へ移行 |
+| 2026-06-27 | v1.9       | セキュリティ修正: ADMIN_TOKEN を `secrets.compare_digest` で定数時間比較・共有リンク数値フィールドを `Number()` 正規化して HTML 注入防止・`?admin=off` 解除ロジックバグ修正 |

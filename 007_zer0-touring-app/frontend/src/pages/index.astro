@@ -1504,6 +1504,16 @@
       (function(){
         const params = new URLSearchParams(location.search);
         const token  = params.get('admin');
+        // ?admin=off で解除（token チェックより先に判定する）
+        if (token === 'off') {
+          localStorage.removeItem('adminToken');
+          params.delete('admin');
+          const newUrl = location.pathname + (params.toString() ? '?' + params.toString() : '');
+          history.replaceState({}, '', newUrl);
+          showToast('管理者モード解除');
+          fetchUsage();
+          return;
+        }
         if (token) {
           localStorage.setItem('adminToken', token);
           params.delete('admin');
@@ -1512,18 +1522,19 @@
           showToast('🔑 管理者モード有効');
           fetchUsage();
         }
-        // ?admin=off で解除
-        if (params.get('admin') === 'off') {
-          localStorage.removeItem('adminToken');
-          showToast('管理者モード解除');
-          fetchUsage();
-        }
       })();
 
       (function(){
         const param=new URLSearchParams(location.search).get('course');
         if(!param)return;
-        try{const c=JSON.parse(decodeURIComponent(atob(param)));courses=[c];openDetail(0);}catch(_){}
+        try{
+          const c=JSON.parse(decodeURIComponent(atob(param)));
+          // 共有リンク経由の数値フィールドは Number() で正規化し HTML 注入を防ぐ
+          ['distance_km','duration_hours','return_hours','dest_temp','dest_lat','dest_lon','dest_weather_code'].forEach(k=>{
+            if(c[k]!==undefined&&c[k]!==null) c[k]=Number(c[k])||0;
+          });
+          courses=[c];openDetail(0);
+        }catch(_){}
       })();
 
       // 残り利用回数バッジ

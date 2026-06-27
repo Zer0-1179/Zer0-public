@@ -163,3 +163,4 @@ bash src/deploy.sh
 | 2026-06-11 | v1.7       | リーチ最適化：記事URLを本文からリプライぶら下げに変更（リンク入り投稿のリーチ抑制対策）、ハッシュタグを最大1個・約35%タグなしに削減、スレッド形式Tips投稿タイプ `thread_tips` 追加。テスト用 `FORCE_TYPE` 環境変数追加                                                                                       |
 | 2026-06-15 | v1.8       | コードレビュー反映：スレッド各ツイートの280文字クランプ追加（URL付加で最終ツイートが上限超過しX APIに拒否される不具合を修正）、事実検証でスレッド件数が変わった場合は草案を採用（連投構造の破壊を防止）、boto3クライアント（SSM/Bedrock）をモジュールスコープ化、文字数クランプ処理を `clamp_tweet` に共通化 |
 | 2026-06-22 | v1.9       | バグ修正＋ブラッシュアップ：スレッド途中エラー時も投稿済み分の履歴を保存（同記事の再選択ループを防止）、URLリプライに `tweet_id` ガード追加、naive datetime の astimezone 対策、CFn に `ReservedConcurrentExecutions: 1` 追加（EventBridge二重発火によるSSM競合防止）、不要docstring削除・多行を1行に整理 |
+| 2026-06-27 | v2.0       | コードレビュー反映（IAM最小権限化）：CFn IAMポリシーから未使用の `ssm:GetParameters`（複数形）を削除。コードは `get_parameter`（単数）のみ呼ぶため過剰権限を排除し `ssm:GetParameter` のみ許可に統一 |
