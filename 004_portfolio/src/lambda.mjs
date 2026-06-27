@@ -73,7 +73,7 @@ app.get('/api/templates/download/:zipname', async (req, res) => {
   try {
     const zip = new JSZip();
     const results = await Promise.allSettled(entries.map(async ({ diff, cat, filename }) => {
-      const r = await fetch(`${GITHUB_RAW_BASE}/${diff}/${cat}/${filename}`);
+      const r = await fetch(`${GITHUB_RAW_BASE}/${diff}/${cat}/${filename}`, { signal: AbortSignal.timeout(10000) });
       if (!r.ok) throw new Error(`${filename}: HTTP ${r.status}`);
       const zipPath = zipname === 'all.zip' ? `${diff}/${cat}/${filename}` : `${cat}/${filename}`;
       zip.file(zipPath, await r.text());
@@ -101,7 +101,7 @@ app.get('/api/templates/:filename', async (req, res) => {
   const meta = FILE_META[filename];
   if (!meta) return res.status(404).send('Not Found');
   try {
-    const response = await fetch(`${GITHUB_RAW_BASE}/${meta.diff}/${meta.cat}/${filename}`);
+    const response = await fetch(`${GITHUB_RAW_BASE}/${meta.diff}/${meta.cat}/${filename}`, { signal: AbortSignal.timeout(10000) });
     if (!response.ok) return res.status(404).send('Not Found');
     const content = await response.text();
     res.setHeader('Content-Type', 'application/octet-stream');
