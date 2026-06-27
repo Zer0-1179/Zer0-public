@@ -53,7 +53,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - ses:SendEmail
-                  - ses:SendRawEmail
                 Resource:
                   - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
               - Effect: Allow
@@ -91,7 +90,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - ses:SendEmail
-                  - ses:SendRawEmail
                 Resource:
                   - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
               - Effect: Allow
@@ -139,7 +137,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - ses:SendEmail
-                  - ses:SendRawEmail
                 Resource:
                   - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
 
@@ -333,7 +330,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - ses:SendEmail
-                  - ses:SendRawEmail
                 Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
               - Effect: Allow
                 Action:
