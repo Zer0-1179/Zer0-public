@@ -25,8 +25,8 @@ let noteArticles: Article[] = [];
 
 try {
   const [zennRes, noteRes] = await Promise.allSettled([
-    fetch('https://zenn.dev/zer0_infra/feed'),
-    fetch('https://note.com/zer0_infra/rss'),
+    fetch('https://zenn.dev/zer0_infra/feed', { signal: AbortSignal.timeout(5000) }),
+    fetch('https://note.com/zer0_infra/rss', { signal: AbortSignal.timeout(5000) }),
   ]);
   if (zennRes.status === 'fulfilled' && zennRes.value.ok) {
     zennArticles = parseRss(await zennRes.value.text(), 'zenn');
