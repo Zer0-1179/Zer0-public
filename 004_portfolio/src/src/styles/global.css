@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html {
+  font-size: 18px;
+}
+
 @theme {
   --color-navy-950: #060d1a;
   --color-navy-900: #0a1628;
