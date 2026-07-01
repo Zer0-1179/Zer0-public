@@ -13,7 +13,7 @@ import matplotlib.image as mpimg
 from matplotlib.patches import FancyBboxPatch
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_ICON_DIR = os.path.join(_SCRIPT_DIR, 'aws_icons')
+_ICON_DIR = '/tmp/aws_icons'
 _OFFICIAL_ICON_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'images', 'AWS-icon')
 
 _SVC = 'Architecture-Service-Icons_07312025'
@@ -33,6 +33,52 @@ _OFFICIAL_ICON_MAP: dict[str, str] = {
     'acm':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
     'api_gateway': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
     'dynamodb':    f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
+    # ── Compute ──
+    'ec2':              f'{_SVC}/Arch_Compute/64/Arch_Amazon-EC2_64.png',
+    'ecs':              f'{_SVC}/Arch_Containers/64/Arch_Amazon-Elastic-Container-Service_64.png',
+    'ecr':              f'{_SVC}/Arch_Containers/64/Arch_Amazon-Elastic-Container-Registry_64.png',
+    'compute_optimizer':f'{_SVC}/Arch_Compute/64/Arch_AWS-Compute-Optimizer_64.png',
+    # ── Storage ──
+    'backup':           f'{_SVC}/Arch_Storage/64/Arch_AWS-Backup_64.png',
+    # ── Database ──
+    'rds':              f'{_SVC}/Arch_Database/64/Arch_Amazon-RDS_64.png',
+    'opensearch':       f'{_SVC}/Arch_Analytics/64/Arch_Amazon-OpenSearch-Service_64.png',
+    # ── Networking ──
+    'alb':              f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Elastic-Load-Balancing_64.png',
+    'route53':          f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-Route-53_64.png',
+    'waf':              f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-WAF_64.png',
+    # ── Security & Identity ──
+    'iam':              f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Identity-and-Access-Management_64.png',
+    'guardduty':        f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_Amazon-GuardDuty_64.png',
+    'security_hub':     f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Security-Hub_64.png',
+    'shield':           f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Shield_64.png',
+    'secrets_manager':  f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Secrets-Manager_64.png',
+    'control_tower':    f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Control-Tower_64.png',
+    'organizations':    f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Organizations_64.png',
+    # ── Developer Tools ──
+    'codepipeline':     f'{_SVC}/Arch_Developer-Tools/64/Arch_AWS-CodePipeline_64.png',
+    'codebuild':        f'{_SVC}/Arch_Developer-Tools/64/Arch_AWS-CodeBuild_64.png',
+    'codecommit':       f'{_SVC}/Arch_Developer-Tools/64/Arch_AWS-CodeCommit_64.png',
+    'codedeploy':       f'{_SVC}/Arch_Developer-Tools/64/Arch_AWS-CodeDeploy_64.png',
+    'xray':             f'{_SVC}/Arch_Developer-Tools/64/Arch_AWS-X-Ray_64.png',
+    # ── Analytics ──
+    'kinesis':          f'{_SVC}/Arch_Analytics/64/Arch_Amazon-Kinesis_64.png',
+    'athena':           f'{_SVC}/Arch_Analytics/64/Arch_Amazon-Athena_64.png',
+    'glue':             f'{_SVC}/Arch_Analytics/64/Arch_AWS-Glue_64.png',
+    'lake_formation':   f'{_SVC}/Arch_Analytics/64/Arch_AWS-Lake-Formation_64.png',
+    'quicksight':       f'{_SVC}/Arch_Analytics/64/Arch_Amazon-QuickSight_64.png',
+    'sagemaker':        f'{_SVC}/Arch_Analytics/64/Arch_Amazon-SageMaker_64.png',
+    # ── Management & Governance ──
+    'cloudtrail':       f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-CloudTrail_64.png',
+    'cloudformation':   f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-CloudFormation_64.png',
+    'config':           f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Config_64.png',
+    'service_catalog':  f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Service-Catalog_64.png',
+    # ── Messaging ──
+    'sns':              f'{_SVC}/Arch_App-Integration/64/Arch_Amazon-Simple-Notification-Service_64.png',
+    'step_functions':   f'{_SVC}/Arch_App-Integration/64/Arch_AWS-Step-Functions_64.png',
+    # ── Cost Management ──
+    'cost_explorer':    f'{_SVC}/Arch_Cloud-Financial-Management/64/Arch_AWS-Cost-Explorer_64.png',
+    'budgets':          f'{_SVC}/Arch_Cloud-Financial-Management/64/Arch_AWS-Budgets_64.png',
     # ── グループアイコン（クラスター枠用・32px） ──
     'vpc':            f'{_GRP}/Virtual-private-cloud-VPC_32.png',
     'region':         f'{_GRP}/Region_32.png',
@@ -147,6 +193,37 @@ _ICON_FALLBACK: dict[str, tuple[str, str, str]] = {
 }
 
 
+_PAD_H_OUTER   = 1.1   # 外枠 水平余白（auto-paddingの閾値1.0より大きく設定）
+_PAD_TOP_OUTER = 1.2   # 外枠 上余白（クラスターアイコン・ラベル含む、閾値1.1より大）
+_PAD_BOT_OUTER = 2.0   # 外枠 下余白（ノードラベルが下に伸びる分、閾値1.6より大）
+
+
+def _outer_cluster(
+    nodes: list,
+    inner_clusters: list = None,
+    label: str = 'ap-northeast-1',
+    icon: str = 'region',
+    color: str = '#F0F4F8',
+    edgecolor: str = '#4A7FA5',
+) -> dict:
+    """全ノードと内部クラスターを包む最外枠クラスターを auto-padding が発火しない座標で生成する。"""
+    xs = [n['x'] for n in nodes]
+    ys = [n['y'] for n in nodes]
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+    for c in (inner_clusters or []):
+        x_min = min(x_min, c['x'])
+        x_max = max(x_max, c['x'] + c['w'])
+        y_min = min(y_min, c['y'])
+        y_max = max(y_max, c['y'] + c['h'])
+    cx = max(0.4, x_min - _PAD_H_OUTER)
+    cy = y_min - _PAD_BOT_OUTER
+    cw = x_max + _PAD_H_OUTER - cx
+    ch = y_max + _PAD_TOP_OUTER - cy
+    return {'label': label, 'icon': icon, 'x': cx, 'y': cy, 'w': cw, 'h': ch,
+            'color': color, 'edgecolor': edgecolor, 'linewidth': 2.0}
+
+
 def _ensure_icon(name: str) -> None:
     """アイコンPNGが存在しない場合、フォールバック定義から自動生成する。"""
     path = os.path.join(_ICON_DIR, f'{name}.png')
@@ -200,7 +277,7 @@ def _draw_diagram(
     nodes: list,
     edges: list,
     output_path: str,
-    figsize: tuple = (14, 7),
+    figsize: tuple = None,
     xlim: tuple = (0, 14),
     ylim: tuple = None,
     clusters: list = None,
@@ -210,6 +287,7 @@ def _draw_diagram(
     edges   : [(from_id, to_id) | (from_id, to_id, label)]
     clusters: [{'label': str, 'x': float, 'y': float, 'w': float, 'h': float, 'color': str}]
     ylim    : None で自動計算（ノード・クラスターの範囲から余白付きで決定）
+    figsize : None で xlim/ylim の比率から自動計算
     """
     # ylim 自動計算
     if ylim is None:
@@ -219,12 +297,20 @@ def _draw_diagram(
         for c in (clusters or []):
             y_lo = min(y_lo, c['y'])
             y_hi = max(y_hi, c['y'] + c['h'])
-        y_lo = max(0.0, y_lo - 1.3)   # アイコン下端 + ラベル分
+        y_lo = y_lo - 0.4              # アイコン下端 + ラベル分（クランプなし）
         y_hi = y_hi + 0.8              # アイコン上端 + クラスターラベル分
         if y_hi - y_lo < 4.0:          # 最低幅を確保
             mid = (y_lo + y_hi) / 2
             y_lo, y_hi = mid - 2.0, mid + 2.0
         ylim = (y_lo, y_hi)
+
+    # figsize 自動計算（xlim/ylim 比率に合わせる）
+    if figsize is None:
+        xlim_range = xlim[1] - xlim[0]
+        ylim_range = ylim[1] - ylim[0]
+        fig_w = 14.0
+        fig_h = round(fig_w * ylim_range / xlim_range, 1)
+        figsize = (fig_w, fig_h)
 
     # ── クラスター枠がノードと重ならないよう自動パディング調整 ──────────────
     # ルール: アイコン端(HALF=0.55)から枠まで水平0.45・上0.55・下1.05以上確保
@@ -395,8 +481,9 @@ def _diagram_serverless_ec_1(output_path: str):
         ('fn2', 'sqs', 'キュー投入'),
         ('fn2', 'sns', '通知発行'),
     ]
+    outer = _outer_cluster(nodes, clusters)
     _draw_diagram('サーバーレスECバックエンド ① – フルシステム構成',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_serverless_ec_2(output_path: str):
@@ -419,7 +506,8 @@ def _diagram_serverless_ec_2(output_path: str):
         ('fn2', 'sns', '4. 通知発行'),
     ]
     _draw_diagram('サーバーレスECバックエンド ② – 注文処理データフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── static_web_hosting ────────────────────────────────────────────────────────
@@ -445,8 +533,10 @@ def _diagram_static_web_hosting_1(output_path: str):
         ('cf', 's3', 'OAC経由'),
         ('acm', 'cf', 'HTTPS証明書', 0.3),
     ]
+    outer = _outer_cluster(nodes, clusters, label='AWS Cloud', icon='aws_cloud_logo',
+                           color='#F4F6F8', edgecolor='#232F3E')
     _draw_diagram('静的Webホスティング ① – CloudFront + S3 + Route53 構成',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_static_web_hosting_2(output_path: str):
@@ -467,7 +557,9 @@ def _diagram_static_web_hosting_2(output_path: str):
         ('fn', 'cf', 'キャッシュ無効化'),
     ]
     _draw_diagram('静的Webホスティング ② – CI/CDデプロイ & キャッシュ無効化フロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes, label='AWS Cloud', icon='aws_cloud_logo',
+                                           color='#F4F6F8', edgecolor='#232F3E')])
 
 
 # ─── container_platform ───────────────────────────────────────────────────────
@@ -475,9 +567,9 @@ def _diagram_static_web_hosting_2(output_path: str):
 def _diagram_container_platform_1(output_path: str):
     """図1: ECS Fargate + ALB + ECR 本番構成"""
     clusters = [
-        {'label': 'VPC', 'x': 3.5, 'y': 0.5, 'w': 9.8, 'h': 6.0, 'color': '#F0F8FF'},
-        {'label': 'パブリックサブネット', 'x': 3.8, 'y': 0.8, 'w': 2.5, 'h': 5.2, 'color': '#E8F5E9'},
-        {'label': 'プライベートサブネット (ECS)', 'x': 6.5, 'y': 0.8, 'w': 6.5, 'h': 5.2, 'color': '#FFF8E1'},
+        {'label': 'VPC', 'x': 3.5, 'y': 0.5, 'w': 9.8, 'h': 6.0, 'color': '#F0F8FF', 'icon': 'vpc'},
+        {'label': 'パブリックサブネット', 'x': 3.8, 'y': 0.8, 'w': 2.5, 'h': 5.2, 'color': '#E8F5E9', 'icon': 'public_subnet'},
+        {'label': 'プライベートサブネット (ECS)', 'x': 6.5, 'y': 0.8, 'w': 6.5, 'h': 5.2, 'color': '#FFF8E1', 'icon': 'private_subnet'},
     ]
     nodes = [
         {'id': 'user',  'icon': 'user',    'label': 'ユーザー',     'x': 1.5, 'y': 3.5},
@@ -497,8 +589,9 @@ def _diagram_container_platform_1(output_path: str):
         ('ecr', 'ecs1', 'イメージPull', 0.2),
         ('ecs1', 'sm', 'シークレット取得', 0.2),
     ]
+    outer = _outer_cluster(nodes, clusters)
     _draw_diagram('コンテナ本番運用 ① – ECS Fargate + ALB + ECR 構成',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_container_platform_2(output_path: str):
@@ -521,7 +614,8 @@ def _diagram_container_platform_2(output_path: str):
         ('alb', 'ecs', 'ヘルスチェック'),
     ]
     _draw_diagram('コンテナ本番運用 ② – CI/CD + CloudWatch モニタリングフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── event_driven_pipeline ────────────────────────────────────────────────────
@@ -549,7 +643,8 @@ def _diagram_event_driven_pipeline_1(output_path: str):
         ('s3r', 'athena', 'SQLクエリ', 0.15),
     ]
     _draw_diagram('イベント駆動パイプライン ① – Kinesis + Lambda + S3 + Athena',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 def _diagram_event_driven_pipeline_2(output_path: str):
@@ -572,7 +667,8 @@ def _diagram_event_driven_pipeline_2(output_path: str):
         ('s3', 'athena', 'バッチクエリ'),
     ]
     _draw_diagram('イベント駆動パイプライン ② – リアルタイム + バッチ分析フロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── microservices_base ───────────────────────────────────────────────────────
@@ -601,7 +697,8 @@ def _diagram_microservices_base_1(output_path: str):
         ('fn2', 'xray', 'トレース送信', 0.2),
     ]
     _draw_diagram('マイクロサービス基盤 ① – API Gateway + Lambda + X-Ray 構成',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 def _diagram_microservices_base_2(output_path: str):
@@ -623,7 +720,8 @@ def _diagram_microservices_base_2(output_path: str):
         ('fn2', 'xray', 'セグメント送信', 0.2),
     ]
     _draw_diagram('マイクロサービス基盤 ② – X-Ray 分散トレーシングフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── multi_region_dr ──────────────────────────────────────────────────────────
@@ -631,8 +729,8 @@ def _diagram_microservices_base_2(output_path: str):
 def _diagram_multi_region_dr_1(output_path: str):
     """図1: マルチリージョン DR アーキテクチャ"""
     clusters = [
-        {'label': 'プライマリリージョン (ap-northeast-1)', 'x': 3.0, 'y': 3.2, 'w': 4.5, 'h': 3.2, 'color': '#E8F5E9'},
-        {'label': 'DRリージョン (ap-southeast-1)', 'x': 7.8, 'y': 3.2, 'w': 4.5, 'h': 3.2, 'color': '#FFF8E1'},
+        {'label': 'ap-northeast-1', 'x': 3.0, 'y': 3.2, 'w': 4.5, 'h': 3.2, 'color': '#E8F5E9', 'icon': 'region'},
+        {'label': 'ap-southeast-1', 'x': 7.8, 'y': 3.2, 'w': 4.5, 'h': 3.2, 'color': '#FFF8E1', 'icon': 'region'},
     ]
     nodes = [
         {'id': 'user',    'icon': 'user',    'label': 'ユーザー',       'x': 1.5, 'y': 4.8},
@@ -654,8 +752,10 @@ def _diagram_multi_region_dr_1(output_path: str):
         ('alb2', 'ec2dr', 'ルーティング'),
         ('ec2dr', 'rdsdr', 'Read'),
     ]
+    outer = _outer_cluster(nodes, clusters, label='AWS Cloud', icon='aws_cloud_logo',
+                           color='#F4F6F8', edgecolor='#232F3E')
     _draw_diagram('マルチリージョンDR ① – Route 53 フェイルオーバー構成',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_multi_region_dr_2(output_path: str):
@@ -676,7 +776,8 @@ def _diagram_multi_region_dr_2(output_path: str):
         ('alb2', 'user', 'トラフィック切替'),
     ]
     _draw_diagram('マルチリージョンDR ② – 自動フェイルオーバーフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── realtime_notify ──────────────────────────────────────────────────────────
@@ -703,7 +804,8 @@ def _diagram_realtime_notify_1(output_path: str):
         ('sqs2', 'fn2', 'トリガー'),
     ]
     _draw_diagram('リアルタイム通知システム ① – SNS + SQS + Lambda 構成',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 def _diagram_realtime_notify_2(output_path: str):
@@ -724,7 +826,8 @@ def _diagram_realtime_notify_2(output_path: str):
         ('cw', 'notify', 'アラーム発火'),
     ]
     _draw_diagram('リアルタイム通知システム ② – DLQ & リトライフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── bedrock_rag ──────────────────────────────────────────────────────────────
@@ -755,8 +858,9 @@ def _diagram_bedrock_rag_1(output_path: str):
         ('fn', 'claude', '文脈+質問'),
         ('claude', 'fn', '回答生成', 0.3),
     ]
+    outer = _outer_cluster(nodes, clusters)
     _draw_diagram('Bedrock RAG ① – フルシステム構成',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_bedrock_rag_2(output_path: str):
@@ -779,7 +883,8 @@ def _diagram_bedrock_rag_2(output_path: str):
         ('fn', 'out', '7. 回答返却'),
     ]
     _draw_diagram('Bedrock RAG ② – クエリ処理データフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── cicd_pipeline ────────────────────────────────────────────────────────────
@@ -805,7 +910,8 @@ def _diagram_cicd_pipeline_1(output_path: str):
         ('deploy', 'ecs', 'Blue/Green\nデプロイ'),
     ]
     _draw_diagram('CI/CDパイプライン ① – CodePipeline + CodeBuild + CodeDeploy 構成',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 def _diagram_cicd_pipeline_2(output_path: str):
@@ -825,7 +931,8 @@ def _diagram_cicd_pipeline_2(output_path: str):
         ('shift', 'cd', '失敗→自動ロールバック', 0.2),
     ]
     _draw_diagram('CI/CDパイプライン ② – Blue/Green デプロイフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── ml_pipeline ──────────────────────────────────────────────────────────────
@@ -851,7 +958,8 @@ def _diagram_ml_pipeline_1(output_path: str):
         ('eval', 'ep', '承認→デプロイ'),
     ]
     _draw_diagram('MLパイプライン ① – SageMaker AI + Step Functions 構成',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 def _diagram_ml_pipeline_2(output_path: str):
@@ -872,7 +980,8 @@ def _diagram_ml_pipeline_2(output_path: str):
         ('cw', 'ep', '精度向上確認→\n本番100%切替'),
     ]
     _draw_diagram('MLパイプライン ② – 定期再学習 & A/Bテストフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── log_analytics ────────────────────────────────────────────────────────────
@@ -898,7 +1007,8 @@ def _diagram_log_analytics_1(output_path: str):
         ('s3', 'athena', 'データソース'),
     ]
     _draw_diagram('ログ分析基盤 ① – CloudTrail + Kinesis Firehose + Athena',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 def _diagram_log_analytics_2(output_path: str):
@@ -917,7 +1027,8 @@ def _diagram_log_analytics_2(output_path: str):
         ('check', 'sns', '不審操作検知'),
     ]
     _draw_diagram('ログ分析基盤 ② – 自動セキュリティ監査フロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── cost_optimization ────────────────────────────────────────────────────────
@@ -942,7 +1053,8 @@ def _diagram_cost_optimization_1(output_path: str):
         ('co', 'fn', '最適化推奨', 0.2),
     ]
     _draw_diagram('コスト最適化 ① – 自動コスト管理アーキテクチャ',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 def _diagram_cost_optimization_2(output_path: str):
@@ -965,7 +1077,8 @@ def _diagram_cost_optimization_2(output_path: str):
         ('life', 'report', 'コスト削減額'),
     ]
     _draw_diagram('コスト最適化 ② – コスト削減施策フロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── security_hardening ───────────────────────────────────────────────────────
@@ -994,8 +1107,9 @@ def _diagram_security_hardening_1(output_path: str):
         ('sh', 'fn', 'EventBridge連携'),
         ('fn', 'sns', '修復完了通知'),
     ]
+    outer = _outer_cluster(nodes, clusters)
     _draw_diagram('セキュリティ強化 ① – 多層防御アーキテクチャ',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_security_hardening_2(output_path: str):
@@ -1016,7 +1130,8 @@ def _diagram_security_hardening_2(output_path: str):
         ('fn', 'sns', '3. 担当者通知'),
     ]
     _draw_diagram('セキュリティ強化 ② – インシデント自動対応フロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── backup_dr ────────────────────────────────────────────────────────────────
@@ -1041,7 +1156,9 @@ def _diagram_backup_dr_1(output_path: str):
         ('vault1', 'vault2', 'Cross-Region\nコピー'),
     ]
     _draw_diagram('バックアップ・DR ① – AWS Backup 統合管理構成',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes, label='AWS Cloud', icon='aws_cloud_logo',
+                                           color='#F4F6F8', edgecolor='#232F3E')])
 
 
 def _diagram_backup_dr_2(output_path: str):
@@ -1063,7 +1180,8 @@ def _diagram_backup_dr_2(output_path: str):
         ('ec2', 'r53', 'DNS切替'),
     ]
     _draw_diagram('バックアップ・DR ② – DRリージョン復元フロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── multi_account ────────────────────────────────────────────────────────────
@@ -1092,8 +1210,10 @@ def _diagram_multi_account_1(output_path: str):
         ('prod', 'log', 'CloudTrail集約'),
         ('dev', 'log', 'CloudTrail集約'),
     ]
+    outer = _outer_cluster(nodes, clusters, label='AWS Cloud', icon='aws_cloud_logo',
+                           color='#F4F6F8', edgecolor='#232F3E')
     _draw_diagram('マルチアカウント ① – Organizations + Control Tower 構成',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_multi_account_2(output_path: str):
@@ -1112,7 +1232,9 @@ def _diagram_multi_account_2(output_path: str):
         ('ct', 'scp', 'SCP自動適用'),
     ]
     _draw_diagram('マルチアカウント ② – Account Factory 自動払い出しフロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes, label='AWS Cloud', icon='aws_cloud_logo',
+                                           color='#F4F6F8', edgecolor='#232F3E')])
 
 
 # ─── data_lake ────────────────────────────────────────────────────────────────
@@ -1144,8 +1266,9 @@ def _diagram_data_lake_1(output_path: str):
         ('curate', 'athena', 'SQLクエリ'),
         ('athena', 'qs', 'BIダッシュボード'),
     ]
+    outer = _outer_cluster(nodes, clusters)
     _draw_diagram('データレイク ① – S3 + Glue + Athena + Lake Formation 構成',
-                  nodes, edges, output_path, clusters=clusters)
+                  nodes, edges, output_path, clusters=[outer] + clusters)
 
 
 def _diagram_data_lake_2(output_path: str):
@@ -1167,7 +1290,8 @@ def _diagram_data_lake_2(output_path: str):
         ('s3out', 'athena', 'データソース'),
     ]
     _draw_diagram('データレイク ② – Glue ETLジョブ & データカタログ更新フロー',
-                  nodes, edges, output_path)
+                  nodes, edges, output_path,
+                  clusters=[_outer_cluster(nodes)])
 
 
 # ─── ディスパッチテーブル ──────────────────────────────────────────────────────
