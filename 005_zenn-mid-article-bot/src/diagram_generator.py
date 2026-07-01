@@ -7,6 +7,7 @@ matplotlib + AWS公式アイコン（PNGバンドル）使用。Graphviz依存�
 import matplotlib
 matplotlib.use('Agg')
 
+import functools
 import os
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -256,6 +257,7 @@ def _ensure_icon(name: str) -> None:
 _BUNDLED_ICON_DIR = os.path.join(_SCRIPT_DIR, 'aws_icons')
 
 
+@functools.lru_cache(maxsize=128)
 def _load_icon(name: str):
     if not name:
         return None
