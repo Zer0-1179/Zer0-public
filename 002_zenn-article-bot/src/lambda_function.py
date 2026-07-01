@@ -705,6 +705,12 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
             lines.insert(insert_idx + 1, placeholder)
             result = "\n".join(lines)
 
+    # 図の一部が生成失敗した場合、残存する {DIAGRAM_N} マーカーを除去する
+    import re as _re
+    result, n_orphan = _re.subn(r'\n*\{DIAGRAM_\d+\}\n*', '\n\n', result)
+    if n_orphan:
+        print(f"[WARNING] 図生成失敗により未置換のDIAGRAMマーカー{n_orphan}件を除去しました")
+
     return result
 
 

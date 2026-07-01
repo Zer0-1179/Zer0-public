@@ -244,10 +244,11 @@ def _draw_diagram(
                 ha='center', va='top', fontsize=8,
                 color='#232F3E', fontweight='bold', zorder=5)
 
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight',
-                facecolor='white', format='png')
-    plt.close(fig)
+    try:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight',
+                    facecolor='white', format='png')
+    finally:
+        plt.close(fig)
 
 
 # ─── EC2 ─────────────────────────────────────────────────────────────────────
