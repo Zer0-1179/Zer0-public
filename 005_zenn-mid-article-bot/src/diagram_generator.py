@@ -221,7 +221,8 @@ def _outer_cluster(
     cw = x_max + _PAD_H_OUTER - cx
     ch = y_max + _PAD_TOP_OUTER - cy
     return {'label': label, 'icon': icon, 'x': cx, 'y': cy, 'w': cw, 'h': ch,
-            'color': color, 'edgecolor': edgecolor, 'linewidth': 2.0}
+            'color': color, 'edgecolor': edgecolor, 'linewidth': 2.0,
+            'skip_autopad': True}
 
 
 def _ensure_icon(name: str) -> None:
@@ -301,38 +302,17 @@ def _draw_diagram(
     ylim    : None で自動計算（ノード・クラスターの範囲から余白付きで決定）
     figsize : None で xlim/ylim の比率から自動計算
     """
-    # ylim 自動計算
-    if ylim is None:
-        ys = [n['y'] for n in nodes]
-        y_lo = min(ys)
-        y_hi = max(ys)
-        for c in (clusters or []):
-            y_lo = min(y_lo, c['y'])
-            y_hi = max(y_hi, c['y'] + c['h'])
-        y_lo = y_lo - 0.4              # アイコン下端 + ラベル分（クランプなし）
-        y_hi = y_hi + 0.8              # アイコン上端 + クラスターラベル分
-        if y_hi - y_lo < 4.0:          # 最低幅を確保
-            mid = (y_lo + y_hi) / 2
-            y_lo, y_hi = mid - 2.0, mid + 2.0
-        ylim = (y_lo, y_hi)
-
-    # figsize 自動計算（xlim/ylim 比率に合わせる）
-    if figsize is None:
-        xlim_range = xlim[1] - xlim[0]
-        ylim_range = ylim[1] - ylim[0]
-        fig_w = 14.0
-        fig_h = round(fig_w * ylim_range / xlim_range, 1)
-        figsize = (fig_w, fig_h)
-
     # ── クラスター枠がノードと重ならないよう自動パディング調整 ──────────────
     # ルール: アイコン端(HALF=0.55)から枠まで水平0.45・上0.55・下1.05以上確保
+    # skip_autopad=True の外枠クラスターは対象外（_outer_cluster が正確に計算済み）
     _ICON_HALF   = 0.55
     _PAD_H       = _ICON_HALF + 0.45   # 水平マージン（アイコン端＋余白）
     _PAD_TOP     = _ICON_HALF + 0.55   # 上マージン（クラスターラベル分含む）
     _PAD_BOT     = _ICON_HALF + 1.05   # 下マージン（ノードラベルが下に伸びる分含む）
 
-    node_cx = {n['id']: (n['x'], n['y']) for n in nodes}
     for cl in (clusters or []):
+        if cl.get('skip_autopad'):
+            continue
         for node in nodes:
             nx, ny = node['x'], node['y']
             # ノードがこのクラスターの範囲内かチェック（元の座標で判定）
@@ -356,113 +336,131 @@ def _draw_diagram(
                 cl['y'] -= diff
                 cl['h'] += diff
 
+    # ylim 自動計算（auto-padding 後のクラスター座標を使用）
+    if ylim is None:
+        ys = [n['y'] for n in nodes]
+        y_lo = min(ys)
+        y_hi = max(ys)
+        for c in (clusters or []):
+            y_lo = min(y_lo, c['y'])
+            y_hi = max(y_hi, c['y'] + c['h'])
+        y_lo = y_lo - 0.4              # アイコン下端 + ラベル分（クランプなし）
+        y_hi = y_hi + 0.8              # アイコン上端 + クラスターラベル分
+        if y_hi - y_lo < 4.0:          # 最低幅を確保
+            mid = (y_lo + y_hi) / 2
+            y_lo, y_hi = mid - 2.0, mid + 2.0
+        ylim = (y_lo, y_hi)
+
+    # figsize 自動計算（xlim/ylim 比率に合わせる）
+    if figsize is None:
+        xlim_range = xlim[1] - xlim[0]
+        ylim_range = ylim[1] - ylim[0]
+        if xlim_range <= 0:
+            xlim_range = 14.0
+        fig_w = 14.0
+        fig_h = round(fig_w * ylim_range / xlim_range, 1)
+        figsize = (fig_w, fig_h)
+
     fig, ax = plt.subplots(figsize=figsize, dpi=150)
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
-    ax.set_aspect('equal')
-    ax.axis('off')
-    fig.patch.set_facecolor('white')
-    ax.set_facecolor('white')
-    ax.set_title(title, fontsize=13, fontweight='bold', pad=10, color='#232F3E')
+    try:
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
+        ax.set_title(title, fontsize=13, fontweight='bold', pad=10, color='#232F3E')
 
-    ICON_SZ = 0.45  # クラスターアイコンの一辺サイズ
-    for cluster in (clusters or []):
-        has_icon = bool(cluster.get('icon'))
-        rect = FancyBboxPatch(
-            (cluster['x'], cluster['y']),
-            cluster['w'], cluster['h'],
-            boxstyle='round,pad=0.15',
-            facecolor=cluster.get('color', '#EAF4FB'),
-            edgecolor=cluster.get('edgecolor', '#8AAFCC'),
-            linewidth=cluster.get('linewidth', 2.0 if has_icon else 1.5),
-            linestyle=cluster.get('linestyle', '-'),
-            zorder=1,
-        )
-        ax.add_patch(rect)
-        icon_img = _load_icon(cluster['icon']) if has_icon else None
-        ix = cluster['x'] + 0.15
-        iy = cluster['y'] + cluster['h'] - ICON_SZ - 0.05
-        if icon_img is not None:
-            ax.imshow(
-                icon_img,
-                extent=[ix, ix + ICON_SZ, iy, iy + ICON_SZ],
-                aspect='auto', zorder=6, interpolation='bilinear',
-            )
-            tx = ix + ICON_SZ + 0.12
-        else:
-            tx = cluster['x'] + 0.2
-        ty = cluster['y'] + cluster['h'] - (ICON_SZ / 2) - 0.05 if has_icon else cluster['y'] + cluster['h']
-        ax.text(
-            tx, ty,
-            cluster['label'],
-            ha='left', va='center' if has_icon else 'bottom',
-            fontsize=7.5, color='#4A7FA5', style='italic',
-            zorder=6,
-        )
-
-    node_map = {n['id']: n for n in nodes}
-
-    SHRINK = 42
-    for edge in edges:
-        from_id, to_id = edge[0], edge[1]
-        edge_label = edge[2] if len(edge) > 2 else ''
-        n1, n2 = node_map[from_id], node_map[to_id]
-        rad = edge[3] if len(edge) > 3 else 0.0
-        ax.annotate(
-            '',
-            xy=(n2['x'], n2['y']),
-            xytext=(n1['x'], n1['y']),
-            arrowprops=dict(
-                arrowstyle='->', color='#555555', lw=1.5,
-                shrinkA=SHRINK, shrinkB=SHRINK,
-                connectionstyle=f'arc3,rad={rad}',
-            ),
-            zorder=3,
-        )
-        if edge_label:
-            mx = (n1['x'] + n2['x']) / 2
-            my = (n1['y'] + n2['y']) / 2
-            if rad != 0.0:
-                # 弧の視覚的中点 = 弦の中点 + 0.5 * rad * 垂直方向ベクトル
-                dx = n2['x'] - n1['x']
-                dy = n2['y'] - n1['y']
-                mx += 0.5 * rad * (-dy)
-                my += 0.5 * rad * dx
-            offset_y = 0.18 if rad >= 0 else -0.25
-            ax.text(mx, my + offset_y, edge_label, ha='center', va='bottom',
-                    fontsize=7, color='#555555', zorder=5,
-                    bbox=dict(facecolor='white', alpha=0.75, edgecolor='none', pad=1.5))
-
-    HALF = 0.55
-    for node in nodes:
-        x, y = node['x'], node['y']
-        img = _load_icon(node.get('icon'))
-        if img is not None:
-            ax.imshow(
-                img,
-                extent=[x - HALF, x + HALF, y - HALF, y + HALF],
-                aspect='auto', zorder=4, interpolation='bilinear',
-            )
-        else:
+        ICON_SZ = 0.45  # クラスターアイコンの一辺サイズ
+        for cluster in (clusters or []):
+            has_icon = bool(cluster.get('icon'))
             rect = FancyBboxPatch(
-                (x - HALF, y - HALF), HALF * 2, HALF * 2,
-                boxstyle='round,pad=0.1',
-                facecolor=node.get('color', '#E8E8E8'),
-                edgecolor='#AAAAAA', zorder=4,
+                (cluster['x'], cluster['y']),
+                cluster['w'], cluster['h'],
+                boxstyle='round,pad=0.15',
+                facecolor=cluster.get('color', '#EAF4FB'),
+                edgecolor=cluster.get('edgecolor', '#8AAFCC'),
+                linewidth=cluster.get('linewidth', 2.0 if has_icon else 1.5),
+                linestyle=cluster.get('linestyle', '-'),
+                zorder=1,
             )
             ax.add_patch(rect)
-            ax.text(x, y, node.get('short', '?'), ha='center', va='center',
-                    fontsize=8, color='#232F3E', fontweight='bold', zorder=5)
+            icon_img = _load_icon(cluster['icon']) if has_icon else None
+            ix = cluster['x'] + 0.15
+            iy = cluster['y'] + cluster['h'] - ICON_SZ - 0.05
+            if icon_img is not None:
+                ax.imshow(
+                    icon_img,
+                    extent=[ix, ix + ICON_SZ, iy, iy + ICON_SZ],
+                    aspect='auto', zorder=6, interpolation='bilinear',
+                )
+                tx = ix + ICON_SZ + 0.12
+            else:
+                tx = cluster['x'] + 0.2
+            ty = cluster['y'] + cluster['h'] - (ICON_SZ / 2) - 0.05 if has_icon else cluster['y'] + cluster['h']
+            ax.text(
+                tx, ty,
+                cluster['label'],
+                ha='left', va='center' if has_icon else 'bottom',
+                fontsize=7.5, color='#4A7FA5', style='italic',
+                zorder=6,
+            )
 
-        ax.text(x, y - HALF - 0.2, node['label'],
-                ha='center', va='top', fontsize=8,
-                color='#232F3E', fontweight='bold', zorder=5,
-                bbox=dict(facecolor='white', alpha=0.75, edgecolor='none', pad=1.0))
+        node_map = {n['id']: n for n in nodes}
 
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight',
-                facecolor='white', format='png')
-    plt.close(fig)
+        SHRINK = 42
+        for edge in edges:
+            from_id, to_id = edge[0], edge[1]
+            edge_label = edge[2] if len(edge) > 2 else ''
+            n1, n2 = node_map[from_id], node_map[to_id]
+            ax.annotate(
+                '',
+                xy=(n2['x'], n2['y']),
+                xytext=(n1['x'], n1['y']),
+                arrowprops=dict(
+                    arrowstyle='->', color='#555555', lw=1.5,
+                    shrinkA=SHRINK, shrinkB=SHRINK,
+                    connectionstyle='arc3,rad=0.0',
+                ),
+                zorder=3,
+            )
+            if edge_label:
+                mx = (n1['x'] + n2['x']) / 2
+                my = (n1['y'] + n2['y']) / 2
+                ax.text(mx, my + 0.18, edge_label, ha='center', va='bottom',
+                        fontsize=7, color='#555555', zorder=5,
+                        bbox=dict(facecolor='white', alpha=0.75, edgecolor='none', pad=1.5))
+
+        HALF = 0.55
+        for node in nodes:
+            x, y = node['x'], node['y']
+            img = _load_icon(node.get('icon'))
+            if img is not None:
+                ax.imshow(
+                    img,
+                    extent=[x - HALF, x + HALF, y - HALF, y + HALF],
+                    aspect='auto', zorder=4, interpolation='bilinear',
+                )
+            else:
+                rect = FancyBboxPatch(
+                    (x - HALF, y - HALF), HALF * 2, HALF * 2,
+                    boxstyle='round,pad=0.1',
+                    facecolor=node.get('color', '#E8E8E8'),
+                    edgecolor='#AAAAAA', zorder=4,
+                )
+                ax.add_patch(rect)
+                ax.text(x, y, node.get('short', '?'), ha='center', va='center',
+                        fontsize=8, color='#232F3E', fontweight='bold', zorder=5)
+
+            ax.text(x, y - HALF - 0.2, node['label'],
+                    ha='center', va='top', fontsize=8,
+                    color='#232F3E', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='white', alpha=0.75, edgecolor='none', pad=1.0))
+
+        plt.savefig(output_path, dpi=150, bbox_inches='tight',
+                    facecolor='white', format='png')
+    finally:
+        plt.close(fig)
 
 
 # ─── serverless_ec ─────────────────────────────────────────────────────────────
@@ -543,7 +541,7 @@ def _diagram_static_web_hosting_1(output_path: str):
         ('r53', 'waf', 'ALIASレコード'),
         ('waf', 'cf', 'フィルタリング'),
         ('cf', 's3', 'OAC経由'),
-        ('acm', 'cf', 'HTTPS証明書', 0.3),
+        ('acm', 'cf', 'HTTPS証明書'),
     ]
     outer = _outer_cluster(nodes, clusters, label='AWS Cloud', icon='aws_cloud_logo',
                            color='#F4F6F8', edgecolor='#232F3E')
@@ -598,8 +596,8 @@ def _diagram_container_platform_1(output_path: str):
         ('alb', 'ecs2', 'ルーティング'),
         ('ecs1', 'rds', 'DB接続'),
         ('ecs2', 'rds', 'DB接続'),
-        ('ecr', 'ecs1', 'イメージPull', 0.2),
-        ('ecs1', 'sm', 'シークレット取得', 0.2),
+        ('ecr', 'ecs1', 'イメージPull'),
+        ('ecs1', 'sm', 'シークレット取得'),
     ]
     outer = _outer_cluster(nodes, clusters)
     _draw_diagram('コンテナ本番運用 ① – ECS Fargate + ALB + ECR 構成',
@@ -648,11 +646,11 @@ def _diagram_event_driven_pipeline_1(output_path: str):
         ('src', 'kds', 'PutRecord'),
         ('kds', 'fn', 'トリガー'),
         ('fn', 's3r', '生データ保存'),
-        ('kds', 'kfh', 'Firehose連携', 0.3),
+        ('kds', 'kfh', 'Firehose連携'),
         ('kfh', 's3p', 'Parquet変換'),
         ('s3p', 'glue', 'クロール'),
         ('glue', 'athena', 'スキーマ提供'),
-        ('s3r', 'athena', 'SQLクエリ', 0.15),
+        ('s3r', 'athena', 'SQLクエリ'),
     ]
     _draw_diagram('イベント駆動パイプライン ① – Kinesis + Lambda + S3 + Athena',
                   nodes, edges, output_path,
@@ -690,11 +688,11 @@ def _diagram_microservices_base_1(output_path: str):
     nodes = [
         {'id': 'client', 'icon': 'user',       'label': 'クライアント',  'x': 1.5, 'y': 3.5},
         {'id': 'apigw',  'icon': 'api_gateway','label': 'API Gateway',   'x': 4.0, 'y': 3.5},
-        {'id': 'fn1',    'icon': 'lambda',     'label': 'Order\nService', 'x': 7.0, 'y': 5.0},
+        {'id': 'fn1',    'icon': 'lambda',     'label': 'Order\nService', 'x': 7.0, 'y': 6.0},
         {'id': 'fn2',    'icon': 'lambda',     'label': 'User\nService',  'x': 7.0, 'y': 3.5},
-        {'id': 'fn3',    'icon': 'lambda',     'label': 'Notify\nService','x': 7.0, 'y': 2.0},
-        {'id': 'ddb',    'icon': 'dynamodb',   'label': 'DynamoDB',       'x': 10.5, 'y': 4.3},
-        {'id': 'sqs',    'icon': 'sqs',        'label': 'SQS',            'x': 10.5, 'y': 2.8},
+        {'id': 'fn3',    'icon': 'lambda',     'label': 'Notify\nService','x': 7.0, 'y': 1.0},
+        {'id': 'ddb',    'icon': 'dynamodb',   'label': 'DynamoDB',       'x': 10.5, 'y': 4.8},
+        {'id': 'sqs',    'icon': 'sqs',        'label': 'SQS',            'x': 10.5, 'y': 2.3},
         {'id': 'xray',   'icon': 'xray',       'label': 'X-Ray\n(トレース)', 'x': 4.0, 'y': 1.0},
     ]
     edges = [
@@ -705,8 +703,8 @@ def _diagram_microservices_base_1(output_path: str):
         ('fn1', 'ddb', 'Read/Write'),
         ('fn1', 'sqs', 'メッセージ投入'),
         ('sqs', 'fn3', 'トリガー'),
-        ('fn1', 'xray', 'トレース送信', 0.3),
-        ('fn2', 'xray', 'トレース送信', 0.2),
+        ('fn1', 'xray', 'トレース送信'),
+        ('fn2', 'xray', 'トレース送信'),
     ]
     _draw_diagram('マイクロサービス基盤 ① – API Gateway + Lambda + X-Ray 構成',
                   nodes, edges, output_path,
@@ -728,8 +726,8 @@ def _diagram_microservices_base_2(output_path: str):
         ('fn1', 'ddb', 'サブセグメント'),
         ('fn1', 'sqs', 'サブセグメント'),
         ('sqs', 'fn2', 'トレース継続'),
-        ('fn1', 'xray', 'セグメント送信', 0.3),
-        ('fn2', 'xray', 'セグメント送信', 0.2),
+        ('fn1', 'xray', 'セグメント送信'),
+        ('fn2', 'xray', 'セグメント送信'),
     ]
     _draw_diagram('マイクロサービス基盤 ② – X-Ray 分散トレーシングフロー',
                   nodes, edges, output_path,
@@ -757,7 +755,7 @@ def _diagram_multi_region_dr_1(output_path: str):
     edges = [
         ('user', 'r53', 'DNS解決'),
         ('r53', 'alb1', 'Primary'),
-        ('r53', 'alb2', 'Failover', 0.2),
+        ('r53', 'alb2', 'Failover'),
         ('alb1', 'ec2p', 'ルーティング'),
         ('ec2p', 'rdsp', 'Read/Write'),
         ('rdsp', 'rdsdr', 'レプリケーション'),
@@ -800,10 +798,10 @@ def _diagram_realtime_notify_1(output_path: str):
         {'id': 'src',   'icon': 'user',    'label': 'イベントソース', 'x': 1.5, 'y': 3.5},
         {'id': 'eb',    'icon': 'eventbridge', 'label': 'EventBridge', 'x': 4.0, 'y': 3.5},
         {'id': 'sns',   'icon': 'sns',     'label': 'SNS Topic',  'x': 6.5, 'y': 3.5},
-        {'id': 'sqs1',  'icon': 'sqs',     'label': 'SQS\n(メール通知)', 'x': 9.5, 'y': 5.0},
+        {'id': 'sqs1',  'icon': 'sqs',     'label': 'SQS\n(メール通知)', 'x': 9.5, 'y': 6.0},
         {'id': 'sqs2',  'icon': 'sqs',     'label': 'SQS\n(Slack通知)', 'x': 9.5, 'y': 3.5},
-        {'id': 'sqs3',  'icon': 'sqs',     'label': 'SQS\n(DB保存)',    'x': 9.5, 'y': 2.0},
-        {'id': 'fn1',   'icon': 'lambda',  'label': 'Lambda\n(SES送信)', 'x': 12.0, 'y': 5.0},
+        {'id': 'sqs3',  'icon': 'sqs',     'label': 'SQS\n(DB保存)',    'x': 9.5, 'y': 1.0},
+        {'id': 'fn1',   'icon': 'lambda',  'label': 'Lambda\n(SES送信)', 'x': 12.0, 'y': 6.0},
         {'id': 'fn2',   'icon': 'lambda',  'label': 'Lambda\n(Webhook)', 'x': 12.0, 'y': 3.5},
     ]
     edges = [
@@ -828,7 +826,7 @@ def _diagram_realtime_notify_2(output_path: str):
         {'id': 'ok',    'icon': 'ses',    'label': 'SES\n(送信成功)',        'x': 8.5, 'y': 5.2},
         {'id': 'fail',  'icon': 'sqs',    'label': 'DLQ\n(失敗メッセージ)', 'x': 8.5, 'y': 2.8},
         {'id': 'cw',    'icon': 'cloudwatch', 'label': 'CloudWatch\n(アラーム)', 'x': 11.5, 'y': 2.8},
-        {'id': 'notify','icon': 'sns',    'label': 'SNS\n(障害通知)',        'x': 11.5, 'y': 4.5},
+        {'id': 'notify','icon': 'sns',    'label': 'SNS\n(障害通知)',        'x': 11.5, 'y': 5.0},
     ]
     edges = [
         ('sqs', 'fn', 'メッセージ取得'),
@@ -866,9 +864,9 @@ def _diagram_bedrock_rag_1(output_path: str):
         ('user', 'apigw', '質問'),
         ('apigw', 'fn', 'invoke'),
         ('fn', 'search', 'クエリ埋め込み'),
-        ('search', 'oss', 'ANN検索', 0.2),
+        ('search', 'oss', 'ANN検索'),
         ('fn', 'claude', '文脈+質問'),
-        ('claude', 'fn', '回答生成', 0.3),
+        ('claude', 'fn', '回答生成'),
     ]
     outer = _outer_cluster(nodes, clusters)
     _draw_diagram('Bedrock RAG ① – フルシステム構成',
@@ -880,9 +878,9 @@ def _diagram_bedrock_rag_2(output_path: str):
     nodes = [
         {'id': 'user',   'icon': 'user',       'label': 'ユーザー\n(質問入力)',     'x': 1.5, 'y': 3.5},
         {'id': 'fn',     'icon': 'lambda',     'label': 'Lambda\n(RAGロジック)',   'x': 4.5, 'y': 3.5},
-        {'id': 'embed',  'icon': 'bedrock',    'label': 'Bedrock\nEmbedding API', 'x': 7.5, 'y': 5.0},
+        {'id': 'embed',  'icon': 'bedrock',    'label': 'Bedrock\nEmbedding API', 'x': 7.5, 'y': 5.5},
         {'id': 'oss',    'icon': 'opensearch', 'label': 'OpenSearch\n(ベクトルDB)', 'x': 7.5, 'y': 3.5},
-        {'id': 'claude', 'icon': 'bedrock',    'label': 'Bedrock\nClaude',        'x': 7.5, 'y': 2.0},
+        {'id': 'claude', 'icon': 'bedrock',    'label': 'Bedrock\nClaude',        'x': 7.5, 'y': 1.5},
         {'id': 'out',    'icon': 'user',       'label': '回答返却',               'x': 11.0, 'y': 3.5},
     ]
     edges = [
@@ -940,7 +938,7 @@ def _diagram_cicd_pipeline_2(output_path: str):
         ('cd', 'green', '新バージョンデプロイ'),
         ('cd', 'alb', '10%→50%→100%\nトラフィック切替'),
         ('shift', 'alb', 'ヘルスチェック成功\n→切替続行'),
-        ('shift', 'cd', '失敗→自動ロールバック', 0.2),
+        ('shift', 'cd', '失敗→自動ロールバック'),
     ]
     _draw_diagram('CI/CDパイプライン ② – Blue/Green デプロイフロー',
                   nodes, edges, output_path,
@@ -1061,8 +1059,8 @@ def _diagram_cost_optimization_1(output_path: str):
         ('sns', 'fn', 'トリガー'),
         ('fn', 'ec2', '開発環境\n自動停止'),
         ('fn', 'rds', '深夜帯\n自動停止'),
-        ('ce', 'fn', 'コスト分析', 0.2),
-        ('co', 'fn', '最適化推奨', 0.2),
+        ('ce', 'fn', 'コスト分析'),
+        ('co', 'fn', '最適化推奨'),
     ]
     _draw_diagram('コスト最適化 ① – 自動コスト管理アーキテクチャ',
                   nodes, edges, output_path,
@@ -1187,7 +1185,7 @@ def _diagram_backup_dr_2(output_path: str):
         ('incident', 'vault', '復元開始'),
         ('vault', 'rds', 'RDS復元'),
         ('vault', 'ec2', 'EC2復元'),
-        ('cfn', 'ec2', 'インフラ展開', 0.2),
+        ('cfn', 'ec2', 'インフラ展開'),
         ('rds', 'r53', 'DNS切替'),
         ('ec2', 'r53', 'DNS切替'),
     ]
@@ -1266,8 +1264,8 @@ def _diagram_data_lake_1(output_path: str):
         {'id': 'clean',  'icon': 's3',            'label': 'S3 (Parquet)',     'x': 6.8, 'y': 4.0},
         {'id': 'lf',     'icon': 'lake_formation','label': 'Lake Formation\n(権限管理)', 'x': 8.7, 'y': 4.0},
         {'id': 'curate', 'icon': 's3',            'label': 'S3 (Curated)',     'x': 10.8, 'y': 4.0},
-        {'id': 'athena', 'icon': 'athena',        'label': 'Athena',           'x': 13.0, 'y': 5.0},
-        {'id': 'qs',     'icon': 'quicksight',    'label': 'QuickSight\n(BI)', 'x': 13.0, 'y': 3.0},
+        {'id': 'athena', 'icon': 'athena',        'label': 'Athena',           'x': 12.5, 'y': 5.0},
+        {'id': 'qs',     'icon': 'quicksight',    'label': 'QuickSight\n(BI)', 'x': 12.5, 'y': 3.0},
     ]
     edges = [
         ('src', 'raw', 'Ingestion'),
