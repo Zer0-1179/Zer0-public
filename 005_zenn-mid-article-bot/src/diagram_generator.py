@@ -252,9 +252,13 @@ def _ensure_icon(name: str) -> None:
 
 # ─── 描画ヘルパー ──────────────────────────────────────────────────────────────
 
+_BUNDLED_ICON_DIR = os.path.join(_SCRIPT_DIR, 'aws_icons')
+
+
 def _load_icon(name: str):
     if not name:
         return None
+    # 1. ローカル開発環境: 公式July 2025 PNGを使用
     if name in _OFFICIAL_ICON_MAP:
         path = os.path.join(_OFFICIAL_ICON_DIR, _OFFICIAL_ICON_MAP[name])
         if os.path.exists(path):
@@ -262,6 +266,14 @@ def _load_icon(name: str):
                 return mpimg.imread(path)
             except Exception:
                 pass
+    # 2. Lambda: ZIPにバンドルされたアイコンを使用（/var/task/aws_icons/）
+    bundled = os.path.join(_BUNDLED_ICON_DIR, f'{name}.png')
+    if os.path.exists(bundled):
+        try:
+            return mpimg.imread(bundled)
+        except Exception:
+            pass
+    # 3. 未登録アイコン: /tmp/aws_icons/ に色付きテキストボックスを生成
     _ensure_icon(name)
     path = os.path.join(_ICON_DIR, f'{name}.png')
     if os.path.exists(path):
