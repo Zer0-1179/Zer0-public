@@ -146,3 +146,4 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 | 2026-07-02 | v2.2       | Opus 4.8でlog_analytics記事を精査。構成図が本文のservicesリストと食い違う問題と、CloudTrail経由データのgzipエンベロープ未展開・Athenaパーティション未登録という実バグ2件を発見・修正 |
 | 2026-07-02 | v2.3       | 記事生成後のAI技術レビュー自動化を追加。Bedrockに構造化出力で技術的正確性を検証させ、指摘をメールに掲載（自動修正なし）。Haiku推論プロファイルのリージョン起因IAM不足バグも副次的に発見・修正 |
 | 2026-07-02 | v2.4       | v2.3のレビュー・自動修正機能を撤回（1回書き直し方式の自動修正が新たな矛盾を生む実例を確認）。代わりに全16トピックのサービス数を5→3に削減し、構成図生成をservicesリストから自動生成する汎用方式に刷新 |
+| 2026-07-02 | v2.5       | Opusによるコード監査を反映。security_hardening の primary_service 誤り（waf→guardduty）を修正、未使用の secondary_service フィールドと IAM s3:DeleteObject を削除、構成図がサービス数4以上でxlim外にクリップされるバグを修正、Lambda Runtime記述をpython3.14に統一 |
