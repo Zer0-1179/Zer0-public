@@ -67,6 +67,7 @@ AWS_TOPICS = [
         "subtitle": "API Gateway + Lambda + DynamoDB で構築する本番級バックエンド",
         "keywords": "サーバーレス, API Gateway, Lambda, DynamoDB, スロットリング, 冪等性",
         "primary_service": "apigateway",
+        "primary_service_label": "API Gateway",
         "emoji": "🛒",
     },
     {
@@ -77,6 +78,7 @@ AWS_TOPICS = [
         "subtitle": "S3 + CloudFront + ACM で構築するセキュアな静的サイト",
         "keywords": "静的サイト, CloudFront, S3, ACM, HTTPS, カスタムドメイン, OAC, キャッシュ制御",
         "primary_service": "cloudfront",
+        "primary_service_label": "CloudFront",
         "emoji": "🌐",
     },
     {
@@ -87,6 +89,7 @@ AWS_TOPICS = [
         "subtitle": "ECS Fargate + ALB + ECR でコンテナを本番運用する",
         "keywords": "ECS Fargate, ALB, ECR, タスク定義, サービス, ローリングデプロイ, ヘルスチェック",
         "primary_service": "ecs",
+        "primary_service_label": "ECS Fargate",
         "emoji": "🐳",
     },
     {
@@ -97,6 +100,7 @@ AWS_TOPICS = [
         "subtitle": "Kinesis + Lambda + S3 でリアルタイムデータを収集・保存する",
         "keywords": "Kinesis, Lambda, S3, リアルタイム処理, データパイプライン, シャード, バッチウィンドウ",
         "primary_service": "kinesis",
+        "primary_service_label": "Kinesis Data Streams",
         "emoji": "🌊",
     },
     {
@@ -107,6 +111,7 @@ AWS_TOPICS = [
         "subtitle": "API Gateway + Lambda + X-Ray で分散トレーシングを実現する",
         "keywords": "マイクロサービス, X-Ray, 分散トレーシング, API Gateway, Lambda, サービスマップ, レイテンシ分析",
         "primary_service": "apigateway",
+        "primary_service_label": "API Gateway",
         "emoji": "🔬",
     },
     {
@@ -117,6 +122,7 @@ AWS_TOPICS = [
         "subtitle": "Route 53 + RDS Multi-AZ + S3レプリケーションでRTO/RPOを最小化するDR設計",
         "keywords": "DR, RTO, RPO, Route 53, フェイルオーバー, RDS Multi-AZ, S3レプリケーション, ヘルスチェック",
         "primary_service": "route53",
+        "primary_service_label": "Route 53",
         "emoji": "🌍",
     },
     {
@@ -127,6 +133,7 @@ AWS_TOPICS = [
         "subtitle": "SNS + SQS + Lambda でスケーラブルな通知基盤を構築する",
         "keywords": "SNS, SQS, Lambda, Pub/Sub, デッドレターキュー, メッセージルーティング, 冪等性",
         "primary_service": "sns",
+        "primary_service_label": "SNS",
         "emoji": "🔔",
     },
     {
@@ -137,6 +144,7 @@ AWS_TOPICS = [
         "subtitle": "Bedrock + S3 + OpenSearch Serverless でRAGシステムを構築する",
         "keywords": "RAG, Bedrock, Knowledge Base, OpenSearch Serverless, ベクトル検索, エンベディング, チャンキング",
         "primary_service": "bedrock",
+        "primary_service_label": "Amazon Bedrock",
         "emoji": "🤖",
     },
     # ── ユースケース別ソリューション ────────────────────────────────────────
@@ -148,6 +156,7 @@ AWS_TOPICS = [
         "subtitle": "CodePipeline + CodeBuild + ECR でコンテナイメージのビルド〜配布を自動化する",
         "keywords": "CI/CD, CodePipeline, CodeBuild, ECR, ビルドスペック, パイプラインステージ, 自動テスト",
         "primary_service": "codepipeline",
+        "primary_service_label": "CodePipeline",
         "emoji": "🚀",
     },
     {
@@ -158,6 +167,7 @@ AWS_TOPICS = [
         "subtitle": "SageMaker + Step Functions + S3 で学習〜デプロイを自動化するMLパイプライン",
         "keywords": "SageMaker AI, Step Functions, S3, MLOps, モデルレジストリ, バッチ推論, Pipeline",
         "primary_service": "sagemaker",
+        "primary_service_label": "SageMaker AI",
         "emoji": "🧠",
     },
     {
@@ -168,6 +178,7 @@ AWS_TOPICS = [
         "subtitle": "CloudTrail + S3 + Athena でAWS全体のログを集約・分析する",
         "keywords": "CloudTrail, S3, Athena, ログ集約, セキュリティ監査, SQLクエリ, パーティション射影",
         "primary_service": "cloudtrail",
+        "primary_service_label": "CloudTrail",
         "emoji": "🔍",
     },
     {
@@ -178,6 +189,7 @@ AWS_TOPICS = [
         "subtitle": "Cost Explorer + Budgets + 自動停止Lambdaでコストを可視化・削減する",
         "keywords": "コスト最適化, Cost Explorer, Budgets, Lambda自動停止, タグ管理, Cost Allocation",
         "primary_service": "cost_explorer",
+        "primary_service_label": "Cost Explorer",
         "emoji": "💰",
     },
     {
@@ -188,6 +200,7 @@ AWS_TOPICS = [
         "subtitle": "GuardDuty + Security Hub + CloudTrailで脅威検知と監査証跡を一元化する",
         "keywords": "GuardDuty, Security Hub, CloudTrail, 脅威検知, コンプライアンス, セキュリティスコア",
         "primary_service": "guardduty",
+        "primary_service_label": "GuardDuty",
         "emoji": "🛡️",
     },
     {
@@ -198,6 +211,7 @@ AWS_TOPICS = [
         "subtitle": "AWS Backup + RDS + DynamoDB のバックアッププランで障害に強い設計を実現する",
         "keywords": "AWS Backup, RDS スナップショット, DynamoDB PITRバックアップ, RTO, RPO, 復元テスト, バックアップポリシー",
         "primary_service": "backup",
+        "primary_service_label": "AWS Backup",
         "emoji": "💾",
     },
     {
@@ -208,6 +222,7 @@ AWS_TOPICS = [
         "subtitle": "Organizations + Control Tower + IAM Identity Center でセキュアなマルチアカウント環境を構築する",
         "keywords": "AWS Organizations, Control Tower, IAM Identity Center, SCP, ガードレール, ランディングゾーン, OU設計",
         "primary_service": "organizations",
+        "primary_service_label": "AWS Organizations",
         "emoji": "🏢",
     },
     {
@@ -218,6 +233,7 @@ AWS_TOPICS = [
         "subtitle": "S3 + Glue + Athena でデータレイクを構築しSQLで分析する",
         "keywords": "データレイク, S3, Glue, Athena, データカタログ, ETL, パーティショニング, 列指向フォーマット",
         "primary_service": "glue",
+        "primary_service_label": "AWS Glue",
         "emoji": "🏞️",
     },
 ]
@@ -349,6 +365,9 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
   - ニーズから入る例:「{topic_name}が必要になるのは、〜というシナリオが多いです」
   - 「この記事では〜を解説します」という宣言は使わない
 - この記事で「何が作れるようになるか・何を判断できるようになるか」を1〜2文で示す
+- **「この記事でわかること」を3行の箇条書きで示す**（スキマー向けの要点先出し。冒頭の課題描写のすぐ後、対象読者の前に置く）
+  - 各行は具体的な成果物・判断軸で書く（例:「{topic_name}の構成要素と役割分担」「本番運用で見落としがちなコスト・セキュリティの落とし穴」）
+  - 「〜がわかります」で統一し、抽象的な言い換えの羅列にしない
 - 対象読者と前提知識（箇条書き可）
 
 ### ## アーキテクチャ概要
@@ -413,7 +432,8 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 - 発展として学ぶべき次のトピック（関連サービス・設計パターン）
 
 ### ## 参考
-- AWS公式ドキュメントへの参照（URLは書かず「AWS公式ドキュメント: サービス名」形式）
+- {primary_service_label} の公式ドキュメントへの参照は自動挿入されるため書かない
+- それ以外のサービスへの参照（URLは書かず「AWS公式ドキュメント: サービス名」形式）
 
 ---
 
@@ -605,6 +625,7 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
         keywords=topic["keywords"],
         today=today,
         docs_section=docs_section,
+        primary_service_label=topic.get("primary_service_label", ""),
     )
 
     body_dict = {
@@ -726,6 +747,26 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
     return result
 
 
+def _inject_reference_link(article: str, topic: dict) -> str:
+    """primary_service の公式ドキュメントURLを '## 参考' セクションに挿入する。
+    LLMにURLを書かせるとハルシネーションのリスクがあるため、DOCS_URL_MAPの
+    確定済みURLをコード側で直接挿入する（LLM生成テキストとは独立した安全な追記）。
+    """
+    url = DOCS_URL_MAP.get(topic.get("primary_service", ""), "")
+    if not url:
+        return article
+    label = topic.get("primary_service_label", topic.get("primary_service", ""))
+    link_line = f"- [{label} 公式ドキュメント]({url})"
+
+    lines = article.split("\n")
+    ref_idx = next((i for i, line in enumerate(lines) if line.startswith("## ") and "参考" in line), None)
+    if ref_idx is None:
+        return article.rstrip() + f"\n\n## 参考\n\n{link_line}\n"
+
+    lines.insert(ref_idx + 1, f"\n{link_line}")
+    return "\n".join(lines)
+
+
 def _next_article_number(output_dir: str) -> str:
     import glob
     existing = glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*"))
@@ -764,6 +805,9 @@ def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[
 
     # 構成図を生成（1枚）
     png_paths = generate_diagrams(topic, png_base)
+
+    # primary_service の確定URLを '## 参考' セクションに挿入（LLM生成ではない安全なリンク）
+    article = _inject_reference_link(article, topic)
 
     # {{DIAGRAM_1}} マーカーで記事中に挿入（マーカー不在時はフォールバック）
     article_with_images = _embed_image_placeholders(article, png_paths, topic["name"])
