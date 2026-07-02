@@ -27,7 +27,7 @@ _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 # Environment variables
 SES_SENDER_EMAIL    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT_EMAIL = os.environ["SES_RECIPIENT_EMAIL"]
-BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-sonnet-4-6")
+BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-5")
 OUTPUT_DIR = os.environ.get(
     "OUTPUT_DIR",
     "/tmp/zenn_mid_articles" if _IS_LAMBDA
@@ -47,10 +47,10 @@ RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "4"))
 # ─── Bedrock 呼び出しパラメータ（定数化） ────────────────────────────────────
 BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
 TOPIC_SELECT_MAX_TOKENS   = 20        # トピックID（短い文字列）の選択用
-ARTICLE_MAX_TOKENS        = 24000     # 記事本文生成用
-# Claude Sonnet 概算単価（USD / 100万トークン）
-SONNET_INPUT_COST_PER_MTOK  = 3.0
-SONNET_OUTPUT_COST_PER_MTOK = 15.0
+ARTICLE_MAX_TOKENS        = 32000     # 記事本文生成用（Sonnet 5のadaptive thinking分の余裕を確保）
+# Claude Sonnet 5 概算単価（USD / 100万トークン、2026-08-31までの導入価格）
+SONNET_INPUT_COST_PER_MTOK  = 2.0
+SONNET_OUTPUT_COST_PER_MTOK = 10.0
 # AWS公式ドキュメント取得
 DOCS_FETCH_TIMEOUT_SEC = 15
 DOCS_MAX_CHARS         = 6000
@@ -588,6 +588,7 @@ architectureとusecaseが交互になるように選ぶと良いですが、純�
         body=json.dumps({
             "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
             "max_tokens": TOPIC_SELECT_MAX_TOKENS,
+            "thinking": {"type": "disabled"},
             "messages": [{"role": "user", "content": prompt}],
         }),
     )
@@ -632,15 +633,20 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
         docs_section=docs_section,
     )
 
+    body_dict = {
+        "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
+        "max_tokens": ARTICLE_MAX_TOKENS,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if "sonnet-5" in model_id:
+        # Haikuはadaptive thinking非対応のため、Sonnet 5使用時のみ有効化する
+        body_dict["thinking"] = {"type": "adaptive"}
+
     response = bedrock.invoke_model(
         modelId=model_id,
         contentType="application/json",
         accept="application/json",
-        body=json.dumps({
-            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
-            "max_tokens": ARTICLE_MAX_TOKENS,
-            "messages": [{"role": "user", "content": prompt}],
-        }),
+        body=json.dumps(body_dict),
     )
 
     result = json.loads(response["body"].read())
