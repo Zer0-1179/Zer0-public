@@ -390,20 +390,9 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 
 ### ## 設計上の考慮ポイント
 
-**`{{DIAGRAM_2}}` マーカーの配置ルール（必ず守ること）**
-- マーカーは `## 設計上の考慮ポイント` セクションの本文中にのみ置く。他のセクションには置かない。
-- 直前（1文）: 図2が示している観点（コスト・セキュリティ・スケーラビリティのどれか）に言及する文を書く（毎回違う切り口で）
-  - 良い例: 「以下の図は、{services}間のデータフローとコスト最適化ポイントを示しています。」
-  - 良い例: 「{topic_name}における処理の詳細フローを図示します。各レイヤーでの変換・制御の流れを確認してください。」
-  - 禁止: 「以下の図を参照してください。」のような内容のない定型文
-- 直後（1〜2文）: 図に描かれた特定のフローや設計上の工夫を具体的に指摘し、以降の解説への橋渡しをする
-
 構成:
 1. このセクション全体の視点を1文で紹介
-2. 予告文（1文）を書く
-3. 単独行で `{{DIAGRAM_2}}` を挿入（前後に空行必須）
-4. 図の補足説明と以降の解説への橋渡し（1〜2文）
-5. コスト・セキュリティ・スケーラビリティの3観点を解説:
+2. コスト・セキュリティ・スケーラビリティの3観点を解説:
    - **コスト最適化**: 各サービスの料金構造と削減テクニック
    - **セキュリティ**: IAMポリシー最小権限・暗号化・ネットワーク分離の具体的な設定
    - **スケーラビリティ**: 高負荷時の挙動とボトルネック対策
@@ -665,8 +654,7 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
 # ─── MD 生成（画像プレースホルダー付き） ─────────────────────────────────────
 
 _DIAGRAM_CAPTIONS = [
-    "{topic_name} – 全体アーキテクチャ構成図",
-    "{topic_name} – データフロー・詳細構成図",
+    "{topic_name} – 構成図",
 ]
 
 
@@ -698,7 +686,7 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
         return cleaned
 
     # フォールバック用: 見出し名で挿入位置を探す順序
-    _FALLBACK_HEADINGS = ["アーキテクチャ概要", "設計上の考慮ポイント"]
+    _FALLBACK_HEADINGS = ["アーキテクチャ概要"]
 
     result = article
     for img_idx, png_path in enumerate(png_paths):
@@ -774,10 +762,10 @@ def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[
     md_path  = os.path.join(article_dir, f"{base_name}.md")
     png_base = os.path.join(images_dir,  f"{base_name}_diagram")
 
-    # 構成図を生成（2枚）
+    # 構成図を生成（1枚）
     png_paths = generate_diagrams(topic, png_base)
 
-    # 図1・図2ともに {{DIAGRAM_N}} マーカーで記事中に挿入（マーカー不在時はフォールバック）
+    # {{DIAGRAM_1}} マーカーで記事中に挿入（マーカー不在時はフォールバック）
     article_with_images = _embed_image_placeholders(article, png_paths, topic["name"])
 
     # Zennフロントマター用メタ情報
