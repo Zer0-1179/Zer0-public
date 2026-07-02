@@ -8,7 +8,7 @@ from botocore.config import Config
 try:
     from diagram_generator import generate_diagrams
 except ImportError:
-    def generate_diagrams(topic_id, base_path):
+    def generate_diagrams(topic, base_path):
         return []
 
 # AWS clients
@@ -47,9 +47,7 @@ RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "4"))
 # ─── Bedrock 呼び出しパラメータ（定数化） ────────────────────────────────────
 BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
 TOPIC_SELECT_MAX_TOKENS   = 20        # トピックID（短い文字列）の選択用
-ARTICLE_MAX_TOKENS        = 32000     # 記事本文生成用（Sonnet 5移行時のadaptive thinking分の余裕も見込み拡張済み）
-REVIEW_MODEL_ID           = os.environ.get("REVIEW_MODEL_ID", "jp.anthropic.claude-sonnet-4-6")
-REVIEW_MAX_TOKENS         = 12000     # 技術レビューの指摘リスト用（effort:medium指定時の実測値の約4倍を確保）
+ARTICLE_MAX_TOKENS        = 24000     # 記事本文生成用
 # Claude Sonnet 4.6 概算単価（USD / 100万トークン）
 SONNET_INPUT_COST_PER_MTOK  = 3.0
 SONNET_OUTPUT_COST_PER_MTOK = 15.0
@@ -58,15 +56,16 @@ DOCS_FETCH_TIMEOUT_SEC = 15
 DOCS_MAX_CHARS         = 6000
 
 # ─── 中級者向けトピック定義（16記事分 ≒ 8ヶ月分） ────────────────────────────
+# サービス数は1トピック3つまでに絞る（複数サービスを跨ぐ細かい統合バグの温床になりやすいため）
 AWS_TOPICS = [
     # ── 複合アーキテクチャ系 ─────────────────────────────────────────────────
     {
         "id": "serverless_ec",
         "name": "サーバーレスECバックエンド完全構成",
         "article_type": "architecture",
-        "services": ["API Gateway", "Lambda", "DynamoDB", "SQS", "SNS"],
-        "subtitle": "API Gateway + Lambda + DynamoDB + SQS + SNS で構築する本番級バックエンド",
-        "keywords": "サーバーレス, API Gateway, Lambda, DynamoDB, SQS, SNS, 非同期処理, スロットリング, 冪等性",
+        "services": ["API Gateway", "Lambda", "DynamoDB"],
+        "subtitle": "API Gateway + Lambda + DynamoDB で構築する本番級バックエンド",
+        "keywords": "サーバーレス, API Gateway, Lambda, DynamoDB, スロットリング, 冪等性",
         "primary_service": "apigateway",
         "secondary_service": "lambda",
         "emoji": "🛒",
@@ -75,9 +74,9 @@ AWS_TOPICS = [
         "id": "static_web_hosting",
         "name": "静的Webホスティング最適解",
         "article_type": "architecture",
-        "services": ["S3", "CloudFront", "Route 53", "ACM", "WAF"],
-        "subtitle": "S3 + CloudFront + Route 53 + ACM + WAF で構築するセキュアな静的サイト",
-        "keywords": "静的サイト, CloudFront, S3, Route 53, ACM, WAF, HTTPS, カスタムドメイン, OAC, キャッシュ制御",
+        "services": ["S3", "CloudFront", "ACM"],
+        "subtitle": "S3 + CloudFront + ACM で構築するセキュアな静的サイト",
+        "keywords": "静的サイト, CloudFront, S3, ACM, HTTPS, カスタムドメイン, OAC, キャッシュ制御",
         "primary_service": "cloudfront",
         "secondary_service": "s3",
         "emoji": "🌐",
@@ -86,9 +85,9 @@ AWS_TOPICS = [
         "id": "container_platform",
         "name": "コンテナアプリ本番運用基盤",
         "article_type": "architecture",
-        "services": ["ECS Fargate", "ALB", "ECR", "CloudWatch", "Secrets Manager"],
-        "subtitle": "ECS Fargate + ALB + ECR + CloudWatch でコンテナを本番運用する",
-        "keywords": "ECS Fargate, ALB, ECR, CloudWatch, Secrets Manager, タスク定義, サービス, ローリングデプロイ, ヘルスチェック",
+        "services": ["ECS Fargate", "ALB", "ECR"],
+        "subtitle": "ECS Fargate + ALB + ECR でコンテナを本番運用する",
+        "keywords": "ECS Fargate, ALB, ECR, タスク定義, サービス, ローリングデプロイ, ヘルスチェック",
         "primary_service": "ecs",
         "secondary_service": "ecr",
         "emoji": "🐳",
@@ -97,9 +96,9 @@ AWS_TOPICS = [
         "id": "event_driven_pipeline",
         "name": "イベント駆動データ処理パイプライン",
         "article_type": "architecture",
-        "services": ["Kinesis Data Streams", "Lambda", "S3", "Athena", "Glue"],
-        "subtitle": "Kinesis + Lambda + S3 + Athena でリアルタイムデータを収集・分析する",
-        "keywords": "Kinesis, Lambda, S3, Athena, Glue, リアルタイム処理, データパイプライン, パーティション, Parquet, ETL",
+        "services": ["Kinesis Data Streams", "Lambda", "S3"],
+        "subtitle": "Kinesis + Lambda + S3 でリアルタイムデータを収集・保存する",
+        "keywords": "Kinesis, Lambda, S3, リアルタイム処理, データパイプライン, シャード, バッチウィンドウ",
         "primary_service": "kinesis",
         "secondary_service": "lambda",
         "emoji": "🌊",
@@ -108,9 +107,9 @@ AWS_TOPICS = [
         "id": "microservices_base",
         "name": "マイクロサービス観測性基盤",
         "article_type": "architecture",
-        "services": ["API Gateway", "Lambda", "DynamoDB", "SQS", "X-Ray"],
-        "subtitle": "API Gateway + Lambda + DynamoDB + SQS + X-Ray で分散トレーシングを実現する",
-        "keywords": "マイクロサービス, X-Ray, 分散トレーシング, API Gateway, Lambda, DynamoDB, SQS, サービスマップ, レイテンシ分析",
+        "services": ["API Gateway", "Lambda", "X-Ray"],
+        "subtitle": "API Gateway + Lambda + X-Ray で分散トレーシングを実現する",
+        "keywords": "マイクロサービス, X-Ray, 分散トレーシング, API Gateway, Lambda, サービスマップ, レイテンシ分析",
         "primary_service": "apigateway",
         "secondary_service": "xray",
         "emoji": "🔬",
@@ -119,9 +118,9 @@ AWS_TOPICS = [
         "id": "multi_region_dr",
         "name": "マルチリージョンDR構成",
         "article_type": "architecture",
-        "services": ["Route 53", "ALB", "EC2", "RDS", "S3 Cross-Region Replication"],
-        "subtitle": "Route 53 + ALB + RDS Multi-AZ でRTO/RPOを最小化するDR設計",
-        "keywords": "DR, RTO, RPO, Route 53, フェイルオーバー, RDS Multi-AZ, S3レプリケーション, ヘルスチェック, パイロットライト, ウォームスタンバイ",
+        "services": ["Route 53", "RDS", "S3 Cross-Region Replication"],
+        "subtitle": "Route 53 + RDS Multi-AZ + S3レプリケーションでRTO/RPOを最小化するDR設計",
+        "keywords": "DR, RTO, RPO, Route 53, フェイルオーバー, RDS Multi-AZ, S3レプリケーション, ヘルスチェック",
         "primary_service": "route53",
         "secondary_service": "rds",
         "emoji": "🌍",
@@ -130,9 +129,9 @@ AWS_TOPICS = [
         "id": "realtime_notify",
         "name": "リアルタイム通知・アラートシステム",
         "article_type": "architecture",
-        "services": ["SNS", "SQS", "Lambda", "SES", "EventBridge"],
-        "subtitle": "SNS + SQS + Lambda + EventBridge でスケーラブルな通知基盤を構築する",
-        "keywords": "SNS, SQS, Lambda, SES, EventBridge, Pub/Sub, デッドレターキュー, フィルタリングポリシー, メッセージルーティング, 冪等性",
+        "services": ["SNS", "SQS", "Lambda"],
+        "subtitle": "SNS + SQS + Lambda でスケーラブルな通知基盤を構築する",
+        "keywords": "SNS, SQS, Lambda, Pub/Sub, デッドレターキュー, メッセージルーティング, 冪等性",
         "primary_service": "sns",
         "secondary_service": "sqs",
         "emoji": "🔔",
@@ -141,9 +140,9 @@ AWS_TOPICS = [
         "id": "bedrock_rag",
         "name": "Bedrock RAG アーキテクチャ",
         "article_type": "architecture",
-        "services": ["Amazon Bedrock", "S3", "OpenSearch Serverless", "Lambda", "API Gateway"],
-        "subtitle": "Bedrock + S3 + OpenSearch Serverless + Lambda でRAGシステムを構築する",
-        "keywords": "RAG, Bedrock, Knowledge Base, OpenSearch Serverless, ベクトル検索, エンベディング, LLM, チャンキング, ハイブリッド検索",
+        "services": ["Amazon Bedrock", "S3", "OpenSearch Serverless"],
+        "subtitle": "Bedrock + S3 + OpenSearch Serverless でRAGシステムを構築する",
+        "keywords": "RAG, Bedrock, Knowledge Base, OpenSearch Serverless, ベクトル検索, エンベディング, チャンキング",
         "primary_service": "bedrock",
         "secondary_service": "opensearch",
         "emoji": "🤖",
@@ -153,9 +152,9 @@ AWS_TOPICS = [
         "id": "cicd_pipeline",
         "name": "AWS CI/CDパイプライン構築",
         "article_type": "usecase",
-        "services": ["CodePipeline", "CodeBuild", "CodeDeploy", "ECR", "ECS"],
-        "subtitle": "CodePipeline + CodeBuild + CodeDeploy でコンテナアプリのCI/CDを自動化する",
-        "keywords": "CI/CD, CodePipeline, CodeBuild, CodeDeploy, ECR, ECS, Blue/Greenデプロイ, ビルドスペック, パイプラインステージ, 自動テスト",
+        "services": ["CodePipeline", "CodeBuild", "ECR"],
+        "subtitle": "CodePipeline + CodeBuild + ECR でコンテナイメージのビルド〜配布を自動化する",
+        "keywords": "CI/CD, CodePipeline, CodeBuild, ECR, ビルドスペック, パイプラインステージ, 自動テスト",
         "primary_service": "codepipeline",
         "secondary_service": "codebuild",
         "emoji": "🚀",
@@ -164,9 +163,9 @@ AWS_TOPICS = [
         "id": "ml_pipeline",
         "name": "機械学習パイプライン自動化",
         "article_type": "usecase",
-        "services": ["SageMaker AI", "S3", "Lambda", "Step Functions", "EventBridge"],
-        "subtitle": "SageMaker + Step Functions + Lambda で学習〜デプロイを自動化するMLパイプライン",
-        "keywords": "SageMaker AI, Step Functions, Lambda, S3, MLOps, モデルレジストリ, バッチ推論, A/Bテスト, ドリフト検知, Pipeline",
+        "services": ["SageMaker AI", "S3", "Step Functions"],
+        "subtitle": "SageMaker + Step Functions + S3 で学習〜デプロイを自動化するMLパイプライン",
+        "keywords": "SageMaker AI, Step Functions, S3, MLOps, モデルレジストリ, バッチ推論, Pipeline",
         "primary_service": "sagemaker",
         "secondary_service": "step_functions",
         "emoji": "🧠",
@@ -175,9 +174,9 @@ AWS_TOPICS = [
         "id": "log_analytics",
         "name": "ログ集約・分析基盤の構築",
         "article_type": "usecase",
-        "services": ["CloudTrail", "CloudWatch Logs", "Kinesis Firehose", "S3", "Athena"],
-        "subtitle": "CloudTrail + Kinesis Firehose + Athena でAWS全体のログを集約・分析する",
-        "keywords": "CloudTrail, CloudWatch Logs, Kinesis Firehose, S3, Athena, ログ集約, セキュリティ監査, SQLクエリ, コスト効率, データカタログ",
+        "services": ["CloudTrail", "S3", "Athena"],
+        "subtitle": "CloudTrail + S3 + Athena でAWS全体のログを集約・分析する",
+        "keywords": "CloudTrail, S3, Athena, ログ集約, セキュリティ監査, SQLクエリ, パーティション射影",
         "primary_service": "cloudtrail",
         "secondary_service": "athena",
         "emoji": "🔍",
@@ -186,9 +185,9 @@ AWS_TOPICS = [
         "id": "cost_optimization",
         "name": "AWSコスト最適化の実践戦略",
         "article_type": "usecase",
-        "services": ["Cost Explorer", "AWS Budgets", "Savings Plans", "Lambda", "CloudWatch"],
-        "subtitle": "Cost Explorer + Budgets + Savings Plans + 自動停止Lambdaでコストを30%削減する",
-        "keywords": "コスト最適化, Cost Explorer, Budgets, Savings Plans, Reserved Instances, Spot, Lambda自動停止, タグ管理, Cost Allocation, Compute Optimizer",
+        "services": ["Cost Explorer", "AWS Budgets", "Lambda"],
+        "subtitle": "Cost Explorer + Budgets + 自動停止Lambdaでコストを可視化・削減する",
+        "keywords": "コスト最適化, Cost Explorer, Budgets, Lambda自動停止, タグ管理, Cost Allocation",
         "primary_service": "cost_explorer",
         "secondary_service": "budgets",
         "emoji": "💰",
@@ -197,9 +196,9 @@ AWS_TOPICS = [
         "id": "security_hardening",
         "name": "AWSセキュリティ強化設計",
         "article_type": "usecase",
-        "services": ["AWS WAF", "GuardDuty", "Security Hub", "CloudTrail", "Config"],
-        "subtitle": "WAF + GuardDuty + Security Hub + Config で多層防御セキュリティを実現する",
-        "keywords": "WAF, GuardDuty, Security Hub, CloudTrail, AWS Config, 多層防御, 脅威検知, コンプライアンス, セキュリティスコア, 自動修復",
+        "services": ["GuardDuty", "Security Hub", "CloudTrail"],
+        "subtitle": "GuardDuty + Security Hub + CloudTrailで脅威検知と監査証跡を一元化する",
+        "keywords": "GuardDuty, Security Hub, CloudTrail, 脅威検知, コンプライアンス, セキュリティスコア",
         "primary_service": "waf",
         "secondary_service": "guardduty",
         "emoji": "🛡️",
@@ -208,9 +207,9 @@ AWS_TOPICS = [
         "id": "backup_dr",
         "name": "バックアップ・DR設計の実践",
         "article_type": "usecase",
-        "services": ["AWS Backup", "S3", "RDS", "DynamoDB", "CloudFormation"],
-        "subtitle": "AWS Backup + S3 Cross-Region + RDS スナップショットで障害に強い設計を実現する",
-        "keywords": "AWS Backup, S3 Cross-Region Replication, RDS スナップショット, DynamoDB PITRバックアップ, RTO, RPO, CloudFormation, 復元テスト, バックアップポリシー",
+        "services": ["AWS Backup", "RDS", "DynamoDB"],
+        "subtitle": "AWS Backup + RDS + DynamoDB のバックアッププランで障害に強い設計を実現する",
+        "keywords": "AWS Backup, RDS スナップショット, DynamoDB PITRバックアップ, RTO, RPO, 復元テスト, バックアップポリシー",
         "primary_service": "backup",
         "secondary_service": "rds",
         "emoji": "💾",
@@ -219,9 +218,9 @@ AWS_TOPICS = [
         "id": "multi_account",
         "name": "マルチアカウント管理の実践",
         "article_type": "usecase",
-        "services": ["AWS Organizations", "Control Tower", "Service Catalog", "IAM Identity Center", "CloudFormation StackSets"],
+        "services": ["AWS Organizations", "Control Tower", "IAM Identity Center"],
         "subtitle": "Organizations + Control Tower + IAM Identity Center でセキュアなマルチアカウント環境を構築する",
-        "keywords": "AWS Organizations, Control Tower, Service Catalog, IAM Identity Center, SCP, ガードレール, ランディングゾーン, アカウントファクトリー, OU設計",
+        "keywords": "AWS Organizations, Control Tower, IAM Identity Center, SCP, ガードレール, ランディングゾーン, OU設計",
         "primary_service": "organizations",
         "secondary_service": "control_tower",
         "emoji": "🏢",
@@ -230,9 +229,9 @@ AWS_TOPICS = [
         "id": "data_lake",
         "name": "データレイク構築の実践",
         "article_type": "usecase",
-        "services": ["S3", "AWS Glue", "Athena", "Lake Formation", "QuickSight"],
-        "subtitle": "S3 + Glue + Athena + Lake Formation + QuickSight でデータレイクを構築してBIまで繋げる",
-        "keywords": "データレイク, S3, Glue, Athena, Lake Formation, QuickSight, データカタログ, ETL, パーティショニング, データガバナンス, 列指向フォーマット",
+        "services": ["S3", "AWS Glue", "Athena"],
+        "subtitle": "S3 + Glue + Athena でデータレイクを構築しSQLで分析する",
+        "keywords": "データレイク, S3, Glue, Athena, データカタログ, ETL, パーティショニング, 列指向フォーマット",
         "primary_service": "glue",
         "secondary_service": "athena",
         "emoji": "🏞️",
@@ -792,7 +791,7 @@ def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[
     png_base = os.path.join(images_dir,  f"{base_name}_diagram")
 
     # 構成図を生成（2枚）
-    png_paths = generate_diagrams(topic["id"], png_base)
+    png_paths = generate_diagrams(topic, png_base)
 
     # 図1・図2ともに {{DIAGRAM_N}} マーカーで記事中に挿入（マーカー不在時はフォールバック）
     article_with_images = _embed_image_placeholders(article, png_paths, topic["name"])
@@ -875,155 +874,12 @@ def validate_cli_in_article(article_text: str) -> list[str]:
     return issues
 
 
-# ─── AI技術レビュー ───────────────────────────────────────────────────────────
-
-_REVIEW_ISSUE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "issues": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "severity": {"type": "string", "enum": ["high", "medium", "low"]},
-                    "summary": {"type": "string"},
-                },
-                "required": ["severity", "summary"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    "required": ["issues"],
-    "additionalProperties": False,
-}
-
-_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-
-
-def review_technical_accuracy(article_text: str, topic: dict, model_id: str) -> list[str]:
-    """Bedrockで記事の技術的正確性をレビューする。
-    validate_cli_in_article() の構文チェック（存在確認）とは異なり、
-    複数サービスを跨いだ意味的な矛盾（データフォーマット非互換・IAM条件の実効性・
-    パーティション認識タイミング等）をLLMに検証させる。
-    """
-    services_str = "、".join(topic["services"])
-    prompt = f"""あなたはAWSソリューションアーキテクトです。以下のZenn技術記事（{services_str}を使った「{topic['name']}」）を、技術的正確性の観点で厳密にレビューしてください。
-
-特に以下の観点を重点的に確認してください:
-1. 複数のAWSサービスを組み合わせる際のデータフォーマット・処理順序の互換性（あるサービスの出力形式を後段のサービスがそのまま処理できるか）
-2. IAMの信頼ポリシー・権限ポリシーが、実際のサービスプリンシパルの挙動と一致しているか（Condition句が実際に満たされる条件になっているか）
-3. リソース間の依存関係・作成順序に矛盾がないか
-4. パーティション・カタログ等について「書き込んだデータをすぐに読み取れるか」という認識タイミングの問題
-5. 記事内の「動作確認」手順が、記載された構成のまま実行して本当に結果を返せるか
-6. AWS CLIコマンドのオプションが実在するか、構文が正しいか
-
-確信度が低い指摘は無理に含めず、実際に手順通り実行した場合に問題が起きると考えられるものだけを報告してください。指摘がなければissuesを空配列にしてください。
-
---- 記事本文 ---
-{article_text}
-"""
-
-    response = bedrock.invoke_model(
-        modelId=model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({
-            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
-            "max_tokens": REVIEW_MAX_TOKENS,
-            "thinking": {"type": "adaptive"},
-            "messages": [{"role": "user", "content": prompt}],
-            "output_config": {
-                "effort": "medium",
-                "format": {"type": "json_schema", "schema": _REVIEW_ISSUE_SCHEMA},
-            },
-        }),
-    )
-
-    result = json.loads(response["body"].read())
-    usage = result.get("usage", {})
-    print(f"[Bedrock/review] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}, "
-          f"stop={result.get('stop_reason','unknown')}")
-
-    text_blocks = [b for b in result["content"] if b.get("type") == "text"]
-    if not text_blocks:
-        raise ValueError(
-            f"レビュー応答にtextブロックがありません（stop_reason={result.get('stop_reason')}、"
-            f"thinkingトークンで予算を使い切った可能性）"
-        )
-    issues = json.loads(text_blocks[0]["text"]).get("issues", [])
-    issues.sort(key=lambda i: _SEVERITY_ORDER.get(i.get("severity", "low"), 3))
-
-    return [f"[{i.get('severity', '?')}] {i.get('summary', '')}" for i in issues]
-
-
-def fix_article(article_text: str, issues: list[str], model_id: str) -> str | None:
-    """レビュー指摘を踏まえて記事を修正する。失敗時はNoneを返す（呼び出し側は元記事にフォールバックする）"""
-    issues_text = "\n".join(f"- {i}" for i in issues)
-    prompt = f"""以下のZenn技術記事に、技術レビューで次の指摘が見つかりました。指摘内容を踏まえて記事を修正し、修正後の記事全文をMarkdownでそのまま出力してください。
-
---- 指摘内容 ---
-{issues_text}
-
---- 修正時の注意 ---
-- 指摘された技術的問題を解決すること（不足しているコマンド・設定の追加、誤った記述の訂正等）
-- 記事の構成・見出し・`{{DIAGRAM_N}}`マーカーの位置・文体は可能な限り維持すること
-- 修正内容の説明や前置きは不要。記事本文のみを出力すること
-
---- 元の記事 ---
-{article_text}
-"""
-
-    response = bedrock.invoke_model(
-        modelId=model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({
-            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
-            "max_tokens": ARTICLE_MAX_TOKENS,
-            "thinking": {"type": "adaptive"},
-            "output_config": {"effort": "medium"},
-            "messages": [{"role": "user", "content": prompt}],
-        }),
-    )
-
-    result = json.loads(response["body"].read())
-    usage = result.get("usage", {})
-    stop_reason = result.get("stop_reason", "unknown")
-    in_tok  = usage.get("input_tokens", 0)
-    out_tok = usage.get("output_tokens", 0)
-    cost_usd = (in_tok * SONNET_INPUT_COST_PER_MTOK + out_tok * SONNET_OUTPUT_COST_PER_MTOK) / 1_000_000
-    print(f"[Bedrock/fix] in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
-
-    if stop_reason == "max_tokens":
-        print("[WARNING] 修正記事がmax_tokensで打ち切られました。修正を破棄し元記事を使用します。")
-        return None
-
-    text_blocks = [b for b in result["content"] if b.get("type") == "text"]
-    if not text_blocks:
-        print("[WARNING] 修正応答にtextブロックがありません。修正を破棄し元記事を使用します。")
-        return None
-    text = text_blocks[0]["text"]
-
-    # Bedrock が記事冒頭に YAML frontmatter を付けることがあるため除去する
-    if text.lstrip().startswith("---"):
-        lines = text.lstrip().splitlines(keepends=True)
-        end = 1
-        for i in range(1, len(lines)):
-            if lines[i].rstrip() == "---":
-                end = i + 1
-                break
-        text = "".join(lines[end:]).lstrip()
-
-    return text
-
-
 # ─── SES メール通知 ───────────────────────────────────────────────────────────
 
 def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
     timestamp: str, s3_url: str = "", is_truncated: bool = False,
-    cfn_issues: list | None = None, review_issues: list | None = None,
-    fix_applied: bool = False,
+    cfn_issues: list | None = None,
 ):
     """SES でメール通知を送信する"""
     import html as _html
@@ -1055,7 +911,6 @@ def send_email_notification(
     )
 
     cfn_issues = cfn_issues or []
-    review_issues = review_issues or []
     truncation_warning_text = """
 ⚠️ 警告: 記事が途中で切れています
 記事の生成がmax_tokensに達したため、末尾が不完全な可能性があります。
@@ -1067,17 +922,8 @@ Zennに投稿する前に内容を必ず確認してください。
         + "\n".join(f"  - {i}" for i in cfn_issues) + "\n"
     ) if cfn_issues else ""
 
-    review_warning_text = (
-        (
-            "🔍 AI技術レビューで指摘があり、自動修正しました（修正前の指摘内容）:\n"
-            if fix_applied else
-            "🔍 AI技術レビューで指摘がありましたが、自動修正に失敗しました。手動で確認してください:\n"
-        )
-        + "\n".join(f"  - {i}" for i in review_issues) + "\n"
-    ) if review_issues else ""
-
     body_text = f"""Zenn中級記事の自動生成が完了しました。
-{truncation_warning_text}{cfn_warning_text}{review_warning_text}
+{truncation_warning_text}{cfn_warning_text}
 ■ 記事情報
 - テーマ: {topic['name']}（{topic['article_type']}）
 - 使用サービス: {services_str}
@@ -1121,31 +967,12 @@ Zennに投稿する前に内容を必ず確認してください。
         '</div>'
     )
 
-    review_issues_html = (
-        '<div style="background:#e3f2fd;border:2px solid #1e88e5;padding:15px;border-radius:8px;margin:20px 0;">'
-        + (
-            '<h3 style="color:#1565c0;margin-top:0;">🔍 AI技術レビューで指摘があり、自動修正しました</h3>'
-            '<p style="color:#1565c0;margin:0 0 8px 0;">修正前の指摘内容（参考）:</p>'
-            if fix_applied else
-            '<h3 style="color:#1565c0;margin-top:0;">🔍 AI技術レビューで指摘がありましたが、自動修正に失敗しました</h3>'
-            '<p style="color:#1565c0;margin:0 0 8px 0;">手動で確認してください:</p>'
-        )
-        + '<ul style="color:#1565c0;margin:0;">'
-        + "".join(f'<li><code>{i}</code></li>' for i in review_issues)
-        + '</ul></div>'
-    ) if review_issues else (
-        '<div style="background:#e8f5e9;border:1px solid #66bb6a;padding:10px 15px;border-radius:8px;margin:20px 0;">'
-        '<p style="color:#2e7d32;margin:0;">✅ AI技術レビュー — 問題なし</p>'
-        '</div>'
-    )
-
     body_html = f"""
 <html>
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <h2 style="color:#3EA8FF;">Zenn中級記事の自動生成が完了しました</h2>
   {truncation_warning_html}
   {cfn_issues_html}
-  {review_issues_html}
 
   <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>記事情報</h3>
@@ -1236,43 +1063,29 @@ def lambda_handler(event, context):
     article, is_truncated = generate_article(topic, today, model_id)
     print(f"  記事生成完了: {len(article):,}文字 [{time.time()-_t:.1f}s]")
 
-    # Step 4: AI技術レビュー・自動修正（test_mode・記事切り詰め時はスキップ）
-    review_issues = []
-    if not event.get("test_mode") and not is_truncated:
-        _t = time.time()
-        print("Step 4: AI技術レビュー中...")
-        try:
-            review_issues = review_technical_accuracy(article, topic, REVIEW_MODEL_ID)
-            if review_issues:
-                print(f"  ⚠️ レビュー指摘: {len(review_issues)}件 [{time.time()-_t:.1f}s]")
-            else:
-                print(f"  ✓ レビュー指摘なし [{time.time()-_t:.1f}s]")
-        except Exception as e:
-            print(f"  レビュースキップ（無視して続行）: {e}")
-            review_issues = []
-
-        fix_applied = False
-        if review_issues:
-            _t = time.time()
-            print("Step 4.5: 指摘を踏まえて記事を自動修正中...")
-            try:
-                fixed_article = fix_article(article, review_issues, REVIEW_MODEL_ID)
-                if fixed_article:
-                    article = fixed_article
-                    fix_applied = True
-                    print(f"  ✓ 自動修正完了: {len(article):,}文字 [{time.time()-_t:.1f}s]")
-                else:
-                    print(f"  修正失敗のため元記事のまま続行 [{time.time()-_t:.1f}s]")
-            except Exception as e:
-                print(f"  修正スキップ（無視して続行、元記事のまま）: {e}")
-    else:
-        fix_applied = False
-        skip_reason = "TEST MODE" if event.get("test_mode") else "記事がmax_tokensで切り詰められたため"
-        print(f"[{skip_reason}] AI技術レビュー・自動修正をスキップしました")
-
-    # Step 5: AWS CLIコマンドチェック（自動修正後の記事に対して実行）
+    # Step 4: ローカル保存 + 構成図生成
     _t = time.time()
-    print("Step 5: AWS CLIコマンドをチェック中...")
+    print("Step 4: ローカルに保存中（記事MD + 構成図PNG）...")
+    md_path, png_paths = save_to_local(topic, article, timestamp)
+    print(f"  MD保存完了: {md_path}")
+    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
+
+    # Step 5: S3 アップロード（Lambda環境のみ）
+    s3_url = ""
+    if _IS_LAMBDA:
+        _t = time.time()
+        print("Step 5: S3にアップロード中...")
+        s3_folder = f"{timestamp}_{topic['id']}"
+        s3_url = upload_to_s3(md_path, png_paths, s3_folder)
+        print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
+
+    # Step 6: SSM 更新
+    print("Step 6: SSMにトピックを保存中...")
+    save_topic_to_ssm(topic["id"])
+
+    # Step 7: AWS CLIコマンドチェック
+    _t = time.time()
+    print("Step 7: AWS CLIコマンドをチェック中...")
     try:
         cfn_issues = validate_cli_in_article(article)
         if cfn_issues:
@@ -1283,33 +1096,12 @@ def lambda_handler(event, context):
         print(f"  CLIチェックスキップ（無視して続行）: {e}")
         cfn_issues = []
 
-    # Step 6: ローカル保存 + 構成図生成
+    # Step 8: メール通知
     _t = time.time()
-    print("Step 6: ローカルに保存中（記事MD + 構成図PNG）...")
-    md_path, png_paths = save_to_local(topic, article, timestamp)
-    print(f"  MD保存完了: {md_path}")
-    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
-
-    # Step 7: S3 アップロード（Lambda環境のみ）
-    s3_url = ""
-    if _IS_LAMBDA:
-        _t = time.time()
-        print("Step 7: S3にアップロード中...")
-        s3_folder = f"{timestamp}_{topic['id']}"
-        s3_url = upload_to_s3(md_path, png_paths, s3_folder)
-        print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
-
-    # Step 8: SSM 更新
-    print("Step 8: SSMにトピックを保存中...")
-    save_topic_to_ssm(topic["id"])
-
-    # Step 9: メール通知
-    _t = time.time()
-    print("Step 9: メール通知を送信中...")
+    print("Step 8: メール通知を送信中...")
     try:
         send_email_notification(
-            topic, article, md_path, png_paths, timestamp, s3_url, is_truncated,
-            cfn_issues, review_issues, fix_applied,
+            topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues,
         )
         print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
     except Exception as e:
