@@ -27,7 +27,7 @@ _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 # Environment variables
 SES_SENDER_EMAIL    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT_EMAIL = os.environ["SES_RECIPIENT_EMAIL"]
-BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-5")
+BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-sonnet-4-6")
 OUTPUT_DIR = os.environ.get(
     "OUTPUT_DIR",
     "/tmp/zenn_mid_articles" if _IS_LAMBDA
@@ -47,10 +47,12 @@ RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "4"))
 # ─── Bedrock 呼び出しパラメータ（定数化） ────────────────────────────────────
 BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
 TOPIC_SELECT_MAX_TOKENS   = 20        # トピックID（短い文字列）の選択用
-ARTICLE_MAX_TOKENS        = 32000     # 記事本文生成用（Sonnet 5のadaptive thinking分の余裕を確保）
-# Claude Sonnet 5 概算単価（USD / 100万トークン、2026-08-31までの導入価格）
-SONNET_INPUT_COST_PER_MTOK  = 2.0
-SONNET_OUTPUT_COST_PER_MTOK = 10.0
+ARTICLE_MAX_TOKENS        = 32000     # 記事本文生成用（Sonnet 5移行時のadaptive thinking分の余裕も見込み拡張済み）
+REVIEW_MODEL_ID           = os.environ.get("REVIEW_MODEL_ID", "jp.anthropic.claude-sonnet-4-6")
+REVIEW_MAX_TOKENS         = 12000     # 技術レビューの指摘リスト用（effort:medium指定時の実測値の約4倍を確保）
+# Claude Sonnet 4.6 概算単価（USD / 100万トークン）
+SONNET_INPUT_COST_PER_MTOK  = 3.0
+SONNET_OUTPUT_COST_PER_MTOK = 15.0
 # AWS公式ドキュメント取得
 DOCS_FETCH_TIMEOUT_SEC = 15
 DOCS_MAX_CHARS         = 6000
@@ -873,12 +875,93 @@ def validate_cli_in_article(article_text: str) -> list[str]:
     return issues
 
 
+# ─── AI技術レビュー ───────────────────────────────────────────────────────────
+
+_REVIEW_ISSUE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "issues": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+                    "summary": {"type": "string"},
+                },
+                "required": ["severity", "summary"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["issues"],
+    "additionalProperties": False,
+}
+
+_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
+def review_technical_accuracy(article_text: str, topic: dict, model_id: str) -> list[str]:
+    """Bedrockで記事の技術的正確性をレビューする。
+    validate_cli_in_article() の構文チェック（存在確認）とは異なり、
+    複数サービスを跨いだ意味的な矛盾（データフォーマット非互換・IAM条件の実効性・
+    パーティション認識タイミング等）をLLMに検証させる。
+    """
+    services_str = "、".join(topic["services"])
+    prompt = f"""あなたはAWSソリューションアーキテクトです。以下のZenn技術記事（{services_str}を使った「{topic['name']}」）を、技術的正確性の観点で厳密にレビューしてください。
+
+特に以下の観点を重点的に確認してください:
+1. 複数のAWSサービスを組み合わせる際のデータフォーマット・処理順序の互換性（あるサービスの出力形式を後段のサービスがそのまま処理できるか）
+2. IAMの信頼ポリシー・権限ポリシーが、実際のサービスプリンシパルの挙動と一致しているか（Condition句が実際に満たされる条件になっているか）
+3. リソース間の依存関係・作成順序に矛盾がないか
+4. パーティション・カタログ等について「書き込んだデータをすぐに読み取れるか」という認識タイミングの問題
+5. 記事内の「動作確認」手順が、記載された構成のまま実行して本当に結果を返せるか
+6. AWS CLIコマンドのオプションが実在するか、構文が正しいか
+
+確信度が低い指摘は無理に含めず、実際に手順通り実行した場合に問題が起きると考えられるものだけを報告してください。指摘がなければissuesを空配列にしてください。
+
+--- 記事本文 ---
+{article_text}
+"""
+
+    response = bedrock.invoke_model(
+        modelId=model_id,
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps({
+            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
+            "max_tokens": REVIEW_MAX_TOKENS,
+            "thinking": {"type": "adaptive"},
+            "messages": [{"role": "user", "content": prompt}],
+            "output_config": {
+                "effort": "medium",
+                "format": {"type": "json_schema", "schema": _REVIEW_ISSUE_SCHEMA},
+            },
+        }),
+    )
+
+    result = json.loads(response["body"].read())
+    usage = result.get("usage", {})
+    print(f"[Bedrock/review] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}, "
+          f"stop={result.get('stop_reason','unknown')}")
+
+    text_blocks = [b for b in result["content"] if b.get("type") == "text"]
+    if not text_blocks:
+        raise ValueError(
+            f"レビュー応答にtextブロックがありません（stop_reason={result.get('stop_reason')}、"
+            f"thinkingトークンで予算を使い切った可能性）"
+        )
+    issues = json.loads(text_blocks[0]["text"]).get("issues", [])
+    issues.sort(key=lambda i: _SEVERITY_ORDER.get(i.get("severity", "low"), 3))
+
+    return [f"[{i.get('severity', '?')}] {i.get('summary', '')}" for i in issues]
+
+
 # ─── SES メール通知 ───────────────────────────────────────────────────────────
 
 def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
     timestamp: str, s3_url: str = "", is_truncated: bool = False,
-    cfn_issues: list | None = None,
+    cfn_issues: list | None = None, review_issues: list | None = None,
 ):
     """SES でメール通知を送信する"""
     import html as _html
@@ -910,6 +993,7 @@ def send_email_notification(
     )
 
     cfn_issues = cfn_issues or []
+    review_issues = review_issues or []
     truncation_warning_text = """
 ⚠️ 警告: 記事が途中で切れています
 記事の生成がmax_tokensに達したため、末尾が不完全な可能性があります。
@@ -921,8 +1005,13 @@ Zennに投稿する前に内容を必ず確認してください。
         + "\n".join(f"  - {i}" for i in cfn_issues) + "\n"
     ) if cfn_issues else ""
 
+    review_warning_text = (
+        "🔍 AI技術レビューで指摘がありました:\n"
+        + "\n".join(f"  - {i}" for i in review_issues) + "\n"
+    ) if review_issues else ""
+
     body_text = f"""Zenn中級記事の自動生成が完了しました。
-{truncation_warning_text}{cfn_warning_text}
+{truncation_warning_text}{cfn_warning_text}{review_warning_text}
 ■ 記事情報
 - テーマ: {topic['name']}（{topic['article_type']}）
 - 使用サービス: {services_str}
@@ -966,12 +1055,25 @@ Zennに投稿する前に内容を必ず確認してください。
         '</div>'
     )
 
+    review_issues_html = (
+        '<div style="background:#e3f2fd;border:2px solid #1e88e5;padding:15px;border-radius:8px;margin:20px 0;">'
+        '<h3 style="color:#1565c0;margin-top:0;">🔍 AI技術レビューで指摘がありました</h3>'
+        '<ul style="color:#1565c0;margin:0;">'
+        + "".join(f'<li><code>{i}</code></li>' for i in review_issues)
+        + '</ul></div>'
+    ) if review_issues else (
+        '<div style="background:#e8f5e9;border:1px solid #66bb6a;padding:10px 15px;border-radius:8px;margin:20px 0;">'
+        '<p style="color:#2e7d32;margin:0;">✅ AI技術レビュー — 問題なし</p>'
+        '</div>'
+    )
+
     body_html = f"""
 <html>
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <h2 style="color:#3EA8FF;">Zenn中級記事の自動生成が完了しました</h2>
   {truncation_warning_html}
   {cfn_issues_html}
+  {review_issues_html}
 
   <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>記事情報</h3>
@@ -1095,11 +1197,31 @@ def lambda_handler(event, context):
         print(f"  CLIチェックスキップ（無視して続行）: {e}")
         cfn_issues = []
 
+    # Step 7.5: AI技術レビュー（test_modeではコスト・速度優先のためスキップ）
+    review_issues = []
+    if not event.get("test_mode"):
+        _t = time.time()
+        print("Step 7.5: AI技術レビュー中...")
+        try:
+            review_issues = review_technical_accuracy(article, topic, REVIEW_MODEL_ID)
+            if review_issues:
+                print(f"  ⚠️ レビュー指摘: {len(review_issues)}件 [{time.time()-_t:.1f}s]")
+            else:
+                print(f"  ✓ レビュー指摘なし [{time.time()-_t:.1f}s]")
+        except Exception as e:
+            print(f"  レビュースキップ（無視して続行）: {e}")
+            review_issues = []
+    else:
+        print("[TEST MODE] AI技術レビューをスキップしました")
+
     # Step 8: メール通知
     _t = time.time()
     print("Step 8: メール通知を送信中...")
     try:
-        send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues)
+        send_email_notification(
+            topic, article, md_path, png_paths, timestamp, s3_url, is_truncated,
+            cfn_issues, review_issues,
+        )
         print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
     except Exception as e:
         print(f"  メール送信失敗（無視して続行）: {e}")

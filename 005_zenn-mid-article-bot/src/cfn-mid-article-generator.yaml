@@ -13,7 +13,12 @@ Parameters:
     Description: Notification recipient email address
   BedrockModelId:
     Type: String
-    Default: global.anthropic.claude-sonnet-5
+    Default: jp.anthropic.claude-sonnet-4-6
+    Description: Article generation model
+  ReviewModelId:
+    Type: String
+    Default: jp.anthropic.claude-sonnet-4-6
+    Description: Technical accuracy review model (independent from BedrockModelId)
   DiagramsLayerArn:
     Type: String
     Description: ARN of the matplotlib Lambda Layer for mid-level article diagram generation
@@ -49,10 +54,11 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-sonnet-5"
-                  - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/global.anthropic.claude-sonnet-5"
+                  - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-sonnet-4-6"
+                  - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-sonnet-4-6"
                   - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
-                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -88,6 +94,7 @@ Resources:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           BEDROCK_MODEL_ID: !Ref BedrockModelId
+          REVIEW_MODEL_ID: !Ref ReviewModelId
           MATPLOTLIB_BACKEND: Agg
           S3_BUCKET: zer0-dev-s3
       DeadLetterConfig:
