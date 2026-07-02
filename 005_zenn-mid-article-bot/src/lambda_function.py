@@ -67,7 +67,6 @@ AWS_TOPICS = [
         "subtitle": "API Gateway + Lambda + DynamoDB で構築する本番級バックエンド",
         "keywords": "サーバーレス, API Gateway, Lambda, DynamoDB, スロットリング, 冪等性",
         "primary_service": "apigateway",
-        "secondary_service": "lambda",
         "emoji": "🛒",
     },
     {
@@ -78,7 +77,6 @@ AWS_TOPICS = [
         "subtitle": "S3 + CloudFront + ACM で構築するセキュアな静的サイト",
         "keywords": "静的サイト, CloudFront, S3, ACM, HTTPS, カスタムドメイン, OAC, キャッシュ制御",
         "primary_service": "cloudfront",
-        "secondary_service": "s3",
         "emoji": "🌐",
     },
     {
@@ -89,7 +87,6 @@ AWS_TOPICS = [
         "subtitle": "ECS Fargate + ALB + ECR でコンテナを本番運用する",
         "keywords": "ECS Fargate, ALB, ECR, タスク定義, サービス, ローリングデプロイ, ヘルスチェック",
         "primary_service": "ecs",
-        "secondary_service": "ecr",
         "emoji": "🐳",
     },
     {
@@ -100,7 +97,6 @@ AWS_TOPICS = [
         "subtitle": "Kinesis + Lambda + S3 でリアルタイムデータを収集・保存する",
         "keywords": "Kinesis, Lambda, S3, リアルタイム処理, データパイプライン, シャード, バッチウィンドウ",
         "primary_service": "kinesis",
-        "secondary_service": "lambda",
         "emoji": "🌊",
     },
     {
@@ -111,7 +107,6 @@ AWS_TOPICS = [
         "subtitle": "API Gateway + Lambda + X-Ray で分散トレーシングを実現する",
         "keywords": "マイクロサービス, X-Ray, 分散トレーシング, API Gateway, Lambda, サービスマップ, レイテンシ分析",
         "primary_service": "apigateway",
-        "secondary_service": "xray",
         "emoji": "🔬",
     },
     {
@@ -122,7 +117,6 @@ AWS_TOPICS = [
         "subtitle": "Route 53 + RDS Multi-AZ + S3レプリケーションでRTO/RPOを最小化するDR設計",
         "keywords": "DR, RTO, RPO, Route 53, フェイルオーバー, RDS Multi-AZ, S3レプリケーション, ヘルスチェック",
         "primary_service": "route53",
-        "secondary_service": "rds",
         "emoji": "🌍",
     },
     {
@@ -133,7 +127,6 @@ AWS_TOPICS = [
         "subtitle": "SNS + SQS + Lambda でスケーラブルな通知基盤を構築する",
         "keywords": "SNS, SQS, Lambda, Pub/Sub, デッドレターキュー, メッセージルーティング, 冪等性",
         "primary_service": "sns",
-        "secondary_service": "sqs",
         "emoji": "🔔",
     },
     {
@@ -144,7 +137,6 @@ AWS_TOPICS = [
         "subtitle": "Bedrock + S3 + OpenSearch Serverless でRAGシステムを構築する",
         "keywords": "RAG, Bedrock, Knowledge Base, OpenSearch Serverless, ベクトル検索, エンベディング, チャンキング",
         "primary_service": "bedrock",
-        "secondary_service": "opensearch",
         "emoji": "🤖",
     },
     # ── ユースケース別ソリューション ────────────────────────────────────────
@@ -156,7 +148,6 @@ AWS_TOPICS = [
         "subtitle": "CodePipeline + CodeBuild + ECR でコンテナイメージのビルド〜配布を自動化する",
         "keywords": "CI/CD, CodePipeline, CodeBuild, ECR, ビルドスペック, パイプラインステージ, 自動テスト",
         "primary_service": "codepipeline",
-        "secondary_service": "codebuild",
         "emoji": "🚀",
     },
     {
@@ -167,7 +158,6 @@ AWS_TOPICS = [
         "subtitle": "SageMaker + Step Functions + S3 で学習〜デプロイを自動化するMLパイプライン",
         "keywords": "SageMaker AI, Step Functions, S3, MLOps, モデルレジストリ, バッチ推論, Pipeline",
         "primary_service": "sagemaker",
-        "secondary_service": "step_functions",
         "emoji": "🧠",
     },
     {
@@ -178,7 +168,6 @@ AWS_TOPICS = [
         "subtitle": "CloudTrail + S3 + Athena でAWS全体のログを集約・分析する",
         "keywords": "CloudTrail, S3, Athena, ログ集約, セキュリティ監査, SQLクエリ, パーティション射影",
         "primary_service": "cloudtrail",
-        "secondary_service": "athena",
         "emoji": "🔍",
     },
     {
@@ -189,7 +178,6 @@ AWS_TOPICS = [
         "subtitle": "Cost Explorer + Budgets + 自動停止Lambdaでコストを可視化・削減する",
         "keywords": "コスト最適化, Cost Explorer, Budgets, Lambda自動停止, タグ管理, Cost Allocation",
         "primary_service": "cost_explorer",
-        "secondary_service": "budgets",
         "emoji": "💰",
     },
     {
@@ -199,8 +187,7 @@ AWS_TOPICS = [
         "services": ["GuardDuty", "Security Hub", "CloudTrail"],
         "subtitle": "GuardDuty + Security Hub + CloudTrailで脅威検知と監査証跡を一元化する",
         "keywords": "GuardDuty, Security Hub, CloudTrail, 脅威検知, コンプライアンス, セキュリティスコア",
-        "primary_service": "waf",
-        "secondary_service": "guardduty",
+        "primary_service": "guardduty",
         "emoji": "🛡️",
     },
     {
@@ -211,7 +198,6 @@ AWS_TOPICS = [
         "subtitle": "AWS Backup + RDS + DynamoDB のバックアッププランで障害に強い設計を実現する",
         "keywords": "AWS Backup, RDS スナップショット, DynamoDB PITRバックアップ, RTO, RPO, 復元テスト, バックアップポリシー",
         "primary_service": "backup",
-        "secondary_service": "rds",
         "emoji": "💾",
     },
     {
@@ -222,7 +208,6 @@ AWS_TOPICS = [
         "subtitle": "Organizations + Control Tower + IAM Identity Center でセキュアなマルチアカウント環境を構築する",
         "keywords": "AWS Organizations, Control Tower, IAM Identity Center, SCP, ガードレール, ランディングゾーン, OU設計",
         "primary_service": "organizations",
-        "secondary_service": "control_tower",
         "emoji": "🏢",
     },
     {
@@ -233,7 +218,6 @@ AWS_TOPICS = [
         "subtitle": "S3 + Glue + Athena でデータレイクを構築しSQLで分析する",
         "keywords": "データレイク, S3, Glue, Athena, データカタログ, ETL, パーティショニング, 列指向フォーマット",
         "primary_service": "glue",
-        "secondary_service": "athena",
         "emoji": "🏞️",
     },
 ]
@@ -251,7 +235,7 @@ DOCS_URL_MAP: dict[str, str] = {
     "sagemaker":     "https://docs.aws.amazon.com/ja_jp/sagemaker/latest/dg/whatis.html",
     "cloudtrail":    "https://docs.aws.amazon.com/ja_jp/awscloudtrail/latest/userguide/cloudtrail-user-guide.html",
     "cost_explorer": "https://docs.aws.amazon.com/ja_jp/cost-management/latest/userguide/what-is-costmanagement.html",
-    "waf":           "https://docs.aws.amazon.com/ja_jp/waf/latest/developerguide/what-is-aws-waf.html",
+    "guardduty":     "https://docs.aws.amazon.com/ja_jp/guardduty/latest/ug/what-is-guardduty.html",
     "backup":        "https://docs.aws.amazon.com/ja_jp/aws-backup/latest/devguide/whatisbackup.html",
     "organizations": "https://docs.aws.amazon.com/ja_jp/organizations/latest/userguide/orgs_introduction.html",
     "xray":          "https://docs.aws.amazon.com/ja_jp/xray/latest/devguide/aws-xray.html",
@@ -273,7 +257,7 @@ _ZENN_META: dict[str, dict] = {
     "ml_pipeline":      {"emoji": "🧠", "topics": ["aws", "mlops", "sagemaker", "stepfunctions"]},
     "log_analytics":    {"emoji": "🔍", "topics": ["aws", "cloudtrail", "athena", "セキュリティ"]},
     "cost_optimization":{"emoji": "💰", "topics": ["aws", "コスト最適化", "finops", "クラウド"]},
-    "security_hardening":{"emoji": "🛡️","topics": ["aws", "セキュリティ", "guardduty", "waf"]},
+    "security_hardening":{"emoji": "🛡️","topics": ["aws", "セキュリティ", "guardduty", "securityhub"]},
     "backup_dr":        {"emoji": "💾", "topics": ["aws", "backup", "dr", "可用性"]},
     "multi_account":    {"emoji": "🏢", "topics": ["aws", "organizations", "マルチアカウント", "ガバナンス"]},
     "data_lake":        {"emoji": "🏞️", "topics": ["aws", "datalake", "glue", "athena"]},
@@ -477,8 +461,8 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 - 同一ステートメントにリソース条件対応・非対応のアクションを混在させない（条件が正しく評価されない）
 
 ### Lambda Runtime
-- Lambda の Runtime は現時点の最新安定版を使う: `python3.13`（Python）/ `nodejs22.x`（Node.js）
-- `python3.12` や `nodejs20.x` 等の旧バージョンは使わない
+- Lambda の Runtime は現時点の最新安定版を使う: `python3.14`（Python）/ `nodejs22.x`（Node.js）
+- `python3.13` 以前や `nodejs20.x` 等の旧バージョンは使わない
 
 ### AWS CLI コマンドの正確性
 - 記事内のAWS CLIコマンドは**実際に実行できるもの**を書く（オプション名・引数の誤記に注意）

@@ -554,7 +554,11 @@ def _diagram_generic(topic_name: str, services: list[str], variant: int, output_
         if variant == 1 else
         f"{topic_name} ② – コスト・セキュリティの制御ポイント"
     )
-    _draw_diagram(title, nodes, edges, output_path, clusters=[_outer_cluster(nodes)])
+    # サービス数が変わってもノードが xlim の外にクリップされないよう、
+    # ノード数に応じて右端の余白を動的に確保する（既定14はn=3までカバー）
+    last_x = 1.5 + (n - 1) * spacing if n > 0 else 0
+    xlim = (0, max(14.0, last_x + 2.5))
+    _draw_diagram(title, nodes, edges, output_path, xlim=xlim, clusters=[_outer_cluster(nodes)])
 
 
 def generate_diagrams(topic: dict, base_path: str) -> list[str]:
