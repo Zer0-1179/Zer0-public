@@ -4,6 +4,10 @@ Description: >
   Generates AWS intermediate architecture articles via Bedrock (Claude Sonnet)
   on the 1st and 15th of each month at 21:00 JST, with SES email notifications
 
+# -----------------------------------------------
+# Parameters
+# Values passed in at deploy time.
+# -----------------------------------------------
 Parameters:
   SenderEmail:
     Type: String
@@ -13,11 +17,18 @@ Parameters:
     Description: Notification recipient email address
   BedrockModelId:
     Type: String
+    Description: Bedrock inference profile ID used for article generation (Default is Claude Sonnet 4.6)
     Default: jp.anthropic.claude-sonnet-4-6
   DiagramsLayerArn:
     Type: String
     Description: ARN of the matplotlib Lambda Layer for mid-level article diagram generation
 
+# -----------------------------------------------
+# Resources
+# DeletionPolicy is default (Delete) for all resources; LogGroup retention is 7 days.
+# Bedrock IAM policy explicitly lists sonnet-4-6/haiku-4-5 ARNs in both foundation-model
+# regions (ap-northeast-1/ap-northeast-3) actually routed to by the "jp." inference profile.
+# -----------------------------------------------
 Resources:
 
   MidArticleGeneratorDLQ:
@@ -49,11 +60,12 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-sonnet-4-6"
+                  - "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-sonnet-4-6"
+                  - "arn:aws:bedrock:ap-northeast-3::foundation-model/anthropic.claude-sonnet-4-6"
+                  - "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - "arn:aws:bedrock:ap-northeast-3::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
                   - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-sonnet-4-6"
                   - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
-                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
-                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -185,6 +197,10 @@ Resources:
       Action: lambda:InvokeFunctionUrl
       Principal: !Sub "arn:aws:iam::${AWS::AccountId}:root"
 
+# -----------------------------------------------
+# Outputs
+# Reference values for post-deploy verification; not consumed via cross-stack ImportValue.
+# -----------------------------------------------
 Outputs:
   LambdaFunctionArn:
     Description: Lambda関数のARN
