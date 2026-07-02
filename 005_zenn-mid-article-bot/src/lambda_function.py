@@ -956,12 +956,74 @@ def review_technical_accuracy(article_text: str, topic: dict, model_id: str) -> 
     return [f"[{i.get('severity', '?')}] {i.get('summary', '')}" for i in issues]
 
 
+def fix_article(article_text: str, issues: list[str], model_id: str) -> str | None:
+    """レビュー指摘を踏まえて記事を修正する。失敗時はNoneを返す（呼び出し側は元記事にフォールバックする）"""
+    issues_text = "\n".join(f"- {i}" for i in issues)
+    prompt = f"""以下のZenn技術記事に、技術レビューで次の指摘が見つかりました。指摘内容を踏まえて記事を修正し、修正後の記事全文をMarkdownでそのまま出力してください。
+
+--- 指摘内容 ---
+{issues_text}
+
+--- 修正時の注意 ---
+- 指摘された技術的問題を解決すること（不足しているコマンド・設定の追加、誤った記述の訂正等）
+- 記事の構成・見出し・`{{DIAGRAM_N}}`マーカーの位置・文体は可能な限り維持すること
+- 修正内容の説明や前置きは不要。記事本文のみを出力すること
+
+--- 元の記事 ---
+{article_text}
+"""
+
+    response = bedrock.invoke_model(
+        modelId=model_id,
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps({
+            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
+            "max_tokens": ARTICLE_MAX_TOKENS,
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": "medium"},
+            "messages": [{"role": "user", "content": prompt}],
+        }),
+    )
+
+    result = json.loads(response["body"].read())
+    usage = result.get("usage", {})
+    stop_reason = result.get("stop_reason", "unknown")
+    in_tok  = usage.get("input_tokens", 0)
+    out_tok = usage.get("output_tokens", 0)
+    cost_usd = (in_tok * SONNET_INPUT_COST_PER_MTOK + out_tok * SONNET_OUTPUT_COST_PER_MTOK) / 1_000_000
+    print(f"[Bedrock/fix] in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
+
+    if stop_reason == "max_tokens":
+        print("[WARNING] 修正記事がmax_tokensで打ち切られました。修正を破棄し元記事を使用します。")
+        return None
+
+    text_blocks = [b for b in result["content"] if b.get("type") == "text"]
+    if not text_blocks:
+        print("[WARNING] 修正応答にtextブロックがありません。修正を破棄し元記事を使用します。")
+        return None
+    text = text_blocks[0]["text"]
+
+    # Bedrock が記事冒頭に YAML frontmatter を付けることがあるため除去する
+    if text.lstrip().startswith("---"):
+        lines = text.lstrip().splitlines(keepends=True)
+        end = 1
+        for i in range(1, len(lines)):
+            if lines[i].rstrip() == "---":
+                end = i + 1
+                break
+        text = "".join(lines[end:]).lstrip()
+
+    return text
+
+
 # ─── SES メール通知 ───────────────────────────────────────────────────────────
 
 def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
     timestamp: str, s3_url: str = "", is_truncated: bool = False,
     cfn_issues: list | None = None, review_issues: list | None = None,
+    fix_applied: bool = False,
 ):
     """SES でメール通知を送信する"""
     import html as _html
@@ -1006,7 +1068,11 @@ Zennに投稿する前に内容を必ず確認してください。
     ) if cfn_issues else ""
 
     review_warning_text = (
-        "🔍 AI技術レビューで指摘がありました:\n"
+        (
+            "🔍 AI技術レビューで指摘があり、自動修正しました（修正前の指摘内容）:\n"
+            if fix_applied else
+            "🔍 AI技術レビューで指摘がありましたが、自動修正に失敗しました。手動で確認してください:\n"
+        )
         + "\n".join(f"  - {i}" for i in review_issues) + "\n"
     ) if review_issues else ""
 
@@ -1057,8 +1123,14 @@ Zennに投稿する前に内容を必ず確認してください。
 
     review_issues_html = (
         '<div style="background:#e3f2fd;border:2px solid #1e88e5;padding:15px;border-radius:8px;margin:20px 0;">'
-        '<h3 style="color:#1565c0;margin-top:0;">🔍 AI技術レビューで指摘がありました</h3>'
-        '<ul style="color:#1565c0;margin:0;">'
+        + (
+            '<h3 style="color:#1565c0;margin-top:0;">🔍 AI技術レビューで指摘があり、自動修正しました</h3>'
+            '<p style="color:#1565c0;margin:0 0 8px 0;">修正前の指摘内容（参考）:</p>'
+            if fix_applied else
+            '<h3 style="color:#1565c0;margin-top:0;">🔍 AI技術レビューで指摘がありましたが、自動修正に失敗しました</h3>'
+            '<p style="color:#1565c0;margin:0 0 8px 0;">手動で確認してください:</p>'
+        )
+        + '<ul style="color:#1565c0;margin:0;">'
         + "".join(f'<li><code>{i}</code></li>' for i in review_issues)
         + '</ul></div>'
     ) if review_issues else (
@@ -1164,29 +1236,43 @@ def lambda_handler(event, context):
     article, is_truncated = generate_article(topic, today, model_id)
     print(f"  記事生成完了: {len(article):,}文字 [{time.time()-_t:.1f}s]")
 
-    # Step 4: ローカル保存 + 構成図生成
-    _t = time.time()
-    print("Step 4: ローカルに保存中（記事MD + 構成図PNG）...")
-    md_path, png_paths = save_to_local(topic, article, timestamp)
-    print(f"  MD保存完了: {md_path}")
-    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
-
-    # Step 5: S3 アップロード（Lambda環境のみ）
-    s3_url = ""
-    if _IS_LAMBDA:
+    # Step 4: AI技術レビュー・自動修正（test_mode・記事切り詰め時はスキップ）
+    review_issues = []
+    if not event.get("test_mode") and not is_truncated:
         _t = time.time()
-        print("Step 5: S3にアップロード中...")
-        s3_folder = f"{timestamp}_{topic['id']}"
-        s3_url = upload_to_s3(md_path, png_paths, s3_folder)
-        print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
+        print("Step 4: AI技術レビュー中...")
+        try:
+            review_issues = review_technical_accuracy(article, topic, REVIEW_MODEL_ID)
+            if review_issues:
+                print(f"  ⚠️ レビュー指摘: {len(review_issues)}件 [{time.time()-_t:.1f}s]")
+            else:
+                print(f"  ✓ レビュー指摘なし [{time.time()-_t:.1f}s]")
+        except Exception as e:
+            print(f"  レビュースキップ（無視して続行）: {e}")
+            review_issues = []
 
-    # Step 6: SSM 更新
-    print("Step 6: SSMにトピックを保存中...")
-    save_topic_to_ssm(topic["id"])
+        fix_applied = False
+        if review_issues:
+            _t = time.time()
+            print("Step 4.5: 指摘を踏まえて記事を自動修正中...")
+            try:
+                fixed_article = fix_article(article, review_issues, REVIEW_MODEL_ID)
+                if fixed_article:
+                    article = fixed_article
+                    fix_applied = True
+                    print(f"  ✓ 自動修正完了: {len(article):,}文字 [{time.time()-_t:.1f}s]")
+                else:
+                    print(f"  修正失敗のため元記事のまま続行 [{time.time()-_t:.1f}s]")
+            except Exception as e:
+                print(f"  修正スキップ（無視して続行、元記事のまま）: {e}")
+    else:
+        fix_applied = False
+        skip_reason = "TEST MODE" if event.get("test_mode") else "記事がmax_tokensで切り詰められたため"
+        print(f"[{skip_reason}] AI技術レビュー・自動修正をスキップしました")
 
-    # Step 7: AWS CLIコマンドチェック
+    # Step 5: AWS CLIコマンドチェック（自動修正後の記事に対して実行）
     _t = time.time()
-    print("Step 7: AWS CLIコマンドをチェック中...")
+    print("Step 5: AWS CLIコマンドをチェック中...")
     try:
         cfn_issues = validate_cli_in_article(article)
         if cfn_issues:
@@ -1197,30 +1283,33 @@ def lambda_handler(event, context):
         print(f"  CLIチェックスキップ（無視して続行）: {e}")
         cfn_issues = []
 
-    # Step 7.5: AI技術レビュー（test_modeではコスト・速度優先のためスキップ）
-    review_issues = []
-    if not event.get("test_mode"):
-        _t = time.time()
-        print("Step 7.5: AI技術レビュー中...")
-        try:
-            review_issues = review_technical_accuracy(article, topic, REVIEW_MODEL_ID)
-            if review_issues:
-                print(f"  ⚠️ レビュー指摘: {len(review_issues)}件 [{time.time()-_t:.1f}s]")
-            else:
-                print(f"  ✓ レビュー指摘なし [{time.time()-_t:.1f}s]")
-        except Exception as e:
-            print(f"  レビュースキップ（無視して続行）: {e}")
-            review_issues = []
-    else:
-        print("[TEST MODE] AI技術レビューをスキップしました")
-
-    # Step 8: メール通知
+    # Step 6: ローカル保存 + 構成図生成
     _t = time.time()
-    print("Step 8: メール通知を送信中...")
+    print("Step 6: ローカルに保存中（記事MD + 構成図PNG）...")
+    md_path, png_paths = save_to_local(topic, article, timestamp)
+    print(f"  MD保存完了: {md_path}")
+    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
+
+    # Step 7: S3 アップロード（Lambda環境のみ）
+    s3_url = ""
+    if _IS_LAMBDA:
+        _t = time.time()
+        print("Step 7: S3にアップロード中...")
+        s3_folder = f"{timestamp}_{topic['id']}"
+        s3_url = upload_to_s3(md_path, png_paths, s3_folder)
+        print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
+
+    # Step 8: SSM 更新
+    print("Step 8: SSMにトピックを保存中...")
+    save_topic_to_ssm(topic["id"])
+
+    # Step 9: メール通知
+    _t = time.time()
+    print("Step 9: メール通知を送信中...")
     try:
         send_email_notification(
             topic, article, md_path, png_paths, timestamp, s3_url, is_truncated,
-            cfn_issues, review_issues,
+            cfn_issues, review_issues, fix_applied,
         )
         print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
     except Exception as e:
