@@ -14,11 +14,6 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: jp.anthropic.claude-sonnet-4-6
-    Description: Article generation model
-  ReviewModelId:
-    Type: String
-    Default: jp.anthropic.claude-sonnet-4-6
-    Description: Technical accuracy review model (independent from BedrockModelId)
   DiagramsLayerArn:
     Type: String
     Description: ARN of the matplotlib Lambda Layer for mid-level article diagram generation
@@ -94,7 +89,6 @@ Resources:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           BEDROCK_MODEL_ID: !Ref BedrockModelId
-          REVIEW_MODEL_ID: !Ref ReviewModelId
           MATPLOTLIB_BACKEND: Agg
           S3_BUCKET: zer0-dev-s3
       DeadLetterConfig:
