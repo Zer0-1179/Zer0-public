@@ -1003,7 +1003,6 @@ def _diagram_log_analytics_1(output_path: str):
     nodes = [
         {'id': 'ct',    'icon': 'cloudtrail', 'label': 'CloudTrail',     'x': 1.5, 'y': 5.5},
         {'id': 'cwl',   'icon': 'cloudwatch', 'label': 'CloudWatch\nLogs','x': 1.5, 'y': 3.5},
-        {'id': 'vpc',   'icon': 'vpc',        'label': 'VPC Flow Logs',  'x': 1.5, 'y': 1.5},
         {'id': 'kfh',   'icon': 'kinesis',    'label': 'Kinesis\nFirehose', 'x': 4.5, 'y': 3.5},
         {'id': 's3',    'icon': 's3',         'label': 'S3\n(ログ保存)',  'x': 7.5, 'y': 3.5},
         {'id': 'glue',  'icon': 'glue',       'label': 'Glue\nCatalog',  'x': 10.0, 'y': 5.0},
@@ -1012,7 +1011,6 @@ def _diagram_log_analytics_1(output_path: str):
     edges = [
         ('ct', 'kfh', 'CloudWatch\nLogs経由'),
         ('cwl', 'kfh', 'サブスクリプション'),
-        ('vpc', 'kfh', 'Firehose連携'),
         ('kfh', 's3', 'Parquet変換'),
         ('s3', 'glue', 'クロール'),
         ('glue', 'athena', 'スキーマ提供'),
@@ -1024,21 +1022,17 @@ def _diagram_log_analytics_1(output_path: str):
 
 
 def _diagram_log_analytics_2(output_path: str):
-    """図2: セキュリティ監査クエリフロー"""
+    """図2: コスト・セキュリティの制御ポイント"""
     nodes = [
-        {'id': 's3',    'icon': 's3',        'label': 'S3\n(CloudTrailログ)', 'x': 2.0, 'y': 3.5},
-        {'id': 'athena','icon': 'athena',    'label': 'Athena\n(SQLクエリ)',   'x': 5.0, 'y': 3.5},
-        {'id': 'check', 'icon': 'lambda',   'label': 'Lambda\n(異常検知)',    'x': 8.0, 'y': 3.5},
-        {'id': 'sns',   'icon': 'sns',       'label': 'SNS\n(アラート通知)',   'x': 11.0, 'y': 4.5},
-        {'id': 'eb',    'icon': 'eventbridge','label': 'EventBridge\n(定期実行)', 'x': 5.0, 'y': 1.5},
+        {'id': 'kfh',   'icon': 'kinesis', 'label': 'Kinesis\nFirehose', 'x': 2.0, 'y': 3.5},
+        {'id': 's3',    'icon': 's3',      'label': 'S3\n(ログ保存)\n暗号化',      'x': 7.0, 'y': 3.5},
+        {'id': 'athena','icon': 'athena',  'label': 'Athena\n(SQL分析)\nコスト制御', 'x': 12.0, 'y': 3.5},
     ]
     edges = [
-        ('eb', 'athena', '毎時実行'),
-        ('s3', 'athena', 'データ読み取り'),
-        ('athena', 'check', 'クエリ結果'),
-        ('check', 'sns', '不審操作検知'),
+        ('kfh', 's3', 'Parquet変換\n(ストレージ削減)'),
+        ('s3', 'athena', 'パーティション\nプルーニング'),
     ]
-    _draw_diagram('ログ分析基盤 ② – 自動セキュリティ監査フロー',
+    _draw_diagram('ログ分析基盤 ② – コスト・セキュリティの制御ポイント',
                   nodes, edges, output_path,
                   clusters=[_outer_cluster(nodes)])
 
