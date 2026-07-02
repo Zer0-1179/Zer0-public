@@ -15,7 +15,7 @@
 | 対応トピック     | 16種類（複合アーキテクチャ8 + ユースケース別8）                          |
 | 記事ボリューム   | 10,000〜15,000文字（初級Botの約3倍）                                     |
 | 差別化セクション | コスト最適化・セキュリティ設計・スケーラビリティの考慮点を追加           |
-| 生成画像         | アーキテクチャ図 PNG × 2枚（AWS公式アイコン使用）                        |
+| 生成画像         | アーキテクチャ図 PNG × 1枚（AWS公式アイコン使用）                        |
 | 使用モデル       | Amazon Bedrock **Claude Sonnet 4.6**（`jp.anthropic.claude-sonnet-4-6`） |
 | 月額コスト       | ~$2.8（約420円）                                                         |
 
@@ -30,7 +30,7 @@ EventBridge（毎月1日・15日 21:00 JST）
         ├─ SSM からトピック履歴取得（直近4件除外）
         ├─ Bedrock Claude Sonnet（記事本文生成: ~12,000 tokens出力）
         ├─ diagram_generator.py（matplotlib + AWS公式アイコン）
-        ├─ S3 PUT（MD + PNG × 2）
+        ├─ S3 PUT（MD + PNG × 1）
         ├─ SSM PUT（トピック履歴更新）
         └─ SES（生成完了メール通知）
 ```
@@ -147,3 +147,4 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 | 2026-07-02 | v2.3       | 記事生成後のAI技術レビュー自動化を追加。Bedrockに構造化出力で技術的正確性を検証させ、指摘をメールに掲載（自動修正なし）。Haiku推論プロファイルのリージョン起因IAM不足バグも副次的に発見・修正                                                                                                              |
 | 2026-07-02 | v2.4       | v2.3のレビュー・自動修正機能を撤回（1回書き直し方式の自動修正が新たな矛盾を生む実例を確認）。代わりに全16トピックのサービス数を5→3に削減し、構成図生成をservicesリストから自動生成する汎用方式に刷新                                                                                                       |
 | 2026-07-02 | v2.5       | Opusによるコード監査を反映。security_hardening の primary_service 誤り（waf→guardduty）を修正、未使用の secondary_service フィールドと IAM s3:DeleteObject を削除、構成図がサービス数4以上でxlim外にクリップされるバグを修正、Lambda Runtime記述をpython3.14に統一                                         |
+| 2026-07-02 | v2.6       | 構成図をほぼ同一内容の2枚から1枚に統合。記事プロンプトの{DIAGRAM_2}マーカー・設計上の考慮ポイント節の図指示を削除し、コスト・セキュリティ・スケーラビリティを図なしで直接解説する構成に変更                                                                                                                 |

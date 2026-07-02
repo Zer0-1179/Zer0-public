@@ -1,7 +1,6 @@
 """
 中級者向けAWSアーキテクチャ図を生成するモジュール。
-複合サービス構成に対応したフルシステム構成図（図1）と
-データフロー図（図2）の2種類を各トピックで生成する。
+複合サービス構成に対応した構成図（1枚）を各トピックで生成する。
 matplotlib + AWS公式アイコン（PNGバンドル）使用。Graphviz依存なし。
 """
 import matplotlib
@@ -529,7 +528,7 @@ def _label_for_service(name: str) -> str:
     return _SERVICE_LABEL_OVERRIDE.get(name, name)
 
 
-def _diagram_generic(topic_name: str, services: list[str], variant: int, output_path: str):
+def _diagram_generic(topic_name: str, services: list[str], output_path: str):
     """トピックの services リストから直接ノードを組み立てる汎用フロー図。
     手作業のトピック別ハードコード図は、記事本文（services準拠）との不整合が
     繰り返し発生したため廃止し、この関数に一本化した。servicesと図が構造的に
@@ -547,13 +546,8 @@ def _diagram_generic(topic_name: str, services: list[str], variant: int, output_
         }
         for i, svc in enumerate(services)
     ]
-    edge_label = "データ連携" if variant == 1 else "アクセス制御・課金"
-    edges = [(f"n{i}", f"n{i+1}", edge_label) for i in range(n - 1)]
-    title = (
-        f"{topic_name} ① – 構成概要"
-        if variant == 1 else
-        f"{topic_name} ② – コスト・セキュリティの制御ポイント"
-    )
+    edges = [(f"n{i}", f"n{i+1}", "データ連携") for i in range(n - 1)]
+    title = f"{topic_name} – 構成図"
     # サービス数が変わってもノードが xlim の外にクリップされないよう、
     # ノード数に応じて右端の余白を動的に確保する（既定14はn=3までカバー）
     last_x = 1.5 + (n - 1) * spacing if n > 0 else 0
@@ -563,7 +557,7 @@ def _diagram_generic(topic_name: str, services: list[str], variant: int, output_
 
 def generate_diagrams(topic: dict, base_path: str) -> list[str]:
     """
-    指定トピックの構成図2枚を生成し、PNGパスのリストを返す。
+    指定トピックの構成図1枚を生成し、PNGパスのリストを返す。
     topic     : AWS_TOPICS の要素（"name"・"services" を使用）
     base_path : 拡張子なしのパス（例: /tmp/20260501_210000_serverless_ec_diagram）
     """
@@ -572,14 +566,11 @@ def generate_diagrams(topic: dict, base_path: str) -> list[str]:
         print(f"警告: トピック '{topic.get('id')}' に services が定義されていません")
         return []
 
-    paths = []
-    for i in (1, 2):
-        out_path = f"{base_path}_{i}.png"
-        try:
-            _diagram_generic(topic["name"], services, i, out_path)
-            paths.append(out_path)
-            print(f"  PNG生成完了: {out_path}")
-        except Exception as e:
-            print(f"  PNG生成エラー (図{i}): {e}")
-
-    return paths
+    out_path = f"{base_path}_1.png"
+    try:
+        _diagram_generic(topic["name"], services, out_path)
+        print(f"  PNG生成完了: {out_path}")
+        return [out_path]
+    except Exception as e:
+        print(f"  PNG生成エラー: {e}")
+        return []
