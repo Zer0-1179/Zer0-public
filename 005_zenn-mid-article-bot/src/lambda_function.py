@@ -51,6 +51,9 @@ ARTICLE_MAX_TOKENS        = 24000     # 記事本文生成用
 # Claude Sonnet 4.6 概算単価（USD / 100万トークン）
 SONNET_INPUT_COST_PER_MTOK  = 3.0
 SONNET_OUTPUT_COST_PER_MTOK = 15.0
+# Claude Haiku 4.5 概算単価（test_mode時に使用、USD / 100万トークン）
+HAIKU_INPUT_COST_PER_MTOK  = 1.0
+HAIKU_OUTPUT_COST_PER_MTOK = 5.0
 # AWS公式ドキュメント取得
 DOCS_FETCH_TIMEOUT_SEC = 15
 DOCS_MAX_CHARS         = 6000
@@ -110,8 +113,8 @@ AWS_TOPICS = [
         "services": ["API Gateway", "Lambda", "X-Ray"],
         "subtitle": "API Gateway + Lambda + X-Ray で分散トレーシングを実現する",
         "keywords": "マイクロサービス, X-Ray, 分散トレーシング, API Gateway, Lambda, サービスマップ, レイテンシ分析",
-        "primary_service": "apigateway",
-        "primary_service_label": "API Gateway",
+        "primary_service": "xray",
+        "primary_service_label": "X-Ray",
         "emoji": "🔬",
     },
     {
@@ -645,16 +648,18 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
     )
 
     result = json.loads(response["body"].read())
-    text = result["content"][0]["text"]
+    # thinking有効時はcontent[0]がthinkingブロック（"text"キーなし）になり得るため、
+    # type=="text" のブロックを明示的に探す（content[0]決め打ちはKeyErrorの原因になる）
+    text = next(b["text"] for b in result["content"] if b.get("type") == "text")
     usage = result.get("usage", {})
     stop_reason = result.get("stop_reason", "unknown")
     is_truncated = stop_reason == "max_tokens"
     in_tok  = usage.get('input_tokens', 0)
     out_tok = usage.get('output_tokens', 0)
-    cost_usd = (
-        in_tok  * SONNET_INPUT_COST_PER_MTOK
-        + out_tok * SONNET_OUTPUT_COST_PER_MTOK
-    ) / 1_000_000  # Sonnet pricing (概算)
+    is_haiku = "haiku" in model_id
+    input_cost_per_mtok  = HAIKU_INPUT_COST_PER_MTOK  if is_haiku else SONNET_INPUT_COST_PER_MTOK
+    output_cost_per_mtok = HAIKU_OUTPUT_COST_PER_MTOK if is_haiku else SONNET_OUTPUT_COST_PER_MTOK
+    cost_usd = (in_tok * input_cost_per_mtok + out_tok * output_cost_per_mtok) / 1_000_000  # 概算
     print(f"[Bedrock/article] in={in_tok}, out={out_tok}, stop={stop_reason}, cost≈${cost_usd:.4f}")
     if is_truncated:
         print("[WARNING] 記事がmax_tokensで打ち切られました。記事が不完全な可能性があります。")
@@ -712,10 +717,15 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
     result = article
     for img_idx, png_path in enumerate(png_paths):
         n = img_idx + 1
+        # format() 後は単一波括弧が正常だが、LLMがプロンプト例文の二重波括弧を
+        # そのまま出力することがあるため両方を置換対象にする
         marker = "{" + f"DIAGRAM_{n}" + "}"
+        marker_double = "{" + marker + "}"
         placeholder = _make_image_placeholder(png_path, topic_name, n)
 
-        if marker in result:
+        if marker_double in result:
+            result = result.replace(marker_double, placeholder, 1)
+        elif marker in result:
             result = result.replace(marker, placeholder, 1)
         else:
             # フォールバック: 対応する見出し名の直後に挿入
@@ -740,7 +750,9 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
 
     # 図の一部が生成失敗した場合、残存する {DIAGRAM_N} マーカーを除去する
     import re as _re
-    result, n_orphan = _re.subn(r'\n*\{DIAGRAM_\d+\}\n*', '\n\n', result)
+    # LLMがプロンプト例文の二重波括弧 {{DIAGRAM_N}} をそのまま出力するケースもあるため、
+    # 単一・二重波括弧の両方を除去対象にする（_embed_image_placeholders冒頭と同じパターン）
+    result, n_orphan = _re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', result)
     if n_orphan:
         print(f"[WARNING] 図生成失敗により未置換のDIAGRAMマーカー{n_orphan}件を除去しました")
 
@@ -759,7 +771,14 @@ def _inject_reference_link(article: str, topic: dict) -> str:
     link_line = f"- [{label} 公式ドキュメント]({url})"
 
     lines = article.split("\n")
-    ref_idx = next((i for i, line in enumerate(lines) if line.startswith("## ") and "参考" in line), None)
+    # 完全一致「## 参考」を優先。見出し改題（例:「## 参考アーキテクチャとの比較」）に
+    # 誤ってマッチしないよう、部分一致は最後に見つかったもの（通常は記事末尾の参考節）を使う
+    exact = [i for i, line in enumerate(lines) if line.strip() == "## 参考"]
+    if exact:
+        ref_idx = exact[0]
+    else:
+        partial = [i for i, line in enumerate(lines) if line.startswith("## ") and "参考" in line]
+        ref_idx = partial[-1] if partial else None
     if ref_idx is None:
         return article.rstrip() + f"\n\n## 参考\n\n{link_line}\n"
 
@@ -768,9 +787,14 @@ def _inject_reference_link(article: str, topic: dict) -> str:
 
 
 def _next_article_number(output_dir: str) -> str:
+    """既存フォルダの最大番号+1を返す。_cleanup_old_articlesが古いフォルダを
+    削除した後は len(existing)+1 だと番号が常に一定値に張り付くため、
+    実際に存在する番号の最大値を見る。
+    """
     import glob
     existing = glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*"))
-    return f"{len(existing) + 1:03d}"
+    nums = [int(os.path.basename(p)[:3]) for p in existing]
+    return f"{(max(nums) if nums else 0) + 1:03d}"
 
 
 def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
@@ -1087,13 +1111,18 @@ def lambda_handler(event, context):
     print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
 
     # Step 5: S3 アップロード（Lambda環境のみ）
+    # ここで例外を伝播させるとLambdaの再試行で記事生成（Bedrockコスト）から
+    # 丸ごとやり直しになるため、失敗しても後続のSSM保存・メール通知は続行する
     s3_url = ""
     if _IS_LAMBDA:
         _t = time.time()
         print("Step 5: S3にアップロード中...")
-        s3_folder = f"{timestamp}_{topic['id']}"
-        s3_url = upload_to_s3(md_path, png_paths, s3_folder)
-        print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
+        try:
+            s3_folder = f"{timestamp}_{topic['id']}"
+            s3_url = upload_to_s3(md_path, png_paths, s3_folder)
+            print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
+        except Exception as e:
+            print(f"  S3アップロード失敗（無視して続行、記事はローカル/tmpにのみ存在）: {e}")
 
     # Step 6: SSM 更新
     print("Step 6: SSMにトピックを保存中...")

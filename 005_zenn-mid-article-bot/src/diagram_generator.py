@@ -419,7 +419,10 @@ def _draw_diagram(
                 xy=(n2['x'], n2['y']),
                 xytext=(n1['x'], n1['y']),
                 arrowprops=dict(
-                    arrowstyle='->', color='#555555', lw=1.5,
+                    # 矢印なしの直線。services の並び順は必ずしも実際のデータフロー方向と
+                    # 一致しない（例: CloudFrontはS3から取得する側で逆向き）ため、
+                    # 誤った方向性を主張しないよう「連携している」ことだけを示す。
+                    arrowstyle='-', color='#555555', lw=1.5,
                     shrinkA=SHRINK, shrinkB=SHRINK,
                     connectionstyle='arc3,rad=0.0',
                 ),
@@ -546,13 +549,18 @@ def _diagram_generic(topic_name: str, services: list[str], output_path: str):
         }
         for i, svc in enumerate(services)
     ]
-    edges = [(f"n{i}", f"n{i+1}", "データ連携") for i in range(n - 1)]
+    # ラベルなしの接続線のみ（servicesの並び順が実際のデータフロー方向と
+    # 一致するとは限らないため、「データ連携」等の特定の関係性は主張しない）
+    edges = [(f"n{i}", f"n{i+1}") for i in range(n - 1)]
     title = f"{topic_name} – 構成図"
     # サービス数が変わってもノードが xlim の外にクリップされないよう、
     # ノード数に応じて右端の余白を動的に確保する（既定14はn=3までカバー）
     last_x = 1.5 + (n - 1) * spacing if n > 0 else 0
     xlim = (0, max(14.0, last_x + 2.5))
-    _draw_diagram(title, nodes, edges, output_path, xlim=xlim, clusters=[_outer_cluster(nodes)])
+    # トピックによってグローバルサービス（CloudFront/Route 53等）が混在するため、
+    # 特定リージョンを断定せず汎用的な "AWS Cloud" 枠にする
+    cluster = _outer_cluster(nodes, label="AWS Cloud", icon="aws_cloud_logo")
+    _draw_diagram(title, nodes, edges, output_path, xlim=xlim, clusters=[cluster])
 
 
 def generate_diagrams(topic: dict, base_path: str) -> list[str]:
