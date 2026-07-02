@@ -88,7 +88,6 @@ Resources:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           BEDROCK_MODEL_ID: !Ref BedrockModelId
-          MATPLOTLIB_BACKEND: Agg
           S3_BUCKET: zer0-dev-s3
       DeadLetterConfig:
         TargetArn: !GetAtt MidArticleGeneratorDLQ.Arn
