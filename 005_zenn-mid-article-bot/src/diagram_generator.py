@@ -231,6 +231,10 @@ def _ensure_icon(name: str) -> None:
     if os.path.exists(path):
         return
     os.makedirs(_ICON_DIR, exist_ok=True)
+    # CLAUDE.mdの構成図ルールでは自作の色付き文字ボックスは禁止だが、バンドルアイコンに
+    # 存在しないサービスが指定された場合のフォールバックとしてのみ発動する。無警告だと
+    # 規約違反の図が気付かれず生成され続けるためWARNINGを出す
+    print(f"[diagram_generator][WARNING] '{name}' のバンドルアイコンが見つからないため色付きボックスにフォールバックします（CLAUDE.md構成図ルール非準拠）")
     bg, fg, label = _ICON_FALLBACK.get(name, ('#999999', '#FFFFFF', name[:4].upper()))
     import matplotlib.pyplot as _plt
     from matplotlib.patches import FancyBboxPatch as _FBP

@@ -61,3 +61,53 @@ def test_model_id_prod_mode():
     """test_mode=Falseのとき BEDROCK_MODEL_ID（Sonnet）が使われること"""
     model_id = lambda_function.HAIKU_MODEL_ID if False else lambda_function.BEDROCK_MODEL_ID
     assert model_id == lambda_function.BEDROCK_MODEL_ID
+
+
+def _make_invoke_response(content_blocks, stop_reason="end_turn"):
+    import io
+    body = json.dumps({
+        "content": content_blocks,
+        "usage": {"input_tokens": 10, "output_tokens": 10},
+        "stop_reason": stop_reason,
+    }).encode("utf-8")
+    return {"body": io.BytesIO(body)}
+
+
+def _dummy_topic():
+    return {
+        "name": "テストトピック",
+        "subtitle": "サブタイトル",
+        "services": ["Lambda"],
+        "keywords": "テスト",
+        "primary_service": "unknown_service_not_in_docs_map",
+        "primary_service_label": "Lambda",
+    }
+
+
+def test_generate_article_extracts_text_block_when_thinking_present(monkeypatch):
+    """thinkingブロックがcontent[0]にあってもtextブロックを正しく抽出できること"""
+    monkeypatch.setattr(
+        lambda_function.bedrock, "invoke_model",
+        lambda **kwargs: _make_invoke_response([
+            {"type": "thinking", "thinking": "考え中..."},
+            {"type": "text", "text": "本文です"},
+        ]),
+    )
+    text, is_truncated = lambda_function.generate_article(_dummy_topic(), "2026-01-01", "jp.anthropic.claude-sonnet-5")
+    assert text == "本文です"
+    assert is_truncated is False
+
+
+def test_generate_article_no_text_block_does_not_raise(monkeypatch):
+    """adaptive thinkingがmax_tokensで打ち切られtextブロックが無い場合でも
+    StopIterationを送出せず、空記事＋truncated扱いにフォールバックすること"""
+    monkeypatch.setattr(
+        lambda_function.bedrock, "invoke_model",
+        lambda **kwargs: _make_invoke_response(
+            [{"type": "thinking", "thinking": "考え中..."}],
+            stop_reason="max_tokens",
+        ),
+    )
+    text, is_truncated = lambda_function.generate_article(_dummy_topic(), "2026-01-01", "jp.anthropic.claude-sonnet-5")
+    assert text == ""
+    assert is_truncated is True

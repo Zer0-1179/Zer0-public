@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import re
 import time
 import boto3
 import datetime
@@ -15,7 +16,9 @@ except ImportError:
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name="ap-northeast-1",
-    config=Config(read_timeout=880, connect_timeout=10),
+    # 自動リトライを無効化: read_timeoutはBedrock課金が発生した後に起こり得るため、
+    # botocoreの自動リトライを許すとLambdaのTimeout(900s)超過やBedrockコスト二重発生に繋がる
+    config=Config(read_timeout=880, connect_timeout=10, retries={"max_attempts": 0}),
 )
 ses = boto3.client("ses", region_name="ap-northeast-1")
 s3  = boto3.client("s3",  region_name="ap-northeast-1")
@@ -638,6 +641,9 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
     }
     if "sonnet-5" in model_id:
         # Haikuはadaptive thinking非対応のため、Sonnet 5使用時のみ有効化する
+        # 注意: BEDROCK_MODEL_IDをsonnet-5系ARNに切り替える場合はcfn-mid-article-generator.yaml
+        # のBedrock IAMポリシー（bedrock:InvokeModel Resource）にsonnet-5のARNを追加すること。
+        # 現状はsonnet-4-6/haiku-4-5のみ許可しておりAccessDeniedになる
         body_dict["thinking"] = {"type": "adaptive"}
 
     response = bedrock.invoke_model(
@@ -649,11 +655,17 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
 
     result = json.loads(response["body"].read())
     # thinking有効時はcontent[0]がthinkingブロック（"text"キーなし）になり得るため、
-    # type=="text" のブロックを明示的に探す（content[0]決め打ちはKeyErrorの原因になる）
-    text = next(b["text"] for b in result["content"] if b.get("type") == "text")
+    # type=="text" のブロックを明示的に探す（content[0]決め打ちはKeyErrorの原因になる）。
+    # adaptive thinkingがmax_tokensで打ち切られるとtextブロック自体が存在しないことがあるため、
+    # デフォルトNoneを指定してStopIteration（未捕捉のままlambda_handlerまで伝播しBedrockコスト
+    # 二重発生の原因になる）を避け、空記事＋truncated扱いにフォールバックする
+    text_block = next((b for b in result["content"] if b.get("type") == "text"), None)
     usage = result.get("usage", {})
     stop_reason = result.get("stop_reason", "unknown")
-    is_truncated = stop_reason == "max_tokens"
+    is_truncated = stop_reason == "max_tokens" or text_block is None
+    text = text_block["text"] if text_block is not None else ""
+    if text_block is None:
+        print("[WARNING] Bedrock応答にtextブロックがありません（thinking中に打ち切られた可能性）。空の記事として扱います。")
     in_tok  = usage.get('input_tokens', 0)
     out_tok = usage.get('output_tokens', 0)
     is_haiku = "haiku" in model_id
@@ -703,10 +715,9 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
     マーカーが見つからない場合は見出し名ベースのフォールバック挿入を行う。
     """
     if not png_paths:
-        import re as _re
         # format() 後は単一波括弧 {DIAGRAM_N}、未展開時は二重波括弧 {{DIAGRAM_N}} の
         # どちらが残っていても除去できるようにパターンを両対応にする。
-        cleaned, n = _re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
+        cleaned, n = re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
         if n:
             print(f"[WARNING] PNG未生成のためDIAGRAMマーカー{n}件を除去しました")
         return cleaned
@@ -749,10 +760,9 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
             result = "\n".join(lines)
 
     # 図の一部が生成失敗した場合、残存する {DIAGRAM_N} マーカーを除去する
-    import re as _re
     # LLMがプロンプト例文の二重波括弧 {{DIAGRAM_N}} をそのまま出力するケースもあるため、
     # 単一・二重波括弧の両方を除去対象にする（_embed_image_placeholders冒頭と同じパターン）
-    result, n_orphan = _re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', result)
+    result, n_orphan = re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', result)
     if n_orphan:
         print(f"[WARNING] 図生成失敗により未置換のDIAGRAMマーカー{n_orphan}件を除去しました")
 
@@ -883,11 +893,10 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
 
 def validate_cli_in_article(article_text: str) -> list[str]:
     """記事内にAWS CLIベースの構築手順が含まれているかチェックする"""
-    import re as _re
     issues = []
 
     # bashコードブロック内に限定してCLIコマンドを検索（散文中のaws言及と区別）
-    bash_blocks = "\n".join(_re.findall(r'```bash[^\n]*\n(.*?)```', article_text, _re.DOTALL))
+    bash_blocks = "\n".join(re.findall(r'```bash[^\n]*\n(.*?)```', article_text, re.DOTALL))
     required_in_bash = {
         "aws ": "bashブロック内のAWS CLIコマンド",
     }
