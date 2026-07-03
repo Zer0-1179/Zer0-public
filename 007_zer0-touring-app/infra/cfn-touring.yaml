@@ -120,6 +120,15 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:GetItem
                 Resource: !GetAtt TouringShareTable.Arn
+        - PolicyName: DynamoDBHistory
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                Resource: !GetAtt TouringHistoryTable.Arn
 
   # ── DynamoDB レートリミットテーブル ───────────────────────────
   TouringRateLimitTable:
@@ -156,6 +165,31 @@ Resources:
       KeySchema:
         - AttributeName: pk
           KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  # ── DynamoDB 履歴テーブル（端末ID単位でコース生成履歴を保持）─────
+  TouringHistoryTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: zer0-touring-history
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
@@ -226,6 +260,7 @@ Resources:
         AllowHeaders:
           - Content-Type
           - X-Admin-Token
+          - X-Device-Id
         MaxAge: 86400
 
   # ── Lambda インテグレーション ──────────────────────────────────
@@ -267,6 +302,22 @@ Resources:
     Properties:
       ApiId: !Ref TouringApi
       RouteKey: "GET /s/{id}"
+      Target: !Sub "integrations/${TouringIntegration}"
+
+  # ── POST /api/history ルート（端末IDに紐づく履歴保存）────────
+  TouringHistoryPostRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref TouringApi
+      RouteKey: "POST /api/history"
+      Target: !Sub "integrations/${TouringIntegration}"
+
+  # ── GET /api/history ルート（端末IDの履歴一覧取得）───────────
+  TouringHistoryGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref TouringApi
+      RouteKey: "GET /api/history"
       Target: !Sub "integrations/${TouringIntegration}"
 
   # ── デフォルトステージ ─────────────────────────────────────────

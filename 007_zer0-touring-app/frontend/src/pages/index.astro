@@ -76,6 +76,20 @@
       .usage-badge .dot.used { background: var(--accent); }
       .usage-badge.limit-reached { border-color: #ef4444; color: #ef4444; }
 
+      /* ── 履歴一覧 ── */
+      .history-list { display: flex; flex-direction: column; gap: .6rem; padding: 1rem 1.25rem; }
+      .history-item {
+        display: flex; flex-direction: column; gap: .3rem;
+        background: var(--card); border: 1px solid var(--border);
+        border-radius: .75rem; padding: .8rem 1rem;
+        text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+        transition: border-color .2s;
+      }
+      .history-item:active { border-color: var(--accent); }
+      .history-item-name { font-weight: 600; font-size: .95rem; }
+      .history-item-meta { font-size: .8rem; color: var(--muted); }
+      .history-empty { text-align: center; color: var(--muted); padding: 2.5rem 1rem; font-size: .9rem; }
+
       /* ── Loading ── */
       #screen-loading { align-items: center; justify-content: center; padding: 1.75rem 2rem; gap: 1.75rem; }
       .loading-title  { font-size: 1.2rem; font-weight: 600; }
@@ -804,10 +818,23 @@
       </div>
 
       <button class="btn-primary" id="btn-start">コースを探す</button>
+      <button class="btn-ghost" id="btn-history" style="margin-top:0.75rem">📖 過去のコースを見る</button>
       <div class="usage-badge" id="usage-badge" style="visibility:hidden">
         <span class="dots" id="usage-dots"></span>
         <span id="usage-text"></span>
       </div>
+    </div>
+
+    <!-- ── 履歴一覧 ── -->
+    <div id="screen-history" class="screen">
+      <div class="topbar">
+        <button class="btn-ghost" id="btn-history-back">← 戻る</button>
+        <div class="topbar-left">
+          <span class="topbar-title">過去のコース</span>
+        </div>
+      </div>
+      <div id="history-list" class="history-list"></div>
+      <p id="history-empty" class="history-empty" style="display:none">まだ生成したコースがありません。</p>
     </div>
 
     <!-- ── Loading ── -->
@@ -935,11 +962,29 @@
       const API_BASE = import.meta.env.PUBLIC_API_URL ?? '';
 
       // localStorage に adminToken があれば全リクエストに付与
+      function getDeviceId() {
+        let id = localStorage.getItem('deviceId');
+        if (!id) {
+          id = crypto.randomUUID();
+          localStorage.setItem('deviceId', id);
+        }
+        return id;
+      }
+
       function apiHeaders(extra = {}) {
         const token = localStorage.getItem('adminToken') ?? '';
-        const h = { 'Content-Type': 'application/json', ...extra };
+        const h = { 'Content-Type': 'application/json', 'X-Device-Id': getDeviceId(), ...extra };
         if (token) h['X-Admin-Token'] = token;
         return h;
+      }
+
+      // コース生成結果を端末の履歴に保存する（失敗しても生成フロー自体は止めない）
+      function saveHistory(course) {
+        fetch(`${API_BASE}/api/history`, {
+          method: 'POST',
+          headers: apiHeaders(),
+          body: JSON.stringify({ course }),
+        }).catch(() => {});
       }
 
       const WEATHER = {
@@ -977,6 +1022,7 @@
       let destForecastController = null;
       let locationMode = 'gps';
       let selectedPrefs = new Set();
+      let detailReturnScreen = 'screen-idle';  // 詳細画面から「戻る」で戻る先
       let originDisplayName = '現在地';
       let remainingUses = null;
       let shortUrlCache = {}; // courseIdx → short URL
@@ -1133,7 +1179,7 @@
 
         // ボタンイベント
         vp.querySelectorAll('.course-card').forEach(card => {
-          card.querySelector('.card-btn-detail').addEventListener('click',()=>openDetail(+card.dataset.idx));
+          card.querySelector('.card-btn-detail').addEventListener('click',()=>{detailReturnScreen='screen-results';openDetail(+card.dataset.idx);});
           card.querySelector('.card-btn-nav').addEventListener('click',()=>{
             window.open(buildMapUrl(courses[+card.dataset.idx]), '_blank', 'noopener,noreferrer');
           });
@@ -1424,6 +1470,7 @@
           setStep('step-ai','done');
 
           renderSlider(data);
+          courses.forEach(saveHistory);
           showScreen('screen-results');
           initSlider();
 
@@ -1442,10 +1489,62 @@
 
       function backFromDetail() {
         history.pushState({},'',location.pathname);
+        if (detailReturnScreen === 'screen-history') { showScreen('screen-history'); return; }
         const vp=document.getElementById('card-viewport');
         if(vp && vp.children.length > 0){ showScreen('screen-results'); }
         else { showScreen('screen-idle'); }
       }
+
+      // 履歴一覧の読み込み・表示
+      async function loadHistory() {
+        const listEl  = document.getElementById('history-list');
+        const emptyEl = document.getElementById('history-empty');
+        listEl.innerHTML = '<p style="text-align:center;color:var(--muted);padding:2rem 0">読み込み中...</p>';
+        emptyEl.style.display = 'none';
+        try {
+          const res = await fetch(`${API_BASE}/api/history`, { headers: apiHeaders() });
+          const data = await res.json();
+          const items = data.items ?? [];
+          if (items.length === 0) {
+            listEl.innerHTML = '';
+            emptyEl.style.display = '';
+            return;
+          }
+          listEl.innerHTML = items.map((it, i) => {
+            const date = new Date(it.created_at);
+            const dateStr = isNaN(date) ? '' : `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+            const durationStr = it.duration ? `片道${fmtHours(Number(it.duration))}` : '';
+            return `<button class="history-item" data-idx="${i}">
+              <span class="history-item-name">${escHtml(it.name || 'ツーリングコース')}</span>
+              <span class="history-item-meta">🏁 ${escHtml(it.destination || '')}${durationStr ? ' · ' + durationStr : ''}${dateStr ? ' · ' + dateStr : ''}</span>
+            </button>`;
+          }).join('');
+          listEl.querySelectorAll('.history-item').forEach((btn, i) => {
+            btn.addEventListener('click', () => openHistoryItem(items[i]));
+          });
+        } catch (_) {
+          listEl.innerHTML = '';
+          emptyEl.textContent = '履歴の取得に失敗しました。';
+          emptyEl.style.display = '';
+        }
+      }
+
+      function openHistoryItem(item) {
+        try {
+          const c = JSON.parse(decodeURIComponent(atob(item.course_b64)));
+          courses = [c];
+          detailReturnScreen = 'screen-history';
+          openDetail(0);
+        } catch (_) {
+          showToast('コースの読み込みに失敗しました');
+        }
+      }
+
+      document.getElementById('btn-history').addEventListener('click', () => {
+        showScreen('screen-history');
+        loadHistory();
+      });
+      document.getElementById('btn-history-back').addEventListener('click', () => showScreen('screen-idle'));
 
       document.getElementById('btn-start').addEventListener('click',findCourses);
       document.getElementById('btn-retry').addEventListener('click',findCourses);
