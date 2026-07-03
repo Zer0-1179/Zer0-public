@@ -11,7 +11,6 @@ import base64
 import html as html_module
 import urllib.request
 import urllib.parse
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import boto3
 from botocore.config import Config
@@ -727,6 +726,32 @@ def _handle_history_get(event, cors):
     return {"statusCode": 200, "headers": cors, "body": json.dumps({"items": items}, ensure_ascii=False)}
 
 
+def _handle_enrich_post(event, cors, context):
+    """二段階レスポンスの後段: 1コース分の距離・スポット座標・目的地天気を取得して返す。
+    /api/suggest を高速化するために分離した重い処理（Nominatim/OSRM/Google Maps/Open-Meteo）。
+    失敗してもAI推定値のままのcourseを200で返す（フロント側は表示を継続できる）。"""
+    try:
+        body = json.loads(event.get("body") or "{}")
+        course = body.get("course")
+        lat = float(body["latitude"])
+        lon = float(body["longitude"])
+        if not course or not isinstance(course, dict):
+            raise ValueError("course required")
+        course_json_bytes = len(json.dumps(course, ensure_ascii=False).encode("utf-8"))
+        if course_json_bytes > MAX_SHARE_COURSE_BYTES:
+            raise ValueError("course too large")
+    except Exception as e:
+        return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": str(e)})}
+
+    use_gmaps = check_and_reserve_gmaps(n_courses=1)
+    try:
+        enrich_course(course, lat, lon, context, use_gmaps=use_gmaps)
+    except Exception as e:
+        print(f"[enrich] エラー（AI推定値のまま返す）: {e}")
+
+    return {"statusCode": 200, "headers": cors, "body": json.dumps({"course": course}, ensure_ascii=False)}
+
+
 def lambda_handler(event, context):
     cors   = _get_cors_headers(event)
     http   = (event.get("requestContext") or {}).get("http", {})
@@ -759,6 +784,11 @@ def lambda_handler(event, context):
     # GET /api/history — 端末IDの履歴一覧取得（レートリミット対象外）
     if method == "GET" and path == "/api/history":
         return _handle_history_get(event, cors)
+
+    # POST /api/enrich — 二段階レスポンスの後段（レートリミット対象外・/api/suggestの
+    # DAILY_LIMITで既に生成回数は制限されているため、その結果の精密化には別枠の制限は設けない）
+    if method == "POST" and path == "/api/enrich":
+        return _handle_enrich_post(event, cors, context)
 
     # GET /api/status — 残り回数を返す（カウント増加なし）
     if method == "GET" and path == "/api/status":
@@ -873,23 +903,12 @@ def lambda_handler(event, context):
             "body": json.dumps({"error": "Failed to parse AI response"}),
         }
 
-    # 今月の Google Maps 残枠を確認（n_courses 分を DynamoDB でアトミックに予約）
-    use_gmaps = check_and_reserve_gmaps(n_courses=len(courses))
-
-    # 距離・所要時間を実データに上書き（タイムアウト余裕がある場合のみ）
-    if context.get_remaining_time_in_millis() > 12000:
-        def _enrich(course):
-            try:
-                enrich_course(course, lat, lon, context, use_gmaps=use_gmaps)
-            except Exception as e:
-                print(f"[ERROR] enrich: {e}")
-            return course
-
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            courses = list(executor.map(_enrich, courses))
-    else:
-        print("[WARN] Skipped OSRM enrichment: insufficient time remaining")
-
+    # 二段階レスポンス: 距離・スポット座標・目的地天気の実データ取得（enrich_course）は
+    # ここでは行わず、AI推定値のままここで即座に返す。実データ取得はフロントが詳細画面を
+    # 開いたタイミングで POST /api/enrich を個別に呼ぶことで行う（後段）。
+    # これにより /api/suggest の応答時間が Bedrock 生成のみ（約9秒）まで短縮される
+    # （旧実装は3コース分のNominatim直列ジオコーディングを同一リクエスト内で行い
+    # 20〜28秒かかっていた）。
     return {
         "statusCode": 200,
         "headers": cors,

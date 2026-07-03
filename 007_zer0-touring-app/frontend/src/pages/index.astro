@@ -1465,6 +1465,36 @@
         // 詳細画面を開くたびにバイクアニメーションを先頭から再スタート
         const bikeEl = document.querySelector('.wc-bike');
         if (bikeEl) { bikeEl.style.animation='none'; void bikeEl.offsetHeight; bikeEl.style.animation=''; }
+
+        enrichCourseDetail(idx);
+      }
+
+      // 二段階レスポンスの後段: 詳細画面を開いたコースだけ、距離・スポット座標・
+      // 目的地天気の精密なデータを非同期取得する（/api/suggestを高速化した分、
+      // ここで初めて正確な値を取りに行く）。取得できたら詳細画面を再描画して反映する。
+      async function enrichCourseDetail(idx) {
+        const c = courses[idx];
+        if (!c || c._enriched || c._enriching || userLat === null || userLon === null) return;
+        c._enriching = true;
+        try {
+          const res = await fetch(`${API_BASE}/api/enrich`, {
+            method: 'POST',
+            headers: apiHeaders(),
+            body: JSON.stringify({ course: c, latitude: userLat, longitude: userLon }),
+          });
+          if (!res.ok) throw new Error('enrich failed');
+          const data = await res.json();
+          Object.assign(c, data.course);
+          c._enriched = true;
+          // 開いたまま待っている間に他のコースへ移動していたら再描画しない
+          if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
+            openDetail(idx);
+          }
+        } catch (_) {
+          // 失敗してもAI推定値のまま表示を継続する（再試行は次回詳細画面を開いた時）
+        } finally {
+          c._enriching = false;
+        }
       }
 
       async function getShareUrl(idx){
