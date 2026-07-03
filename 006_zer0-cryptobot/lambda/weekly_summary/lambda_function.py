@@ -71,7 +71,10 @@ def load_trades() -> list[dict]:
 def summarize_trades(trades: list[dict], now: datetime) -> dict:
     """実現損益の週次・累計サマリーを計算する。
     勝率・PF はポジション単位（position_id でTP1部分利確とクローズを合算）。
-    クローズ記録がまだ無いポジション（TP1のみ）は勝敗計算から除外する。"""
+    クローズ記録がまだ無いポジション（TP1のみ）は勝敗計算から除外する。
+    最大DDは全取引記録を時系列でcumsumした「実現損益ベースの資産曲線」から算出する参考値
+    （口座残高そのものではなく実現損益の推移のみを見ているため、バックテストの資本比%DDとは
+    単純比較できない。円建てのまま参考表示する）。"""
     week_ago   = now - timedelta(days=7)
     weekly     = [t for t in trades if datetime.fromisoformat(t["ts"]) >= week_ago]
     weekly_pnl = sum(t["pnl_jpy"] for t in weekly)
@@ -87,6 +90,16 @@ def summarize_trades(trades: list[dict], now: datetime) -> dict:
     closed  = [p["pnl"] for p in positions.values() if p["closed"]]
     wins    = [v for v in closed if v > 0]
     losses  = [v for v in closed if v <= 0]
+
+    sorted_trades = sorted(trades, key=lambda t: t["ts"])
+    cum = 0.0
+    peak = 0.0
+    max_dd_jpy = 0.0
+    for t in sorted_trades:
+        cum += t["pnl_jpy"]
+        peak = max(peak, cum)
+        max_dd_jpy = max(max_dd_jpy, peak - cum)
+
     return {
         "total_pnl":    sum(t["pnl_jpy"] for t in trades),
         "weekly_pnl":   weekly_pnl,
@@ -94,7 +107,44 @@ def summarize_trades(trades: list[dict], now: datetime) -> dict:
         "closed_count": len(closed),
         "win_rate":     len(wins) / len(closed) * 100 if closed else None,
         "pf":           (sum(wins) / abs(sum(losses))) if losses and sum(losses) != 0 else None,
+        "max_dd_jpy":   max_dd_jpy,
     }
+
+
+# 資金増額判断の基準（project_006_scale_up_plan.md で確定・2026-06-25合意）
+SCALE_UP_MIN_TRADES  = 20   # 最低ライン
+SCALE_UP_SAFE_TRADES = 30   # 安心ライン
+SCALE_UP_WIN_RATE_MIN  = 55.0
+SCALE_UP_WIN_RATE_REC  = 60.0
+SCALE_UP_PF_MIN         = 1.0
+
+
+def build_scale_up_progress(stats: dict) -> list[str]:
+    """資金増額判断の進捗をテキスト行のリストで返す（本文・HTML共通で使う素材）。"""
+    n = stats["closed_count"]
+    win_rate = stats["win_rate"]
+    pf = stats["pf"]
+
+    lines = [f"  累計クローズ: {n}/{SCALE_UP_MIN_TRADES}（最低ライン）・{n}/{SCALE_UP_SAFE_TRADES}（安心ライン）"]
+
+    if win_rate is None:
+        lines.append("  実勝率: —（クローズ済みポジションなし）")
+    else:
+        mark = "○" if win_rate >= SCALE_UP_WIN_RATE_REC else ("△" if win_rate >= SCALE_UP_WIN_RATE_MIN else "×")
+        lines.append(f"  実勝率: {win_rate:.1f}% {mark}（基準: 60%推奨/55%最低）")
+
+    if pf is None:
+        if n == 0:
+            lines.append("  実PF:   —（クローズ済みポジションなし）")
+        else:
+            lines.append("  実PF:   ∞ ○（無敗のためPF計算不可・基準: >1.0）")
+    else:
+        mark = "○" if pf > SCALE_UP_PF_MIN else "×"
+        lines.append(f"  実PF:   {pf:.2f} {mark}（基準: >1.0）")
+
+    dd_val = -stats["max_dd_jpy"] if stats["max_dd_jpy"] else 0.0
+    lines.append(f"  実現ベース最大DD: {fmt_jpy(dd_val)}（参考値・バックテストDD5.2%は資本比%のため単純比較不可）")
+    return lines
 
 
 def fmt_jpy(value: float) -> str:
@@ -189,7 +239,10 @@ def lambda_handler(event, context):
             f"  今週の確定損益: {fmt_jpy(stats['weekly_pnl'])}（決済 {stats['weekly_count']}件）",
             f"  累計確定損益:   {fmt_jpy(stats['total_pnl'])}",
             f"  クローズ済み:   {stats['closed_count']}ポジション / 勝率 {win_str} / PF {pf_str}",
-            "  （参考: バックテスト5年 勝率61.9% / PF1.62）",
+            "  （参考: バックテスト2年・現実コスト込み 勝率72.9% / PF1.16 / 最大DD5.2%）",
+            "",
+            "■ 資金増額判断の進捗",
+            *build_scale_up_progress(stats),
         ]
     lines += ["", "このメールは毎週日曜 09:00 JST に自動送信されます。"]
     body_text = "\n".join(lines)
@@ -252,7 +305,11 @@ def lambda_handler(event, context):
           <td style="padding:6px;">{stats['closed_count']}ポジション / 勝率 {win_str} / PF {pf_str}</td>
         </tr>
       </table>
-      <p style="color:#555;font-size:12px;margin:8px 0 0;">参考: バックテスト5年 勝率61.9% / PF1.62</p>
+      <p style="color:#555;font-size:12px;margin:8px 0 0;">参考: バックテスト2年・現実コスト込み 勝率72.9% / PF1.16 / 最大DD5.2%</p>
+    </div>
+    <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;">
+      <h3 style="color:#3ea8ff;margin:0 0 12px;">資金増額判断の進捗</h3>
+      <p style="margin:4px 0;font-size:14px;">{'<br>'.join(build_scale_up_progress(stats))}</p>
     </div>"""
 
     body_html = f"""<!DOCTYPE html>
