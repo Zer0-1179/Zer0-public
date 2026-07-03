@@ -1,17 +1,12 @@
 import { defineMiddleware } from 'astro:middleware';
 import crypto from 'node:crypto';
 
-// SHA-256 hashes of all inlined scripts. Recompute after any script change:
-//   node --input-type=module -e "..."  (see scripts/hash-nav-script.mjs pattern)
-const SCRIPT_HASHES = [
-  "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='", // Nav.astro
-  "'sha256-2mZe1216qSfXhWjWW7LgH/iaMAXbV60fBI2HwiXJGpM='", // BaseLayout font
-  "'sha256-KXUDQAuXOeqRrd1aNG0JF4S5VtF/LiYF4RsHdHaWN1k='", // ja/templates/index
-  "'sha256-1DhTENB/zpG3cKR7goiDvncDxumSdUUwJ02mq45dVno='", // en/templates/index
-  "'sha256-cWbZQz7qqZr7bU3ee4onPOv2dX9PBo/h26P+y0O1bzo='", // ja/templates/[category]（2026-07-03 file-row click修正で更新）
-  "'sha256-DgX2pBSQucJ4N60pwee4TwGFAbw6IESlTzfW5Z/g3Ws='", // en/templates/[category]（2026-07-03 file-row click修正で更新）
-].join(' ');
-
+// 全てのインラインスクリプトは nonce={Astro.locals.cspNonce} を付与済み
+// （Nav.astro / BaseLayout.astro / templates/index.astro(ja,en) / templates/[category]/index.astro(ja,en)）。
+// 2026-07-03以前はハッシュ全件を手動計算してハードコードする方式だったが、
+// スクリプト変更のたびに複数箇所のハッシュ再計算が必要で壊れやすかったため、
+// nonceベースに統一した（ハッシュはlambda.mjsのSTATIC_CSP側にのみ残す。
+// そちらはインラインスクリプトを持たないAPIルート用のフォールバックのため実質未使用）。
 export const onRequest = defineMiddleware(async (context, next) => {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64').replace(/=+$/, '');
   context.locals.cspNonce = nonce;
@@ -28,7 +23,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     [
       "default-src 'self'",
       "connect-src 'self'",
-      `script-src 'self' 'nonce-${nonce}' ${SCRIPT_HASHES}`,
+      `script-src 'self' 'nonce-${nonce}'`,
       `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
       `font-src https://fonts.gstatic.com`,
       "img-src 'self' data:",

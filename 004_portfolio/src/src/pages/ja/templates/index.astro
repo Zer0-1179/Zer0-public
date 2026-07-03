@@ -454,7 +454,7 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
   </div>
 </BaseLayout>
 
-<script>
+<script nonce={Astro.locals.cspNonce}>
   // ── YAML syntax highlighter (VS Code Dark Modern) ──
   function highlightLines(code: string): string[] {
     const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
