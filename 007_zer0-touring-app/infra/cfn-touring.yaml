@@ -320,6 +320,14 @@ Resources:
       RouteKey: "GET /api/history"
       Target: !Sub "integrations/${TouringIntegration}"
 
+  # ── POST /api/enrich ルート（二段階レスポンスの後段: 距離・天気の精密化）──
+  TouringEnrichPostRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref TouringApi
+      RouteKey: "POST /api/enrich"
+      Target: !Sub "integrations/${TouringIntegration}"
+
   # ── デフォルトステージ ─────────────────────────────────────────
   TouringStage:
     Type: AWS::ApiGatewayV2::Stage
