@@ -31,6 +31,16 @@ BITBANK_REST    = "https://api.bitbank.cc/v1"
 SSM_API_KEY     = "/Zer0/CryptoBot/bitbank/api_key"
 SSM_API_SECRET  = "/Zer0/CryptoBot/bitbank/api_secret"
 SSM_STATE       = "/Zer0/CryptoBot/state"
+SSM_MODE        = "/Zer0/CryptoBot/mode"
+
+# セーフモード: normal（通常）/ pause_entry（新規建てのみ停止、既存ポジション管理は継続）
+# / halt（全処理停止）。パラメータ未作成・不正値・読み込み失敗はすべて normal 扱い
+# （SSM障害時に既存ポジションのSL管理まで止まる方が危険なため、fail-safeはnormal側に倒す）。
+# 切替: aws ssm put-parameter --name /Zer0/CryptoBot/mode --value halt --type String --overwrite
+BOT_MODE_NORMAL       = "normal"
+BOT_MODE_PAUSE_ENTRY  = "pause_entry"
+BOT_MODE_HALT         = "halt"
+VALID_BOT_MODES       = (BOT_MODE_NORMAL, BOT_MODE_PAUSE_ENTRY, BOT_MODE_HALT)
 
 # 取引履歴（確定損益）の保存先
 TRADES_BUCKET      = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
@@ -130,6 +140,18 @@ def load_state() -> dict:
         return json.loads(raw)
     except Exception:
         return {"positions": {}}
+
+
+def get_bot_mode() -> str:
+    """セーフモード設定を読む。パラメータ未作成・不正値・読み込み失敗は normal 扱い。"""
+    try:
+        mode = get_ssm(SSM_MODE, decrypt=False).strip()
+    except Exception:
+        return BOT_MODE_NORMAL
+    if mode not in VALID_BOT_MODES:
+        log(f"不正なmode値のためnormal扱い: {mode!r}")
+        return BOT_MODE_NORMAL
+    return mode
 
 
 def save_state(state: dict):
@@ -1188,6 +1210,12 @@ def lambda_handler(event, context):
     signals = event.get("signals", [])
 
     try:
+        mode = get_bot_mode()
+        log(f"Bot mode: {mode}")
+        if mode == BOT_MODE_HALT:
+            log("mode=halt → 全処理スキップ（既存ポジション管理も含め停止中）")
+            return {"statusCode": 200, "body": json.dumps({"mode": mode, "skipped": True})}
+
         api_key    = get_ssm(SSM_API_KEY,    decrypt=True)
         api_secret = get_ssm(SSM_API_SECRET, decrypt=True)
         bb         = BitbankClient(api_key, api_secret)
@@ -1232,7 +1260,9 @@ def lambda_handler(event, context):
         log("Phase A: 既存ポジションメンテナンス")
         state = maintain_positions(bb, state, event)
 
-        if signals:
+        if mode == BOT_MODE_PAUSE_ENTRY:
+            log("mode=pause_entry → Phase Bスキップ（新規建て停止、既存ポジション管理は継続）")
+        elif signals:
             log(f"Phase B: 新規シグナル処理 ({len(signals)} 件)")
             state = place_new_orders(bb, state, signals, event)
         else:
