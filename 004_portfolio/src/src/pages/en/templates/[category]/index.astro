@@ -177,7 +177,6 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
                   <a
                     href={`/api/templates/${tmpl.filename}`}
                     download={tmpl.filename}
-                    onclick="event.stopPropagation()"
                     title="Download"
                     class="shrink-0 p-1.5 text-slate-600 hover:text-accent hover:bg-navy-700/40 rounded transition-colors"
                   >
@@ -348,7 +347,12 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
   }
 
   document.querySelectorAll('.file-row').forEach((row) => {
-    row.addEventListener('click', () => {
+    row.addEventListener('click', (e) => {
+      // Clicks on the download link (<a>) must not also open the YAML viewer.
+      // The old implementation relied on the link's inline onclick="event.stopPropagation()",
+      // but CSP (script-src 'self') blocks inline event handlers, so the viewer opened
+      // at the same time as the download.
+      if ((e.target as HTMLElement).closest('a')) return;
       const el = row as HTMLElement;
       showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!);
     });
