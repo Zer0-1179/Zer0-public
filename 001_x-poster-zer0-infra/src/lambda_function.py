@@ -376,15 +376,41 @@ JSONのみを出力する。説明・修正理由は一切書かない。
     return checked
 
 
+def x_weighted_length(text: str) -> int:
+    """X（Twitter）の weighted length を算出する。
+    ほぼ全ての日本語文字（ひらがな・カタカナ・漢字等）は加重2の範囲に入るため、
+    Python の len()（=文字数）だけで280制限を判定すると、実際には加重280＝
+    実質140文字前後で X API に 403（Tweet too long）を返される。
+    参考: https://developer.x.com/en/docs/counting-characters"""
+    total = 0
+    for ch in text:
+        cp = ord(ch)
+        if (0 <= cp <= 4351) or (8192 <= cp <= 8205) or (8208 <= cp <= 8223) or (8242 <= cp <= 8247):
+            total += 1  # 英数字・記号など（Latin/Greek/Cyrillic等）は加重1
+        else:
+            total += 2  # 日本語・絵文字等は加重2
+    return total
+
+
 def clamp_tweet(text: str, max_len: int = TWEET_MAX_LEN) -> str:
-    """文末記号境界を優先して切り、mid-sentence truncation を避ける。"""
-    if len(text) <= max_len:
+    """X の weighted length が max_len 以内になるよう切る。
+    文末記号境界を優先して切り、mid-sentence truncation を避ける。"""
+    if x_weighted_length(text) <= max_len:
         return text
-    cut = text[:max_len]
+    cut = text
+    while cut and x_weighted_length(cut) > max_len:
+        cut = cut[:-1]
     idx = max(cut.rfind(s) for s in "。！？!?…〜笑")
-    if idx >= max_len // 2:
+    if idx >= len(cut) // 2:
         return cut[:idx + 1]
-    return cut[:max_len - 1] + "…"
+    # 自然な切れ目がない場合は省略記号「…」を付ける。「…」自体も加重2なので、
+    # あらかじめその分の余白を差し引いてから切らないと合計が max_len を超えうる。
+    ellipsis = "…"
+    budget = max_len - x_weighted_length(ellipsis)
+    cut2 = text
+    while cut2 and x_weighted_length(cut2) > budget:
+        cut2 = cut2[:-1]
+    return (cut2 + ellipsis) if cut2 else ellipsis
 
 
 def post_tweet(auth, text: str, reply_to: str = None) -> str:
@@ -406,7 +432,9 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
     if post_type in ("news_reaction", "aws_tips", "aws_question"):
         length_rule = f"- {random.choice([50, 70, 90])}文字前後を目安に（最大100文字）"
     else:
-        length_rule = f"- {random.choice([70, 100, 140])}文字前後を目安に（最大160文字）"
+        # 日本語はXの weighted length で加重2のため、実質上限は約140文字（=weighted 280）。
+        # 130文字を目安上限にして clamp_tweet での強制切り詰め頻度を抑える。
+        length_rule = f"- {random.choice([50, 70, 100])}文字前後を目安に（最大130文字）"
     ending_rule = pick_ending_rule()
 
     if post_type == "news_reaction":
@@ -820,7 +848,12 @@ def lambda_handler(event, context):
             used_services[kw] = today_str
         cutoff = (datetime.now(JST).date() - timedelta(days=30)).isoformat()
         history["used_services"] = {k: v for k, v in used_services.items() if v > cutoff}
-        save_history(ssm, history)
+        try:
+            save_history(ssm, history)
+        except Exception as e:
+            # 投稿は既に成功しているため、履歴保存の失敗で呼び出し全体を失敗扱いにしない
+            # （リトライは無効化済みだが、失敗扱いにすると誤ったアラート・調査コストを生む）
+            print(f"[History] 保存失敗（投稿は成功済みのため続行）: {e}")
 
     if post_type == "thread_tips" and post_err:
         raise post_err
