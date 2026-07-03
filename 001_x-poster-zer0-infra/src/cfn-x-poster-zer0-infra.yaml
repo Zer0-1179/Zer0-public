@@ -82,6 +82,17 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EveningRule.Arn
 
+  # ── Lambda EventInvokeConfig: EventBridge非同期起動のリトライを無効化 ────
+  # デフォルトでは非同期呼び出し失敗時に2回自動リトライされるが、Xへの投稿は
+  # 副作用（実際にツイートを送信済み）を伴うため、リトライすると同じ記事で
+  # 二重投稿する恐れがある（週2回の定期実行が実質的なリトライとして機能する）。
+  PosterEventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref PosterFunction
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
+
   PosterLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
