@@ -108,6 +108,8 @@ Resources:
                 Action:
                   - dynamodb:UpdateItem
                   - dynamodb:GetItem
+                  # PutItem はジオコーディングキャッシュ（geocode#...キー）の書き込みに使用
+                  - dynamodb:PutItem
                 Resource: !GetAtt TouringRateLimitTable.Arn
         - PolicyName: DynamoDBShare
           PolicyDocument:
