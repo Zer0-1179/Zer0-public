@@ -25,6 +25,10 @@ MAX_SHARE_COURSE_BYTES = 8192  # course JSON の上限（DynamoDBアイテム膨
 RATE_LIMIT_TABLE    = "zer0-touring-ratelimit"
 SHARE_TABLE         = "zer0-touring-share"
 SITE_URL            = "https://touring.zer0-infra.com"
+HISTORY_TABLE       = "zer0-touring-history"
+HISTORY_TTL_DAYS    = 180
+MAX_HISTORY_ITEMS   = 30  # 一覧で返す最大件数
+DEVICE_ID_RE        = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
 ADMIN_TOKEN         = os.environ.get("ADMIN_TOKEN", "")
 # CloudFront が OriginCustomHeaders で付与する共有シークレット。execute-api への
 # 直接アクセス（CloudFrontをバイパスしたレートリミット回避）を遮断するために使う。
@@ -57,7 +61,7 @@ def _get_cors_headers(event):
     return {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": allowed,
-        "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token",
+        "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token, X-Device-Id",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     }
 
@@ -649,6 +653,80 @@ def _handle_share_get(short_id):
     return {"statusCode": 200, "headers": html_headers, "body": html}
 
 
+def _handle_history_post(event, cors):
+    """コース生成結果を端末IDに紐づけて履歴保存する（1日3回の生成上限で消えてしまう
+    候補コースをあとから見返せるようにするための機能）。"""
+    device_id = (event.get("headers") or {}).get("x-device-id", "")
+    if not DEVICE_ID_RE.match(device_id):
+        return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": "invalid device id"})}
+    try:
+        body = json.loads(event.get("body") or "{}")
+        course = body.get("course")
+        if not course or not isinstance(course, dict):
+            raise ValueError("course required")
+        course_json_bytes = len(json.dumps(course, ensure_ascii=False).encode("utf-8"))
+        if course_json_bytes > MAX_SHARE_COURSE_BYTES:
+            raise ValueError("course too large")
+    except Exception as e:
+        return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": str(e)})}
+
+    now = datetime.now(timezone.utc)
+    ttl = int((now + timedelta(days=HISTORY_TTL_DAYS)).timestamp())
+    # sk は ISO時刻の文字列なので辞書順ソート=時系列順になる。末尾の短いsuffixで
+    # 同一ミリ秒での衝突（複数コース同時保存時）を避ける。
+    sk = f"{now.isoformat()}#{_short_id(4)}"
+    course_b64 = base64.b64encode(
+        urllib.parse.quote(json.dumps(course, ensure_ascii=False), safe="").encode("ascii")
+    ).decode("ascii")
+
+    item = {
+        "pk":          {"S": device_id},
+        "sk":          {"S": sk},
+        "course_b64":  {"S": course_b64},
+        "name":        {"S": course.get("name", "ツーリングコース")},
+        "destination": {"S": course.get("destination", "")},
+        "duration":    {"S": str(course.get("duration_hours", ""))},
+        "ttl":         {"N": str(ttl)},
+    }
+    try:
+        dynamodb.put_item(TableName=HISTORY_TABLE, Item=item)
+    except Exception as e:
+        print(f"[history] 保存失敗: {e}")
+        return {"statusCode": 500, "headers": cors, "body": json.dumps({"error": "save failed"})}
+
+    return {"statusCode": 200, "headers": cors, "body": json.dumps({"ok": True})}
+
+
+def _handle_history_get(event, cors):
+    """端末IDの履歴一覧を新しい順に返す。"""
+    device_id = (event.get("headers") or {}).get("x-device-id", "")
+    if not DEVICE_ID_RE.match(device_id):
+        return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": "invalid device id"})}
+    try:
+        resp = dynamodb.query(
+            TableName=HISTORY_TABLE,
+            KeyConditionExpression="pk = :pk",
+            ExpressionAttributeValues={":pk": {"S": device_id}},
+            ScanIndexForward=False,  # sk（時刻）降順 = 新しい順
+            Limit=MAX_HISTORY_ITEMS,
+        )
+        items = [
+            {
+                "name":        it.get("name", {}).get("S", ""),
+                "destination": it.get("destination", {}).get("S", ""),
+                "duration":    it.get("duration", {}).get("S", ""),
+                "course_b64":  it.get("course_b64", {}).get("S", ""),
+                "created_at":  it.get("sk", {}).get("S", "").split("#")[0],
+            }
+            for it in resp.get("Items", [])
+        ]
+    except Exception as e:
+        print(f"[history] 取得失敗: {e}")
+        return {"statusCode": 500, "headers": cors, "body": json.dumps({"error": "fetch failed"})}
+
+    return {"statusCode": 200, "headers": cors, "body": json.dumps({"items": items}, ensure_ascii=False)}
+
+
 def lambda_handler(event, context):
     cors   = _get_cors_headers(event)
     http   = (event.get("requestContext") or {}).get("http", {})
@@ -673,6 +751,14 @@ def lambda_handler(event, context):
     # POST /api/share — URL短縮・OGP用保存（レートリミット対象外）
     if method == "POST" and path == "/api/share":
         return _handle_share_post(event, cors)
+
+    # POST /api/history — 端末IDに紐づく履歴保存（レートリミット対象外）
+    if method == "POST" and path == "/api/history":
+        return _handle_history_post(event, cors)
+
+    # GET /api/history — 端末IDの履歴一覧取得（レートリミット対象外）
+    if method == "GET" and path == "/api/history":
+        return _handle_history_get(event, cors)
 
     # GET /api/status — 残り回数を返す（カウント増加なし）
     if method == "GET" and path == "/api/status":
