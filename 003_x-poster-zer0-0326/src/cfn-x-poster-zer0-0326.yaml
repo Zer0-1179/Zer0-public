@@ -82,6 +82,15 @@ Resources:
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "placeholder - deploy.sh will update this"}
 
+  # Lambda EventInvokeConfig: Scheduler の RetryPolicy とは別に、Lambda自身の
+  # 非同期呼び出しデフォルトリトライ（2回）も無効化する（二重投稿防止の多重防御）
+  PosterEventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref PosterFunction
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
+
   # CloudWatch log group
   PosterLogGroup:
     Type: AWS::Logs::LogGroup
@@ -124,6 +133,11 @@ Resources:
         Arn: !GetAtt PosterFunction.Arn
         RoleArn: !GetAtt SchedulerRole.Arn
         Input: '{"mode": "random"}'
+        # デフォルトのリトライ回数（185回）のままだと、Xへの投稿は既に成功しているのに
+        # 一時的なエラーで再実行され同じ記事で二重投稿する恐れがあるため無効化する
+        # （週2回の定期実行が実質的なリトライとして機能する）
+        RetryPolicy:
+          MaximumRetryAttempts: 0
 
   # EventBridge: 日曜10:00 JST (UTC 日曜01:00)
   TrendSchedule:
@@ -138,6 +152,8 @@ Resources:
         Arn: !GetAtt PosterFunction.Arn
         RoleArn: !GetAtt SchedulerRole.Arn
         Input: '{"mode": "trend"}'
+        RetryPolicy:
+          MaximumRetryAttempts: 0
 
 # ---- Outputs ----
 Outputs:

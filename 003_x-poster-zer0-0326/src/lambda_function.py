@@ -25,6 +25,7 @@ NO_HASHTAG_RATE      = 0.35 # Bot感軽減: この確率でハッシュタグな
 URL_REACTION_RATE    = 0.5  # 月曜にurl_reactionを選ぶ確率（残りはローテーション）
 URL_REACTION_LIMIT   = 100  # url_reaction本文の文字数上限（URLはリプライにぶら下げる）
 BODY_LIMIT           = 140  # 通常カテゴリ本文の文字数上限（ハッシュタグ・URL除く）
+TWEET_MAX_LEN        = 280  # X実際の投稿上限（weighted length）
 
 # カテゴリ別ハッシュタグ（リストの場合は投稿ごとにランダム選択）
 HASHTAGS = {
@@ -408,7 +409,8 @@ def fetch_url_reaction_article(used_urls: list) -> dict | None:
             # 非ASCII文字を含むURLをパーセントエンコード
             encoded_url = urllib.parse.quote(feed["url"], safe=":/?=&%#+@")
             req = urllib.request.Request(encoded_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=10) as r:
+            # 6フィード直列取得のため timeout は短めに（Lambda Timeout=60秒との兼ね合い）
+            with urllib.request.urlopen(req, timeout=5) as r:
                 tree = ET.parse(r)
             ns = {"atom": "http://www.w3.org/2005/Atom"}
             # RSS形式
@@ -953,8 +955,36 @@ AIの回答を信じて上司に即レスしたら間違ってた
 _HASHTAG_LINE_RE = re.compile(r'^(#\S+(\s+#\S+)*)$')
 
 
+def x_weighted_length(text: str) -> int:
+    """X（Twitter）の weighted length を算出する。
+    ひらがな・カタカナ・漢字等ほぼ全ての日本語文字は加重2の範囲に入るため、
+    Python の len()（=文字数）だけで判定すると、本文がBODY_LIMIT(140)文字以内でも
+    ハッシュタグ込みの実際の重みが280を超えてX APIに投稿を拒否されることがある。
+    参考: https://developer.x.com/en/docs/counting-characters"""
+    total = 0
+    for ch in text:
+        cp = ord(ch)
+        if (0 <= cp <= 4351) or (8192 <= cp <= 8205) or (8208 <= cp <= 8223) or (8242 <= cp <= 8247):
+            total += 1
+        else:
+            total += 2
+    return total
+
+
+def strip_model_hashtag_lines(text: str) -> str:
+    """末尾のハッシュタグ行（1行に複数タグでも可）をモデル出力から取り除く。
+    単純な r'\\n#\\S+' 部分置換は「1行に複数タグ」「先頭行がタグ」のケースで
+    タグの一部が本文に残留するため、行単位で判定して除去する。"""
+    lines = text.rstrip().split('\n')
+    while lines and (not lines[-1].strip() or _HASHTAG_LINE_RE.match(lines[-1].strip())):
+        lines.pop()
+    return '\n'.join(lines).rstrip()
+
+
 def trim_body_excluding_hashtags(text: str, limit: int = BODY_LIMIT) -> str:
-    """末尾ハッシュタグ行を分離し、本文を limit 文字以内に収めて再結合する。"""
+    """末尾ハッシュタグ行を分離し、本文を limit 文字以内に収めて再結合する。
+    さらに本文+タグ全体のXの weighted length が280を超える場合は、
+    タグ分の重みを差し引いた予算まで本文を追加で削る（安全弁）。"""
     lines      = text.strip().split('\n')
     hashtag_re = _HASHTAG_LINE_RE
 
@@ -976,7 +1006,17 @@ def trim_body_excluding_hashtags(text: str, limit: int = BODY_LIMIT) -> str:
         idx = max(cut.rfind(s) for s in "\n。！？!?…〜笑")
         body = (cut[:idx + 1] if idx >= limit // 2 else cut[:limit - 1] + "…").rstrip()
 
-    return f"{body}\n{tags}" if tags else body
+    combined = f"{body}\n{tags}" if tags else body
+
+    if x_weighted_length(combined) > TWEET_MAX_LEN:
+        tag_weighted = x_weighted_length(f"\n{tags}") if tags else 0
+        budget = TWEET_MAX_LEN - tag_weighted
+        while body and x_weighted_length(body) > budget:
+            body = body[:-1]
+        body = body.rstrip()
+        combined = f"{body}\n{tags}" if tags else body
+
+    return combined
 
 
 # ─────────────────────────────────────────────────────
@@ -1162,9 +1202,16 @@ def lambda_handler(event, context):
     if category == "url_reaction":
         # 本文は100文字以内。URLは本文に入れるとリーチが抑制されるため、投稿後にリプライへぶら下げる
         body  = trim_body_excluding_hashtags(raw, limit=URL_REACTION_LIMIT)
-        body  = re.sub(r'\n#\S+', '', body).rstrip()  # drop model-inserted hashtag lines
+        body  = strip_model_hashtag_lines(body)  # drop model-inserted hashtag lines
         htag  = pick_hashtag(body + " " + url_article["title"])
         tweet = f"{body}\n{htag}"
+        # ハッシュタグ再付加後にXのweighted lengthで最終チェック（安全弁）
+        if x_weighted_length(tweet) > TWEET_MAX_LEN:
+            tag_weighted = x_weighted_length(f"\n{htag}")
+            budget = TWEET_MAX_LEN - tag_weighted
+            while body and x_weighted_length(body) > budget:
+                body = body[:-1]
+            tweet = f"{body.rstrip()}\n{htag}"
     else:
         tweet = trim_body_excluding_hashtags(raw)
 
