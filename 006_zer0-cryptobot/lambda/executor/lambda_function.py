@@ -292,16 +292,10 @@ def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: flo
 
 
 def notify_trail_updated(pair: str, direction: str, new_trail: float, current_price: float):
-    dir_str = "ロング" if direction == "long" else "ショート"
-    coin = _coin(pair)
-    subject = f"【CryptoBot】トレーリングSL更新 - {coin}/JPY"
-    body = (
-        f"■ {coin}/JPY  {dir_str}  トレーリングSL更新\n"
-        f"\n"
-        f"現在価格：{current_price:,.0f}円\n"
-        f"新SL　　：{new_trail:,.0f}円"
-    )
-    send_email(subject, body)
+    """トレーリングSL更新はメール送信しない（ログのみ、呼び出し元で既に記録済み）。
+    強トレンド時は30分毎に更新され得るため、毎回メールすると約定・クローズ・警告・緊急
+    といった重要通知が埋もれてしまう。更新の事実自体はCloudWatch Logsで追跡できる。"""
+    pass
 
 
 def notify_close(pair: str, direction: str, reason: str, price: float,
