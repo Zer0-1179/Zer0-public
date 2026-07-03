@@ -24,6 +24,23 @@ bash scripts/setup_ssm.sh
 - SSM Parameter Store にポジション State（保有コイン・エントリー価格・SL水準）が保存されている。SSMパラメータを誤って削除するとBotがポジション管理を失う
 - テスト実行: `ENABLE_FORCE_TEST=1 bash scripts/deploy.sh`（テストフラグが有効になり即実行される）
 
+## 緊急停止・一時停止（v4.0〜）
+
+EventBridgeスケジュールを無効化する前に、まずSSMパラメータ`/Zer0/CryptoBot/mode`での切替を検討すること。既存ポジションのSL管理を止めずに新規建てだけ止められる。
+
+```bash
+# 新規建てのみ停止（既存ポジションのTP1/SL/トレーリング管理は継続）
+aws ssm put-parameter --name /Zer0/CryptoBot/mode --value pause_entry --type String --overwrite --region ap-northeast-1
+
+# 全処理停止（既存ポジション管理も止まる。ポジションがある状態での長時間停止は非推奨）
+aws ssm put-parameter --name /Zer0/CryptoBot/mode --value halt --type String --overwrite --region ap-northeast-1
+
+# 復帰
+aws ssm put-parameter --name /Zer0/CryptoBot/mode --value normal --type String --overwrite --region ap-northeast-1
+```
+
+パラメータ未作成・不正値・読込失敗は全て`normal`扱い（fail-safe）。
+
 ## スタック名
 
 - メインスタック: `zer0-cryptobot`（ap-northeast-1）
