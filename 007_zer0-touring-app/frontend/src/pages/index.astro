@@ -591,6 +591,10 @@
       .forecast-day.best  { border-color: rgba(249,115,22,.6); background: rgba(249,115,22,.1); }
       .forecast-day.selectable { cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .15s; }
       .forecast-day.selectable:active { transform: scale(.94); }
+
+      /* ── ルートマップ ── */
+      .detail-map { width: 100%; height: 220px; border-radius: .7rem; overflow: hidden; border: 1px solid var(--border); background: var(--card2); }
+      .detail-map .leaflet-control-attribution { font-size: .6rem; }
       .fd-dow  { font-size: .65rem; font-weight: 700; color: var(--muted); }
       .fd-icon { font-size: 1.3rem; line-height: 1; }
       .fd-temp { font-weight: 700; }
@@ -938,6 +942,10 @@
           <p class="section-title">🔄 帰りの立ち寄り</p>
           <div class="rest-spots" id="detail-return-spots"></div>
         </div>
+        <div class="section" id="detail-map-section" style="display:none">
+          <p class="section-title">ルートマップ</p>
+          <div id="detail-map" class="detail-map"></div>
+        </div>
         <div class="section" id="detail-dest-weather-section" style="display:none">
           <p class="section-title">目的地の今週の天気</p>
           <div class="forecast-strip" id="detail-dest-forecast-strip"></div>
@@ -961,6 +969,21 @@
     </div>
 
     <script>
+      import L from 'leaflet';
+      import 'leaflet/dist/leaflet.css';
+      import markerIcon from 'leaflet/dist/images/marker-icon.png';
+      import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+      import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+      // Leafletのデフォルトマーカーアイコンはバンドラー経由だとパス解決が壊れる既知の問題があるため、
+      // Viteが解決した実URLを明示的に設定する
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconUrl: markerIcon,
+        iconRetinaUrl: markerIcon2x,
+        shadowUrl: markerShadow,
+      });
+
       const API_BASE = import.meta.env.PUBLIC_API_URL ?? '';
 
       // localStorage に adminToken があれば全リクエストに付与
@@ -1027,6 +1050,9 @@
       let detailReturnScreen = 'screen-idle';  // 詳細画面から「戻る」で戻る先
       let forecastDays = [];      // 週間予報データ（狙い目日タップでの再生成に使用）
       let selectedDayLabel = null; // 狙い目日を選んだ場合の表示ラベル（例: "7/5"）
+      let detailMap = null;            // Leaflet マップインスタンス（詳細画面で使い回す）
+      let detailMapLayerGroup = null;  // マーカー・ルートをまとめて差し替えるためのレイヤーグループ
+      let detailMapRouteAbort = null;  // ルート取得のキャンセル用
       let originDisplayName = '現在地';
       let remainingUses = null;
       let shortUrlCache = {}; // courseIdx → short URL
@@ -1258,6 +1284,68 @@
         return `https://www.google.com/maps/dir/?api=1${op}&destination=${dest}${wp}&travelmode=driving`;
       }
 
+      // ルートマップ描画: 現在地・目的地・立ち寄りスポットにマーカーを置き、
+      // OSRMから実際の道路ルートを取得してポリラインで表示する（失敗時は直線で代替）
+      async function renderRouteMap(c) {
+        const section = document.getElementById('detail-map-section');
+        if (detailMapRouteAbort) { detailMapRouteAbort.abort(); detailMapRouteAbort = null; }
+
+        if (c.dest_lat === undefined || userLat === null || userLon === null) {
+          section.style.display = 'none';
+          return;
+        }
+        section.style.display = '';
+
+        if (!detailMap) {
+          detailMap = L.map('detail-map', { zoomControl: false, attributionControl: true });
+          L.control.zoom({ position: 'bottomright' }).addTo(detailMap);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 18,
+          }).addTo(detailMap);
+          detailMapLayerGroup = L.layerGroup().addTo(detailMap);
+        }
+        detailMapLayerGroup.clearLayers();
+        // 非表示状態のコンテナで初期化/更新されるとタイル描画が崩れるため、表示後にサイズ再計算する
+        setTimeout(() => detailMap.invalidateSize(), 50);
+
+        const originLL = [userLat, userLon];
+        const destLL   = [c.dest_lat, c.dest_lon];
+        L.marker(originLL).addTo(detailMapLayerGroup).bindPopup('現在地');
+        L.marker(destLL).addTo(detailMapLayerGroup).bindPopup(c.destination || '目的地');
+
+        const waypoints = [...(c.outbound_spots ?? []), ...(c.return_spots ?? [])]
+          .filter(s => s.lat !== undefined && s.lon !== undefined);
+        waypoints.forEach(s => {
+          L.circleMarker([s.lat, s.lon], { radius: 5, color: '#f97316', weight: 2, fillOpacity: 0.9 })
+            .addTo(detailMapLayerGroup).bindPopup(escHtml(s.name));
+        });
+
+        detailMap.fitBounds(L.latLngBounds([originLL, destLL]).pad(0.2));
+
+        try {
+          detailMapRouteAbort = new AbortController();
+          const coords = `${userLon},${userLat};${c.dest_lon},${c.dest_lat}`;
+          const res = await fetch(
+            `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+            { signal: AbortSignal.any([detailMapRouteAbort.signal, AbortSignal.timeout(6000)]) }
+          );
+          const data = await res.json();
+          if (data.code === 'Ok' && data.routes && data.routes[0]) {
+            const latlngs = data.routes[0].geometry.coordinates.map(([lng,lat])=>[lat,lng]);
+            L.polyline(latlngs, { color: '#f97316', weight: 4, opacity: 0.85 }).addTo(detailMapLayerGroup);
+            detailMap.fitBounds(L.latLngBounds(latlngs).pad(0.1));
+          } else {
+            throw new Error('no route');
+          }
+        } catch (e) {
+          if (e.name !== 'AbortError') {
+            // ルート取得失敗時は直線で代替表示（劣化しても地図自体は見られるようにする）
+            L.polyline([originLL, destLL], { color: '#f97316', weight: 3, opacity: 0.6, dashArray: '6 6' }).addTo(detailMapLayerGroup);
+          }
+        }
+      }
+
       function openDetail(idx){
         detailCourseIdx = idx;
         // 詳細画面を開くたびに先頭へスクロール
@@ -1348,6 +1436,8 @@
         }else{
           destSection.style.display='none';
         }
+
+        renderRouteMap(c);
 
         document.getElementById('detail-map-btn').href=buildMapUrl(c);
         const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 片道${fmtHours(c.duration_hours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
