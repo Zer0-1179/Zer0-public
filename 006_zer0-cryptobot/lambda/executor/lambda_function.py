@@ -357,6 +357,9 @@ class BitbankClient:
     def get_margin_status(self) -> dict:
         return self._get("/user/margin/status")["data"]
 
+    def get_margin_positions(self) -> list[dict]:
+        return self._get("/user/margin/positions")["data"]["positions"]
+
     def get_order(self, pair: str, order_id: int) -> dict:
         return self._get("/user/spot/order", {"pair": pair, "order_id": order_id})["data"]
 
@@ -604,6 +607,54 @@ def _notify_emergency_close_result(bb: BitbankClient, state: dict, trigger_reaso
             f"{trigger_reason}\n"
             f"全ポジションを成行決済しました。速やかに状況を確認してください。",
         )
+
+
+def reconcile_positions(bb: BitbankClient, state: dict):
+    """SSM state と bitbank実建玉のズレを検知する（自動修復はしない、通知のみ）。
+    過去のHIGHバグ（緊急決済取りこぼし・部分約定孤児化等）はいずれも
+    「stateと実態がズレる」ことが根本原因だったため、未知の経路によるズレも
+    含めて毎サイクル検出する最終安全網として導入。
+    buy_pending（発注直後で約定未確認）は一時的な状態のため対象外とする。"""
+    try:
+        actual = bb.get_margin_positions()
+    except Exception as e:
+        log(f"建玉リコンサイル: 実建玉取得失敗 → スキップ: {e}")
+        return
+
+    actual_by_pair = {}
+    for p in actual:
+        try:
+            amount = float(p.get("open_amount", 0))
+        except (TypeError, ValueError):
+            amount = 0.0
+        if amount > 0:
+            actual_by_pair[p["pair"]] = {"position_side": p.get("position_side"), "open_amount": amount}
+
+    mismatches = []
+
+    for pair, pos in state.get("positions", {}).items():
+        if pos.get("status") == "buy_pending":
+            continue
+        direction = pos.get("direction")
+        real = actual_by_pair.pop(pair, None)
+        if real is None:
+            mismatches.append(f"{pair}({direction}): stateにあるが実建玉なし（決済済み？孤児state）")
+        elif real["position_side"] != direction:
+            mismatches.append(f"{pair}: state方向={direction} vs 実建玉方向={real['position_side']}（不一致）")
+
+    # state に対応エントリのない実建玉（孤児建玉）
+    for pair, real in actual_by_pair.items():
+        mismatches.append(f"{pair}({real['position_side']}): 実建玉があるがstateに記録なし（孤児建玉）")
+
+    if mismatches:
+        log(f"建玉リコンサイル不一致検出: {mismatches}")
+        send_email(
+            "【Zer0-CryptoBot】⚠️state⇄実建玉の不一致検出",
+            "SSM stateとbitbank実建玉のズレを検出しました。自動修復は行っていません。手動確認をお願いします。\n\n"
+            + "\n".join(mismatches),
+        )
+    else:
+        log("建玉リコンサイル: 一致確認OK")
 
 
 def check_margin_health(bb: BitbankClient, state: dict) -> bool:
@@ -1168,6 +1219,9 @@ def lambda_handler(event, context):
 
         state = load_state()
         log(f"現在のポジション: {list(state['positions'].keys())}")
+
+        log("state⇄実建玉リコンサイル確認")
+        reconcile_positions(bb, state)
 
         log("証拠金維持率チェック")
         if not check_margin_health(bb, state):
