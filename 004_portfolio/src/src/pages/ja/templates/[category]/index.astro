@@ -177,7 +177,6 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
                   <a
                     href={`/api/templates/${tmpl.filename}`}
                     download={tmpl.filename}
-                    onclick="event.stopPropagation()"
                     title="ダウンロード"
                     class="shrink-0 p-1.5 text-slate-600 hover:text-accent hover:bg-navy-700/40 rounded transition-colors"
                   >
@@ -348,7 +347,12 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
   }
 
   document.querySelectorAll('.file-row').forEach((row) => {
-    row.addEventListener('click', () => {
+    row.addEventListener('click', (e) => {
+      // ダウンロードリンク（<a>）のクリックはYAMLビューアを開かない。
+      // 旧実装はリンク側の inline onclick="event.stopPropagation()" に頼っていたが、
+      // CSP（script-src 'self'）でインラインイベントハンドラはブロックされるため
+      // ダウンロードと同時にビューアも開いてしまっていた。
+      if ((e.target as HTMLElement).closest('a')) return;
       const el = row as HTMLElement;
       showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!);
     });

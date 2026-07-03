@@ -187,9 +187,12 @@ Resources:
             Override: false
         CustomHeadersConfig:
           Items:
-            - Header: Content-Type
-              Value: "text/html; charset=utf-8"
-              Override: true
+            # Content-Type の固定上書きは削除済み（2026-07-03 第2巡レビュー）。
+            # このポリシーは /sitemap.xml・/robots.txt・/api/templates/*.yaml・
+            # ダウンロードZIP等、text/html以外のContent-Typeを返すべきルートにも
+            # 適用されており、全レスポンスがtext/htmlに強制書き換えされていた
+            # （sitemapがクローラーにパースされない等の実害があった）。
+            # Content-TypeはAstro/Express側で個別に正しく設定済みのため不要。
             - Header: Permissions-Policy
               Value: "camera=(), microphone=(), geolocation=()"
               Override: true
@@ -255,6 +258,7 @@ Resources:
             TargetOriginId: S3Origin
             ViewerProtocolPolicy: redirect-to-https
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref PortfolioResponseHeadersPolicy
             AllowedMethods:
               - GET
               - HEAD
@@ -266,6 +270,7 @@ Resources:
             TargetOriginId: S3Origin
             ViewerProtocolPolicy: redirect-to-https
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref PortfolioResponseHeadersPolicy
             AllowedMethods:
               - GET
               - HEAD
@@ -277,6 +282,7 @@ Resources:
             TargetOriginId: S3Origin
             ViewerProtocolPolicy: redirect-to-https
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref PortfolioResponseHeadersPolicy
             AllowedMethods:
               - GET
               - HEAD

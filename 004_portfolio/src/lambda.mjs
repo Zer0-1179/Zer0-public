@@ -127,8 +127,8 @@ const STATIC_CSP = [
     "'sha256-UYCtDDmMoDHvTISYj6fW+GkhSw+u880Y62A+oJ+zftk='", // Nav menu
     "'sha256-KXUDQAuXOeqRrd1aNG0JF4S5VtF/LiYF4RsHdHaWN1k='", // ja/templates/index
     "'sha256-1DhTENB/zpG3cKR7goiDvncDxumSdUUwJ02mq45dVno='", // en/templates/index
-    "'sha256-f2FO/4ReRT1WxIUEXGfHLVDYsz+9UpuD/hrVHCDMyv0='", // ja/templates/[category]
-    "'sha256-k+KUCDvcl8Jg2X9tR7pXlJPr7qVgBr05Kqf65W8RYqg='", // en/templates/[category]
+    "'sha256-cWbZQz7qqZr7bU3ee4onPOv2dX9PBo/h26P+y0O1bzo='", // ja/templates/[category]（2026-07-03 file-row click修正で更新）
+    "'sha256-DgX2pBSQucJ4N60pwee4TwGFAbw6IESlTzfW5Z/g3Ws='", // en/templates/[category]（2026-07-03 file-row click修正で更新）
   ].join(' '),
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src https://fonts.gstatic.com",
