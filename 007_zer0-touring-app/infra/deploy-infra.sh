@@ -72,6 +72,10 @@ else
   echo "  ✓ EdgeSecret を新規生成し SSM に保存: $EDGE_SECRET_PARAM"
 fi
 
+# AlarmEmail: Lambdaエラー・高レイテンシ・API Gateway 5xx発生時の通知先。
+# 環境変数 ALARM_EMAIL が未設定なら空のまま（アラーム未設定でスキップ）。
+ALARM_EMAIL="${ALARM_EMAIL:-}"
+
 echo "=== [2/4] メインスタックデプロイ ($REGION) ==="
 aws cloudformation deploy \
   --stack-name "$STACK" \
@@ -80,7 +84,8 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     CertificateArn="${CERT_ARN}" \
-    EdgeSecret="${EDGE_SECRET}"
+    EdgeSecret="${EDGE_SECRET}" \
+    AlarmEmail="${ALARM_EMAIL}"
 
 # スタック出力取得
 BUCKET=$(aws cloudformation describe-stacks \
