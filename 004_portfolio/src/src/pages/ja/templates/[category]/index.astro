@@ -247,7 +247,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
   </div>
 </BaseLayout>
 
-<script>
+<script nonce={Astro.locals.cspNonce}>
   const navTree = document.getElementById('nav-tree') as HTMLElement;
   const currentSlug = navTree.dataset.current!;
 

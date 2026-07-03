@@ -117,7 +117,9 @@ app.get('/', (req, res) => res.redirect(302, '/ja/'));
 
 // CSP fallback: Astro middleware's Response headers need writeHead to be intercepted
 // to reach serverless-http. The STATIC_CSP is injected only when Astro doesn't set one
-// (e.g., API routes). For page routes, Astro's dynamic nonce+hash CSP takes precedence.
+// (e.g., the ZIP/YAML download routes and the "/" redirect below, none of which render
+// inline scripts). For page routes, Astro's dynamic nonce-based CSP (src/middleware.ts)
+// takes precedence and is the one actually gating inline script execution.
 const STATIC_CSP = [
   "default-src 'self'",
   "connect-src 'self'",

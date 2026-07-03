@@ -83,7 +83,7 @@ const navItems = [
 <!-- ヘッダー分の余白 -->
 <div class="h-16"></div>
 
-<script>
+<script nonce={Astro.locals.cspNonce}>
   const btn = document.getElementById('menu-btn')!;
   const menu = document.getElementById('mobile-menu')!;
   const lines = btn.querySelectorAll('.hamburger-line');
