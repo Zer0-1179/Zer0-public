@@ -1003,7 +1003,7 @@
 
       async function geocodeOrigin(input) {
         const params = new URLSearchParams({ q: input, format: 'json', limit: 1, countrycodes: 'jp', 'accept-language': 'ja' });
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {signal:AbortSignal.timeout(5000)});
         if (!res.ok) throw new Error('network error');
         const data = await res.json();
         if (!data || data.length === 0) throw new Error('not found');
@@ -1011,7 +1011,10 @@
       }
       async function renderForecastInto(lat, lon, stripEl, signal) {
         try {
-          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`, signal ? { signal } : {});
+          // ナビゲーション時のキャンセル用signalと、Open-Meteo無応答対策のタイムアウトを両方効かせる
+          const timeoutSignal = AbortSignal.timeout(5000);
+          const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`, {signal: combinedSignal});
           const d = await res.json();
           const { time, weathercode, temperature_2m_max, temperature_2m_min } = d.daily;
           let bestIdx=1, bestScore=-1;
@@ -1400,7 +1403,8 @@
         setStep('step-weather','active');
         let temperature=20,weatherCondition='晴れ';
         try{
-          const res=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`);
+          // Open-Meteoが劣化/無応答の場合にフロー全体がハングしないようタイムアウトを設定
+          const res=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=auto`,{signal:AbortSignal.timeout(5000)});
           const d=await res.json();
           temperature=Math.round(d.current.temperature_2m);
           const wCode=d.current.weathercode??0;
