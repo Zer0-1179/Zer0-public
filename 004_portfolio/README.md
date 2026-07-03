@@ -159,3 +159,4 @@ bash scripts/deploy.sh
 | 2026-06-27 | v2.8       | S3 ライフサイクル設定追加: `zer0-portfolio-s3` に旧バージョン 7 日後削除（直近 3 世代保持）＋未完了マルチパート 7 日後中断ルールを CFn で追加。既存の不要旧バージョン 2,448 件（約 12 GB）を一括削除。 |
 | 2026-06-27 | v2.9       | fetch タイムアウト追加: `ja/articles.astro`・`en/articles.astro` の RSS フェッチに 5 秒タイムアウト（`AbortSignal.timeout`）追加。`lambda.mjs` の GitHub Raw 取得 2 箇所に 10 秒タイムアウト追加。Lambda がスロー上流でブロックされるリスクを解消。仕様書の CSP 記述を実 CFn（`connect-src`・`'nonce-fallback'` 追記）に一致させた。 |
 | 2026-06-28 | v3.0       | フォントサイズ全体拡大: `global.css` に `html { font-size: 18px; }` を追加。デフォルト 16px → 18px（+12.5%）。`text-sm` 実質 16px・`text-base` 実質 18px となり視認性を向上。 |
+| 2026-07-03 | v3.1       | **第2巡Fableレビュー HIGH修正**: CloudFront ResponseHeadersPolicyがContent-Typeを全レスポンスにtext/html強制上書きしておりsitemap.xml/robots.txt/テンプレートDLが壊れていたバグを修正。MEDIUM: テンプレートDLアイコンのインラインonclickがCSPでブロックされYAMLビューアが同時に開くUIバグをJSイベントリスナー方式に修正（CSPハッシュ更新）。S3配信の3ビヘイビアにもセキュリティヘッダーを追加。本番で全項目を実機検証済み |
