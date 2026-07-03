@@ -352,8 +352,9 @@ Resources:
             Override: true
           ContentSecurityPolicy:
             # connect-src: Open-Meteo（天気）+ Wikipedia API（写真取得）+ Nominatim（出発地ジオコーディング）
-            # img-src: Wikimedia（Wikipedia写真）
-            ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://ja.wikipedia.org https://nominatim.openstreetmap.org; img-src 'self' data: https://upload.wikimedia.org; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
+            #              + OSRM（ルートマップのポリライン取得）
+            # img-src: Wikimedia（Wikipedia写真）+ OpenStreetMapタイルサーバー（ルートマップ背景）
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://ja.wikipedia.org https://nominatim.openstreetmap.org https://router.project-osrm.org; img-src 'self' data: https://upload.wikimedia.org https://*.tile.openstreetmap.org; font-src 'self'; object-src 'none'; base-uri 'self'; manifest-src 'self'"
             Override: true
         CustomHeadersConfig:
           Items:
