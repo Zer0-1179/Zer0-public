@@ -974,6 +974,7 @@
       import markerIcon from 'leaflet/dist/images/marker-icon.png';
       import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
       import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+      import { escHtml, fmtHours, getWeatherMeta } from '../scripts/course-utils';
 
       // Leafletのデフォルトマーカーアイコンはバンドラー経由だとパス解決が壊れる既知の問題があるため、
       // Viteが解決した実URLを明示的に設定する
@@ -1026,19 +1027,6 @@
       const ROAD = { '峠道':'🏔','山道':'🏔','高速道路':'🛣','国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊' };
       const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
 
-      function escHtml(s) {
-        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-      }
-
-      function fmtHours(h) {
-        const rounded = Math.ceil(Math.round(h * 60) / 10) * 10;  // 10分単位で切り上げ
-        const hrs = Math.floor(rounded / 60);
-        const mins = rounded % 60;
-        if (hrs === 0) return `約${mins}分`;
-        if (mins === 0) return `約${hrs}時間`;
-        return `約${hrs}時間${mins}分`;
-      }
-
       let courses     = [];
       let userLat     = null, userLon = null;
       let weatherMeta = { icon:'☀️', score:5, label:'絶好の日和！', temp:'--' };
@@ -1058,18 +1046,6 @@
       let shortUrlCache = {}; // courseIdx → short URL
       let detailCourseIdx = 0;
 
-      /* ── 天気ヘルパー ── */
-      function getWeatherMeta(code) {
-        if (code === 0)                 return { icon:'☀️', score:5, label:'絶好の日和！' };
-        if (code <= 2)                  return { icon:'🌤', score:4, label:'ツーリング向き' };
-        if (code === 3)                 return { icon:'☁️', score:3, label:'まずまず' };
-        if (code===45 || code===48)     return { icon:'🌫', score:2, label:'視界に注意' };
-        if (code>=51 && code<=67)       return { icon:'🌧', score:1, label:'雨天注意' };
-        if (code>=71 && code<=77)       return { icon:'🌨', score:1, label:'降雪注意' };
-        if (code>=80 && code<=82)       return { icon:'🌦', score:2, label:'にわか雨注意' };
-        if (code>=95)                   return { icon:'⛈', score:0, label:'走行危険' };
-        return { icon:'🌤', score:3, label:'まずまず' };
-      }
       function renderWeatherInfo() {
         const el = document.getElementById('weather-subtitle');
         if (!el) return;
