@@ -31,6 +31,9 @@ _OFFICIAL_ICON_MAP: dict[str, str] = {
     'cloudfront':  f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
     'acm':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
     'api_gateway': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
+    'ebs':         f'{_SVC}/Arch_Storage/64/Arch_Amazon-Elastic-Block-Store_64.png',
+    'privatelink': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_AWS-PrivateLink_64.png',
+    'glacier':     f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service-Glacier_64.png',
     'vpc':            f'{_GRP}/Virtual-private-cloud-VPC_32.png',
     'region':         f'{_GRP}/Region_32.png',
     'public_subnet':  f'{_GRP}/Public-subnet_32.png',
@@ -1108,6 +1111,210 @@ def _diagram_cloudtrail_2(output_path: str):
                   nodes, edges, output_path)
 
 
+# ─── EC2 × Systems Manager ─────────────────────────────────────────────────────
+
+def _diagram_ec2_ssm_1(output_path: str):
+    """図1: 管理者 → Systems Manager → Session Manager → EC2（プライベート・鍵ペア/踏み台不要）"""
+    nodes = [
+        {'id': 'admin', 'icon': 'user', 'label': '管理者',           'x': 1.5, 'y': 3.0},
+        {'id': 'ssm',   'icon': 'ssm',  'label': 'Systems Manager',  'x': 6.0, 'y': 3.0},
+        {'id': 'ec2',   'icon': 'ec2',  'label': 'EC2（プライベート）','x': 10.5,'y': 3.0},
+    ]
+    edges = [
+        ('admin', 'ssm', 'コンソール/CLI'),
+        ('ssm', 'ec2', 'Session Manager接続'),
+    ]
+    clusters = [
+        {'label': 'プライベートサブネット', 'x': 9.0, 'y': 1.8, 'w': 3.2, 'h': 2.4,
+         'color': '#FEF9E7'},
+    ]
+    _draw_diagram('Amazon EC2 × Systems Manager ① – Session Manager によるキーレス接続構成',
+                  nodes, edges, output_path, clusters=clusters)
+
+
+def _diagram_ec2_ssm_2(output_path: str):
+    """図2: EC2（SSM Agent）→ CloudWatch Logs → S3（セッション操作ログの記録）"""
+    nodes = [
+        {'id': 'ec2', 'icon': 'ec2',        'label': 'EC2（SSM Agent）', 'x': 1.5, 'y': 3.0},
+        {'id': 'cw',  'icon': 'cloudwatch', 'label': 'CloudWatch Logs', 'x': 6.0, 'y': 3.0},
+        {'id': 's3',  'icon': 's3',         'label': 'S3（長期保管）',   'x': 10.5,'y': 3.0},
+    ]
+    edges = [
+        ('ec2', 'cw', 'セッションログ送信'),
+        ('cw', 's3', 'エクスポート'),
+    ]
+    _draw_diagram('Amazon EC2 × Systems Manager ② – セッション操作ログの記録構成',
+                  nodes, edges, output_path)
+
+
+# ─── EC2 × EBS ──────────────────────────────────────────────────────────────────
+
+def _diagram_ec2_ebs_1(output_path: str):
+    """図1: EC2 → 複数EBSボリューム（gp3ルート + io2高性能データ）"""
+    nodes = [
+        {'id': 'ec2',  'icon': 'ec2', 'label': 'EC2',                'x': 3.0, 'y': 3.0},
+        {'id': 'root', 'icon': 'ebs', 'label': 'EBS (gp3) ルート',    'x': 8.5, 'y': 4.2},
+        {'id': 'data', 'icon': 'ebs', 'label': 'EBS (io2) データ',    'x': 8.5, 'y': 1.8},
+    ]
+    edges = [
+        ('ec2', 'root', 'アタッチ'),
+        ('ec2', 'data', 'アタッチ（高IOPS）'),
+    ]
+    _draw_diagram('Amazon EC2 × EBS ① – 複数ボリューム種類のアタッチ構成',
+                  nodes, edges, output_path)
+
+
+def _diagram_ec2_ebs_2(output_path: str):
+    """図2: EBS → スナップショット → S3（バックアップ）"""
+    nodes = [
+        {'id': 'ebs',  'icon': 'ebs', 'label': 'EBS ボリューム',   'x': 1.5, 'y': 3.0},
+        {'id': 'snap', 'icon': None,  'label': 'スナップショット', 'short': 'SNAP', 'x': 6.0, 'y': 3.0},
+        {'id': 's3',   'icon': 's3',  'label': 'S3（バックアップ）','x': 10.5,'y': 3.0},
+    ]
+    edges = [
+        ('ebs', 'snap', '定期取得'),
+        ('snap', 's3', '長期保管'),
+    ]
+    _draw_diagram('Amazon EC2 × EBS ② – スナップショットによるバックアップ構成',
+                  nodes, edges, output_path)
+
+
+# ─── Lambda Layers ──────────────────────────────────────────────────────────────
+
+def _diagram_lambda_layers_1(output_path: str):
+    """図1: 開発者 → Layer発行 → Lambda関数へアタッチ"""
+    nodes = [
+        {'id': 'dev',   'icon': 'user',   'label': '開発者',       'x': 1.5, 'y': 3.0},
+        {'id': 'layer', 'icon': None,     'label': 'Lambda Layer', 'short': 'Layer', 'x': 6.0, 'y': 3.0},
+        {'id': 'fn',    'icon': 'lambda', 'label': 'Lambda 関数',  'x': 10.5,'y': 3.0},
+    ]
+    edges = [
+        ('dev', 'layer', 'publish-layer-version'),
+        ('layer', 'fn', 'レイヤーとして追加'),
+    ]
+    _draw_diagram('AWS Lambda Layers ① – レイヤーの発行とアタッチ構成',
+                  nodes, edges, output_path)
+
+
+def _diagram_lambda_layers_2(output_path: str):
+    """図2: 共通Layerを複数Lambda関数で共有"""
+    nodes = [
+        {'id': 'layer', 'icon': None,     'label': 'Lambda Layer（共通ライブラリ）', 'short': 'Layer', 'x': 3.5, 'y': 3.0},
+        {'id': 'fn1',   'icon': 'lambda', 'label': 'Lambda 関数A', 'x': 9.5, 'y': 4.2},
+        {'id': 'fn2',   'icon': 'lambda', 'label': 'Lambda 関数B', 'x': 9.5, 'y': 1.8},
+    ]
+    edges = [
+        ('layer', 'fn1', '共有'),
+        ('layer', 'fn2', '共有'),
+    ]
+    _draw_diagram('AWS Lambda Layers ② – 複数関数間でのレイヤー共有構成',
+                  nodes, edges, output_path)
+
+
+# ─── S3 ライフサイクルポリシー ───────────────────────────────────────────────────
+
+def _diagram_s3_lifecycle_1(output_path: str):
+    """図1: S3 Standard → Standard-IA → Glacier（ストレージクラス自動移行）"""
+    nodes = [
+        {'id': 'std', 'icon': 's3',      'label': 'S3 Standard',     'x': 1.5, 'y': 3.0},
+        {'id': 'ia',  'icon': 's3',      'label': 'S3 Standard-IA',  'x': 6.0, 'y': 3.0},
+        {'id': 'glc', 'icon': 'glacier', 'label': 'S3 Glacier',      'x': 10.5,'y': 3.0},
+    ]
+    edges = [
+        ('std', 'ia', '30日後（自動移行）'),
+        ('ia', 'glc', '90日後（自動移行）'),
+    ]
+    _draw_diagram('Amazon S3 ライフサイクル ① – ストレージクラス自動移行構成',
+                  nodes, edges, output_path)
+
+
+def _diagram_s3_lifecycle_2(output_path: str):
+    """図2: ライフサイクルルール評価 → 期限切れオブジェクトの自動削除"""
+    nodes = [
+        {'id': 's3',   'icon': 's3',  'label': 'S3 バケット（バージョニング有効）', 'x': 1.8, 'y': 3.0},
+        {'id': 'rule', 'icon': None,  'label': 'ライフサイクルルール評価', 'short': 'Rule', 'x': 6.5, 'y': 3.0},
+        {'id': 'del',  'icon': None,  'label': '期限切れオブジェクト自動削除', 'short': 'Del', 'x': 11.0,'y': 3.0},
+    ]
+    edges = [
+        ('s3', 'rule', '日次評価'),
+        ('rule', 'del', '条件一致時'),
+    ]
+    _draw_diagram('Amazon S3 ライフサイクル ② – 期限切れオブジェクトの自動削除構成',
+                  nodes, edges, output_path)
+
+
+# ─── VPC エンドポイント ──────────────────────────────────────────────────────────
+
+def _diagram_vpc_endpoint_1(output_path: str):
+    """図1: EC2（プライベート）→ Gateway型エンドポイント → S3（インターネットを経由しない）"""
+    nodes = [
+        {'id': 'ec2', 'icon': 'ec2',         'label': 'EC2（プライベート）',        'x': 1.8, 'y': 3.0},
+        {'id': 'gw',  'icon': 'privatelink', 'label': 'Gateway型 VPCエンドポイント', 'x': 6.5, 'y': 3.0},
+        {'id': 's3',  'icon': 's3',          'label': 'S3',                        'x': 11.0,'y': 3.0},
+    ]
+    edges = [
+        ('ec2', 'gw', 'ルートテーブル経由'),
+        ('gw', 's3', 'プライベート接続（無料）'),
+    ]
+    clusters = [
+        {'label': 'プライベートサブネット', 'x': 0.5, 'y': 1.8, 'w': 2.8, 'h': 2.4, 'color': '#FEF9E7'},
+    ]
+    _draw_diagram('Amazon VPC エンドポイント ① – Gateway型（S3）構成',
+                  nodes, edges, output_path, clusters=clusters)
+
+
+def _diagram_vpc_endpoint_2(output_path: str):
+    """図2: EC2（プライベート）→ Interface型エンドポイント（PrivateLink）→ Systems Manager"""
+    nodes = [
+        {'id': 'ec2',   'icon': 'ec2',         'label': 'EC2（プライベート）',          'x': 1.8, 'y': 3.0},
+        {'id': 'iface', 'icon': 'privatelink', 'label': 'Interface型 VPCエンドポイント', 'x': 6.5, 'y': 3.0},
+        {'id': 'ssm',   'icon': 'ssm',         'label': 'Systems Manager',              'x': 11.0,'y': 3.0},
+    ]
+    edges = [
+        ('ec2', 'iface', 'PrivateLink接続'),
+        ('iface', 'ssm', 'プライベートAPI呼び出し'),
+    ]
+    clusters = [
+        {'label': 'プライベートサブネット', 'x': 0.5, 'y': 1.8, 'w': 2.8, 'h': 2.4, 'color': '#FEF9E7'},
+    ]
+    _draw_diagram('Amazon VPC エンドポイント ② – Interface型（PrivateLink）構成',
+                  nodes, edges, output_path, clusters=clusters)
+
+
+# ─── CloudWatch Logs Insights ────────────────────────────────────────────────────
+
+def _diagram_cloudwatch_insights_1(output_path: str):
+    """図1: Lambda/EC2 → CloudWatch Logs → Logs Insights クエリ実行"""
+    nodes = [
+        {'id': 'fn',       'icon': 'lambda',     'label': 'Lambda',            'x': 1.5, 'y': 4.2},
+        {'id': 'ec2',      'icon': 'ec2',        'label': 'EC2',               'x': 1.5, 'y': 1.8},
+        {'id': 'logs',     'icon': 'cloudwatch', 'label': 'CloudWatch Logs',   'x': 6.0, 'y': 3.0},
+        {'id': 'insights', 'icon': 'cloudwatch', 'label': 'Logs Insights（クエリ）', 'x': 10.5,'y': 3.0},
+    ]
+    edges = [
+        ('fn', 'logs', 'ログ出力'),
+        ('ec2', 'logs', 'ログ出力'),
+        ('logs', 'insights', 'クエリ実行'),
+    ]
+    _draw_diagram('CloudWatch Logs Insights ① – ログ収集とクエリ実行構成',
+                  nodes, edges, output_path)
+
+
+def _diagram_cloudwatch_insights_2(output_path: str):
+    """図2: Logs Insights → ダッシュボード可視化 + Alarm連携"""
+    nodes = [
+        {'id': 'insights', 'icon': 'cloudwatch',       'label': 'Logs Insights',        'x': 2.0, 'y': 3.0},
+        {'id': 'dash',     'icon': None,                'label': 'CloudWatchダッシュボード', 'short': 'Dash', 'x': 6.5, 'y': 4.2},
+        {'id': 'alarm',    'icon': 'cloudwatch_alarm',  'label': 'Alarm（異常検知）',     'x': 6.5, 'y': 1.8},
+    ]
+    edges = [
+        ('insights', 'dash', '可視化'),
+        ('insights', 'alarm', 'メトリクスフィルタ'),
+    ]
+    _draw_diagram('CloudWatch Logs Insights ② – ダッシュボード可視化とアラーム連携構成',
+                  nodes, edges, output_path, figsize=(9, 6), xlim=(0, 9))
+
+
 # ─── パブリックインターフェース ───────────────────────────────────────────────────
 
 _GENERATORS = {
@@ -1135,6 +1342,13 @@ _GENERATORS = {
     'route53':        [_diagram_route53_1,        _diagram_route53_2],
     'kinesis':        [_diagram_kinesis_1,        _diagram_kinesis_2],
     'cloudtrail':     [_diagram_cloudtrail_1,     _diagram_cloudtrail_2],
+    # サブトピック（2026-06-18 v2.0 で追加されたが構成図が未対応だったため 2026-07-03 に追加）
+    'ec2_ssm':            [_diagram_ec2_ssm_1,            _diagram_ec2_ssm_2],
+    'ec2_ebs':            [_diagram_ec2_ebs_1,            _diagram_ec2_ebs_2],
+    'lambda_layers':      [_diagram_lambda_layers_1,      _diagram_lambda_layers_2],
+    's3_lifecycle':       [_diagram_s3_lifecycle_1,       _diagram_s3_lifecycle_2],
+    'vpc_endpoint':       [_diagram_vpc_endpoint_1,       _diagram_vpc_endpoint_2],
+    'cloudwatch_insights': [_diagram_cloudwatch_insights_1, _diagram_cloudwatch_insights_2],
 }
 
 
