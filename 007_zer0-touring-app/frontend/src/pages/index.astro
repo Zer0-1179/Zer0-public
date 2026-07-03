@@ -589,6 +589,8 @@
       }
       .forecast-day.today { border-color: rgba(56,189,248,.5); background: rgba(56,189,248,.06); }
       .forecast-day.best  { border-color: rgba(249,115,22,.6); background: rgba(249,115,22,.1); }
+      .forecast-day.selectable { cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .15s; }
+      .forecast-day.selectable:active { transform: scale(.94); }
       .fd-dow  { font-size: .65rem; font-weight: 700; color: var(--muted); }
       .fd-icon { font-size: 1.3rem; line-height: 1; }
       .fd-temp { font-weight: 700; }
@@ -1023,6 +1025,8 @@
       let locationMode = 'gps';
       let selectedPrefs = new Set();
       let detailReturnScreen = 'screen-idle';  // 詳細画面から「戻る」で戻る先
+      let forecastDays = [];      // 週間予報データ（狙い目日タップでの再生成に使用）
+      let selectedDayLabel = null; // 狙い目日を選んだ場合の表示ラベル（例: "7/5"）
       let originDisplayName = '現在地';
       let remainingUses = null;
       let shortUrlCache = {}; // courseIdx → short URL
@@ -1043,7 +1047,8 @@
       function renderWeatherInfo() {
         const el = document.getElementById('weather-subtitle');
         if (!el) return;
-        el.textContent = `📍${originDisplayName}  ${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
+        const dayPrefix = selectedDayLabel ? `${selectedDayLabel}向け · ` : '';
+        el.textContent = `${dayPrefix}📍${originDisplayName}  ${weatherMeta.icon} ${weatherMeta.temp}℃ · ${weatherMeta.label}`;
         el.style.display = 'inline-flex';
       }
 
@@ -1055,7 +1060,7 @@
         if (!data || data.length === 0) throw new Error('not found');
         return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
       }
-      async function renderForecastInto(lat, lon, stripEl, signal) {
+      async function renderForecastInto(lat, lon, stripEl, signal, selectable=false) {
         try {
           // ナビゲーション時のキャンセル用signalと、Open-Meteo無応答対策のタイムアウトを両方効かせる
           const timeoutSignal = AbortSignal.timeout(5000);
@@ -1066,13 +1071,21 @@
           let bestIdx=1, bestScore=-1;
           weathercode.forEach((c,i)=>{if(i===0)return;const s=getWeatherMeta(c).score;if(s>bestScore){bestScore=s;bestIdx=i;}});
           const DOW=['日','月','火','水','木','金','土'];
+          if (selectable) {
+            forecastDays = time.map((t,i)=>({
+              date: t,
+              tMax: Math.round(temperature_2m_max[i]),
+              tMin: Math.round(temperature_2m_min[i]),
+              weathercode: weathercode[i],
+            }));
+          }
           stripEl.innerHTML=time.map((t,i)=>{
             const date=new Date(t+'T00:00:00');
             const meta=getWeatherMeta(weathercode[i]);
             const tMax=Math.round(temperature_2m_max[i]);
             const tMin=Math.round(temperature_2m_min[i]);
             const dots=Array.from({length:5},(_,di)=>`<span class="fd-dot${di<meta.score?' on':''}"></span>`).join('');
-            return `<div class="forecast-day${i===0?' today':''}${i===bestIdx?' best':''}">
+            return `<div class="forecast-day${i===0?' today':''}${i===bestIdx?' best':''}${selectable?' selectable':''}" data-idx="${i}">
               <span class="fd-dow">${i===0?'今日':DOW[date.getDay()]}</span>
               <span class="fd-icon">${meta.icon}</span>
               <span class="fd-temp">${tMax}℃</span>
@@ -1081,13 +1094,18 @@
               ${i===bestIdx?'<span class="fd-best">★ 狙い目</span>':''}
             </div>`;
           }).join('');
+          if (selectable) {
+            stripEl.querySelectorAll('.forecast-day').forEach((el)=>{
+              el.addEventListener('click', ()=>regenerateForDay(+el.dataset.idx));
+            });
+          }
         } catch(e) { if (e.name !== 'AbortError') console.warn('[forecast]', e); }
       }
       async function renderForecast(lat, lon) {
         const strip=document.getElementById('forecast-strip');
         const wrap=document.getElementById('forecast-wrap');
         if(!strip||!wrap)return;
-        await renderForecastInto(lat, lon, strip);
+        await renderForecastInto(lat, lon, strip, undefined, true);
         if(strip.innerHTML) wrap.style.display='block';
       }
 
@@ -1408,6 +1426,8 @@
           if (!inputVal) { showError('出発地を入力してください。\n例: 横浜、新宿、名古屋駅など'); return; }
         }
 
+        selectedDayLabel = null;  // 通常検索では「狙い目日」選択状態をリセットする
+
         const wsub=document.getElementById('weather-subtitle');
         const fwrap=document.getElementById('forecast-wrap');
         if(wsub) wsub.style.display='none';
@@ -1478,6 +1498,56 @@
           renderForecast(lat,lon);
           fetchUsage();
         }catch(e){
+          if(e && e.status===429){
+            fetchUsage();
+            showError('本日の利用上限（3回）に達しました。\n明日またお試しください。', 'limit');
+          } else {
+            showError('コースの生成に失敗しました。\n通信状況を確認して再試行してください。');
+          }
+        }
+      }
+
+      // 週間予報の「狙い目日」をタップした際、その日の予報でコースを再生成する。
+      // GPS取得はスキップし、既に取得済みの userLat/userLon を再利用する。
+      async function regenerateForDay(idx) {
+        if (remainingUses !== null && remainingUses <= 0) {
+          showError('本日の利用上限（3回）に達しました。\n明日またお試しください。', 'limit');
+          return;
+        }
+        const day = forecastDays[idx];
+        if (!day || userLat === null || userLon === null) return;
+
+        const d = new Date(day.date + 'T00:00:00');
+        selectedDayLabel = idx === 0 ? '今日' : `${d.getMonth()+1}/${d.getDate()}`;
+
+        showScreen('screen-loading');
+        ['step-gps','step-weather','step-ai'].forEach(id=>setStep(id,'idle'));
+        setStep('step-gps','done');
+        setStep('step-weather','done');
+        setStep('step-ai','active');
+
+        const temperature = day.tMax;
+        const weatherCondition = WEATHER[day.weathercode] ?? '晴れ';
+        weatherMeta = { ...getWeatherMeta(day.weathercode), temp: temperature };
+
+        try {
+          const prefs = Array.from(selectedPrefs);
+          const reqBody = {latitude:userLat, longitude:userLon, temperature, weather_condition:weatherCondition};
+          if (prefs.length > 0) reqBody.preferences = prefs;
+          const res = await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:apiHeaders(),body:JSON.stringify(reqBody)});
+          if(!res.ok){const err=new Error();err.status=res.status;throw err;}
+          const data = await res.json();
+          setStep('step-ai','done');
+
+          renderSlider(data);
+          courses.forEach(saveHistory);
+          showScreen('screen-results');
+          initSlider();
+
+          renderWeatherInfo();
+          renderForecast(userLat, userLon);
+          fetchUsage();
+        } catch(e) {
           if(e && e.status===429){
             fetchUsage();
             showError('本日の利用上限（3回）に達しました。\n明日またお試しください。', 'limit');
