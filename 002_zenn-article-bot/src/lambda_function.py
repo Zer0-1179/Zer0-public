@@ -39,8 +39,12 @@ S3_PREFIX  = "zenn-articles"
 OUTPUT_KEEP_MAX     = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
 
 # SSM: 直近トピック履歴
+# 注意: AWS_TOPICS の総数（28件）と同値にすると、全トピック消化後に除外リストが
+# 常に「全トピック」を含んだまま固定化し、以後 select_topic_with_bedrock の
+# 「全除外時リセット」分岐が毎回発火して重複除外が恒久的に無効化されるバグがあった
+# （2026-07-03 第2巡レビューで修正）。総数より必ず小さい値にすること。
 SSM_PARAM_PATH      = "/zenn-article-bot/recent-topics"
-RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "28"))
+RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "20"))
 
 AWS_TOPICS = [
     {
@@ -526,6 +530,17 @@ def save_topic_to_ssm(topic_id: str):
         print(f"SSM書き込みエラー（無視して続行）: {e}")
 
 
+def _extract_bedrock_text(result: dict) -> str | None:
+    """Bedrock invoke_model のレスポンスから安全にテキストを取り出す。
+    ガードレール発動・異常終了等で content が空配列になることがあり、
+    result["content"][0]["text"] を直接書くと IndexError で未処理クラッシュする。"""
+    content = result.get("content") or []
+    if not content:
+        return None
+    text = content[0].get("text")
+    return text if isinstance(text, str) else None
+
+
 # ─── トピック選択 ─────────────────────────────────────────────────────────────
 
 def select_topic_with_bedrock(excluded_ids: list[str]) -> dict:
@@ -551,13 +566,16 @@ def select_topic_with_bedrock(excluded_ids: list[str]) -> dict:
         accept="application/json",
         body=json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 10,
+            "max_tokens": 20,
             "messages": [{"role": "user", "content": prompt}],
         }),
     )
 
     result   = json.loads(response["body"].read())
-    topic_id = result["content"][0]["text"].strip().lower()
+    raw_text = _extract_bedrock_text(result)
+    if raw_text is None:
+        print(f"[WARNING] トピック選択のBedrock応答が空（stop_reason={result.get('stop_reason')}）→ ランダムフォールバック")
+    topic_id = (raw_text or "").strip().lower()
     usage = result.get("usage", {})
     print(f"[Bedrock/topic] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
 
@@ -602,7 +620,11 @@ def generate_article(topic: dict, today: str) -> tuple[str, str, bool]:
     )
 
     result = json.loads(response["body"].read())
-    text = result["content"][0]["text"]
+    text = _extract_bedrock_text(result)
+    if text is None:
+        raise RuntimeError(
+            f"Bedrock記事生成の応答からcontentが取得できませんでした（stop_reason={result.get('stop_reason')}）"
+        )
     usage = result.get("usage", {})
     stop_reason = result.get("stop_reason", "unknown")
     is_truncated = stop_reason == "max_tokens"

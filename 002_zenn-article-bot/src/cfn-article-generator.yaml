@@ -52,7 +52,11 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  # jp.* はクロスリージョン推論プロファイルのため、実際の呼び出し先が
+                  # ap-northeast-3 にルーティングされることがある。東京のみだと当該時のみ
+                  # AccessDeniedException になる（001/003と同じ2リージョン明示構成に統一）
+                  - "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - "arn:aws:bedrock:ap-northeast-3::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
                   - !Sub "arn:aws:bedrock:ap-northeast-1:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
               - Effect: Allow
                 Action:
@@ -90,7 +94,9 @@ Resources:
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           BEDROCK_MODEL_ID: !Ref BedrockModelId
           BEDROCK_ARTICLE_MODEL_ID: !Ref BedrockArticleModelId
-          RECENT_TOPICS_LIMIT: "28"
+          # AWS_TOPICS 総数（28件）と同値にすると重複除外が恒久的に無効化されるバグが
+          # あったため、総数より小さい値にする（2026-07-03 第2巡レビューで修正）
+          RECENT_TOPICS_LIMIT: "20"
           MATPLOTLIB_BACKEND: Agg
           S3_BUCKET: zer0-dev-s3
       DeadLetterConfig:
