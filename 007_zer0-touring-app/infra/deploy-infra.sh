@@ -96,8 +96,9 @@ bash "../backend/deploy.sh"
 # ────────────────────────────────────────────
 if $DEPLOY_FRONTEND; then
   echo "=== [4/4] フロントエンドビルド & S3 同期 ==="
-  FRONTEND_DIR="$(dirname "$0")/../frontend"
-  cd "$FRONTEND_DIR"
+  # スクリプト冒頭の `cd "$(dirname "$0")"` により cwd は既に infra/ のため相対パスでよい
+  # （$0 から再導出すると "infra/../frontend" のように二重に解決されて壊れる）
+  cd ../frontend
 
   npm install --silent
   npm run build
