@@ -272,12 +272,15 @@ Resources:
               return {"statusCode": 200, "body": "placeholder - deploy via deploy.sh"}
 
   # ── Lambda EventInvokeConfig: Executor 非同期失敗時 → FailureNotifier ─────
+  # MaximumRetryAttempts は 0 固定。実発注後にタイムアウト/スロットリングで
+  # 失敗した場合、自動リトライすると同一シグナルで二重発注する恐れがあるため
+  # （4時間毎の定期実行が実質的なリトライとして機能する）。
   ExecutorEventInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
     Properties:
       FunctionName: !Ref ExecutorFunction
       Qualifier: $LATEST
-      MaximumRetryAttempts: 2
+      MaximumRetryAttempts: 0
       DestinationConfig:
         OnFailure:
           Destination: !GetAtt FailureNotifierFunction.Arn
