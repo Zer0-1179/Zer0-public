@@ -446,8 +446,12 @@ def _apply_entry_fill(bb: "BitbankClient", pair: str, pos: dict, order: dict, cf
         tp1_price = entry - atr_jpy * TP1_MULT
         sl_price  = entry + atr_jpy * SL_MULT
 
-    tp1_amount   = round(amount * TP1_RATIO,   cfg["amount_prec"])
-    trail_amount = round(amount * TRAIL_RATIO, cfg["amount_prec"])
+    # tp1_amount は切り捨てで算出し、trail_amount は残り全量とする。
+    # 両方を四捨五入すると合計が amount（実際の保有数量）を超え、
+    # トレーリングSL等の決済注文が拒否される恐れがあるため。
+    prec        = cfg["amount_prec"]
+    tp1_amount  = math.floor(amount * TP1_RATIO * (10 ** prec)) / (10 ** prec)
+    trail_amount = round(amount - tp1_amount, prec)
 
     # TP1: pos に order_id が記録済みなら再試行のため既存注文を再利用（二重発注防止）
     if pos.get("tp1_order_id") is None:
@@ -518,9 +522,12 @@ def get_available_margin(bb: BitbankClient, pair: str | None = None) -> float:
 
 
 # ── 証拠金維持率監視 ──────────────────────────────────────────────────────────
-def _emergency_close_all(bb: BitbankClient, state: dict):
+def _emergency_close_all(bb: BitbankClient, state: dict) -> list[str]:
     """全ポジションの未決済注文をキャンセルし、保有中のものを成行決済する。
-    個別の失敗は無視して全ペアを処理し続ける。"""
+    個別の失敗は無視して全ペアを処理し続けるが、成行決済（または約定数量確認）に
+    失敗したペアは戻り値の failed_pairs に含めて呼び出し側に返す。
+    呼び出し側はこれらを state から削除してはならない（実際の建玉が残っている可能性があるため）。"""
+    failed_pairs: list[str] = []
     for pair, pos in state["positions"].items():
         direction  = pos.get("direction", "long")
         close_side = "sell" if direction == "long" else "buy"
@@ -550,7 +557,8 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
                 fill = order_fill(entry_order)
                 amount = fill[1] if fill else 0
             except Exception as ge:
-                log(f"{pair}: buy_pending 約定数量取得失敗 → スキップ: {ge}")
+                log(f"{pair}: buy_pending 約定数量取得失敗 → 手動確認必要: {ge}")
+                failed_pairs.append(pair)  # 実際の建玉有無が不明なため state から消さない
                 continue
             if amount <= 0:
                 continue  # 未約定エントリーはキャンセル済みで決済不要
@@ -571,6 +579,31 @@ def _emergency_close_all(bb: BitbankClient, state: dict):
                     log(f"{pair}: 緊急決済記録失敗: {re_}")
             except Exception as e:
                 log(f"{pair}: 緊急成行決済失敗: {e}")
+                failed_pairs.append(pair)  # 建玉が無防備なまま残っている
+
+    return failed_pairs
+
+
+def _notify_emergency_close_result(bb: BitbankClient, state: dict, trigger_reason: str):
+    """緊急決済を実行し、失敗ペアが残っていれば state から消さず手動対応メールを送る。
+    全ペア成功時のみ state["positions"] を空にする（失敗分を誤って消失させない）。"""
+    failed_pairs = _emergency_close_all(bb, state)
+    if failed_pairs:
+        state["positions"] = {p: v for p, v in state["positions"].items() if p in failed_pairs}
+        send_email(
+            "【Zer0-CryptoBot】🚨緊急決済失敗 - 手動対応が必要",
+            f"{trigger_reason}\n"
+            f"緊急成行決済を試みましたが、以下のペアは決済に失敗し建玉が残っている可能性があります。\n"
+            f"至急 bitbank 管理画面で手動確認・決済してください。\n\n"
+            f"対象ペア: {', '.join(failed_pairs)}",
+        )
+    else:
+        state["positions"] = {}
+        send_email(
+            "【Zer0-CryptoBot】🚨緊急決済実行",
+            f"{trigger_reason}\n"
+            f"全ポジションを成行決済しました。速やかに状況を確認してください。",
+        )
 
 
 def check_margin_health(bb: BitbankClient, state: dict) -> bool:
@@ -587,13 +620,7 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
         status = margin.get("status", "NORMAL")
         if status in ("CALL", "LOSSCUT", "DEBT"):
             log(f"証拠金ステータス異常: {status} → 緊急成行決済を実行")
-            _emergency_close_all(bb, state)
-            state["positions"] = {}
-            send_email(
-                "【Zer0-CryptoBot】🚨緊急決済実行",
-                f"証拠金ステータス: {status}\n"
-                f"全ポジションを成行決済しました。速やかに状況を確認してください。",
-            )
+            _notify_emergency_close_result(bb, state, f"証拠金ステータス: {status}")
             return False
 
         raw = margin.get("total_margin_balance_percentage")
@@ -612,12 +639,8 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
 
     if ratio <= MARGIN_EMRG_PCT:
         log(f"証拠金維持率{MARGIN_EMRG_PCT}%以下 → 緊急成行決済を実行")
-        _emergency_close_all(bb, state)
-        state["positions"] = {}
-        send_email(
-            "【Zer0-CryptoBot】🚨緊急決済実行",
-            f"証拠金維持率 {ratio:.1f}% が{MARGIN_EMRG_PCT}%以下になったため、"
-            f"全ポジションを成行決済しました。\n速やかに状況を確認してください。",
+        _notify_emergency_close_result(
+            bb, state, f"証拠金維持率 {ratio:.1f}% が{MARGIN_EMRG_PCT}%以下になりました"
         )
         return False
 
@@ -647,8 +670,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                 status = order.get("status", "")
 
                 # Phase B の即時ポーリングが成功した場合は通常ここに到達しない（タイムアウト時のfallback）
-                # PARTIALLY_FILLED も約定済みとして扱う（成行で流動性不足時の部分約定対応）
-                if status in ("FULLY_FILLED", "PARTIALLY_FILLED"):
+                # PARTIALLY_FILLED も約定済みとして扱う（成行で流動性不足時の部分約定対応）。
+                # CANCELED_PARTIALLY_FILLED（一部約定後に残数量がキャンセルされた状態）も
+                # 約定分の建玉が実在するため同様に扱う（そうしないとTP1/SLなしで孤児化する）。
+                if status in ("FULLY_FILLED", "PARTIALLY_FILLED") or (
+                    status.startswith("CANCELED") and order_fill(order)
+                ):
                     log(f"{pair}({direction}): エントリー約定確認 (status={status}) → TP1/SL 発注")
                     try:
                         _apply_and_notify_fill(bb, pair, pos, order, cfg)
@@ -838,20 +865,52 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     f"数量：{tp1_amt}\nエラー：{me}",
                                 )
                         remaining = get_available_margin(bb, pair)
+                        # 損益記録・通知は SL の実約定量（sl_fill_amount）を使う。
+                        # pos["trail_amount"] は発注時の想定数量で、部分約定時にはずれるため。
                         record_trade(pair, direction, "損切り（SL約定）",
                                      pos["entry_price"],
                                      sl_fill_price,
-                                     pos["trail_amount"],
+                                     sl_fill_amount,
                                      pos.get("position_id"))
                         notify_close(pair, direction, "損切り",
                                      sl_fill_price,
                                      pos["entry_price"],
-                                     pos["trail_amount"],
+                                     sl_fill_amount,
                                      remaining)
                         to_delete.append(pair)
 
             # ── トレーリングSL 管理 ────────────────────────────────────────
             elif pos["status"] == "trailing":
+                if pos.get("trail_sl_order_id") is None:
+                    # 前回のトレーリングSL更新でキャンセル後の再発注に失敗し、
+                    # 保護注文が存在しない状態。高値/安値更新を待たず直近の
+                    # trail_sl_price で即座に再発注して自己修復する。
+                    log(f"{pair}({direction}): トレーリングSL不在を検知 → 直近水準で再発注")
+                    try:
+                        heal_price     = pos["trail_sl_price"]
+                        heal_side      = "sell" if direction == "long" else "buy"
+                        heal_trig_str  = round_price(heal_price, cfg["price_prec"])
+                        heal_limit_f   = heal_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
+                        heal_limit_str = round_price(heal_limit_f, cfg["price_prec"])
+                        heal_order = bb.create_order(
+                            pair,
+                            round_amount(pos["trail_amount"], cfg["amount_prec"]),
+                            heal_limit_str,
+                            heal_side, position_side=direction,
+                            trigger_price=heal_trig_str,
+                        )
+                        verify_order(bb, pair, heal_order["order_id"], "トレーリングSL再発注（自己修復）")
+                        pos["trail_sl_order_id"] = heal_order["order_id"]
+                        log(f"{pair}({direction}): トレーリングSL再発注成功 order_id={heal_order['order_id']}")
+                    except Exception as heal_e:
+                        log(f"{pair}: トレーリングSL再発注失敗（次回再試行）: {heal_e}")
+                        send_email(
+                            f"【Zer0-CryptoBot】🚨SL不在 - {pair.upper()}",
+                            f"トレーリングSLの再発注に失敗し、ポジションが無防備な状態です。手動確認が必要です。\n\n"
+                            f"コイン：{pair.upper()}\n方向：{direction}\nエラー：{heal_e}",
+                        )
+                    continue
+
                 trail_order = bb.get_order(pair, pos["trail_sl_order_id"])
 
                 trail_status = trail_order.get("status", "")
@@ -885,6 +944,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                         f"{pos['trail_sl_price']} → {new_trail_val}")
                                     try:
                                         bb.cancel_order(pair, pos["trail_sl_order_id"])
+                                        pos["trail_sl_order_id"] = None  # 以後は再発注失敗時も次回自己修復させる
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue
@@ -915,6 +975,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                         f"{pos['trail_sl_price']} → {new_trail_val}")
                                     try:
                                         bb.cancel_order(pair, pos["trail_sl_order_id"])
+                                        pos["trail_sl_order_id"] = None  # 以後は再発注失敗時も次回自己修復させる
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue
@@ -1038,7 +1099,8 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                 try:
                     o = bb.get_order(pair, order["order_id"])
                     status = o.get("status", "")
-                    if status in ("FULLY_FILLED", "PARTIALLY_FILLED") and order_fill(o):
+                    # CANCELED_PARTIALLY_FILLED も部分約定分の建玉が実在するため filled 扱いにする
+                    if status in ("FULLY_FILLED", "PARTIALLY_FILLED", "CANCELED_PARTIALLY_FILLED") and order_fill(o):
                         filled_order = o
                         break
                     if status.startswith("CANCELED"):
