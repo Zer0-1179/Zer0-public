@@ -10,9 +10,14 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Shared secret CloudFront injects as X-Origin-Verify header to origin; blocks direct execute-api access
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: Email address to notify on Lambda errors / high latency / API Gateway 5xx (leave empty to skip alarm setup)
 
 Conditions:
   HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
 
 Resources:
 
@@ -393,6 +398,87 @@ Resources:
       Tags:
         - Key: Project
           Value: Zer0-touring
+
+  # ── SNS: 障害通知トピック ──────────────────────────────────────
+  TouringAlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAlarmEmail
+    Properties:
+      TopicName: Zer0-touring-alarms
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  TouringAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref TouringAlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  # ── CloudWatch Alarm: Lambda エラー発生 ───────────────────────
+  TouringLambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlarmEmail
+    Properties:
+      AlarmName: Zer0-touring-lambda-errors
+      AlarmDescription: zer0-touring-suggest Lambda でエラーが発生
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TouringLambdaFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref TouringAlarmTopic
+
+  # ── CloudWatch Alarm: Lambda 実行時間が30秒Timeoutに近づいている ─
+  TouringLambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlarmEmail
+    Properties:
+      AlarmName: Zer0-touring-lambda-duration-p95
+      AlarmDescription: zer0-touring-suggest の実行時間p95が25秒を超過（30秒Timeoutに接近）
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TouringLambdaFunction
+      ExtendedStatistic: p95
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 25000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref TouringAlarmTopic
+
+  # ── CloudWatch Alarm: API Gateway 5xx エラー ──────────────────
+  TouringApiGw5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlarmEmail
+    Properties:
+      AlarmName: Zer0-touring-apigw-5xx
+      AlarmDescription: API Gateway で5xxエラーが発生（504タイムアウト等）
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref TouringApi
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref TouringAlarmTopic
 
 Outputs:
   BucketName:
