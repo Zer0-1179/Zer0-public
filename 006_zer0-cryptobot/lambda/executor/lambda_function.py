@@ -47,6 +47,10 @@ TRADES_BUCKET      = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
 TRADES_KEY_PREFIX  = "cryptobot/trades/"  # 1決済1ファイル: prefix/{ts}_{pair}_{ns}.json
 JST                = timezone(timedelta(hours=9))
 
+# 004ポートフォリオの非公開ダッシュボードページ用に公開する統計JSON（stats.jsonのみpublic-read）
+STATS_BUCKET = os.environ.get("STATS_BUCKET", "")
+STATS_KEY    = "stats.json"
+
 # TP/SL 倍率（v3.1: 現実コスト込みグリッドスイープ＋ウォークフォワード検証で最適化）
 TP1_MULT    = 1.25  # TP1 = entry ± ATR × 1.25
 SL_MULT     = 2.5   # 初期SL = entry ∓ ATR × 2.5
@@ -210,6 +214,65 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
         log(f"{pair}: 取引履歴記録 {reason} pnl={pnl:+,.1f}円")
     except Exception as e:
         log(f"{pair}: 取引履歴記録失敗（取引処理は継続）: {e}")
+        return
+
+    try:
+        update_public_stats()
+    except Exception as e:
+        log(f"公開統計JSON更新失敗（取引履歴記録自体は成功・処理は継続）: {e}")
+
+
+def _load_all_trades() -> list[dict]:
+    """TRADES_BUCKET配下の全取引履歴オブジェクトを読み込む（WeeklySummaryと同じprefix走査）。"""
+    trades = []
+    try:
+        paginator = _s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=TRADES_BUCKET, Prefix=TRADES_KEY_PREFIX):
+            for obj in page.get("Contents", []):
+                if obj["Key"].endswith(".json"):
+                    try:
+                        raw = _s3.get_object(Bucket=TRADES_BUCKET, Key=obj["Key"])["Body"].read().decode("utf-8")
+                        trades.append(json.loads(raw))
+                    except Exception as e:
+                        log(f"取引履歴オブジェクト読込スキップ {obj['Key']}: {e}")
+    except Exception as e:
+        log(f"取引履歴一覧取得失敗: {e}")
+    return trades
+
+
+def update_public_stats():
+    """全取引履歴から資産推移（equity curve）を計算し、004ポートフォリオの
+    非公開ダッシュボードページ用に公開JSONとしてS3へ書き出す（stats.jsonのみpublic-read）。
+    ベストエフォート処理。失敗しても取引処理自体は継続する（呼び出し元がtry/exceptで包む）。"""
+    if not STATS_BUCKET:
+        return
+    trades = _load_all_trades()
+    trades.sort(key=lambda t: t["ts"])
+    cum = 0.0
+    points = []
+    for t in trades:
+        cum += t["pnl_jpy"]
+        points.append({
+            "ts":                 t["ts"],
+            "pair":               t["pair"],
+            "direction":          t["direction"],
+            "reason":             t["reason"],
+            "pnl_jpy":            t["pnl_jpy"],
+            "cumulative_pnl_jpy": round(cum, 1),
+        })
+    payload = {
+        "generated_at":  datetime.now(JST).isoformat(timespec="seconds"),
+        "total_pnl_jpy": round(cum, 1),
+        "trade_count":   len(trades),
+        "points":        points,
+    }
+    _s3.put_object(
+        Bucket=STATS_BUCKET, Key=STATS_KEY,
+        Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        ContentType="application/json",
+        CacheControl="public, max-age=300",
+    )
+    log(f"公開統計JSON更新完了（{len(trades)}件）")
 
 
 def send_email(subject: str, body: str):
