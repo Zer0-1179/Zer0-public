@@ -113,6 +113,11 @@ Resources:
                 Condition:
                   StringLike:
                     s3:prefix: "cryptobot/*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub "${CryptoBotStatsBucket.Arn}/stats.json"
 
   # ── IAM ロール: FailureNotifier ───────────────────────────────────────────
   FailureNotifierRole:
@@ -246,6 +251,7 @@ Resources:
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           ENABLE_FORCE_TEST: !Ref EnableForceTest
           TRADES_BUCKET: !Ref TradesBucket
+          STATS_BUCKET: !Ref CryptoBotStatsBucket
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -340,6 +346,42 @@ Resources:
       TreatMissingData: breaching
       AlarmActions:
         - !Ref CryptoBotAlarmTopic
+
+  # ── S3: トレード統計の公開JSON（004ポートフォリオの非公開URLページ用） ──
+  # バケット全体ではなく stats.json オブジェクト1件のみをBucketPolicyで
+  # public-read許可する（PublicAccessBlockConfigurationでACL経由の公開は遮断済み）。
+  CryptoBotStatsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: zer0-cryptobot-stats-s3
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods:
+              - GET
+            AllowedOrigins:
+              - "https://www.zer0-infra.com"
+            AllowedHeaders:
+              - "*"
+            MaxAge: 3600
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+
+  CryptoBotStatsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CryptoBotStatsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${CryptoBotStatsBucket.Arn}/stats.json"
 
   # ── IAM ロール: EventBridge Scheduler → WeeklySummary ───────────────────
   WeeklySummarySchedulerRole:
@@ -520,6 +562,9 @@ Outputs:
   AlarmTopicArn:
     Description: CloudWatch alarm SNS topic ARN
     Value: !Ref CryptoBotAlarmTopic
+  StatsJsonUrl:
+    Description: Public URL for the trade stats JSON (used by the portfolio site's hidden dashboard page)
+    Value: !Sub "https://${CryptoBotStatsBucket}.s3.${AWS::Region}.amazonaws.com/stats.json"
   ScheduleName:
     Description: EventBridge schedule name
     Value: !Ref CryptoBotSchedule
