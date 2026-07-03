@@ -1284,12 +1284,19 @@
 
         document.getElementById('detail-map-btn').href=buildMapUrl(c);
         const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 片道${fmtHours(c.duration_hours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
-        // X share: short URL を非同期で差し込む（即時は fallback URL）
+        // X share: 詳細画面を開いた時点では /api/share を呼ばず、クリック時にのみ短縮URLを取得する
+        // （以前は openDetail のたびに自動でPOSTしており、無認証エンドポイントへの
+        //  不要な書き込みが積み重なる原因になっていた）
         const xBtn=document.getElementById('share-x-btn');
         xBtn.href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
-        getShareUrl(idx).then(url=>{
-          xBtn.href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText+'\n'+url);
-        }).catch(()=>{});
+        xBtn.onclick=(ev)=>{
+          ev.preventDefault();
+          getShareUrl(idx).then(url=>{
+            window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText+'\n'+url),'_blank','noopener');
+          }).catch(()=>{
+            window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText),'_blank','noopener');
+          });
+        };
         const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,outbound_spots:outboundSpots,return_spots:returnSpots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
         try{
           const b64=btoa(encodeURIComponent(JSON.stringify(sd)));

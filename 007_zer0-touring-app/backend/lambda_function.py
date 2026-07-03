@@ -20,6 +20,8 @@ BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-ha
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ
 DAILY_LIMIT         = int(os.environ.get("DAILY_LIMIT", "3"))
+SHARE_DAILY_LIMIT    = int(os.environ.get("SHARE_DAILY_LIMIT", "30"))
+MAX_SHARE_COURSE_BYTES = 8192  # course JSON の上限（DynamoDBアイテム膨張・共有URL肥大化の防止）
 RATE_LIMIT_TABLE    = "zer0-touring-ratelimit"
 SHARE_TABLE         = "zer0-touring-share"
 SITE_URL            = "https://touring.zer0-infra.com"
@@ -35,7 +37,10 @@ ALLOWED_ORIGINS = {
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name="ap-northeast-1",
-    config=Config(read_timeout=60, connect_timeout=10),
+    # Lambda Timeout=30s のため、read_timeout はそれより十分短くする
+    # （旧設定の60秒だとBedrock応答が遅い場合にLambda側が先にハードタイムアウトし、
+    #  エラーハンドリング・CORSヘッダーなしの500になってしまっていた）
+    config=Config(read_timeout=20, connect_timeout=5),
 )
 dynamodb = boto3.client("dynamodb", region_name="ap-northeast-1")
 
@@ -55,10 +60,12 @@ def _get_cors_headers(event):
 
 
 def _get_client_ip(event):
-    # CloudFront が X-Forwarded-For の先頭に本物のクライアントIPを付与する
+    # X-Forwarded-For は「各ホップが末尾に自分が見た送信元IPを追記する」仕様のため、
+    # CloudFront が付与する実クライアントIPは末尾に入る。先頭はクライアントが自由に
+    # 詐称できる値なので信用しない（先頭を信用するとレートリミットが完全に回避できてしまう）。
     xff = (event.get("headers") or {}).get("x-forwarded-for", "")
     if xff:
-        return xff.split(",")[0].strip()
+        return xff.split(",")[-1].strip()
     return (event.get("requestContext") or {}).get("http", {}).get("sourceIp", "unknown")
 
 
@@ -79,11 +86,15 @@ def get_usage(ip):
         return 0
 
 
-def check_rate_limit(ip):
+def check_rate_limit(ip, action="suggest", limit=None):
     """IP別・日別カウントを DynamoDB でアトミックに管理する。
-    DAILY_LIMIT 以内なら True、超過なら False を返す。"""
+    limit 以内なら True、超過なら False を返す。
+    action="suggest" は既存のキー形式（{ip}#{date}）を維持し、それ以外の action は
+    キーに action を含めて別枠のカウンタにする（/api/share 等の使い分け用）。"""
+    if limit is None:
+        limit = DAILY_LIMIT
     today = datetime.now(JST).strftime("%Y-%m-%d")
-    pk    = f"{ip}#{today}"
+    pk    = f"{ip}#{today}" if action == "suggest" else f"{action}#{ip}#{today}"
     # TTL = 翌々日0時JST（日付またぎ直後も安全に消える）
     ttl   = int((datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=2)).timestamp())
     try:
@@ -96,13 +107,13 @@ def check_rate_limit(ip):
             ExpressionAttributeValues={
                 ":one":   {"N": "1"},
                 ":ttl":   {"N": str(ttl)},
-                ":limit": {"N": str(DAILY_LIMIT)},
+                ":limit": {"N": str(limit)},
             },
         )
-        print(f"[rate-limit] {ip} OK (limit={DAILY_LIMIT}/day)")
+        print(f"[rate-limit] {action}:{ip} OK (limit={limit}/day)")
         return True
     except dynamodb.exceptions.ConditionalCheckFailedException:
-        print(f"[rate-limit] {ip} EXCEEDED (limit={DAILY_LIMIT}/day)")
+        print(f"[rate-limit] {action}:{ip} EXCEEDED (limit={limit}/day)")
         return False
     except Exception as e:
         # DynamoDB 障害時は通す（ユーザーを巻き込まない）
@@ -447,8 +458,19 @@ def _handle_share_post(event, cors):
         course = body.get("course")
         if not course or not isinstance(course, dict):
             raise ValueError("course required")
+        course_json_bytes = len(json.dumps(course, ensure_ascii=False).encode("utf-8"))
+        if course_json_bytes > MAX_SHARE_COURSE_BYTES:
+            raise ValueError("course too large")
     except Exception as e:
         return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": str(e)})}
+
+    # 無認証で誰でも呼べるエンドポイントのため IP 別・日別レートリミットで書き込み量を制限する
+    client_ip = _get_client_ip(event)
+    if not check_rate_limit(client_ip, action="share", limit=SHARE_DAILY_LIMIT):
+        return {
+            "statusCode": 429, "headers": cors,
+            "body": json.dumps({"error": "共有機能の利用上限に達しました。時間をおいて再度お試しください。"}, ensure_ascii=False),
+        }
 
     photo_url  = _fetch_wiki_photo(course.get("photo_spot", ""))
     short_id   = _short_id(6)
@@ -476,10 +498,11 @@ def _handle_share_post(event, cors):
             ConditionExpression="attribute_not_exists(pk)",  # ID衝突防止
         )
     except dynamodb.exceptions.ConditionalCheckFailedException:
-        # ID衝突（極めて稀）: 新IDで1回リトライ
+        # ID衝突（極めて稀）: 新IDで1回リトライ（こちらも衝突防止条件を維持）
         short_id = _short_id(6)
         item["pk"] = {"S": short_id}
-        dynamodb.put_item(TableName=SHARE_TABLE, Item=item)
+        dynamodb.put_item(TableName=SHARE_TABLE, Item=item,
+                          ConditionExpression="attribute_not_exists(pk)")
 
     return {"statusCode": 200, "headers": cors,
             "body": json.dumps({"url": f"{SITE_URL}/s/{short_id}"})}
@@ -577,6 +600,39 @@ def lambda_handler(event, context):
     if not (method == "POST" and path == "/api/suggest"):
         return {"statusCode": 404, "headers": cors, "body": json.dumps({"error": "Not found"})}
 
+    # 入力検証を先に行い、不正なリクエストでレートリミットのクォータを消費しないようにする
+    # （検証を後にすると、壊れたリクエストを送るだけで1日の利用回数が無駄に減ってしまう）。
+    try:
+        body = json.loads(event.get("body") or "{}")
+        lat = float(body["latitude"])
+        lon = float(body["longitude"])
+        temp = body.get("temperature", 20)
+        weather = body.get("weather_condition", "晴れ")
+        raw_prefs = body.get("preferences", [])
+        preferences = [p for p in raw_prefs if isinstance(p, str) and p in PREF_PROMPTS]
+    except (KeyError, ValueError, TypeError, json.JSONDecodeError) as e:
+        return {
+            "statusCode": 400,
+            "headers": cors,
+            "body": json.dumps({"error": f"Invalid request: {e}"}),
+        }
+
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        return {
+            "statusCode": 400,
+            "headers": cors,
+            "body": json.dumps({"error": "Coordinates out of range"}),
+        }
+
+    # temperature/weather_condition はそのまま Bedrock プロンプトに埋め込まれるため、
+    # 型・長さを制限してプロンプト肥大化・異常値の混入を防ぐ
+    try:
+        temp = max(-50.0, min(60.0, float(temp)))
+    except (TypeError, ValueError):
+        temp = 20
+    if not isinstance(weather, str) or not weather or len(weather) > 20:
+        weather = "晴れ"
+
     # レートリミット（IP別・日別）— 管理者トークンがあればスキップ
     client_ip = _get_client_ip(event)
     req_token = (event.get("headers") or {}).get("x-admin-token", "")
@@ -592,28 +648,6 @@ def lambda_handler(event, context):
         }
     if is_admin:
         print(f"[rate-limit] admin bypass ({client_ip})")
-
-    try:
-        body = json.loads(event.get("body") or "{}")
-        lat = float(body["latitude"])
-        lon = float(body["longitude"])
-        temp = body.get("temperature", 20)
-        weather = body.get("weather_condition", "晴れ")
-        raw_prefs = body.get("preferences", [])
-        preferences = [p for p in raw_prefs if isinstance(p, str) and p in PREF_PROMPTS]
-    except (KeyError, ValueError, json.JSONDecodeError) as e:
-        return {
-            "statusCode": 400,
-            "headers": cors,
-            "body": json.dumps({"error": f"Invalid request: {e}"}),
-        }
-
-    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-        return {
-            "statusCode": 400,
-            "headers": cors,
-            "body": json.dumps({"error": "Coordinates out of range"}),
-        }
 
     seed = random.randint(100000, 999999)
     if preferences:
