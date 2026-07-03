@@ -1,7 +1,10 @@
 """
 Zer0-CryptoBot FailureNotifier Lambda
-Executor の非同期起動がリトライ上限（3回）に達した際に SES でアラートメールを送信する。
+Executor の非同期起動が失敗した際に SES でアラートメールを送信する。
 EventInvokeConfig の OnFailure destination として ExecutorFunction に紐づけられる。
+MaximumRetryAttempts は 0 固定（v3.6〜。4時間毎の定期実行が実質的なリトライとして
+機能するため、自動リトライによる二重発注を避ける設計）。そのためこのLambdaは
+リトライ待ちなしに最初の失敗で即座に起動する（approximateInvokeCount は常に1）。
 """
 
 import os
@@ -27,11 +30,11 @@ def lambda_handler(event, context):
     signals = event.get("requestPayload", {}).get("signals", [])
 
     body = (
-        f"Executor Lambda の非同期起動が全リトライ失敗しました。\n"
+        f"Executor Lambda の非同期起動が失敗しました（リトライは無効設定のため即時通知）。\n"
         f"ポジションが管理されていない可能性があります。\n\n"
         f"失敗Function  : {func_name}\n"
         f"失敗条件      : {condition}\n"
-        f"試行回数      : {invoke_count} 回\n"
+        f"試行回数      : {invoke_count} 回（MaximumRetryAttempts=0のため通常は1回）\n"
         f"エラー種別    : {func_error}\n"
         f"ステータス    : {status_code}\n"
         f"シグナル数    : {len(signals)} 件\n\n"
@@ -54,7 +57,7 @@ def lambda_handler(event, context):
         Destination={"ToAddresses": [SES_RECIPIENT]},
         Message={
             "Subject": {
-                "Data": "【Zer0-CryptoBot】🚨Executor 起動失敗（リトライ上限）",
+                "Data": "【Zer0-CryptoBot】🚨Executor 起動失敗",
                 "Charset": "UTF-8",
             },
             "Body": {

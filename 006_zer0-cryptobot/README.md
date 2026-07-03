@@ -156,7 +156,7 @@ Executor が実行するたびに証拠金維持率を確認：
 | 状態管理         | AWS SSM Parameter Store（ポジション State・シグナル）                                      |
 | 取引履歴         | Amazon S3（確定損益を 1決済=1オブジェクトで記録・週次集計に使用）                          |
 | 通知             | Amazon SES（エラー通知・週次レポート）                                                     |
-| 信頼性           | Lambda EventInvokeConfig（非同期invoke失敗時にFailureNotifierへ自動通知・最大2回リトライ） |
+| 信頼性           | Lambda EventInvokeConfig（非同期invoke失敗時にFailureNotifierへ自動通知・リトライは無効化（0回、二重発注防止のため）） |
 | データソース     | Binance API（REST）/ python-binance                                                        |
 | 取引所 API       | bitbank API（python-bitbankcc）                                                            |
 | IaC              | CloudFormation（22リソース全管理）                                                         |
