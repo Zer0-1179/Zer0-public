@@ -210,8 +210,59 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return 2 * R * math.asin(math.sqrt(a))
 
+GEOCODE_CACHE_TTL_DAYS = 90  # 地名の座標はほぼ変化しないため長めに保持
+
+
+def _geocode_cache_key(name, origin_lat, origin_lon):
+    # origin を1度（約111km）単位のバケットに丸めてキーに含める。
+    # 同名でも大きく離れた地域からのクエリでは別扱いにする安全策
+    # （実運用上は関東圏の利用が中心なので大半がキャッシュヒットする想定）。
+    bucket = f"{round(origin_lat)}_{round(origin_lon)}"
+    return f"geocode#{bucket}#{name}"
+
+
+def _get_geocode_cache(name, origin_lat, origin_lon):
+    """DynamoDBキャッシュからジオコーディング結果を取得する。ヒットなら(lat,lon)、ミスならNoneを返す。"""
+    key = _geocode_cache_key(name, origin_lat, origin_lon)
+    try:
+        resp = dynamodb.get_item(TableName=RATE_LIMIT_TABLE, Key={"pk": {"S": key}})
+        item = resp.get("Item")
+        if not item:
+            return None
+        lat = float(item["lat"]["N"])
+        lon = float(item["lon"]["N"])
+        print(f"[geocode-cache] HIT {name}: ({lat:.4f},{lon:.4f})")
+        return lat, lon
+    except Exception as e:
+        print(f"[geocode-cache] ERR read {name}: {e}")
+        return None
+
+
+def _put_geocode_cache(name, origin_lat, origin_lon, lat, lon):
+    key = _geocode_cache_key(name, origin_lat, origin_lon)
+    ttl = int((datetime.now(timezone.utc) + timedelta(days=GEOCODE_CACHE_TTL_DAYS)).timestamp())
+    try:
+        dynamodb.put_item(
+            TableName=RATE_LIMIT_TABLE,
+            Item={
+                "pk":  {"S": key},
+                "lat": {"N": str(lat)},
+                "lon": {"N": str(lon)},
+                "ttl": {"N": str(ttl)},
+            },
+        )
+    except Exception as e:
+        print(f"[geocode-cache] ERR write {name}: {e}")
+
+
 def nominatim_geocode(name, origin_lat, origin_lon):
-    """地名をNominatimでジオコーディング。(lat, lon) または (None, None) を返す。"""
+    """地名をNominatimでジオコーディング。(lat, lon) または (None, None) を返す。
+    DynamoDBに結果をキャッシュし（既存の zer0-touring-ratelimit テーブルに相乗り）、
+    同名スポットの再ジオコーディングでNominatimの1req/秒制限に引っかからないようにする。"""
+    cached = _get_geocode_cache(name, origin_lat, origin_lon)
+    if cached is not None:
+        return cached
+
     # ±3° (約300km) の範囲内に限定して誤ジオコーディングを防ぐ
     box = 3
     params = {
@@ -237,6 +288,7 @@ def nominatim_geocode(name, origin_lat, origin_lon):
                 print(f"[geocode] SKIP {name}: {dist:.0f}km (too far)")
                 return None, None
             print(f"[geocode] OK   {name}: ({lat:.4f},{lon:.4f}) {dist:.0f}km")
+            _put_geocode_cache(name, origin_lat, origin_lon, lat, lon)
             return lat, lon
     except Exception as e:
         print(f"[geocode] ERR  {name}: {e}")
