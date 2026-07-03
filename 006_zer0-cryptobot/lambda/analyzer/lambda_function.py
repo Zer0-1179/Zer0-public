@@ -13,7 +13,18 @@ import urllib.parse
 import urllib.error
 
 # ── 定数 ──────────────────────────────────────────────────────────────────────
-BINANCE_BASE   = "https://api.binance.com/api/v3/klines"
+# 単一ホスト障害・レート制限時にシグナル検出が4時間丸ごと欠落するのを防ぐため、
+# フォールバックホストを順にローテーションする（同一URL再試行はやらない）。
+# data-api.binance.vision は認証不要な公開マーケットデータ専用ミラー（/api/v3/klines対応）。
+BINANCE_HOSTS = [
+    "https://api.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+    "https://data-api.binance.vision",
+]
+BINANCE_PATH   = "/api/v3/klines"
 BTC_SYMBOL     = "BTCUSDT"
 INTERVAL       = "4h"
 KLINES_LIMIT   = 500      # 200EMA ウォームアップ用に余裕を持って取得（末尾の未確定足を除外するため+1）
@@ -74,25 +85,29 @@ def send_error_email(subject: str, body: str):
 
 # ── Binance API ────────────────────────────────────────────────────────────────
 def fetch_binance(symbol: str) -> list[dict]:
-    """Binance から 4h 足を KLINES_LIMIT 本取得して辞書リストで返す"""
+    """Binance から 4h 足を KLINES_LIMIT 本取得して辞書リストで返す。
+    ホストを変えながら BINANCE_HOSTS を順に試行する（同一ホスト再試行はしない）。"""
     params = urllib.parse.urlencode({
         "symbol": symbol, "interval": INTERVAL, "limit": KLINES_LIMIT,
     })
-    url = f"{BINANCE_BASE}?{params}"
 
-    for attempt in range(3):
+    last_err = "不明"
+    for i, host in enumerate(BINANCE_HOSTS):
+        url = f"{host}{BINANCE_PATH}?{params}"
         try:
             with urllib.request.urlopen(url, timeout=15) as resp:
                 data = json.loads(resp.read())
             break
         except urllib.error.HTTPError as e:
-            if attempt == 2:
-                raise RuntimeError(f"Binance HTTP エラー({symbol}): {e.code}")
-            time.sleep(1)
+            last_err = f"HTTP {e.code}"
+            log(f"Binance取得失敗({symbol}, {host}): {last_err}")
         except Exception as e:
-            if attempt == 2:
-                raise RuntimeError(f"Binance 取得エラー({symbol}): {e}")
+            last_err = str(e)
+            log(f"Binance取得失敗({symbol}, {host}): {last_err}")
+        if i < len(BINANCE_HOSTS) - 1:
             time.sleep(1)
+    else:
+        raise RuntimeError(f"Binance 全ホスト取得失敗({symbol}): {last_err}")
 
     return [
         {
