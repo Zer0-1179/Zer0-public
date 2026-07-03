@@ -357,7 +357,10 @@ def _is_on_route(slat, slon, olat, olon, dlat, dlon, margin_deg=0.5):
     return min_lat <= slat <= max_lat and min_lon <= slon <= max_lon
 
 
-def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, reverse=False):
+MIN_TIME_BUFFER_MS = 4000  # この値を下回ったら以降の外部API呼び出しを打ち切る（Lambdaハードタイムアウト防止）
+
+
+def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, context, reverse=False):
     """
     スポットリストをジオコードし、ルート上にないものを除外して lat/lon を付与する。
     タイムアウト防止のため最大3件に制限する。
@@ -365,6 +368,9 @@ def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, 
     """
     result = []
     for spot in spots[:3]:  # Nominatim 直列化+スリープによるタイムアウトを防ぐため上限3件
+        if context.get_remaining_time_in_millis() < MIN_TIME_BUFFER_MS:
+            print(f"[waypoint] 残り時間不足のため以降のジオコーディングをスキップ（{spot['name']}以降）")
+            break
         lat, lon = nominatim_geocode(spot["name"], origin_lat, origin_lon)
         if lat is None:
             continue
@@ -379,11 +385,17 @@ def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, 
     return result
 
 
-def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
+def enrich_course(course, origin_lat, origin_lon, context, use_gmaps=True):
     """
     目的地（destination）をジオコーディングして距離・所要時間を取得する。
     use_gmaps=True のとき Google Maps Directions API を使用、False なら OSRM。
     失敗時は AI 推定値をそのまま維持。
+
+    外部API（Nominatim/OSRM/Google Maps/Open-Meteo）が劣化・タイムアウトすると
+    各呼び出し自体はtimeout設定により個別には失敗するが、複数呼び出しが積み重なると
+    合計でLambdaのハードタイムアウトに達し、応答が一切返らず504になってしまう。
+    そのため各段階の前に残り時間を確認し、不足していれば以降の呼び出しをスキップして
+    それまでに得られた結果（またはAI推定値）で確実に応答を返す。
     """
     dest_name = course.get("destination", "")
     if not dest_name:
@@ -397,11 +409,19 @@ def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
     course["dest_lat"] = dest_lat
     course["dest_lon"] = dest_lon
 
+    if context.get_remaining_time_in_millis() < MIN_TIME_BUFFER_MS:
+        print(f"[enrich] {course.get('name','')}: 残り時間不足のためスポット・距離・天気取得をスキップ")
+        return
+
     # outbound_spots/return_spots をジオコードしてルート外を除外
     raw_out = course.get("outbound_spots") or course.get("rest_spots") or []
     raw_ret = course.get("return_spots") or []
-    course["outbound_spots"] = geocode_and_filter_spots(raw_out, origin_lat, origin_lon, dest_lat, dest_lon, reverse=False)
-    course["return_spots"]   = geocode_and_filter_spots(raw_ret, origin_lat, origin_lon, dest_lat, dest_lon, reverse=True)
+    course["outbound_spots"] = geocode_and_filter_spots(raw_out, origin_lat, origin_lon, dest_lat, dest_lon, context, reverse=False)
+    course["return_spots"]   = geocode_and_filter_spots(raw_ret, origin_lat, origin_lon, dest_lat, dest_lon, context, reverse=True)
+
+    if context.get_remaining_time_in_millis() < MIN_TIME_BUFFER_MS:
+        print(f"[enrich] {course.get('name','')}: 残り時間不足のため距離・天気取得をスキップ")
+        return
 
     dist_km, duration_h = None, None
 
@@ -427,6 +447,10 @@ def enrich_course(course, origin_lat, origin_lon, use_gmaps=True):
         course["duration_hours"] = duration_h
         course["return_hours"] = duration_h
         print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_h}h")
+
+    if context.get_remaining_time_in_millis() < MIN_TIME_BUFFER_MS:
+        print(f"[dest-weather] {dest_name}: 残り時間不足のためスキップ")
+        return
 
     dest_temp, dest_weather_code = fetch_dest_weather(dest_lat, dest_lon)
     if dest_temp is not None:
@@ -715,7 +739,7 @@ def lambda_handler(event, context):
     if context.get_remaining_time_in_millis() > 12000:
         def _enrich(course):
             try:
-                enrich_course(course, lat, lon, use_gmaps=use_gmaps)
+                enrich_course(course, lat, lon, context, use_gmaps=use_gmaps)
             except Exception as e:
                 print(f"[ERROR] enrich: {e}")
             return course
