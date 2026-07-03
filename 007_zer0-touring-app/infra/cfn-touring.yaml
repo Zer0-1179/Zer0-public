@@ -6,6 +6,10 @@ Parameters:
     Type: String
     Description: ACM certificate ARN from us-east-1 (Zer0-touring-cert stack output)
     Default: ""
+  EdgeSecret:
+    Type: String
+    NoEcho: true
+    Description: Shared secret CloudFront injects as X-Origin-Verify header to origin; blocks direct execute-api access
 
 Conditions:
   HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
@@ -169,6 +173,7 @@ Resources:
           GOOGLE_MAPS_API_KEY: ""
           DAILY_LIMIT: "3"
           SHARE_DAILY_LIMIT: "30"
+          EDGE_SECRET: !Ref EdgeSecret
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -334,6 +339,12 @@ Resources:
               OriginProtocolPolicy: https-only
               OriginSSLProtocols:
                 - TLSv1.2
+            # execute-api への直接アクセス（CloudFrontバイパス）を遮断するための
+            # 共有シークレット。Lambda側で X-Origin-Verify を検証し不一致なら403にする
+            # （CloudFrontは "X-Edge-*" プレフィックスのヘッダー名を予約済みで使用不可）
+            OriginCustomHeaders:
+              - HeaderName: X-Origin-Verify
+                HeaderValue: !Ref EdgeSecret
         # デフォルト: S3 静的ファイル（キャッシュあり）
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
