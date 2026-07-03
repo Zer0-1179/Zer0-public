@@ -357,7 +357,10 @@ def _is_on_route(slat, slon, olat, olon, dlat, dlon, margin_deg=0.5):
     return min_lat <= slat <= max_lat and min_lon <= slon <= max_lon
 
 
-MIN_TIME_BUFFER_MS = 4000  # この値を下回ったら以降の外部API呼び出しを打ち切る（Lambdaハードタイムアウト防止）
+MIN_TIME_BUFFER_MS = 6000  # この値を下回ったら以降の外部API呼び出しを打ち切る（Lambdaハードタイムアウト防止）
+# 注意: API Gateway HTTP APIのLambda統合タイムアウトは30秒固定でAWS側の仕様上引き上げ不可のため、
+# Lambda自体のTimeoutを30秒より長くしても効果がない。エラーを確実に避けるには、この安全バッファを
+# 広めに取ってLambdaの実行時間そのものを短く終わらせる方針にする。
 
 
 def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, context, reverse=False):
