@@ -58,14 +58,29 @@ if aws cloudformation describe-stacks --stack-name "$CERT_STACK" --region us-eas
     --output text 2>/dev/null || echo "")
 fi
 
+# EdgeSecret: CloudFront→API Gateway間の直接アクセス遮断用の共有シークレット。
+# 未作成なら生成してSSM SecureStringに保存し、以後は同じ値を再利用する
+# （再デプロイのたびに値が変わるとCloudFrontとLambda間で不整合が起きるため）。
+EDGE_SECRET_PARAM="/Zer0/Touring/edge_secret"
+if aws ssm get-parameter --name "$EDGE_SECRET_PARAM" --region "$REGION" --with-decryption &>/dev/null; then
+  EDGE_SECRET=$(aws ssm get-parameter --name "$EDGE_SECRET_PARAM" \
+    --region "$REGION" --with-decryption --query "Parameter.Value" --output text)
+else
+  EDGE_SECRET=$(openssl rand -hex 32)
+  aws ssm put-parameter --name "$EDGE_SECRET_PARAM" --type SecureString \
+    --value "$EDGE_SECRET" --region "$REGION" > /dev/null
+  echo "  ✓ EdgeSecret を新規生成し SSM に保存: $EDGE_SECRET_PARAM"
+fi
+
 echo "=== [2/4] メインスタックデプロイ ($REGION) ==="
-PARAMS="ParameterKey=CertificateArn,ParameterValue=${CERT_ARN}"
 aws cloudformation deploy \
   --stack-name "$STACK" \
   --template-file cfn-touring.yaml \
   --region "$REGION" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides "$PARAMS"
+  --parameter-overrides \
+    CertificateArn="${CERT_ARN}" \
+    EdgeSecret="${EDGE_SECRET}"
 
 # スタック出力取得
 BUCKET=$(aws cloudformation describe-stacks \

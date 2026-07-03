@@ -406,3 +406,4 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | 2026-06-27 | v1.9       | セキュリティ修正: ADMIN_TOKEN を `secrets.compare_digest` で定数時間比較・共有リンク数値フィールドを `Number()` 正規化して HTML 注入防止・`?admin=off` 解除ロジックバグ修正 |
 | 2026-06-27 | v2.0       | S3 ライフサイクル設定追加: `zer0-touring-s3` に未完了マルチパート 7 日後中断ルールを CFn で追加。 |
 | 2026-07-03 | v2.1       | **第2巡Fableレビュー HIGH2件修正**: X-Forwarded-Forの先頭を信用しレートリミットが回避可能だった問題を末尾信頼に修正。`/api/share`が詳細画面を開くたびに自動POSTされていた根本原因をフロント側で解消し、バックエンドにもレートリミット・サイズ上限を追加。MEDIUM: 不正リクエストでレート消費してしまう順序を修正・Bedrock timeoutをLambda Timeout内に短縮・/s/*・/api/*にセキュリティヘッダー適用 |
+| 2026-07-03 | v2.2       | **execute-api直接アクセスの完全遮断**: CloudFront→API Gateway間にOriginCustomHeaders（`X-Origin-Verify`共有シークレット、SSM SecureString管理）を追加し、Lambda側で検証・不一致なら403にする。これによりCloudFrontを経由しないbot/スクリプトからのレートリミット回避を完全に遮断（従来のXFF末尾信頼だけではCloudFrontバイパスに対して無力だった残存課題を解消） |

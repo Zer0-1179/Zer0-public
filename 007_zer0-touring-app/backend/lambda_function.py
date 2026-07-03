@@ -26,6 +26,9 @@ RATE_LIMIT_TABLE    = "zer0-touring-ratelimit"
 SHARE_TABLE         = "zer0-touring-share"
 SITE_URL            = "https://touring.zer0-infra.com"
 ADMIN_TOKEN         = os.environ.get("ADMIN_TOKEN", "")
+# CloudFront が OriginCustomHeaders で付与する共有シークレット。execute-api への
+# 直接アクセス（CloudFrontをバイパスしたレートリミット回避）を遮断するために使う。
+EDGE_SECRET         = os.environ.get("EDGE_SECRET", "")
 
 JST = timezone(timedelta(hours=9))  # 日本標準時（UTC+9）
 
@@ -575,6 +578,14 @@ def lambda_handler(event, context):
 
     if method == "OPTIONS":
         return {"statusCode": 200, "headers": cors, "body": ""}
+
+    # CloudFront経由以外（execute-api URLへの直接アクセス）を遮断する。
+    # execute-apiを直接叩かれるとCloudFrontが付与するX-Forwarded-For末尾を
+    # 信頼する対策が意味を失い、レートリミットが回避できてしまうため。
+    if EDGE_SECRET:
+        req_secret = (event.get("headers") or {}).get("x-origin-verify", "")
+        if not secrets.compare_digest(req_secret, EDGE_SECRET):
+            return {"statusCode": 403, "headers": cors, "body": json.dumps({"error": "Forbidden"})}
 
     # GET /s/{id} — OGP HTML + リダイレクト（レートリミット対象外）
     if method == "GET" and path.startswith("/s/"):
