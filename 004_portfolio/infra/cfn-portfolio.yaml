@@ -86,6 +86,21 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        # 006 CryptoBot の非公開統計JSON（stats.json 1オブジェクトのみ）読み取り用。
+        # Basic認証で保護した /ja/cryptobot-stats ページがこの権限でSSR描画する。
+        - PolicyName: Zer0-portfolio-cryptobot-stats-read
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: "arn:aws:s3:::zer0-cryptobot-stats-s3/stats.json"
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/Portfolio/cryptobot-stats-auth"
 
   # ── Lambda 関数（Astro SSR） ───────────────────────────────────
   PortfolioLambdaFunction:
