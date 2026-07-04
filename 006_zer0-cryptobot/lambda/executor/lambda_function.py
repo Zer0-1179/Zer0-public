@@ -47,7 +47,8 @@ TRADES_BUCKET      = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
 TRADES_KEY_PREFIX  = "cryptobot/trades/"  # 1決済1ファイル: prefix/{ts}_{pair}_{ns}.json
 JST                = timezone(timedelta(hours=9))
 
-# 004ポートフォリオの非公開ダッシュボードページ用に公開する統計JSON（stats.jsonのみpublic-read）
+# 004ポートフォリオの非公開ダッシュボードページ用の統計JSON置き場（バケットは完全非公開。
+# 閲覧は004 SSR LambdaのIAMロールに付与したs3:GetObjectのみで行い、匿名アクセスは不可）
 STATS_BUCKET = os.environ.get("STATS_BUCKET", "")
 STATS_KEY    = "stats.json"
 
@@ -217,9 +218,9 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
         return
 
     try:
-        update_public_stats()
+        update_stats_json()
     except Exception as e:
-        log(f"公開統計JSON更新失敗（取引履歴記録自体は成功・処理は継続）: {e}")
+        log(f"統計JSON更新失敗（取引履歴記録自体は成功・処理は継続）: {e}")
 
 
 def _load_all_trades() -> list[dict]:
@@ -240,9 +241,10 @@ def _load_all_trades() -> list[dict]:
     return trades
 
 
-def update_public_stats():
+def update_stats_json():
     """全取引履歴から資産推移（equity curve）を計算し、004ポートフォリオの
-    非公開ダッシュボードページ用に公開JSONとしてS3へ書き出す（stats.jsonのみpublic-read）。
+    非公開ダッシュボードページ用の統計JSONとして非公開S3バケットへ書き出す
+    （閲覧は004 SSR Lambdaのs3:GetObject経由のみ。匿名アクセス不可）。
     ベストエフォート処理。失敗しても取引処理自体は継続する（呼び出し元がtry/exceptで包む）。"""
     if not STATS_BUCKET:
         return
@@ -272,7 +274,7 @@ def update_public_stats():
         ContentType="application/json",
         CacheControl="public, max-age=300",
     )
-    log(f"公開統計JSON更新完了（{len(trades)}件）")
+    log(f"統計JSON更新完了（{len(trades)}件）")
 
 
 def send_email(subject: str, body: str):
