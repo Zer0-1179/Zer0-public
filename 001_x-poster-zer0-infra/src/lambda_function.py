@@ -10,6 +10,7 @@ MAX_USED_URLS       = 28
 MAX_USED_TYPES      = 6
 MAX_ARTICLE_AGE_DAYS = 14
 TWEET_MAX_LEN       = 280
+MAX_POST_LOG        = 30  # 投稿タイプ別の効果測定用ログ（選択ロジックには使わない）
 
 # boto3クライアントはコールドスタート時に1度だけ生成して使い回す（関数内生成を避ける）
 SSM     = boto3.client("ssm")
@@ -722,44 +723,55 @@ def lambda_handler(event, context):
     used_keywords = history.get("used_keywords", [])
     used_services = history.get("used_services", {})
 
-    # classmethod_reaction は classmethod ソース固定・日本語優先
-    if post_type == "classmethod_reaction":
-        articles = fetch_rss(["classmethod"])
-        articles = [a for a in articles if not is_too_old(a)]
-        print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
-        unused = [a for a in articles if a["url"] not in used_urls
-                  and not is_topic_duplicate(a, used_keywords)
-                  and not is_service_in_cooldown(a, used_services)]
-        if not unused:
+    # 全RSSフィードが同時に取得不能な場合のフォールバック。記事なしでも投稿自体は継続する
+    # （欠投よりは、記事に依拠しない一般的なAWS Tipsを投稿する方が良いという判断）。
+    is_fallback = False
+    try:
+        # classmethod_reaction は classmethod ソース固定・日本語優先
+        if post_type == "classmethod_reaction":
+            articles = fetch_rss(["classmethod"])
+            articles = [a for a in articles if not is_too_old(a)]
+            print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
             unused = [a for a in articles if a["url"] not in used_urls
+                      and not is_topic_duplicate(a, used_keywords)
                       and not is_service_in_cooldown(a, used_services)]
-        if not unused:
-            unused = [a for a in articles if a["url"] not in used_urls]
-        print(f"[Filter] pool={len(unused)}件")
-        pool   = unused if unused else articles
-        jp     = [a for a in pool if is_japanese(a["title"])]
-        main   = pick_mainstream_article(jp if jp else pool)
-    else:
-        articles = fetch_rss(slot["sources"])
-        articles = [a for a in articles if not is_too_old(a)]
-        print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
-        unused = [a for a in articles if a["url"] not in used_urls
-                  and not is_topic_duplicate(a, used_keywords)
-                  and not is_service_in_cooldown(a, used_services)]
-        if not unused:
+            if not unused:
+                unused = [a for a in articles if a["url"] not in used_urls
+                          and not is_service_in_cooldown(a, used_services)]
+            if not unused:
+                unused = [a for a in articles if a["url"] not in used_urls]
+            print(f"[Filter] pool={len(unused)}件")
+            pool   = unused if unused else articles
+            jp     = [a for a in pool if is_japanese(a["title"])]
+            main   = pick_mainstream_article(jp if jp else pool)
+        else:
+            articles = fetch_rss(slot["sources"])
+            articles = [a for a in articles if not is_too_old(a)]
+            print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
             unused = [a for a in articles if a["url"] not in used_urls
+                      and not is_topic_duplicate(a, used_keywords)
                       and not is_service_in_cooldown(a, used_services)]
-        if not unused:
-            unused = [a for a in articles if a["url"] not in used_urls]
-        print(f"[Filter] pool={len(unused)}件")
-        pool   = unused if unused else articles
-        jp     = [a for a in pool if is_japanese(a["title"])]
-        if jp:
-            pool = jp
-        main   = pick_mainstream_article(pool)
+            if not unused:
+                unused = [a for a in articles if a["url"] not in used_urls
+                          and not is_service_in_cooldown(a, used_services)]
+            if not unused:
+                unused = [a for a in articles if a["url"] not in used_urls]
+            print(f"[Filter] pool={len(unused)}件")
+            pool   = unused if unused else articles
+            jp     = [a for a in pool if is_japanese(a["title"])]
+            if jp:
+                pool = jp
+            main   = pick_mainstream_article(pool)
 
-    other_pool = [a for a in pool if a["url"] != main["url"]]
-    news_text = "\n".join(f"[{a['label']}] {a['title']}" for a in ([main] + other_pool)[:3])
+        other_pool = [a for a in pool if a["url"] != main["url"]]
+        news_text = "\n".join(f"[{a['label']}] {a['title']}" for a in ([main] + other_pool)[:3])
+    except RuntimeError as e:
+        print(f"[Fallback] 全RSSフィード取得不可のため記事なしモードに切替: {e}")
+        is_fallback = True
+        post_type = "aws_tips"
+        with_url  = False
+        main      = {"source": "fallback", "label": "フォールバック", "title": "(記事取得不可)", "url": "", "desc": ""}
+        news_text = "（本日はRSSフィードが全て取得できませんでした。記事に依拠せず、一般的なAWS運用Tipsを書いてください）"
 
     # メイン記事の本文を取得（生成のグラウンディング＋事実検証の根拠に使う）
     article_text = fetch_article_text(main["url"])
@@ -810,9 +822,10 @@ def lambda_handler(event, context):
         )
         body = json.loads(resp["body"].read())["content"][0]["text"].strip()
 
-        # 投稿前に事実主張を記事本文と突き合わせて検証する
+        # 投稿前に事実主張を記事本文と突き合わせて検証する（フォールバック時は根拠記事がないためスキップ）
         max_len = 100 if slot_key == "morning" else 160
-        body = verify_tweet(bedrock, body, main["title"], article_text, max_len)
+        if not is_fallback:
+            body = verify_tweet(bedrock, body, main["title"], article_text, max_len)
 
         # ハッシュタグ分を差し引いた長さに本文をクランプ（文末記号で自然に切る）
         max_body = TWEET_MAX_LEN - len(suffix)
@@ -837,7 +850,8 @@ def lambda_handler(event, context):
 
     # スレッド途中エラーでも投稿済みツイートがあれば履歴を保存して重複防止
     if post_type != "thread_tips" or tweet_id:
-        updated_urls = used_urls + [main["url"]]
+        # フォールバック投稿は実記事を持たないため used_urls を汚さない
+        updated_urls = used_urls + ([main["url"]] if main["url"] else [])
         history["used_urls"]  = updated_urls[-MAX_USED_URLS:]
         updated_types = history.get("used_types", []) + [post_type]
         history["used_types"] = updated_types[-MAX_USED_TYPES:]
@@ -848,6 +862,13 @@ def lambda_handler(event, context):
             used_services[kw] = today_str
         cutoff = (datetime.now(JST).date() - timedelta(days=30)).isoformat()
         history["used_services"] = {k: v for k, v in used_services.items() if v > cutoff}
+        # 投稿タイプ別の効果測定用ログ（直近30件）。選択ロジック（used_types）には使わない
+        post_log_entry = {
+            "date":      datetime.now(JST).date().isoformat(),
+            "post_type": post_type,
+            "tweet_id":  tweet_id,
+        }
+        history["post_log"] = (history.get("post_log", []) + [post_log_entry])[-MAX_POST_LOG:]
         try:
             save_history(ssm, history)
         except Exception as e:
