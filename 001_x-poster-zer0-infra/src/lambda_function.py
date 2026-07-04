@@ -11,6 +11,7 @@ MAX_USED_TYPES      = 6
 MAX_ARTICLE_AGE_DAYS = 14
 TWEET_MAX_LEN       = 280
 MAX_POST_LOG        = 30  # 投稿タイプ別の効果測定用ログ（選択ロジックには使わない）
+URL_WEIGHTED_LEN    = 23  # Xはt.co変換で全URLを実際の長さに関わらず一律この重みで数える
 
 # boto3クライアントはコールドスタート時に1度だけ生成して使い回す（関数内生成を避ける）
 SSM     = boto3.client("ssm")
@@ -787,9 +788,11 @@ def lambda_handler(event, context):
         # 各ツイートを280文字以内にクランプ（モデル出力が上限超過しX APIに拒否されるのを防ぐ）
         tweets = [clamp_tweet(t) for t in tweets]
         # 外部リンクは本文1ツイート目に入れるとリーチが抑制されるため最終ツイートにのみ付ける
-        # URL分（改行+URL）を差し引いた長さに本文をクランプしてから付加する
+        # X はURLの実際の長さに関わらず t.co 変換で一律 weighted 23 として数えるため、
+        # 実URL長（50文字超もあり得る）で差し引くと本文が必要以上に短く切られてしまう。
+        # 改行(weighted 1)+URL(weighted 23)の固定値で予算を確保する。
         url_suffix = f"\n{main['url']}"
-        tweets[-1] = clamp_tweet(tweets[-1], TWEET_MAX_LEN - len(url_suffix)) + url_suffix
+        tweets[-1] = clamp_tweet(tweets[-1], TWEET_MAX_LEN - (1 + URL_WEIGHTED_LEN)) + url_suffix
         preview = "\n---\n".join(tweets)
         print(f"[Tweet] スレッド{len(tweets)}件\n{preview}")
 
