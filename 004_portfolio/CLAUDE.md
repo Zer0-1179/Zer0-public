@@ -35,3 +35,16 @@ cd /root/Zer0/004_portfolio/infra && bash deploy-infra.sh
 - URL: https://www.zer0-infra.com
 - CloudFront Distribution: `Zer0-portfolio` スタックで管理
 - ACM証明書スタック: `Zer0-portfolio-cert`（us-east-1）
+
+## 管理者モード（非公開ページ）
+
+`https://www.zer0-infra.com/ja/?admin=<トークン>` に一度アクセスするとCookie（365日）が保存され、
+ナビに「CryptoBot実績」（006の非公開トレード実績ページ）が表示される。`?admin=off` で解除。
+
+```bash
+# トークン取得
+aws ssm get-parameter --name /Zer0/Portfolio/cryptobot-stats-auth \
+  --with-decryption --region ap-northeast-1 --query Parameter.Value --output text
+```
+
+認証ロジックは `src/src/middleware.ts` に集約（`Astro.locals.isAdmin`）。
