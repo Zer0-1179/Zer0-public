@@ -544,7 +544,7 @@ Outputs:
     Description: CloudWatch alarm SNS topic ARN
     Value: !Ref CryptoBotAlarmTopic
   StatsBucketName:
-    Description: Private S3 bucket holding trade stats JSON (access via authenticated API only, see StatsApiUrl once added)
+    Description: Private S3 bucket holding trade stats JSON (read via 004-portfolio SSR Lambda IAM role only, no public access)
     Value: !Ref CryptoBotStatsBucket
   ScheduleName:
     Description: EventBridge schedule name
