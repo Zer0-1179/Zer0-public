@@ -162,3 +162,4 @@ bash scripts/deploy.sh
 | 2026-07-03 | v3.1       | **第2巡Fableレビュー HIGH修正**: ResponseHeadersPolicy が Content-Type を text/html に強制上書きし sitemap.xml 等が壊れるバグを修正。MEDIUM: テンプレートDLアイコンのインラインonclickをイベントリスナー方式に修正。S3配信3ビヘイビアにセキュリティヘッダー追加。本番実機検証済み |
 | 2026-07-03 | v3.2       | **CSP nonce機構を実装**: 生成した nonce が未消費でハッシュのみに依存していた問題を修正。全6箇所のインラインスクリプトに nonce を付与し、`middleware.ts` の CSP を nonce ベースに簡素化。本番でnonce一致を実機検証済み                                                             |
 | 2026-07-04 | v3.3       | **非公開トレード実績ページ追加**: /ja/cryptobot-stats を新設。Basic認証（SSM SecureString）で保護し、006 CryptoBotの非公開statsバケットをSSR Lambdaが直接読み込みSVG描画（新規API Gateway追加なし）。本番でBasic認証・空表示・実データ表示を実機検証済み                          |
+| 2026-07-04 | v3.4       | **管理者Cookie方式に変更**: Basic認証を廃止し、007と同じ?admin=トークン→Cookie(365日,HttpOnly)方式に統一。Nav.astroに管理者限定リンク「CryptoBot実績」を追加（Cookie保持時のみ表示）。本番で全パターン実機検証済み                                                              |
