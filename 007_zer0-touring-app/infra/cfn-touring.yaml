@@ -10,6 +10,11 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Shared secret CloudFront injects as X-Origin-Verify header to origin; blocks direct execute-api access
+  AdminToken:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Shared secret for X-Admin-Token header; when matched, Lambda skips the daily rate limit (leave empty to disable admin bypass)
   AlarmEmail:
     Type: String
     Default: ""
@@ -215,6 +220,7 @@ Resources:
           DAILY_LIMIT: "3"
           SHARE_DAILY_LIMIT: "30"
           EDGE_SECRET: !Ref EdgeSecret
+          ADMIN_TOKEN: !Ref AdminToken
       Code:
         ZipFile: |
           def lambda_handler(event, context):
