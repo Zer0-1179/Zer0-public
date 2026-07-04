@@ -1,0 +1,219 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+
+// 006 CryptoBot の非公開トレード実績ページ。認証は middleware.ts の Basic 認証で行う
+// （このファイル自体には認証ロジックを持たせない）。
+// stats.json は 006 Executor Lambda が取引確定のたびに書き出す非公開S3オブジェクト。
+const STATS_BUCKET = 'zer0-cryptobot-stats-s3';
+const STATS_KEY = 'stats.json';
+
+const PAIR_LABEL: Record<string, string> = {
+  btc_jpy: 'BTC/JPY',
+  eth_jpy: 'ETH/JPY',
+  sol_jpy: 'SOL/JPY',
+};
+const DIR_LABEL: Record<string, string> = { long: 'ロング', short: 'ショート' };
+
+interface StatsPoint {
+  ts: string;
+  pair: string;
+  direction: string;
+  reason: string;
+  pnl_jpy: number;
+  cumulative_pnl_jpy: number;
+}
+interface StatsPayload {
+  generated_at: string;
+  total_pnl_jpy: number;
+  trade_count: number;
+  points: StatsPoint[];
+}
+
+let stats: StatsPayload | null = null;
+let fetchError = false;
+
+try {
+  const s3 = new S3Client({ region: process.env.AWS_REGION || 'ap-northeast-1' });
+  const obj = await s3.send(new GetObjectCommand({ Bucket: STATS_BUCKET, Key: STATS_KEY }));
+  const body = await obj.Body?.transformToString();
+  if (body) stats = JSON.parse(body);
+} catch (e: any) {
+  // stats.json 未生成（トレードなし）は NoSuchKey として想定内。それ以外はエラー表示にする。
+  if (e?.name !== 'NoSuchKey') fetchError = true;
+}
+
+const points = stats?.points ?? [];
+const winCount = points.filter((p) => p.pnl_jpy >= 0).length;
+const lossCount = points.length - winCount;
+const winRate = points.length > 0 ? ((winCount / points.length) * 100).toFixed(1) : null;
+
+// 最大ドローダウン（累積損益カーブのピークからの最大下落幅）。基準0円を起点に含める。
+let peak = 0;
+let maxDD = 0;
+for (const p of points) {
+  peak = Math.max(peak, p.cumulative_pnl_jpy);
+  maxDD = Math.max(maxDD, peak - p.cumulative_pnl_jpy);
+}
+
+// ── SVG ジオメトリ（サーバーサイドで完全に静的なSVGを組み立てる。クライアントJS不要）──
+const W = 720, H = 260;
+const padL = 54, padR = 14, padT = 14, padB = 28;
+const plotW = W - padL - padR, plotH = H - padT - padB;
+
+const series = [{ cum: 0 }, ...points.map((p) => ({ cum: p.cumulative_pnl_jpy }))];
+const cumValues = series.map((s) => s.cum);
+const minCum = Math.min(0, ...cumValues);
+const maxCum = Math.max(0, ...cumValues);
+const yPad = (maxCum - minCum) * 0.15 || 100;
+const yMin = minCum - yPad;
+const yMax = maxCum + yPad;
+
+const xAt = (i: number) => padL + (series.length > 1 ? (i / (series.length - 1)) * plotW : plotW / 2);
+const yAt = (v: number) => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+const linePath = series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(s.cum).toFixed(1)}`).join(' ');
+const areaPath =
+  `M ${xAt(0).toFixed(1)} ${yAt(0).toFixed(1)} ` +
+  series.map((s, i) => `L ${xAt(i).toFixed(1)} ${yAt(s.cum).toFixed(1)}`).join(' ') +
+  ` L ${xAt(series.length - 1).toFixed(1)} ${yAt(0).toFixed(1)} Z`;
+
+const gridSteps = 4;
+const gridLines = Array.from({ length: gridSteps + 1 }, (_, g) => {
+  const v = yMin + (g / gridSteps) * (yMax - yMin);
+  return { y: yAt(v), label: `${v >= 0 ? '+' : ''}${Math.round(v).toLocaleString()}` };
+});
+
+const xLabels =
+  points.length > 0
+    ? [0, Math.floor((points.length - 1) / 2), points.length - 1]
+        .filter((v, i, arr) => arr.indexOf(v) === i)
+        .map((i) => ({ x: xAt(i + 1), label: points[i].ts.slice(5, 10) }))
+    : [];
+---
+
+<BaseLayout title="CryptoBot トレード実績">
+  <div class="max-w-4xl mx-auto px-6 py-20">
+    <div class="mb-10">
+      <p class="text-xs tracking-wide uppercase text-accent-light mb-1">Zer0-CryptoBot &middot; 非公開ページ</p>
+      <h1 class="text-3xl font-bold text-white mb-2">トレード実績</h1>
+      <div class="w-12 h-0.5 bg-accent mb-4"></div>
+      {stats && (
+        <p class="text-slate-400 text-sm">最終更新: {new Date(stats.generated_at).toLocaleString('ja-JP')}</p>
+      )}
+    </div>
+
+    {fetchError && (
+      <div class="p-6 bg-red-900/20 border border-red-700/40 rounded-lg text-red-300">
+        統計データの取得に失敗しました。時間を置いて再度アクセスしてください。
+      </div>
+    )}
+
+    {!fetchError && points.length === 0 && (
+      <div class="p-6 bg-navy-800/40 border border-navy-700 rounded-lg text-slate-300">
+        まだトレード実績がありません。決済が発生すると自動的にここに反映されます。
+      </div>
+    )}
+
+    {!fetchError && points.length > 0 && (
+      <>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">累計損益</div>
+            <div class={`text-xl font-bold ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {stats!.total_pnl_jpy >= 0 ? '+' : ''}{stats!.total_pnl_jpy.toLocaleString()}円
+            </div>
+          </div>
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">トレード数</div>
+            <div class="text-xl font-bold text-white">{stats!.trade_count}件</div>
+          </div>
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">勝率</div>
+            <div class="text-xl font-bold text-white">{winRate}%</div>
+            <div class="text-xs text-slate-500 mt-1">{winCount}勝{lossCount}敗</div>
+          </div>
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">最大DD</div>
+            <div class="text-xl font-bold text-white">-{maxDD.toLocaleString()}円</div>
+          </div>
+        </div>
+
+        <div class="bg-navy-800/40 border border-navy-700 rounded-xl p-5 mb-6">
+          <h2 class="text-sm font-semibold text-white mb-3">累積損益推移</h2>
+          <svg viewBox={`0 0 ${W} ${H}`} class="w-full h-auto">
+            {gridLines.map((g) => (
+              <>
+                <line x1={padL} x2={W - padR} y1={g.y} y2={g.y} stroke="#1e3a5f" stroke-width="1" />
+                <text x={padL - 8} y={g.y + 3} text-anchor="end" fill="#94a3b8" font-size="10.5">{g.label}</text>
+              </>
+            ))}
+            <line x1={padL} x2={W - padR} y1={yAt(0)} y2={yAt(0)} stroke="#2d5282" stroke-width="1" />
+            {xLabels.map((l) => (
+              <text x={l.x} y={H - 8} text-anchor="middle" fill="#94a3b8" font-size="10.5">{l.label}</text>
+            ))}
+            <path d={areaPath} fill="#00b4d8" fill-opacity="0.12" />
+            <path d={linePath} fill="none" stroke="#00b4d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            {points.map((p, i) => (
+              <circle
+                cx={xAt(i + 1)}
+                cy={yAt(p.cumulative_pnl_jpy)}
+                r="4"
+                fill={p.pnl_jpy >= 0 ? '#4ade80' : '#f87171'}
+                stroke="#112240"
+                stroke-width="1.5"
+              >
+                <title>{`${p.ts.slice(0, 10)} ${PAIR_LABEL[p.pair] ?? p.pair} ${DIR_LABEL[p.direction] ?? p.direction} / ${p.reason} / ${p.pnl_jpy >= 0 ? '+' : ''}${p.pnl_jpy.toLocaleString()}円 / 累計${p.cumulative_pnl_jpy.toLocaleString()}円`}</title>
+              </circle>
+            ))}
+            <circle
+              cx={xAt(series.length - 1)}
+              cy={yAt(series[series.length - 1].cum)}
+              r="5"
+              fill="#00b4d8"
+              stroke="#112240"
+              stroke-width="2"
+            />
+          </svg>
+          <div class="flex items-center gap-5 mt-3 text-xs text-slate-400">
+            <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-green-400"></span>利確（勝ちトレード）</span>
+            <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span>損切り（負けトレード）</span>
+            <span class="text-slate-500">各点にカーソルを合わせると詳細を表示</span>
+          </div>
+        </div>
+
+        <details class="bg-navy-800/40 border border-navy-700 rounded-xl p-5">
+          <summary class="text-sm font-semibold text-white cursor-pointer select-none">テーブル表示</summary>
+          <div class="overflow-x-auto mt-4">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-slate-400 text-xs">
+                  <th class="text-left py-2 pr-4">日付</th>
+                  <th class="text-left py-2 pr-4">ペア</th>
+                  <th class="text-left py-2 pr-4">方向</th>
+                  <th class="text-left py-2 pr-4">決済理由</th>
+                  <th class="text-right py-2 pr-4">損益</th>
+                  <th class="text-right py-2">累計</th>
+                </tr>
+              </thead>
+              <tbody>
+                {points.map((p) => (
+                  <tr class="border-t border-navy-700">
+                    <td class="py-2 pr-4 text-slate-300">{p.ts.slice(0, 10)}</td>
+                    <td class="py-2 pr-4 text-slate-300">{PAIR_LABEL[p.pair] ?? p.pair}</td>
+                    <td class="py-2 pr-4 text-slate-300">{DIR_LABEL[p.direction] ?? p.direction}</td>
+                    <td class="py-2 pr-4 text-slate-300">{p.reason}</td>
+                    <td class={`py-2 pr-4 text-right ${p.pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {p.pnl_jpy >= 0 ? '+' : ''}{p.pnl_jpy.toLocaleString()}円
+                    </td>
+                    <td class="py-2 text-right text-slate-300">{p.cumulative_pnl_jpy.toLocaleString()}円</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </>
+    )}
+  </div>
+</BaseLayout>
