@@ -161,3 +161,4 @@ bash scripts/deploy.sh
 | 2026-06-28 | v3.0       | フォントサイズ全体拡大: `global.css` に `html { font-size: 18px; }` を追加。デフォルト 16px → 18px（+12.5%）。`text-sm` 実質 16px・`text-base` 実質 18px となり視認性を向上。                                                                                                     |
 | 2026-07-03 | v3.1       | **第2巡Fableレビュー HIGH修正**: ResponseHeadersPolicy が Content-Type を text/html に強制上書きし sitemap.xml 等が壊れるバグを修正。MEDIUM: テンプレートDLアイコンのインラインonclickをイベントリスナー方式に修正。S3配信3ビヘイビアにセキュリティヘッダー追加。本番実機検証済み |
 | 2026-07-03 | v3.2       | **CSP nonce機構を実装**: 生成した nonce が未消費でハッシュのみに依存していた問題を修正。全6箇所のインラインスクリプトに nonce を付与し、`middleware.ts` の CSP を nonce ベースに簡素化。本番でnonce一致を実機検証済み                                                             |
+| 2026-07-04 | v3.3       | **非公開トレード実績ページ追加**: /ja/cryptobot-stats を新設。Basic認証（SSM SecureString）で保護し、006 CryptoBotの非公開statsバケットをSSR Lambdaが直接読み込みSVG描画（新規API Gateway追加なし）。本番でBasic認証・空表示・実データ表示を実機検証済み                          |
