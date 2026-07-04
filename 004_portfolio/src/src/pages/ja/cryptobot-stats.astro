@@ -40,7 +40,10 @@ try {
   if (body) stats = JSON.parse(body);
 } catch (e: any) {
   // stats.json 未生成（トレードなし）は NoSuchKey として想定内。それ以外はエラー表示にする。
-  if (e?.name !== 'NoSuchKey') fetchError = true;
+  if (e?.name !== 'NoSuchKey') {
+    fetchError = true;
+    console.error('[cryptobot-stats] stats.json 取得失敗:', e);
+  }
 }
 
 const points = stats?.points ?? [];

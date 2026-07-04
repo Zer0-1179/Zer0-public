@@ -97,6 +97,15 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: "arn:aws:s3:::zer0-cryptobot-stats-s3/stats.json"
+              # ListBucket がないと存在しないキーの GetObject が NoSuchKey でなく
+              # AccessDenied になり、初回取引前の「実績なし」判定ができないため必要
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: "arn:aws:s3:::zer0-cryptobot-stats-s3"
+                Condition:
+                  StringEquals:
+                    s3:prefix: "stats.json"
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
