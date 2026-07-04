@@ -21,6 +21,18 @@ echo "=== X Poster Bot (zer0-infra) デプロイ ==="
 # DRY RUN テスト
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if [ "$MODE" = "--test" ]; then
+    # DRY_RUN=true への変更は必ずここで元に戻す。途中のコマンドが失敗して
+    # set -e でスクリプトが終了しても、本番がDRY_RUNのまま放置されないようtrapで保証する。
+    restore_dry_run() {
+        echo ""
+        echo "[Test] DRY_RUN=false に戻します..."
+        aws lambda update-function-configuration \
+            --function-name "$FUNCTION_NAME" \
+            --environment "Variables={SSM_PREFIX=/xposter,DRY_RUN=false}" \
+            --region "$REGION" > /dev/null
+    }
+    trap restore_dry_run EXIT
+
     echo "[Test] DRY_RUN=true で Lambda を実行..."
     aws lambda update-function-configuration \
         --function-name "$FUNCTION_NAME" \
@@ -39,13 +51,6 @@ if [ "$MODE" = "--test" ]; then
     echo ""
     echo "[戻り値]"
     cat /tmp/xposter_test_out.json
-
-    echo ""
-    echo "[Test] DRY_RUN=false に戻します..."
-    aws lambda update-function-configuration \
-        --function-name "$FUNCTION_NAME" \
-        --environment "Variables={SSM_PREFIX=/xposter,DRY_RUN=false}" \
-        --region "$REGION" > /dev/null
     exit 0
 fi
 
@@ -82,16 +87,18 @@ if [ "$MODE" = "--full" ]; then
     echo "[2/4] Lambda ZIPを作成..."
     cd "$SCRIPT_DIR"
     rm -rf .lambda_build && mkdir .lambda_build
-    pip install requests requests-oauthlib -t .lambda_build/ -q
+    pip install -r requirements.txt -t .lambda_build/ -q
     cp lambda_function.py .lambda_build/
     cd .lambda_build && zip -r ../lambda.zip . -q && cd ..
     echo "  ✓ lambda.zip 作成完了 ($(du -sh lambda.zip | cut -f1))"
 
     # ── 3. CloudFormation スタックをデプロイ ──────────────
     echo "[3/4] CloudFormation スタックをデプロイ..."
+    # RecipientEmail を渡すとLambda非同期呼び出し失敗時にSNSメール通知が有効になる（空なら未設定のままスキップ）
     aws cloudformation deploy \
         --template-file cfn-x-poster-zer0-infra.yaml \
         --stack-name "$STACK_NAME" \
+        --parameter-overrides "RecipientEmail=${RECIPIENT_EMAIL:-}" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$REGION"
     echo "  ✓ スタック デプロイ完了"
@@ -125,7 +132,7 @@ cd "$SCRIPT_DIR"
 
 echo "[1/2] Lambda ZIPを作成..."
 rm -rf .lambda_build && mkdir .lambda_build
-pip install requests requests-oauthlib -t .lambda_build/ -q
+pip install -r requirements.txt -t .lambda_build/ -q
 cp lambda_function.py .lambda_build/
 cd .lambda_build && zip -r ../lambda.zip . -q && cd ..
 echo "  ✓ lambda.zip 作成完了 ($(du -sh lambda.zip | cut -f1))"
