@@ -9,25 +9,30 @@ import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 // nonceベースに統一した（ハッシュはlambda.mjsのSTATIC_CSP側にのみ残す。
 // そちらはインラインスクリプトを持たないAPIルート用のフォールバックのため実質未使用）。
 
-// ── 006 CryptoBot 非公開統計ページの Basic 認証（2026-07-04）───────
-// SSM SecureString "user:pass" を GetParameter で取得し比較する。
-// モジュールスコープでTTLキャッシュしてコールドスタート以外は毎回SSMを叩かない。
+// ── 管理者モード（2026-07-04）───────────────────────────────────────────
+// 007のadminトークン方式を踏襲。?admin=<トークン> に一度アクセスすると
+// Cookieに365日保存され、以降はサイト全体でAstro.locals.isAdminがtrueになる。
+// /ja/cryptobot-stats はisAdminがfalseなら401（Nav.astroの管理者リンクも同条件で非表示）。
+// ?admin=off でCookie削除。SSM SecureStringはトークン文字列そのものを保持する
+// （旧Basic認証時代の "user:pass" 形式から移行済み）。
 const PRIVATE_PATH_PREFIX = '/ja/cryptobot-stats';
 const AUTH_PARAM_NAME = '/Zer0/Portfolio/cryptobot-stats-auth';
 const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
+const ADMIN_COOKIE_NAME = 'admin_auth';
+const ADMIN_COOKIE_MAX_AGE_S = 60 * 60 * 24 * 365; // 365日
 
 const ssm = new SSMClient({ region: process.env.AWS_REGION || 'ap-northeast-1' });
-let cachedAuth: { value: string; fetchedAt: number } | null = null;
+let cachedToken: { value: string; fetchedAt: number } | null = null;
 
-async function getExpectedAuth(): Promise<string> {
-  if (cachedAuth && Date.now() - cachedAuth.fetchedAt < AUTH_CACHE_TTL_MS) {
-    return cachedAuth.value;
+async function getExpectedToken(): Promise<string> {
+  if (cachedToken && Date.now() - cachedToken.fetchedAt < AUTH_CACHE_TTL_MS) {
+    return cachedToken.value;
   }
   const result = await ssm.send(
     new GetParameterCommand({ Name: AUTH_PARAM_NAME, WithDecryption: true })
   );
   const value = result.Parameter?.Value ?? '';
-  cachedAuth = { value, fetchedAt: Date.now() };
+  cachedToken = { value, fetchedAt: Date.now() };
   return value;
 }
 
@@ -42,26 +47,54 @@ function safeCompare(provided: string, expected: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
-function unauthorized(): Response {
-  return new Response('Authentication required', {
-    status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Zer0-CryptoBot Stats"' },
-  });
+function parseCookies(header: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    out[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+  }
+  return out;
+}
+
+function buildCookie(value: string, maxAgeSeconds: number): string {
+  return `${ADMIN_COOKIE_NAME}=${value}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=Strict`;
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  if (context.url.pathname.startsWith(PRIVATE_PATH_PREFIX)) {
-    const authHeader = context.request.headers.get('authorization') || '';
-    const expected = await getExpectedAuth();
-    let ok = false;
-    if (expected && authHeader.startsWith('Basic ')) {
-      const provided = Buffer.from(authHeader.slice(6), 'base64').toString('utf-8');
-      ok = safeCompare(provided, expected);
-    }
-    if (!ok) {
-      return unauthorized();
-    }
+  const cookies = parseCookies(context.request.headers.get('cookie') || '');
+  const expected = await getExpectedToken();
+
+  let isAdmin = !!expected && !!cookies[ADMIN_COOKIE_NAME] && safeCompare(cookies[ADMIN_COOKIE_NAME], expected);
+  let setCookie: string | null = null;
+
+  // ?admin=<トークン> / ?admin=off はどのページでも受け付ける
+  const adminParam = context.url.searchParams.get('admin');
+  if (adminParam === 'off') {
+    isAdmin = false;
+    setCookie = buildCookie('', 0);
+  } else if (adminParam && expected && safeCompare(adminParam, expected)) {
+    isAdmin = true;
+    setCookie = buildCookie(expected, ADMIN_COOKIE_MAX_AGE_S);
   }
+
+  if (adminParam !== null) {
+    // トークンをURL・ブラウザ履歴に残さないよう、クエリを外してリダイレクト
+    const cleanUrl = new URL(context.url);
+    cleanUrl.searchParams.delete('admin');
+    const redirect = new Response(null, {
+      status: 302,
+      headers: { Location: cleanUrl.pathname + cleanUrl.search },
+    });
+    if (setCookie) redirect.headers.set('Set-Cookie', setCookie);
+    return redirect;
+  }
+
+  if (context.url.pathname.startsWith(PRIVATE_PATH_PREFIX) && !isAdmin) {
+    return new Response('管理者専用ページです。管理者URLでアクセスしてください。', { status: 401 });
+  }
+
+  context.locals.isAdmin = isAdmin;
 
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64').replace(/=+$/, '');
   context.locals.cspNonce = nonce;
