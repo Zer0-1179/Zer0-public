@@ -1,6 +1,23 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: X Poster Bot (zer0-infra) - Lambda + EventBridge Rule (posts AWS tips to @Zer0_Infra every Mon/Thu at 20:00 JST)
 
+# -----------------------------------------------
+# Parameters
+# RecipientEmail: Lambda非同期呼び出し失敗時の通知先。空文字なら通知設定自体をスキップする。
+# -----------------------------------------------
+Parameters:
+  RecipientEmail:
+    Type: String
+    Default: ""
+    Description: Email address to notify when the Lambda async invocation fails (leave empty to skip)
+
+# -----------------------------------------------
+# Conditions
+# HasRecipientEmail: RecipientEmailが空文字でない場合にtrue。SNSトピック・購読・OnFailure設定の要否に使う。
+# -----------------------------------------------
+Conditions:
+  HasRecipientEmail: !Not [!Equals [!Ref RecipientEmail, ""]]
+
 Resources:
 
   # ── Lambda 実行ロール ────────────────────────────────
@@ -88,10 +105,50 @@ Resources:
   # 二重投稿する恐れがある（週2回の定期実行が実質的なリトライとして機能する）。
   PosterEventInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
+    # sns:Publish権限がIAMに伝播する前にLambdaが宛先権限を検証し失敗することがあるため、
+    # ポリシーアタッチ後に作成されるよう明示的に依存させる。
+    DependsOn: PosterSnsPublishPolicy
     Properties:
       FunctionName: !Ref PosterFunction
       Qualifier: $LATEST
       MaximumRetryAttempts: 0
+      DestinationConfig: !If
+        - HasRecipientEmail
+        - OnFailure:
+            Destination: !Ref PosterAlarmTopic
+        - !Ref AWS::NoValue
+
+  # ── SNS: Lambda非同期呼び出し失敗の通知 ─────────────────────────
+  PosterAlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasRecipientEmail
+    Properties:
+      TopicName: x-poster-zer0-infra-alarms
+
+  PosterAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasRecipientEmail
+    Properties:
+      TopicArn: !Ref PosterAlarmTopic
+      Protocol: email
+      Endpoint: !Ref RecipientEmail
+
+  # ── IAM ポリシー: OnFailure通知のsns:Publish権限（RecipientEmail設定時のみ）──
+  # Lambda非同期呼び出し失敗時にAWSサービスがこのFunction実行ロールの権限で
+  # DestinationConfig先へpublishするため、実行ロール側に権限が必要。
+  PosterSnsPublishPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasRecipientEmail
+    Properties:
+      PolicyName: xposter-sns-publish
+      Roles:
+        - !Ref PosterRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: sns:Publish
+            Resource: !Ref PosterAlarmTopic
 
   PosterLogGroup:
     Type: AWS::Logs::LogGroup
