@@ -8,14 +8,19 @@ const otherLang = lang === 'ja' ? 'en' : 'ja';
 const currentPath = Astro.url.pathname;
 const otherLangPath = currentPath.replace(`/${lang}/`, `/${otherLang}/`).replace(`/${lang}`, `/${otherLang}`);
 
-const navItems = [
-  { key: 'nav.home' as const, href: `/${lang}/` },
-  { key: 'nav.about' as const, href: `/${lang}/about/` },
-  { key: 'nav.projects' as const, href: `/${lang}/projects/` },
-  { key: 'nav.articles' as const, href: `/${lang}/articles/` },
-  { key: 'nav.templates' as const, href: `/${lang}/templates/` },
-  { key: 'nav.contact' as const, href: `/${lang}/contact/` },
+const navItems: { key: string; href: string; label?: string }[] = [
+  { key: 'nav.home', href: `/${lang}/` },
+  { key: 'nav.about', href: `/${lang}/about/` },
+  { key: 'nav.projects', href: `/${lang}/projects/` },
+  { key: 'nav.articles', href: `/${lang}/articles/` },
+  { key: 'nav.templates', href: `/${lang}/templates/` },
+  { key: 'nav.contact', href: `/${lang}/contact/` },
 ];
+
+// 管理者Cookieがある場合のみ表示（多言語未対応の管理者専用ページのため常に/ja/へ）
+if (Astro.locals.isAdmin) {
+  navItems.push({ key: 'nav.cryptobot', href: '/ja/cryptobot-stats/', label: 'CryptoBot実績' });
+}
 ---
 
 <header class="fixed top-0 left-0 right-0 z-50 bg-navy-950/95 backdrop-blur border-b border-navy-700/50">
@@ -27,12 +32,12 @@ const navItems = [
 
     <!-- PC ナビゲーション -->
     <div class="hidden md:flex items-center gap-1">
-      {navItems.map(({ key, href }) => (
+      {navItems.map(({ key, href, label }) => (
         <a
           href={href}
           class="px-4 py-2 text-sm text-slate-300 hover:text-accent hover:bg-navy-800 rounded transition-colors"
         >
-          {t(key)}
+          {label ?? t(key as any)}
         </a>
       ))}
     </div>
