@@ -873,6 +873,77 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
     return f"s3://{S3_BUCKET}/{s3_base}/"
 
 
+# ─── 記事の軽微な自動修正（Bedrock再呼び出し不要・コストゼロ） ──────────────────
+
+_OLD_RUNTIME_MAP = {
+    "python3.12": "python3.13", "python3.11": "python3.13",
+    "python3.10": "python3.13", "python3.9": "python3.13",
+    "nodejs20.x": "nodejs22.x", "nodejs18.x": "nodejs22.x",
+}
+
+
+def _auto_fix_article(article_text: str) -> tuple[str, list[str]]:
+    """Bedrockを再呼び出しせず、文字列置換だけで安全に直せる軽微な問題だけを自動修正する。
+    文字数不足・:::message対応漏れ・図の欠落など内容そのものに関わる問題は対象外（要手動確認）。
+    (修正後テキスト, 適用した修正の説明リスト) を返す。"""
+    text = article_text
+    fixes = []
+
+    # 1. 古いLambdaランタイム表記を最新に置換
+    for old, new in _OLD_RUNTIME_MAP.items():
+        if old in text:
+            text = text.replace(old, new)
+            fixes.append(f"古いランタイム表記 `{old}` → `{new}` に置換")
+
+    # 2. コードブロック外のh1見出し（# xxx）を h2（## xxx）に格上げ
+    lines = text.splitlines(keepends=True)
+    in_code = False
+    h1_fixed = 0
+    for i, line in enumerate(lines):
+        stripped = line.rstrip("\n")
+        if stripped.startswith("```"):
+            in_code = not in_code
+            continue
+        if not in_code and stripped.startswith("# ") and not stripped.startswith("## "):
+            lines[i] = "#" + line
+            h1_fixed += 1
+    if h1_fixed:
+        text = "".join(lines)
+        fixes.append(f"h1見出し{h1_fixed}件を##に格上げ")
+
+    # 3. 言語/ファイル名指定のないコードブロック開始行に text を補完
+    lines = text.splitlines(keepends=True)
+    in_code = False
+    bare_fixed = 0
+    for i, line in enumerate(lines):
+        stripped = line.rstrip("\n")
+        if stripped.startswith("```"):
+            if not in_code and stripped == "```":
+                lines[i] = line.replace("```", "```text", 1)
+                bare_fixed += 1
+            in_code = not in_code
+    if bare_fixed:
+        text = "".join(lines)
+        fixes.append(f"言語/ファイル名指定のないコードブロック{bare_fixed}件に`text`を補完")
+
+    # 4. 記事中に --region が一つもない場合、単一行で完結するAWS CLIコマンドにのみ補完
+    #    （行末が\の複数行コマンドは、他行に--regionがある可能性があり誤修正のリスクがあるため対象外）
+    if "aws " in text and "--region" not in text:
+        lines = text.splitlines(keepends=True)
+        region_fixed = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("aws ") and not stripped.endswith("\\"):
+                ending = "\n" if line.endswith("\n") else ""
+                lines[i] = line.rstrip("\n") + " --region ap-northeast-1" + ending
+                region_fixed += 1
+        if region_fixed:
+            text = "".join(lines)
+            fixes.append(f"--region未指定のAWS CLIコマンド{region_fixed}件に `--region ap-northeast-1` を補完")
+
+    return text, fixes
+
+
 # ─── 記事品質チェック ─────────────────────────────────────────────────────────
 
 def validate_article(article_text: str, char_count: int) -> list[str]:
@@ -932,6 +1003,7 @@ def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
     timestamp: str, title: str = "", s3_url: str = "", is_truncated: bool = False,
     issues: list | None = None, angle: str = "", gen_meta: dict | None = None,
+    applied_fixes: list | None = None,
 ):
     """SES でメール通知を送信する"""
     import html as _html
@@ -972,6 +1044,10 @@ def send_email_notification(
     )
 
     issues = issues or []
+    applied_fixes = applied_fixes or []
+    fixes_text = ("\n".join(f"  - {f}" for f in applied_fixes)) if applied_fixes else "  (なし)"
+    fixes_html = "".join(f"<li>{_html.escape(f)}</li>" for f in applied_fixes) if applied_fixes else "<li>(なし)</li>"
+
     truncation_warning_text = """
 ⚠️ 警告: 記事が途中で切れています
 記事の生成がmax_tokensに達したため、末尾が不完全な可能性があります。
@@ -998,6 +1074,9 @@ Zennに投稿する前に内容を必ず確認してください。
 
 ■ 見出し一覧
 {headings_text}
+
+■ 自動修正（Bedrock再呼び出しなし）
+{fixes_text}
 
 ■ 記事プレビュー（先頭300文字）
 {preview}...
@@ -1067,6 +1146,11 @@ Zennに投稿する前に内容を必ず確認してください。
   <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>見出し一覧</h3>
     <ul style="margin:0;padding-left:16px;">{headings_html}</ul>
+  </div>
+
+  <div style="background:#eef6fc;padding:15px;border-radius:8px;margin:20px 0;">
+    <h3>自動修正（Bedrock再呼び出しなし）</h3>
+    <ul style="margin:0;padding-left:16px;">{fixes_html}</ul>
   </div>
 
   <div style="background:#fff8e1;padding:15px;border-radius:8px;margin:20px 0;">
@@ -1144,6 +1228,12 @@ def run(dry_run: bool = False):
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")
 
+    # 軽微な問題を自動修正（Bedrock再呼び出しなし・コストゼロ）
+    article, applied_fixes = _auto_fix_article(article)
+    char_count = len(article)
+    if applied_fixes:
+        print(f"  自動修正 {len(applied_fixes)}件: {applied_fixes}")
+
     # Step 4: ローカル保存（MD + 画像プレースホルダー埋め込み）
     _t = time.time()
     print("Step 4: ファイル保存中...")
@@ -1181,12 +1271,13 @@ def run(dry_run: bool = False):
     if dry_run:
         print("Step 7: [DRY_RUN] メール送信をスキップ")
         print(f"  [DRY_RUN] タイトル: {title}")
+        print(f"  [DRY_RUN] 自動修正: {applied_fixes if applied_fixes else 'なし'}")
         print(f"  [DRY_RUN] 品質チェック結果: {issues if issues else '問題なし'}")
     else:
         print("Step 7: メール通知を送信中...")
         send_email_notification(
             topic, article, md_path, png_paths, timestamp, title,
-            s3_url, is_truncated, issues, angle, gen_meta,
+            s3_url, is_truncated, issues, angle, gen_meta, applied_fixes,
         )
         print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
 
@@ -1200,6 +1291,7 @@ def run(dry_run: bool = False):
         "truncated": is_truncated,
         "docs_fetched": gen_meta.get("docs_chars", 0) > 0,
         "images": len(png_paths),
+        "auto_fixed": len(applied_fixes),
         "quality_issues": len(issues),
         "duration_s": round(time.time() - _total_start, 1),
         "dry_run": dry_run,
