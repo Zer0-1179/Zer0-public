@@ -74,12 +74,11 @@ def test_strip_hashtag_lines_keeps_body_only_text():
 # ─────────────────────────────────────────────────────
 
 def test_pick_hashtag_matches_keyword():
-    # "フリーランス"は#副業のキーワードのみに含まれる（#AI副業とは同点にならない）
     assert lf.pick_hashtag("フリーランスとして働く") == "#副業"
 
 
 def test_pick_hashtag_fallback_when_no_match():
-    assert lf.pick_hashtag("特に何も関係ない文章です") == "#AI活用"
+    assert lf.pick_hashtag("特に何も関係ない文章です") == "#会社員あるある"
 
 
 def test_pick_category_excludes_recent():
@@ -96,8 +95,8 @@ def test_pick_category_falls_back_when_all_recent():
 # extract_keywords
 # ─────────────────────────────────────────────────────
 
-def test_extract_keywords_returns_ai_fallback_when_empty():
-    assert lf.extract_keywords("特に固有名詞のない普通の文章") == ["AI"]
+def test_extract_keywords_returns_fallback_when_empty():
+    assert lf.extract_keywords("特に固有名詞のない普通の文章") == ["会社員"]
 
 
 def test_extract_keywords_finds_topic_words():
@@ -135,19 +134,24 @@ def test_max_question_theme_history_smaller_than_total():
 
 
 # ─────────────────────────────────────────────────────
-# pick_ai_relatable_trend / TREND_NG_WORDS（v2.7で追加した炎上防止フィルタ）
+# pick_relatable_trend / TREND_NG_WORDS（炎上防止フィルタ）
 # ─────────────────────────────────────────────────────
 
 def test_trend_ng_words_excluded_from_tier1():
-    keywords = ["AI速報 訃報", "AI活用術"]
-    result = lf.pick_ai_relatable_trend(keywords)
-    assert result == "AI活用術"
+    keywords = ["仕事速報 訃報", "転職ブーム"]
+    result = lf.pick_relatable_trend(keywords)
+    assert result == "転職ブーム"
 
 
 def test_trend_ng_words_excluded_entirely_falls_back_to_none():
     keywords = ["有名人 死去", "議員 逮捕"]
-    assert lf.pick_ai_relatable_trend(keywords) is None
+    assert lf.pick_relatable_trend(keywords) is None
 
 
 def test_trend_normal_tier1_keyword_still_matches():
-    assert lf.pick_ai_relatable_trend(["ChatGPT新機能"]) == "ChatGPT新機能"
+    assert lf.pick_relatable_trend(["転職ブーム到来"]) == "転職ブーム到来"
+
+
+def test_trend_generic_keyword_matches_via_tier3():
+    """AIコンセプト撤廃により、Tier1/2に一致しない一般的な話題もTier3で拾えること"""
+    assert lf.pick_relatable_trend(["謎の新現象"]) == "謎の新現象"
