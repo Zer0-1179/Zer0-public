@@ -187,3 +187,44 @@ def test_pick_best_tweet_selects_highest_score():
 
 def test_pick_best_tweet_handles_single_candidate():
     assert lf.pick_best_tweet(["これだけしかない"]) == "これだけしかない"
+
+
+# ─────────────────────────────────────────────────────
+# リプライ営業（2026-07-05追加: ユーザー承認済みアカウントのみ対象）
+# ─────────────────────────────────────────────────────
+
+def test_reply_target_accounts_are_user_approved_list():
+    """対象は必ずユーザーが明示承認した4アカウントのみで、自動追加されないこと"""
+    assert set(lf.REPLY_TARGET_ACCOUNTS) == {
+        "nikkei", "toyokeizai", "diamond_online", "PRESIDENT_Online",
+    }
+
+
+def test_max_reply_target_history_smaller_than_total():
+    """恒久ロックバグ再発防止: 保持件数は対象アカウント総数より必ず小さいこと"""
+    assert lf.MAX_REPLY_TARGET_HISTORY < len(lf.REPLY_TARGET_ACCOUNTS)
+
+
+def test_pick_reply_target_excludes_recent():
+    recent = lf.REPLY_TARGET_ACCOUNTS[:lf.MAX_REPLY_TARGET_HISTORY]
+    assert lf.pick_reply_target(recent) not in recent
+
+
+def test_is_sensitive_for_reply_detects_ng_words():
+    assert lf._is_sensitive_for_reply("〇〇容疑者を逮捕") is True
+    assert lf._is_sensitive_for_reply("今期の決算は増収増益でした") is False
+
+
+def test_pick_reply_candidate_tweet_skips_replied_and_sensitive():
+    tweets = [
+        {"id": "1", "text": "議員が逮捕された件について"},   # センシティブ
+        {"id": "2", "text": "返信済みのツイート"},           # 返信済み
+        {"id": "3", "text": "今期の決算について発表しました"},  # 選ばれるべき
+    ]
+    chosen = lf.pick_reply_candidate_tweet(tweets, replied_ids=["2"])
+    assert chosen["id"] == "3"
+
+
+def test_pick_reply_candidate_tweet_returns_none_when_all_unsuitable():
+    tweets = [{"id": "1", "text": "地震速報が入りました"}]
+    assert lf.pick_reply_candidate_tweet(tweets, replied_ids=[]) is None
