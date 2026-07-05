@@ -155,3 +155,35 @@ def test_trend_normal_tier1_keyword_still_matches():
 def test_trend_generic_keyword_matches_via_tier3():
     """AIコンセプト撤廃により、Tier1/2に一致しない一般的な話題もTier3で拾えること"""
     assert lf.pick_relatable_trend(["謎の新現象"]) == "謎の新現象"
+
+
+# ─────────────────────────────────────────────────────
+# _score_tweet / pick_best_tweet（2026-07-05追加: バズ狙いの自己採点パイプライン）
+# ─────────────────────────────────────────────────────
+
+def test_score_tweet_penalizes_hedge_ending():
+    hedge   = "在宅の方が楽な気がする"
+    assert lf._score_tweet(hedge) < lf._score_tweet("在宅の方が楽だと思ってる")
+
+
+def test_score_tweet_rewards_numbers():
+    with_num    = "残業月60時間でも給料変わらん"
+    without_num = "残業しても給料変わらん"
+    assert lf._score_tweet(with_num) > lf._score_tweet(without_num)
+
+
+def test_score_tweet_penalizes_empty_text():
+    assert lf._score_tweet("") < 0
+    assert lf._score_tweet("#タグだけ") < 0
+
+
+def test_pick_best_tweet_selects_highest_score():
+    candidates = [
+        "在宅の方が楽な気がする",           # ヘッジ終わり・数字なし
+        "残業60時間でも給料変わらんと思ってる",  # 断定・数字あり
+    ]
+    assert lf.pick_best_tweet(candidates) == candidates[1]
+
+
+def test_pick_best_tweet_handles_single_candidate():
+    assert lf.pick_best_tweet(["これだけしかない"]) == "これだけしかない"
