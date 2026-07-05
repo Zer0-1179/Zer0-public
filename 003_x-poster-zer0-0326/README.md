@@ -37,16 +37,16 @@ EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST・リトライ0�
 
 ## 投稿カテゴリ
 
-| カテゴリ       | 内容                                                                 | 曜日                                |
-| -------------- | -------------------------------------------------------------------- | ----------------------------------- |
-| `recipe`       | コピペで使える言い回し・テンプレのレシピ（12お題をローテーション）  | 月曜ローテーション枠（50%）         |
-| `jissoku`      | 仕事・生活のbefore/after実録（数字必須・盛らない）                   | 月曜ローテーション枠（50%）         |
-| `hikaku`       | 働き方・お金・生活の比較とどっち派（断定・返信誘発）                 | 月曜ローテーション枠（50%）         |
-| `shippai`      | 仕事・お金・人間関係の失敗談＋回避法（共感×実用）                    | 月曜ローテーション枠（50%）         |
-| `fukugyo`      | 副業の現実（数字・やり方入り）                                       | 月曜ローテーション枠（50%）         |
-| `question`     | 問いかけ・議論系                                                     | **木曜固定** + 月曜ローテーション枠 |
-| `url_reaction` | Yahoo!ニュース記事への率直な反応（URLはリプライへ）                  | 月曜固定枠（50%）                   |
-| `trend`        | Google Trends トレンド連動（話題を問わず何にでも反応）               | 日曜固定                            |
+| カテゴリ       | 内容                                                               | 曜日                                |
+| -------------- | ------------------------------------------------------------------ | ----------------------------------- |
+| `recipe`       | コピペで使える言い回し・テンプレのレシピ（12お題をローテーション） | 月曜ローテーション枠（50%）         |
+| `jissoku`      | 仕事・生活のbefore/after実録（数字必須・盛らない）                 | 月曜ローテーション枠（50%）         |
+| `hikaku`       | 働き方・お金・生活の比較とどっち派（断定・返信誘発）               | 月曜ローテーション枠（50%）         |
+| `shippai`      | 仕事・お金・人間関係の失敗談＋回避法（共感×実用）                  | 月曜ローテーション枠（50%）         |
+| `fukugyo`      | 副業の現実（数字・やり方入り）                                     | 月曜ローテーション枠（50%）         |
+| `question`     | 問いかけ・議論系                                                   | **木曜固定** + 月曜ローテーション枠 |
+| `url_reaction` | Yahoo!ニュース記事への率直な反応（URLはリプライへ）                | 月曜固定枠（50%）                   |
+| `trend`        | Google Trends トレンド連動（話題を問わず何にでも反応）             | 日曜固定                            |
 
 ## 実装のこだわり
 
@@ -185,32 +185,32 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 ## SSMパラメータ
 
-| パラメータ名                          | 種別         | 管理           |
-| ------------------------------------- | ------------ | -------------- |
-| `/ai_bot/twitter_api_key`             | SecureString | setup_ssm.sh   |
-| `/ai_bot/twitter_api_secret`          | SecureString | setup_ssm.sh   |
-| `/ai_bot/twitter_access_token`        | SecureString | setup_ssm.sh   |
-| `/ai_bot/twitter_access_token_secret` | SecureString | setup_ssm.sh   |
-| `/ai_bot/history/used_categories`     | String       | Lambda自動更新 |
-| `/ai_bot/history/{category}`          | String       | Lambda自動更新 |
-| `/ai_bot/history/url_reaction_urls`   | String       | Lambda自動更新 |
-| `/ai_bot/history/recipe_tasks`        | String       | Lambda自動更新（2026-07-05追加） |
-| `/ai_bot/history/question_themes`     | String       | Lambda自動更新（2026-07-05追加） |
-| `/ai_bot/history/reply_targets`       | String       | Lambda自動更新（2026-07-05追加、リプ営業のローテーション） |
+| パラメータ名                          | 種別         | 管理                                                                                                                                    |
+| ------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `/ai_bot/twitter_api_key`             | SecureString | setup_ssm.sh                                                                                                                            |
+| `/ai_bot/twitter_api_secret`          | SecureString | setup_ssm.sh                                                                                                                            |
+| `/ai_bot/twitter_access_token`        | SecureString | setup_ssm.sh                                                                                                                            |
+| `/ai_bot/twitter_access_token_secret` | SecureString | setup_ssm.sh                                                                                                                            |
+| `/ai_bot/history/used_categories`     | String       | Lambda自動更新                                                                                                                          |
+| `/ai_bot/history/{category}`          | String       | Lambda自動更新                                                                                                                          |
+| `/ai_bot/history/url_reaction_urls`   | String       | Lambda自動更新                                                                                                                          |
+| `/ai_bot/history/recipe_tasks`        | String       | Lambda自動更新（2026-07-05追加）                                                                                                        |
+| `/ai_bot/history/question_themes`     | String       | Lambda自動更新（2026-07-05追加）                                                                                                        |
+| `/ai_bot/history/reply_targets`       | String       | Lambda自動更新（2026-07-05追加、リプ営業のローテーション）                                                                              |
 | `/ai_bot/reply_target_accounts`       | String       | **手動更新可**（2026-07-05追加）。リプ先アカウント一覧本体。`aws ssm put-parameter --overwrite`でコード変更・再デプロイなしに更新できる |
-| `/ai_bot/history/replied_tweets`      | String       | Lambda自動更新（2026-07-05追加、返信済みツイートID） |
+| `/ai_bot/history/replied_tweets`      | String       | Lambda自動更新（2026-07-05追加、返信済みツイートID）                                                                                    |
 
 ## トラブルシューティング
 
-| 症状                   | 原因                           | 対処                                                        |
-| ---------------------- | ------------------------------ | ----------------------------------------------------------- |
-| 投稿されない           | 環境変数 `DRY_RUN=true` のまま | Lambda 環境変数 `DRY_RUN` を `false` に更新                 |
-| 同カテゴリが連続投稿   | SSM履歴破損                    | `/ai_bot/history/used_categories` を削除してリセット        |
-| X API 403 Forbidden    | APIクレジット不足              | developer.x.com でクレジット残高確認・チャージ              |
-| X API 401 Unauthorized | アクセストークン期限切れ       | `bash src/setup_ssm.sh` で4キーを再登録                     |
-| Bedrock エラー         | モデルアクセス未承認           | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化 |
-| url_reaction 記事が0件 | Yahoo!ニュースRSSフィード取得失敗 | CloudWatch Logs で HTTP ステータス確認                  |
-| 実行失敗に気づかない  | 通知メール未設定               | CFn `RecipientEmail` パラメータを設定してスタック更新（2026-07-05追加） |
+| 症状                   | 原因                              | 対処                                                                    |
+| ---------------------- | --------------------------------- | ----------------------------------------------------------------------- |
+| 投稿されない           | 環境変数 `DRY_RUN=true` のまま    | Lambda 環境変数 `DRY_RUN` を `false` に更新                             |
+| 同カテゴリが連続投稿   | SSM履歴破損                       | `/ai_bot/history/used_categories` を削除してリセット                    |
+| X API 403 Forbidden    | APIクレジット不足                 | developer.x.com でクレジット残高確認・チャージ                          |
+| X API 401 Unauthorized | アクセストークン期限切れ          | `bash src/setup_ssm.sh` で4キーを再登録                                 |
+| Bedrock エラー         | モデルアクセス未承認              | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化             |
+| url_reaction 記事が0件 | Yahoo!ニュースRSSフィード取得失敗 | CloudWatch Logs で HTTP ステータス確認                                  |
+| 実行失敗に気づかない   | 通知メール未設定                  | CFn `RecipientEmail` パラメータを設定してスタック更新（2026-07-05追加） |
 
 ## コスト内訳
 
@@ -241,12 +241,12 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 | 2026-06-15 | v2.1       | コードレビュー反映：trend / url_reaction の固定スロットを used_categories に書き込まないよう修正（ローテーション枠が圧迫されるバグを解消）。`save_url_history` の未使用引数 `used_urls` を削除。マジックナンバー（タグなし率・月曜url_reaction率・本文上限）を定数化                                    |
 | 2026-06-27 | v2.3       | コードレビュー反映（IAM最小権限化）：Bedrock IAM Resource の全リージョンワイルドカード `arn:aws:bedrock:*::foundation-model/...` を削除し、明示の `ap-northeast-1` と `ap-northeast-3` の2リージョンに統一（001 と同じ最小権限構成に揃える）                                                            |
 | 2026-07-03 | v2.4       | **第2巡Fableレビュー HIGH修正**: 001と共通の加重文字数バグを修正（weighted length安全弁を追加）。複数タグ1行のケースでタグ除去漏れが再発する不具合を行単位判定に変更。EventBridge Schedulerのデフォルトリトライ（185回）を無効化（二重投稿防止）・6フィード直列取得のtimeoutを10→5秒に短縮              |
-| 2026-07-05 | v2.5       | **Fableブラッシュアップ**: 001と同じOnFailure SNS通知を追加（RecipientEmail設定時のみ）・Bedrockクライアントにリトライ設定追加＋Timeout 60→90秒・trendカテゴリにNGワードフィルタ追加（炎上防止）・dry_runをイベントペイロード化しtest_invoke.shの本番環境変数書き換え方式を廃止（事故リスク解消）・recipe/jissokuのお題とquestionのテーマ軸にSSM履歴除外を追加（マンネリ化対策）・weightedトリムの重複ロジックを共通ヘルパーに統合し投稿URLをログ/戻り値に追加。ユニットテスト23件新規追加。CFn更新・Lambdaデプロイ・本番dry_run検証済み |
-| 2026-07-05 | v2.6       | **AIコンセプト全面撤廃・バズ狙いへ転換**: ユーザー要望により「AI活用系Bot」の前提を撤廃し、話題をAIに限らない会社員あるある系コンテンツへ変更。全カテゴリのプロンプト・few-shot例・お題・ハッシュタグ・キーワードを非AI一般テーマに書き換え、フック強化（挑発型追加・断定終わりの許容）とバズ狙いの強い意見を明示的に許可（誹謗中傷・誤情報は禁止）。url_reactionのRSSフィードをZenn/Qiita（AI関連タグ）→Yahoo!ニュース（経済/国内/エンタメ）に変更。`pick_ai_relatable_trend`を`pick_relatable_trend`にリネームしAI紐付け要件を撤廃（Tier3で任意の話題を拾う）。テスト24件（AI関連アサーションを新テーマに合わせて更新）全パス。Lambdaデプロイ・本番dry_run検証済み |
-| 2026-07-05 | v2.7       | **Fable評価反映（バズ強化第2弾）**: v2.6の評価をFableに依頼したところ「頻度の壁に加えfew-shot例が旧路線のままで新指示が効いていない」と指摘。①複数案生成→自己採点→ベスト選択パイプライン導入（`invoke_bedrock`が1回のBedrock呼び出しで3案生成し`_score_tweet`/`pick_best_tweet`でヘッジ表現・数字・情報密度を機械採点）②ハッシュタグ原則廃止（`NO_HASHTAG_RATE` 0.35→0.9）③`ABSOLUTE_RULES`/`STYLE_GUIDE`から「たまには」「毎回じゃなくていい」等のヘッジ指示を削除し断定を原則化④「オチを決めない・垂れ流す」指示を「1投稿1メッセージ・情報密度最大」に転換⑤shippaiの「失敗→回避法必須」という`ABSOLUTE_RULES`との自己矛盾を解消し恥の解像度重視に変更⑥trendを「知らなかった型」から賛成/反対/どうでもいいを明確に取る意見型に全面再設計⑦hikaku/recipeの数字・断定を強化。テスト5件追加（計29件）。**リプライ営業機能はX APIのRead権限・料金プラン未確認のため保留**（ユーザーがdeveloper.x.comで確認予定）。Lambdaデプロイ・本番dry_run検証済み。**注意**: trendカテゴリで実在の著名人名を扱った際どい投稿が生成される例を確認（NGワードフィルタは訃報・事件等はカバーするが個人名の炎上ネタは未対応） |
-| 2026-07-05 | v2.8       | **リプライ営業機能を実装**: X APIのRead系エンドポイント（`GET /2/users/me`・`GET /2/users/by/username`・`GET /2/users/:id/tweets`）を実地テストで検証（自分の投稿への実際のリプライ投稿→削除、他アカウント＝日経のタイムライン取得まで確認）し、追加料金なしで利用可能と判明。ユーザーが承認した4アカウント（`@nikkei`・`@toyokeizai`・`@diamond_online`・`@PRESIDENT_Online`）を対象にリプ営業機能を実装。`_build_oauth_header`にOAuth 1.0a署名処理を共通化し`get_x`（GET用）を追加、`attempt_reply_outreach`が既存の週3回スケジュールに相乗りする形で1件返信。リプ先ローテーション・返信済み重複回避・`REPLY_NG_WORDS`（政治・災害・訃報等）フィルタで安全設計。本番検証でニュースアカウントの投稿に政治色の強い内容（トランプ大統領関連）が含まれNGワードフィルタが未対応だった穴を発見し`REPLY_NG_WORDS`を拡充。テスト6件追加（計35件）。Lambdaデプロイ・本番dry_run検証済み |
-| 2026-07-05 | v2.9       | **リプ先アカウントを4→6件に拡張**: 「4アカウントだけで十分か」というユーザーの疑問を受け、候補（`@nikkeibp`・`@itmedia_biz`）を追加提示したところ、X API実地確認で`@nikkeibp`が凍結済み・`@itmedia_biz`が実在しないユーザー名と判明。代替として`@itmedia_news`・`@itmedia`の実在を確認しユーザー承認を得て`REPLY_TARGET_ACCOUNTS`に追加（計6件）。`MAX_REPLY_TARGET_HISTORY=3`は総数6より小さいまま維持。テスト1件更新（対象アカウント集合の期待値）、計35件全パス。Lambdaデプロイ・本番dry_run検証済み |
-| 2026-07-05 | v3.0       | **リプ先ハンドルの誤り2件を訂正**: ユーザーの「フォロワー数は？」という質問を受け`user.fields=public_metrics`で全6アカウントを確認したところ、`diamond_online`が実際には無関係な個人アカウント（フォロワー15人）、`PRESIDENT_Online`がXのユーザー名文字数上限（15文字）を超える無効な文字列（API呼び出しがそもそも失敗する状態）だったと判明。当初の候補提示時にAPI実地確認をしていなかったことが原因。プロフィール説明文で公式アカウントと確認できた正しいハンドル`dol_editors`（ダイヤモンド・オンライン、32万フォロワー）・`PRE_ONLINE`（PRESIDENT Online、7.2万フォロワー）に差し替え。全6アカウントのフォロワー数を実地確認・記録（nikkei 391万／toyokeizai 62.7万／itmedia_news 34.6万／dol_editors 32万／itmedia 9.2万／PRE_ONLINE 7.2万）。テスト1件更新、計35件全パス。Lambdaデプロイ・本番で全6アカウントへの疎通を個別確認済み |
-| 2026-07-05 | v3.1       | **リプ先を6→10件に拡張＋SSM管理化**: ユーザーが「アカウントを定期的に変更したいのですぐ変更しやすいコードにして」と要望。①`REPLY_TARGET_ACCOUNTS`（コード内ハードコード）→`load_reply_target_accounts()`が`/ai_bot/reply_target_accounts`SSMパラメータを読む方式に変更し、コード修正・再デプロイなしで`aws ssm put-parameter --overwrite`だけでリスト更新可能に（未設定時は`DEFAULT_REPLY_TARGET_ACCOUNTS`を自動書き込み）②除外履歴の保持件数`_reply_target_history_limit()`を対象数に応じて動的算出する方式に変更し、SSMでアカウント数を変えても恒久ロックバグが起きないようにした③候補としてX API実地確認済みの`@livedoornews`（217万）・`@asahi`（128万）・`@sankei_news`（87万）・`@mainichi`（98万）を提示しユーザー承認を得て追加（計10件）④本番dry_run検証で朝日新聞の実際の投稿に進行中の災害警報（線状降水帯直前予測）が含まれ`REPLY_NG_WORDS`をすり抜けていたことを発見し、警報関連ワードを追加して解消。テスト3件追加・1件更新（計36件）全パス。Lambdaデプロイ・本番で全10アカウントへの疎通と実際の返信内容生成を確認済み |
-| 2026-07-05 | v3.2       | **Fable最終レビュー全件反映**: ①Googleトレンドの関連ニュース見出し（`ht:news_item_title`）を取得し`trend_context`としてプロンプトに注入、文脈のない項目はNG判定して除外（背景不明な話題での誤断定リスクを解消）②`TREND_NG_WORDS`に実報道で見つかった漏れ（死亡/重体/倒産/テロ/皇室/警報/線状降水帯等）を追加、`REPLY_NG_WORDS`の重複整理③`_score_tweet`のヘッジ語尾判定が文末の句読点・「笑」等で回避できてしまうバグを`_strip_trailing_decoration`で修正、です・ます調/過度な長文/複数「…」への減点を追加④`invoke_bedrock`の候補分割に`---`区切りのフォールバックと区切り線の残骸除去を追加⑤`STYLE_GUIDE`・question/url_reactionのfew-shot例に残っていた断定ルールと矛盾するヘッジ語尾を修正⑥リプ生成にジャンル多様化（給料の話への偏り防止）と品質スコアの下限ゲート（`_REPLY_MIN_SCORE=3`未満は投稿しない）を追加⑦80字トリムで文中が途中切断されたリプを検知しスキップする安全弁を追加⑧ハッシュタグ付与率をurl_reactionにも統一適用、`extract_keywords`の空リストフォールバックの自己矛盾を解消、コード内の古いコメント（フィード数・Timeout値）を修正。テスト6件追加（計42件）全パス。Lambdaデプロイ・本番dry_run検証済み（trend/random双方で新フロー・スキップ安全弁の動作を確認）。**既知の留意点**: 80字超過スキップの安全弁により、本番dry_run実測でリプ投稿の成立率が体感1〜2割程度に下がった（品質を優先したトレードオフ。的中率が低すぎる場合は上限文字数や生成プロンプトの調整余地あり） |
-| 2026-07-05 | v3.3       | **リプ文字数上限を80→120に緩和**: v3.2の途中切断スキップ安全弁により成立率が1〜2割まで低下していたことを受け、ユーザーから「上限文字数を上げた方がいい」と指摘。実測の超過幅（85〜101字が大半）を踏まえ`_REPLY_CHAR_LIMIT=120`定数を新設し、プロンプト指示・トリム処理・スキップ判定の3箇所を統一（80のハードコードを排除）。ローカル6回・本番3回のdry_run再検証でリプ成立率が9/9（100%）に改善。テスト変更なし（計42件）全パス。Lambdaデプロイ・本番dry_run検証済み |
+| 2026-07-05 | v2.5       | OnFailure SNS通知・Bedrockリトライ設定・trend NGワードフィルタ追加。dry_runをイベントペイロード化。recipe/questionのお題重複回避・トリム処理統合。テスト23件追加。デプロイ・本番検証済み                                                                                                                |
+| 2026-07-05 | v2.6       | AIコンセプト全面撤廃、非AI一般テーマ（会社員あるある）へ転換。url_reactionのRSSをZenn/Qiita→Yahoo!ニュースに変更。`pick_relatable_trend`に改名しAI紐付け要件を撤廃。テスト24件。デプロイ・本番検証済み                                                                                                  |
+| 2026-07-05 | v2.7       | Fable評価で「few-shot例が旧路線のまま」等の指摘。複数案生成→自己採点→ベスト選択を導入、ハッシュタグ原則廃止、ヘッジ指示削除、trend/shippaiのプロンプト再設計。テスト5件追加（29件）。リプ営業機能は保留                                                                                                 |
+| 2026-07-05 | v2.8       | リプライ営業機能を実装。X API Read系エンドポイントの利用可否を実地確認（追加料金なし）。ユーザー承認済み4アカウントへ返信。OAuth署名共通化・NGワードフィルタ。テスト6件追加（35件）                                                                                                                     |
+| 2026-07-05 | v2.9       | リプ先を4→6件に拡張。追加候補2件がAPI確認で凍結済み/実在しないユーザー名と判明し代替アカウントに差し替え。テスト1件更新（35件）                                                                                                                                                                         |
+| 2026-07-05 | v3.0       | リプ先ハンドルの誤り2件を訂正。フォロワー数確認で無関係アカウント/文字数上限超過の無効ハンドルと判明。正しいハンドルに差し替え、全アカウントのフォロワー数を記録。テスト1件更新（35件）                                                                                                                 |
+| 2026-07-05 | v3.1       | リプ先を6→10件に拡張しSSM管理化（コード変更不要で更新可）。除外履歴の保持件数を動的算出に変更。IAMの`ssm:PutParameter`権限漏れを修正。テスト3件追加・1件更新（36件）                                                                                                                                    |
+| 2026-07-05 | v3.2       | Fable最終レビュー全件反映。トレンドに関連ニュース見出しを文脈注入、NGワード拡充、ヘッジ判定回避バグ修正、リプ品質スコアゲート追加等。テスト6件追加（42件）                                                                                                                                              |
+| 2026-07-05 | v3.3       | リプ文字数上限を80→120に緩和。実測で生成が頻繁に上限超過しスキップが多発していたため。リプ成立率が体感1〜2割→実測100%に改善                                                                                                                                                                             |
