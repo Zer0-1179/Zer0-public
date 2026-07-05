@@ -193,23 +193,32 @@ def test_pick_best_tweet_handles_single_candidate():
 # リプライ営業（2026-07-05追加: ユーザー承認済みアカウントのみ対象）
 # ─────────────────────────────────────────────────────
 
-def test_reply_target_accounts_are_user_approved_list():
-    """対象は必ずユーザーが明示承認した6アカウントのみで、自動追加されないこと
+def test_default_reply_target_accounts_are_user_approved_list():
+    """デフォルト対象は必ずユーザーが明示承認した10アカウントのみで、自動追加されないこと
     （diamond_online/PRESIDENT_Onlineは誤ったハンドルと判明しdol_editors/PRE_ONLINEに訂正済み）"""
-    assert set(lf.REPLY_TARGET_ACCOUNTS) == {
+    assert set(lf.DEFAULT_REPLY_TARGET_ACCOUNTS) == {
         "nikkei", "toyokeizai", "dol_editors", "PRE_ONLINE",
         "itmedia_news", "itmedia",
+        "livedoornews", "asahi", "sankei_news", "mainichi",
     }
 
 
-def test_max_reply_target_history_smaller_than_total():
-    """恒久ロックバグ再発防止: 保持件数は対象アカウント総数より必ず小さいこと"""
-    assert lf.MAX_REPLY_TARGET_HISTORY < len(lf.REPLY_TARGET_ACCOUNTS)
+def test_reply_target_history_limit_smaller_than_total():
+    """恒久ロックバグ再発防止: 保持件数は対象アカウント総数より必ず小さいこと（対象数が変わっても成立）"""
+    accounts = lf.DEFAULT_REPLY_TARGET_ACCOUNTS
+    assert lf._reply_target_history_limit(accounts) < len(accounts)
+
+
+def test_reply_target_history_limit_scales_with_small_account_list():
+    """対象数を減らしても除外件数が対象数以上にならず、必ず1件以上候補が残ること"""
+    assert lf._reply_target_history_limit(["a", "b"]) == 1
 
 
 def test_pick_reply_target_excludes_recent():
-    recent = lf.REPLY_TARGET_ACCOUNTS[:lf.MAX_REPLY_TARGET_HISTORY]
-    assert lf.pick_reply_target(recent) not in recent
+    accounts = lf.DEFAULT_REPLY_TARGET_ACCOUNTS
+    limit = lf._reply_target_history_limit(accounts)
+    recent = accounts[:limit]
+    assert lf.pick_reply_target(recent, accounts) not in recent
 
 
 def test_is_sensitive_for_reply_detects_ng_words():

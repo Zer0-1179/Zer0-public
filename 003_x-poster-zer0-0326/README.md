@@ -30,7 +30,7 @@ EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST・リトライ0�
         │   ├─ url_reaction: Yahoo!ニュースRSS（経済/国内/エンタメ）から記事取得
         │   └─ trend: Google Trends RSS から急上昇ワード取得（訃報・事件等はNGワードで除外、話題は問わない）
         ├─ Bedrock Claude Haiku（カテゴリ別プロンプトで生成、3案自己採点→ベスト選択）
-        ├─ リプライ営業（大手ニュース6アカウントへ1件・NGワード判定つき、失敗してもメイン投稿に影響しない）
+        ├─ リプライ営業（大手ニュース10アカウントへ1件・SSM管理でコード変更不要に更新可・NGワード判定つき）
         ├─ SSM 投稿履歴更新（used_categories / history / recipe_tasks / question_themes / reply_targets / replied_tweets）
         └─ X API v2（POST）
 ```
@@ -106,12 +106,15 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 
 ### 12. リプライ営業機能（2026-07-05追加）
 
-大手ニュースアカウント（`@nikkei`・`@toyokeizai`・`@dol_editors`・`@PRE_ONLINE`・`@itmedia_news`・`@itmedia`、すべてユーザーが明示的に承認した実在アカウント）の最新投稿に、既存の週3回スケジュールへ相乗りする形で1件返信する。X APIのRead系エンドポイント（`GET /2/users/by/username/:username`・`GET /2/users/:id/tweets`）が現行プランで追加料金なしに使えることを実地テストで確認した上で実装。
+大手ニュースアカウント（現在10件、すべてユーザーが明示的に承認した実在アカウント。一覧は下記フォロワー数の項を参照）の最新投稿に、既存の週3回スケジュールへ相乗りする形で1件返信する。X APIのRead系エンドポイント（`GET /2/users/by/username/:username`・`GET /2/users/:id/tweets`）が現行プランで追加料金なしに使えることを実地テストで確認した上で実装。
 
-- **対象アカウントは自動選定しない**: `REPLY_TARGET_ACCOUNTS`はユーザーが指定した6件のみで、AIが対象を判断・追加することはない。候補として挙げた`@nikkeibp`（日経BP）はX API実地確認で凍結済みと判明し不採用
-- **フォロワー数（2026-07-05確認）**: `@nikkei` 391万・`@toyokeizai` 62.7万・`@itmedia_news` 34.6万・`@dol_editors` 32万・`@itmedia` 9.2万・`@PRE_ONLINE` 7.2万
+- **対象アカウントは自動選定しない**: 対象リストはユーザーが指定したもののみで、AIが対象を判断・追加することはない
+- **対象アカウントはSSMパラメータ管理（2026-07-05変更）**: `load_reply_target_accounts()`が`/ai_bot/reply_target_accounts`（SSM）を読み込む方式に変更。ユーザーが「対象を定期的に入れ替えたい」と要望したため、コード変更・再デプロイ不要で`aws ssm put-parameter --overwrite`だけでリストを更新できるようにした（未設定時はコード内の`DEFAULT_REPLY_TARGET_ACCOUNTS`が自動でSSMに書き込まれる）
+- **除外履歴の件数はアカウント数に応じて動的に決定**: `_reply_target_history_limit()`が対象数-1件（上限5件）を算出するため、SSMでアカウント数を変えても恒久ロックバグが起きない
+- **フォロワー数（2026-07-05確認、計10アカウント）**: `@nikkei` 391万・`@livedoornews` 217.4万・`@asahi` 127.8万・`@mainichi` 97.6万・`@sankei_news` 87.3万・`@toyokeizai` 62.7万・`@itmedia_news` 34.6万・`@dol_editors` 32万・`@itmedia` 9.2万・`@PRE_ONLINE` 7.2万
 - **ハンドル誤りの訂正（2026-07-05）**: 当初の候補`diamond_online`・`PRESIDENT_Online`はそれぞれ「無関係な個人アカウント（フォロワー15人）」「Xのユーザー名文字数上限15文字を超える無効な文字列」だったことがフォロワー数確認時に発覚し、正しい公式ハンドル`dol_editors`・`PRE_ONLINE`に訂正した
-- **安全設計**: リプ先ローテーション（直近3件除外）・返信済みツイートの重複回避（履歴50件保持）・政治/災害/訃報等のNGワードフィルタ（`REPLY_NG_WORDS`、トレンド用NGワードに大統領・政権・外交等を追加）でセンシティブな投稿への返信を回避
+- **災害警報の見落としを修正**: 本番検証で朝日新聞の実際の投稿に進行中の災害警報（線状降水帯予測）が含まれ`REPLY_NG_WORDS`をすり抜けていたため、警報・線状降水帯・洪水・土砂災害・避難指示・避難勧告・津波を追加
+- **安全設計**: リプ先ローテーション（対象数に応じた動的件数を除外）・返信済みツイートの重複回避（履歴50件保持）・政治/災害/訃報等のNGワードフィルタ（`REPLY_NG_WORDS`、トレンド用NGワードに大統領・政権・外交・災害警報等を追加）でセンシティブな投稿への返信を回避
 - **失敗時はメイン投稿に影響させない**: `attempt_reply_outreach`は例外を内部で捕捉し、ユーザー検索・タイムライン取得・生成のどこで失敗してもログに残すだけでメインのカテゴリ投稿処理は継続する
 - **本番検証で判明した穴と対処**: 実地テストでニュースアカウントの投稿に政治色の強い内容（トランプ大統領関連）が含まれるケースを発見し、`REPLY_NG_WORDS`を拡充して除外するよう修正済み
 
@@ -136,7 +139,7 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 │   ├── cfn-x-poster-zer0-0326.yaml
 │   ├── deploy.sh                       # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda_function.py     # ユニットテスト（35件）
+│       └── test_lambda_function.py     # ユニットテスト（36件）
 ├── scripts/
 │   └── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
 └── images/
@@ -158,7 +161,7 @@ bash scripts/test_invoke.sh
 # mode指定（random / trend）
 bash scripts/test_invoke.sh trend
 
-# ユニットテスト（35件）
+# ユニットテスト（36件）
 cd src && python -m pytest tests/ -v
 ```
 
@@ -170,6 +173,14 @@ aws logs tail /aws/lambda/x-poster-zer0-0326 --follow --region ap-northeast-1
 
 # カテゴリ履歴リセット（同カテゴリ連続投稿が起きた場合）
 aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-northeast-1
+
+# リプ先アカウントの変更（コード修正・再デプロイ不要）
+aws ssm put-parameter --name "/ai_bot/reply_target_accounts" \
+  --value '["nikkei","toyokeizai","dol_editors","PRE_ONLINE","itmedia_news","itmedia","livedoornews","asahi","sankei_news","mainichi"]' \
+  --type String --overwrite --region ap-northeast-1
+
+# 現在のリプ先アカウント一覧を確認
+aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northeast-1 --query "Parameter.Value" --output text
 ```
 
 ## SSMパラメータ
@@ -186,6 +197,7 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | `/ai_bot/history/recipe_tasks`        | String       | Lambda自動更新（2026-07-05追加） |
 | `/ai_bot/history/question_themes`     | String       | Lambda自動更新（2026-07-05追加） |
 | `/ai_bot/history/reply_targets`       | String       | Lambda自動更新（2026-07-05追加、リプ営業のローテーション） |
+| `/ai_bot/reply_target_accounts`       | String       | **手動更新可**（2026-07-05追加）。リプ先アカウント一覧本体。`aws ssm put-parameter --overwrite`でコード変更・再デプロイなしに更新できる |
 | `/ai_bot/history/replied_tweets`      | String       | Lambda自動更新（2026-07-05追加、返信済みツイートID） |
 
 ## トラブルシューティング
@@ -235,3 +247,4 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | 2026-07-05 | v2.8       | **リプライ営業機能を実装**: X APIのRead系エンドポイント（`GET /2/users/me`・`GET /2/users/by/username`・`GET /2/users/:id/tweets`）を実地テストで検証（自分の投稿への実際のリプライ投稿→削除、他アカウント＝日経のタイムライン取得まで確認）し、追加料金なしで利用可能と判明。ユーザーが承認した4アカウント（`@nikkei`・`@toyokeizai`・`@diamond_online`・`@PRESIDENT_Online`）を対象にリプ営業機能を実装。`_build_oauth_header`にOAuth 1.0a署名処理を共通化し`get_x`（GET用）を追加、`attempt_reply_outreach`が既存の週3回スケジュールに相乗りする形で1件返信。リプ先ローテーション・返信済み重複回避・`REPLY_NG_WORDS`（政治・災害・訃報等）フィルタで安全設計。本番検証でニュースアカウントの投稿に政治色の強い内容（トランプ大統領関連）が含まれNGワードフィルタが未対応だった穴を発見し`REPLY_NG_WORDS`を拡充。テスト6件追加（計35件）。Lambdaデプロイ・本番dry_run検証済み |
 | 2026-07-05 | v2.9       | **リプ先アカウントを4→6件に拡張**: 「4アカウントだけで十分か」というユーザーの疑問を受け、候補（`@nikkeibp`・`@itmedia_biz`）を追加提示したところ、X API実地確認で`@nikkeibp`が凍結済み・`@itmedia_biz`が実在しないユーザー名と判明。代替として`@itmedia_news`・`@itmedia`の実在を確認しユーザー承認を得て`REPLY_TARGET_ACCOUNTS`に追加（計6件）。`MAX_REPLY_TARGET_HISTORY=3`は総数6より小さいまま維持。テスト1件更新（対象アカウント集合の期待値）、計35件全パス。Lambdaデプロイ・本番dry_run検証済み |
 | 2026-07-05 | v3.0       | **リプ先ハンドルの誤り2件を訂正**: ユーザーの「フォロワー数は？」という質問を受け`user.fields=public_metrics`で全6アカウントを確認したところ、`diamond_online`が実際には無関係な個人アカウント（フォロワー15人）、`PRESIDENT_Online`がXのユーザー名文字数上限（15文字）を超える無効な文字列（API呼び出しがそもそも失敗する状態）だったと判明。当初の候補提示時にAPI実地確認をしていなかったことが原因。プロフィール説明文で公式アカウントと確認できた正しいハンドル`dol_editors`（ダイヤモンド・オンライン、32万フォロワー）・`PRE_ONLINE`（PRESIDENT Online、7.2万フォロワー）に差し替え。全6アカウントのフォロワー数を実地確認・記録（nikkei 391万／toyokeizai 62.7万／itmedia_news 34.6万／dol_editors 32万／itmedia 9.2万／PRE_ONLINE 7.2万）。テスト1件更新、計35件全パス。Lambdaデプロイ・本番で全6アカウントへの疎通を個別確認済み |
+| 2026-07-05 | v3.1       | **リプ先を6→10件に拡張＋SSM管理化**: ユーザーが「アカウントを定期的に変更したいのですぐ変更しやすいコードにして」と要望。①`REPLY_TARGET_ACCOUNTS`（コード内ハードコード）→`load_reply_target_accounts()`が`/ai_bot/reply_target_accounts`SSMパラメータを読む方式に変更し、コード修正・再デプロイなしで`aws ssm put-parameter --overwrite`だけでリスト更新可能に（未設定時は`DEFAULT_REPLY_TARGET_ACCOUNTS`を自動書き込み）②除外履歴の保持件数`_reply_target_history_limit()`を対象数に応じて動的算出する方式に変更し、SSMでアカウント数を変えても恒久ロックバグが起きないようにした③候補としてX API実地確認済みの`@livedoornews`（217万）・`@asahi`（128万）・`@sankei_news`（87万）・`@mainichi`（98万）を提示しユーザー承認を得て追加（計10件）④本番dry_run検証で朝日新聞の実際の投稿に進行中の災害警報（線状降水帯直前予測）が含まれ`REPLY_NG_WORDS`をすり抜けていたことを発見し、警報関連ワードを追加して解消。テスト3件追加・1件更新（計36件）全パス。Lambdaデプロイ・本番で全10アカウントへの疎通と実際の返信内容生成を確認済み |
