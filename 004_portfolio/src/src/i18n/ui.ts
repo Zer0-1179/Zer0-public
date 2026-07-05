@@ -44,6 +44,7 @@ export const ui = {
     'about.profile': '自己紹介',
     'about.skills': 'スキル・技術スタック',
     'about.career': '職務経歴',
+    'about.career.summary': '物理サーバ・DB運用からキャリアを開始し、2023年からAWS専門へ。直近は金融機関向けAWS基盤の構築・技術支援を担当する一方、実務では機会の少ない生成AI・サーバーレス設計は個人開発で実践している。',
     'about.certifications': '資格・認定',
     'about.profile.text': 'インフラエンジニア歴5年、うちAWS専門3年。AWSを中心としたクラウドインフラの設計・構築・運用を行うエンジニア。要件定義から本番リリースまでの一貫した経験を持ち、IaCと生成AIを活用した業務自動化に取り組んでいる。',
 
@@ -117,6 +118,7 @@ export const ui = {
     'about.profile': 'About Me',
     'about.skills': 'Skills & Tech Stack',
     'about.career': 'Career',
+    'about.career.summary': 'Started my career in physical server and database operations, then specialized in AWS from 2023. Recently I build and support AWS infrastructure for financial institutions, while practicing generative AI and serverless design — areas with fewer opportunities at work — through personal projects.',
     'about.certifications': 'Certifications',
     'about.profile.text': '5 years in infrastructure engineering, 3 years specialized in AWS. Cloud engineer focused on AWS infrastructure design, implementation, and operations. Full-lifecycle experience from requirements to production, with a focus on IaC and AI-driven automation.',
 
