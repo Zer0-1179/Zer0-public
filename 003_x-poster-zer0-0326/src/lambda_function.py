@@ -97,6 +97,14 @@ TREND_NG_WORDS = [
     "死去", "訃報", "逝去", "追悼", "逮捕", "事故", "事件", "地震", "台風", "水害",
     "火災", "殺", "自殺", "戦争", "ミサイル", "紛争", "選挙", "議員", "内閣", "首相",
     "炎上", "不倫", "引退", "容疑", "被害", "噴火", "遭難", "訴訟", "賠償",
+    # 2026-07-05 Fable最終レビューで指摘: 報道の最頻出語「死亡」等が欠けており、
+    # 経済メディア（nikkei等）が主対象のリプ営業では「倒産」「解雇」等の欠落が
+    # 「大量解雇のニュースに手取りの愚痴リプが付く」ような実害級の組み合わせを招きうる
+    "死亡", "急死", "病死", "重体", "重傷", "遺体", "行方不明",
+    "倒産", "リストラ", "解雇", "破産",
+    "テロ", "銃", "刺傷", "セクハラ", "パワハラ", "虐待", "いじめ",
+    "天皇", "皇室", "被告", "起訴", "判決", "覚醒剤", "薬物", "感染症",
+    "警報", "線状降水帯", "洪水", "土砂災害", "避難指示", "避難勧告", "津波",
 ]
 
 # キーワード抽出用のトピックリスト
@@ -180,7 +188,7 @@ STYLE_GUIDE = """【文体ルール】
   ・挑発型：「〜はもう終わってる」「〜してない人、正直やばいと思ってる」「〜だと思ってる人、たぶんズレてる」
 
 【語感】
-語尾→「…」「〜」「笑」「かも」「気がする」「だけど」「かな」「っていう」
+語尾→「…」「〜」「笑」「だけど」「っていう」（「かも」「気がする」等のヘッジ語尾は断定ルールと矛盾するため使わない）
 文中→「なんか」「ちょっと」「わりと」「けっこう」「なんとなく」「よくわかんないけど」
 反応→「え、待って」「まじか」「あ、そういうことか」「うーん」
 その他→独り言調・失敗談・試行錯誤・雑な数字（「もう2時間経ってた笑」等）
@@ -452,7 +460,10 @@ def extract_keywords(body_text: str) -> list:
     numbers  = re.findall(r'\d+[時間万円本個分%倍]', clean)
     matched  = [kw for kw in TOPIC_WORDS if kw in clean]
     all_kws  = list(dict.fromkeys(katakana + matched + numbers))
-    return all_kws[:5] if len(all_kws) >= 3 else (all_kws or ["会社員"])
+    # 2026-07-05 Fable最終レビューで指摘: フォールバックが["会社員"]だと、一度発生しただけで
+    # 「過去7日間に使ったキーワード（繰り返し禁止）」に居座り続け、アカウントの主題語である
+    # 「会社員」自体を使えなくなる自傷的なバグだったため、空リストに変更した
+    return all_kws[:5]
 
 
 def _past_keywords_hint(history: list) -> str:
@@ -468,47 +479,69 @@ def _past_keywords_hint(history: list) -> str:
 # Google Trends RSS
 # ─────────────────────────────────────────────────────
 
+_GOOGLE_TRENDS_NS = {"ht": "https://trends.google.com/trending/rss"}
+
+
 def fetch_google_trends_jp() -> list:
-    """Google Trends RSS（日本）からトレンドキーワードを最大20件取得する。"""
+    """Google Trends RSS（日本）からトレンド項目を最大20件取得する。
+    各項目はキーワードとそれに紐づく関連ニュース見出し（文脈）のペアで返す。
+    2026-07-05: 以前はキーワード文字列しか取得しておらず、モデルが「なぜトレンド入りしたか」
+    を知らないまま反応する構造的欠陥があった（Fable最終レビューで指摘）。文脈を取得することで
+    プロンプトへの背景供給と、NGワード検査の対象拡大（人名だけがトレンド入りし、文脈の
+    ニュース見出しに訃報・事件が含まれるケースを検出）の両方に使う。"""
     url = "https://trends.google.co.jp/trending/rss?geo=JP"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as r:
             root = ET.fromstring(r.read())
-        return [
-            item.findtext("title", "").strip()
-            for item in root.findall(".//item")
-            if item.findtext("title", "").strip()
-        ][:20]
+        results = []
+        for item in root.findall(".//item")[:20]:
+            keyword = item.findtext("title", "").strip()
+            if not keyword:
+                continue
+            news_titles = [
+                nt.text.strip() for nt in item.findall("ht:news_item/ht:news_item_title", _GOOGLE_TRENDS_NS)
+                if nt.text and nt.text.strip()
+            ]
+            results.append({"keyword": keyword, "context": news_titles[0] if news_titles else ""})
+        return results
     except Exception as e:
         print(f"[Trends] 取得エラー: {e}")
         return []
 
 
-def pick_relatable_trend(keywords: list) -> str | None:
-    """トレンドキーワードを優先度順に1つ選ぶ（AIコンセプト撤廃により内容は問わない）。
+def pick_relatable_trend(trend_items: list) -> dict | None:
+    """トレンド項目（キーワード＋関連ニュース文脈）を優先度順に1つ選ぶ。
+    文脈が取得できない項目は「何の話か分からないまま反応する」ことになり危険なため、
+    全ティアで文脈ありを必須にする（2026-07-05: 従来はTier3がキーワード単体で
+    通っておりNGワード検査をすり抜けるリスクがあった。Fable最終レビューで指摘）。
     Tier1: 仕事・お金まわりの直球ワード、Tier2: 幅広い生活・ビジネス系、
     Tier3: 日本語の任意キーワードにフォールバックするため、実質どんな話題でも拾える。
-    訃報・事件・災害・政治等のNGワードを含むキーワードは炎上防止のため事前に除外する。"""
-    before = len(keywords)
-    keywords = [kw for kw in keywords if not any(ng in kw for ng in TREND_NG_WORDS)]
-    if len(keywords) != before:
-        print(f"[Trends] NGワードにより{before - len(keywords)}件除外")
+    訃報・事件・災害・政治等のNGワードは、キーワードと文脈の両方に対して検査する。"""
+    before = len(trend_items)
+    candidates = [
+        t for t in trend_items
+        if t.get("context")
+        and not any(ng in t["keyword"] for ng in TREND_NG_WORDS)
+        and not any(ng in t["context"] for ng in TREND_NG_WORDS)
+    ]
+    if len(candidates) != before:
+        print(f"[Trends] 文脈なし/NGワードにより{before - len(candidates)}件除外")
 
-    tier1 = [kw for kw in keywords if any(t in kw for t in TIER1_KEYWORDS)]
+    tier1 = [t for t in candidates if any(k in t["keyword"] for k in TIER1_KEYWORDS)]
     if tier1:
-        print(f"[Trends] Tier1マッチ: {tier1}")
+        print(f"[Trends] Tier1マッチ: {[t['keyword'] for t in tier1]}")
         return random.choice(tier1)
 
-    tier2 = [kw for kw in keywords if any(t in kw for t in TIER2_KEYWORDS)]
+    tier2 = [t for t in candidates if any(k in t["keyword"] for k in TIER2_KEYWORDS)]
     if tier2:
-        print(f"[Trends] Tier2マッチ: {tier2}")
+        print(f"[Trends] Tier2マッチ: {[t['keyword'] for t in tier2]}")
         return random.choice(tier2)
 
-    tier3 = [kw for kw in keywords
-             if re.search(r'[\u3040-\u30FF\u4E00-\u9FFF]{2,}', kw) and len(kw) <= 15]
+    tier3 = [t for t in candidates
+             if re.search(r'[\u3040-\u30FF\u4E00-\u9FFF]{2,}', t["keyword"]) and len(t["keyword"]) <= 15]
     if tier3:
-        print(f"[Trends] Tier3マッチ: {tier3}")
+        print(f"[Trends] Tier3マッチ: {[t['keyword'] for t in tier3]}")
         return random.choice(tier3)
 
     return None
@@ -527,27 +560,15 @@ def fetch_url_reaction_article(used_urls: list) -> dict | None:
             # 非ASCII文字を含むURLをパーセントエンコード
             encoded_url = urllib.parse.quote(feed["url"], safe=":/?=&%#+@")
             req = urllib.request.Request(encoded_url, headers={"User-Agent": "Mozilla/5.0"})
-            # 6フィード直列取得のため timeout は短めに（Lambda Timeout=60秒との兼ね合い）
+            # 3フィード直列取得のため timeout は短めに（Lambda Timeout=90秒との兼ね合い）
             with urllib.request.urlopen(req, timeout=5) as r:
                 tree = ET.parse(r)
-            ns = {"atom": "http://www.w3.org/2005/Atom"}
-            # RSS形式
+            # URL_REACTION_FEEDSは全てYahoo!ニュースRSS（RSS2.0形式）のため、
+            # 以前あったAtom形式（Qiita）向けの分岐は2026-07-05のフィード刷新で到達不能になり削除した
             for item in tree.findall(".//item")[:5]:
                 title = item.findtext("title", "").strip()
                 link  = item.findtext("link", "").strip()
                 desc  = item.findtext("description", "").strip()[:300]
-                if title and link:
-                    articles.append({"source": feed["source"], "label": feed["label"],
-                                     "title": title, "url": link, "desc": desc})
-            # Atom形式（Qiita）
-            for entry in tree.findall(".//{http://www.w3.org/2005/Atom}entry")[:5]:
-                title = (entry.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
-                link  = ""
-                for l in entry.findall("{http://www.w3.org/2005/Atom}link"):
-                    if l.get("rel") in (None, "alternate"):
-                        link = l.get("href", "")
-                        break
-                desc  = (entry.findtext("{http://www.w3.org/2005/Atom}summary") or "")[:300]
                 if title and link:
                     articles.append({"source": feed["source"], "label": feed["label"],
                                      "title": title, "url": link, "desc": desc})
@@ -615,7 +636,7 @@ def build_url_reaction_prompt(article: dict, history: list) -> str:
 ---
 ---
 正直この意見には賛同できない部分もあるけど
-言いたいことは分かる気がする
+言いたいことの筋は通ってると思う
 
 叩かれそうだけど自分もこっち側だと思う
 ---
@@ -844,8 +865,8 @@ def build_question_prompt(history: list, hashtag: str, theme: str) -> str:
 ---
 ボーナス、みんな額面で満足してる？
 
-なんとなく妥当な気がしてるけど
-正直基準がよくわかってない笑
+基準を説明できる人、見たことない
+ちゃんと計算したことある人いる？
 {hashtag}
 ---
 ---
@@ -859,23 +880,23 @@ def build_question_prompt(history: list, hashtag: str, theme: str) -> str:
 ---
 今の仕事、向いてる自信ある？
 
-「向いてる」と「慣れただけ」って
-全然別物な気がしてる
+「向いてる」と「慣れただけ」は
+全然別物だと思ってる
 {hashtag}
 ---
 ---
 毎月いくら貯金してる？
 
 無理してでも貯める派と
-使う派に分かれる気がしてて
+使う派、はっきり分かれると思ってる
 {hashtag}
 ---
 ---
 副業ってどこから始めた？
 
 始めたいけど何からやればいいか
-わからないままでいる人
-けっこういそう
+わからないまま何年も経ってる人
+絶対多いと思ってる
 #副業
 ---
 ---
@@ -925,12 +946,17 @@ def build_question_prompt(history: list, hashtag: str, theme: str) -> str:
 ハッシュタグは「{hashtag}」「#副業」のどちらか内容に合う方を1つ、または付けない。URLは含めない。ツイート本文のみ出力。"""
 
 
-def build_trend_prompt(trend_kw: str, history: list) -> str:
+def build_trend_prompt(trend_kw: str, trend_context: str, history: list) -> str:
     avoid = _past_keywords_hint(history)
     return f"""「{trend_kw}」というトレンドに対する、会社員としての率直な意見・持論をX（旧Twitter）用に1件生成してください。
 キャラ：なんとか生きてる普通の会社員
 ターゲット：同じトレンドを見ている人・「それな」「いや違うだろ」のどちらかの反応をせずにいられない内容
 {avoid}
+【このトレンドの背景（関連ニュース見出し）】
+{trend_context}
+
+【重要】上記の背景に書かれている具体的な事実の範囲でのみ反応すること。背景に書かれていないことを推測で断定しない。
+
 【良い例（{trend_kw}の部分は実際のキーワードに変わる）】
 ---
 「{trend_kw}」を見て思ったんだけど
@@ -1187,6 +1213,15 @@ _HEDGE_ENDINGS = (
     "気がする", "気もする", "気がしてる", "かもしれない", "かもな", "かも",
     "んだろうか", "のかな", "なんだろう", "んだろう", "だろうか",
 )
+# ヘッジ判定の前に取り除く文末の装飾（句読点・絵文字的表現・笑い）。
+# 2026-07-05 Fable最終レビューで指摘: 「〜な気がする。」「〜かもね」のように
+# 装飾が1文字付くだけで完全一致(endswith)の判定をすり抜けていた。
+_TRAILING_DECORATIONS = "。.!！?？…～〜笑wW草、ねよなあ"
+
+
+def _strip_trailing_decoration(text: str) -> str:
+    """ヘッジ判定用に文末の句読点・語尾装飾を除去する。"""
+    return text.rstrip(_TRAILING_DECORATIONS)
 
 
 def _score_tweet(text: str) -> int:
@@ -1195,7 +1230,7 @@ def _score_tweet(text: str) -> int:
     if not body:
         return -100
     lines = [l for l in body.splitlines() if l.strip()]
-    last_line = lines[-1].strip() if lines else body
+    last_line = _strip_trailing_decoration(lines[-1].strip() if lines else body)
     score = 0
     if not any(last_line.endswith(h) for h in _HEDGE_ENDINGS):
         score += 3  # ヘッジで終わっていない＝断定で言い切れている
@@ -1203,8 +1238,14 @@ def _score_tweet(text: str) -> int:
         score += 2  # 具体的な数字がある
     if 30 <= len(body) <= 130:
         score += 2  # 短すぎず長すぎない情報密度
+    elif len(body) > 200:
+        score -= 3  # 明らかに長すぎ、後段の機械切断でぶった切られる案は避ける
     if any(w in body for w in ("正直", "だと思ってる", "思ってる")):
         score += 1  # 意見表明のシグナル
+    if re.search(r'(です|ます)(。|、|\s|$)', body):
+        score -= 5  # ABSOLUTE_RULESの「です・ます禁止」違反
+    if body.count("…") > 1:
+        score -= 2  # ABSOLUTE_RULESの「…は1投稿最大1回」違反
     return score
 
 
@@ -1238,8 +1279,17 @@ def invoke_bedrock(prompt: str, n: int = _CANDIDATE_COUNT) -> str:
     print(f"[Bedrock] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
     text = result["content"][0]["text"].strip()
     candidates = [c.strip() for c in re.split(r'\n?={3,}\n?', text) if c.strip()]
+    if len(candidates) <= 1:
+        # 2026-07-05 Fable最終レビューで指摘: few-shot例が"---"区切りを使っているため、
+        # モデルが案の区切りにも"---"を誤用することがある。"==="分割が効かない場合のフォールバック。
+        alt = [c.strip() for c in re.split(r'\n?-{3,}\n?', text) if c.strip()]
+        if len(alt) > 1:
+            candidates = alt
     if not candidates:
         candidates = [text]
+    # 区切り文字だけの行が本文に残っていたら除去する
+    candidates = [re.sub(r'(?m)^[=\-]{3,}$', '', c).strip() for c in candidates]
+    candidates = [c for c in candidates if c] or [text]
     best = pick_best_tweet(candidates)
     if len(candidates) > 1:
         print(f"[Bedrock] {len(candidates)}案からスコア{_score_tweet(best)}点の案を採用")
@@ -1357,6 +1407,9 @@ DEFAULT_REPLY_TARGET_ACCOUNTS = [
 ]
 MAX_REPLY_TARGET_HISTORY_CAP = 5   # 除外履歴の上限（対象数が増えても際限なく増やさない）
 MAX_REPLIED_TWEET_HISTORY    = 50  # 同一ツイートへの二重返信を防ぐための履歴保持件数
+# 2026-07-05 Fable最終レビューで指摘: 2案中マシな方でも低品質なら投稿されてしまう。
+# 大手アカウントの下に晒される文章のため、_score_tweet基準で一定点未満は投稿せずスキップする。
+_REPLY_MIN_SCORE = 3
 
 
 def load_reply_target_accounts() -> list:
@@ -1472,9 +1525,6 @@ def fetch_recent_tweets(user_id: str, creds: dict, max_results: int = 5) -> list
 # 大統領・政権・外交等も除外し、政治的な話題への反応を避ける。
 REPLY_NG_WORDS = TREND_NG_WORDS + [
     "大統領", "首相官邸", "政権", "外交", "与党", "野党", "国会", "トランプ",
-    # 2026-07-05: 朝日新聞の実タイムラインに「線状降水帯直前予測」等の進行中の災害警報が
-    # 含まれ、TREND_NG_WORDS（台風・水害等の一般語）だけでは検知できなかったため追加
-    "警報", "線状降水帯", "洪水", "土砂災害", "避難指示", "避難勧告", "津波",
 ]
 
 
@@ -1500,22 +1550,32 @@ def build_reply_prompt(tweet_text: str, target_label: str) -> str:
 【相手の投稿】
 {tweet_text}
 
-【良い例（投稿の具体的な内容に触れた上で、会社員目線の本音や関連する体験を一言添える）】
+【良い例（投稿の具体的な内容に触れた上で、会社員目線の本音や関連する体験を一言添える。
+記事のジャンルに合わせて切り口を変えること。給料・お金の話に寄せすぎない）】
 ---
 これ見て思ったけど、給料からの天引き額を明細で改めて見ると毎回めまいがする
 使い道が納得できないとなおさら
 ---
 ---
-正直この手のニュース、自分の手取りとは別世界の話に感じる
-生活してる側からするとリアリティがない
+この手のツール紹介、結局試すまでが一番腰が重い
+入れたら入れたでちゃんと使いこなせるか不安になる
 ---
 ---
-記事の内容はわかるけど、結局自分の給料には反映されない話だよなと思ってしまう
+このドラマ／作品の話、社内で話題にできる人がいなくて一人で消化してる
+布教したいけど需要が読めない
+---
+---
+記事の内容はわかるけど、結局自分の日常には反映されない話だよなと思ってしまう
+---
+---
+こういうスポーツの記事を読むと、自分も何か新しいこと始めたくなる
+三日坊主で終わった過去が頭をよぎるけど
 ---
 
 【ルール】
 - 相手の投稿の具体的な内容（数字・固有名詞・論点）に触れること。「わかります」「そうですね」のような当たり障りのない相槌は禁止
-- 会社員としての本音・実感を1つ添える（仕事・お金・生活の視点）。税金・手取りへの不満などの切り口もOK
+- 記事のジャンル（お金・仕事・テック・エンタメ・スポーツ等）に合わせた切り口にする。ジャンルを問わず給料・手取りの話に寄せない
+- 会社員としての本音・実感を1つ添える
 - 特定の個人・政党・企業への攻撃、差別的表現、誤情報の断定はしない（あくまで会社員としての実感・本音の範囲）
 - 「です・ます」禁止。常体・口語
 - 80文字以内
@@ -1554,15 +1614,27 @@ def attempt_reply_outreach(creds: dict, dry_run: bool) -> None:
             return
 
         prompt = build_reply_prompt(chosen["text"], target)
-        reply_text = invoke_bedrock(prompt, n=2)
-        reply_text = trim_body_excluding_hashtags(reply_text, limit=80)
+        raw_reply_text = invoke_bedrock(prompt, n=2)
+        reply_text = trim_body_excluding_hashtags(raw_reply_text, limit=80)
         reply_text = strip_model_hashtag_lines(reply_text)
 
         if not reply_text or len(reply_text) < 5:
             print("[Reply] 生成結果が短すぎる/空のためスキップ")
             return
 
-        print(f"[Reply] @{target} の投稿「{chosen['text'][:40]}...」に返信予定:\n{reply_text}")
+        # 2026-07-05 Fable最終レビューで指摘: 80字トリムで文中がぶった切られたリプは
+        # 大手アカウントの下では特にBot感が強い。80字を超える生成結果は
+        # 途中で切れている可能性が高いため、無理に投稿せずスキップする。
+        if len(raw_reply_text) > 80:
+            print(f"[Reply] 生成結果が80字超（{len(raw_reply_text)}字）で途中切断の恐れがあるためスキップ")
+            return
+
+        reply_score = _score_tweet(reply_text)
+        if reply_score < _REPLY_MIN_SCORE:
+            print(f"[Reply] 生成結果の品質スコアが低い（{reply_score}点）ためスキップ")
+            return
+
+        print(f"[Reply] @{target} の投稿「{chosen['text'][:40]}...」に返信予定（スコア{reply_score}点）:\n{reply_text}")
 
         if dry_run:
             print("[Reply] [DRY_RUN] 返信投稿・履歴更新をスキップ")
@@ -1591,16 +1663,19 @@ def lambda_handler(event, context):
 
     # ── カテゴリ決定 ──────────────────────────────────
     used_categories = load_used_categories()
-    trend_kw    = None
-    url_article = None
-    used_urls   = None
+    trend_kw      = None
+    trend_context = ""
+    url_article   = None
+    used_urls     = None
 
     if mode == "trend":
-        trends   = fetch_google_trends_jp()
-        trend_kw = pick_relatable_trend(trends) if trends else None
-        if trend_kw:
+        trends     = fetch_google_trends_jp()
+        trend_item = pick_relatable_trend(trends) if trends else None
+        if trend_item:
+            trend_kw      = trend_item["keyword"]
+            trend_context = trend_item["context"]
             category = "trend"
-            print(f"[Trend] 使用キーワード: {trend_kw}")
+            print(f"[Trend] 使用キーワード: {trend_kw} / 背景: {trend_context[:50]}")
         else:
             print("[Trend] 絡められるキーワードなし → ローテーションカテゴリにフォールバック")
             category = pick_category(used_categories)
@@ -1675,7 +1750,7 @@ def lambda_handler(event, context):
         "question": lambda h: build_question_prompt(h, cat_hashtag, question_theme),
     }
     if category == "trend":
-        prompt = build_trend_prompt(trend_kw, history)
+        prompt = build_trend_prompt(trend_kw, trend_context, history)
     elif category == "url_reaction":
         prompt = build_url_reaction_prompt(url_article, history)
     else:
@@ -1694,8 +1769,10 @@ def lambda_handler(event, context):
     else:
         tweet = trim_body_excluding_hashtags(raw)
 
-    # Bot感軽減: 約35%はハッシュタグなしで投稿する（url_reaction は除く）
-    if category != "url_reaction" and random.random() < NO_HASHTAG_RATE:
+    # Bot感軽減: NO_HASHTAG_RATE（現在0.9=原則タグなし）の確率でハッシュタグを外す。
+    # 2026-07-05: 以前はurl_reactionだけ100%タグ付けだったが、「タグはBot感のシグナル」
+    # という方針転換（Fable最終レビュー指摘）に合わせ全カテゴリで統一した
+    if random.random() < NO_HASHTAG_RATE:
         stripped = re.sub(r'[ \t]*#\S+', '', tweet).rstrip()
         if stripped:
             tweet = stripped

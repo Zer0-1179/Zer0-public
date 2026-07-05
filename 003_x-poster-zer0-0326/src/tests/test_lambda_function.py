@@ -95,8 +95,10 @@ def test_pick_category_falls_back_when_all_recent():
 # extract_keywords
 # ─────────────────────────────────────────────────────
 
-def test_extract_keywords_returns_fallback_when_empty():
-    assert lf.extract_keywords("特に固有名詞のない普通の文章") == ["会社員"]
+def test_extract_keywords_returns_empty_list_when_no_match():
+    """2026-07-05修正: フォールバック["会社員"]は繰り返し禁止履歴に居座り続け
+    アカウントの主題語自体を使えなくする自傷バグだったため空リストに変更した"""
+    assert lf.extract_keywords("特に固有名詞のない普通の文章") == []
 
 
 def test_extract_keywords_finds_topic_words():
@@ -138,23 +140,45 @@ def test_max_question_theme_history_smaller_than_total():
 # ─────────────────────────────────────────────────────
 
 def test_trend_ng_words_excluded_from_tier1():
-    keywords = ["仕事速報 訃報", "転職ブーム"]
-    result = lf.pick_relatable_trend(keywords)
-    assert result == "転職ブーム"
+    items = [
+        {"keyword": "仕事速報 訃報", "context": "訃報のニュース"},
+        {"keyword": "転職ブーム", "context": "転職市場が活発化というニュース"},
+    ]
+    result = lf.pick_relatable_trend(items)
+    assert result["keyword"] == "転職ブーム"
+
+
+def test_trend_ng_words_in_context_also_excluded():
+    """2026-07-05追加: キーワード自体は無害でも、関連ニュース文脈にNGワードがあれば除外すること
+    （人名だけがトレンド入りし、文脈のニュース見出しに訃報・事件が含まれるケースの対策）"""
+    items = [{"keyword": "山田太郎", "context": "山田太郎さん死去、〇〇の訃報"}]
+    assert lf.pick_relatable_trend(items) is None
+
+
+def test_trend_without_context_excluded():
+    """2026-07-05追加: 文脈（関連ニュース見出し）が取得できない項目は、
+    背景不明のまま反応することになり危険なため除外すること"""
+    items = [{"keyword": "謎のキーワード", "context": ""}]
+    assert lf.pick_relatable_trend(items) is None
 
 
 def test_trend_ng_words_excluded_entirely_falls_back_to_none():
-    keywords = ["有名人 死去", "議員 逮捕"]
-    assert lf.pick_relatable_trend(keywords) is None
+    items = [
+        {"keyword": "有名人 死去", "context": "有名人が死去というニュース"},
+        {"keyword": "議員 逮捕", "context": "議員が逮捕されたというニュース"},
+    ]
+    assert lf.pick_relatable_trend(items) is None
 
 
 def test_trend_normal_tier1_keyword_still_matches():
-    assert lf.pick_relatable_trend(["転職ブーム到来"]) == "転職ブーム到来"
+    items = [{"keyword": "転職ブーム到来", "context": "転職市場についてのニュース"}]
+    assert lf.pick_relatable_trend(items)["keyword"] == "転職ブーム到来"
 
 
 def test_trend_generic_keyword_matches_via_tier3():
-    """AIコンセプト撤廃により、Tier1/2に一致しない一般的な話題もTier3で拾えること"""
-    assert lf.pick_relatable_trend(["謎の新現象"]) == "謎の新現象"
+    """AIコンセプト撤廃により、Tier1/2に一致しない一般的な話題もTier3で拾えること（文脈があれば）"""
+    items = [{"keyword": "謎の新現象", "context": "謎の新現象が話題になっているというニュース"}]
+    assert lf.pick_relatable_trend(items)["keyword"] == "謎の新現象"
 
 
 # ─────────────────────────────────────────────────────
@@ -175,6 +199,37 @@ def test_score_tweet_rewards_numbers():
 def test_score_tweet_penalizes_empty_text():
     assert lf._score_tweet("") < 0
     assert lf._score_tweet("#タグだけ") < 0
+
+
+def test_score_tweet_hedge_detection_survives_trailing_punctuation():
+    """2026-07-05修正: 「気がする。」のように句読点が付くだけで
+    ヘッジ終わりの判定(endswith完全一致)をすり抜けていたバグの回帰テスト"""
+    with_punct    = "在宅の方が楽な気がする。"
+    with_laugh    = "在宅の方が楽な気がする笑"
+    without_hedge = "在宅の方が楽だと思ってる"
+    assert lf._score_tweet(with_punct) < lf._score_tweet(without_hedge)
+    assert lf._score_tweet(with_laugh) < lf._score_tweet(without_hedge)
+
+
+def test_score_tweet_penalizes_desu_masu():
+    """ABSOLUTE_RULESの「です・ます禁止」違反を減点すること"""
+    formal   = "これはとても便利です。"
+    informal = "これはとても便利だと思ってる"
+    assert lf._score_tweet(formal) < lf._score_tweet(informal)
+
+
+def test_score_tweet_penalizes_excessive_length():
+    """長すぎる案は後段の機械切断でぶった切られるため減点すること"""
+    long_body  = "あ" * 250
+    short_body = "あ" * 80 + "だと思ってる"
+    assert lf._score_tweet(long_body) < lf._score_tweet(short_body)
+
+
+def test_score_tweet_penalizes_multiple_ellipsis():
+    """ABSOLUTE_RULESの「…は1投稿最大1回」違反を減点すること（語尾は揃えて比較）"""
+    multi   = "それな…でも実際…そう思ってる"
+    single  = "それな…でも実際そう思ってる"
+    assert lf._score_tweet(multi) < lf._score_tweet(single)
 
 
 def test_pick_best_tweet_selects_highest_score():
