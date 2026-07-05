@@ -58,7 +58,12 @@ function parseCookies(header: string): Record<string, string> {
 }
 
 function buildCookie(value: string, maxAgeSeconds: number): string {
-  return `${ADMIN_COOKIE_NAME}=${value}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=Strict`;
+  // 2026-07-05: SameSite=Strictだと、リンク経由（メモ・チャット等からのアクセス）の
+  // トップレベルナビゲーションでCookieが送信されないモバイルブラウザがあり、
+  // 「指定URLでアクセスしたのに認証されない」報告の原因となっていた。
+  // Laxでもクロスサイトのサブリソース・POST等には送信されないため、
+  // このページ（閲覧専用の管理者トグル）用途では十分な安全性を保ったまま解消できる。
+  return `${ADMIN_COOKIE_NAME}=${value}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=Lax`;
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
