@@ -10,10 +10,6 @@ Parameters:
   RecipientEmail:
     Type: String
     Description: Notification recipient email address
-  BedrockModelId:
-    Type: String
-    Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
-    Description: Topic selection model (Haiku - lightweight)
   BedrockArticleModelId:
     Type: String
     Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
@@ -92,7 +88,6 @@ Resources:
         Variables:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
-          BEDROCK_MODEL_ID: !Ref BedrockModelId
           BEDROCK_ARTICLE_MODEL_ID: !Ref BedrockArticleModelId
           # AWS_TOPICS 総数（28件）と同値にすると重複除外が恒久的に無効化されるバグが
           # あったため、総数より小さい値にする（2026-07-03 第2巡レビューで修正）

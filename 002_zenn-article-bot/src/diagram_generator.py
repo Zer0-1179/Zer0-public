@@ -219,7 +219,8 @@ def _draw_diagram(
             mx = (n1['x'] + n2['x']) / 2
             my = (n1['y'] + n2['y']) / 2
             ax.text(mx, my + 0.18, edge_label, ha='center', va='bottom',
-                    fontsize=7, color='#666666', zorder=4)
+                    fontsize=7, color='#666666', zorder=4,
+                    bbox=dict(facecolor='white', edgecolor='none', pad=1.5))
 
     # ノード（アイコン + ラベル）
     HALF = 0.55
@@ -252,6 +253,7 @@ def _draw_diagram(
                     facecolor='white', format='png')
     finally:
         plt.close(fig)
+    return title
 
 
 # ─── EC2 ─────────────────────────────────────────────────────────────────────
@@ -272,7 +274,7 @@ def _diagram_ec2_1(output_path: str):
         ('ec2_1', 'rds'),
         ('ec2_2', 'rds'),
     ]
-    _draw_diagram('Amazon EC2 ① – ALB + EC2 冗長構成', nodes, edges, output_path)
+    return _draw_diagram('Amazon EC2 ① – ALB + EC2 冗長構成', nodes, edges, output_path)
 
 
 def _diagram_ec2_2(output_path: str):
@@ -292,7 +294,7 @@ def _diagram_ec2_2(output_path: str):
         ('asg', 'e2'),
         ('asg', 'e3', '追加起動'),
     ]
-    _draw_diagram('Amazon EC2 ② – CloudWatch + Auto Scaling 自動スケール構成',
+    return _draw_diagram('Amazon EC2 ② – CloudWatch + Auto Scaling 自動スケール構成',
                   nodes, edges, output_path)
 
 
@@ -311,7 +313,7 @@ def _diagram_s3_1(output_path: str):
         ('s3', 'cf', 'オリジン'),
         ('cf', 'user', 'CDN配信'),
     ]
-    _draw_diagram('Amazon S3 ① – 静的ウェブホスティング + CloudFront 構成',
+    return _draw_diagram('Amazon S3 ① – 静的ウェブホスティング + CloudFront 構成',
                   nodes, edges, output_path)
 
 
@@ -328,7 +330,7 @@ def _diagram_s3_2(output_path: str):
         ('s3', 'fn', 'イベント通知'),
         ('fn', 'ddb', 'メタデータ保存'),
     ]
-    _draw_diagram('Amazon S3 ② – S3 イベント通知 + Lambda 連携構成',
+    return _draw_diagram('Amazon S3 ② – S3 イベント通知 + Lambda 連携構成',
                   nodes, edges, output_path)
 
 
@@ -352,7 +354,7 @@ def _diagram_iam_1(output_path: str):
         ('iam_role', 's3'),
         ('iam_role', 'rds'),
     ]
-    _draw_diagram('AWS IAM ① – ユーザー / ロール / ポリシー 構成', nodes, edges, output_path)
+    return _draw_diagram('AWS IAM ① – ユーザー / ロール / ポリシー 構成', nodes, edges, output_path)
 
 
 def _diagram_iam_2(output_path: str):
@@ -368,7 +370,7 @@ def _diagram_iam_2(output_path: str):
         ('role', 's3', 'GetObject / PutObject'),
         ('role', 'ddb', 'Query / PutItem'),
     ]
-    _draw_diagram('AWS IAM ② – EC2 インスタンスプロファイル（ロール）によるリソースアクセス',
+    return _draw_diagram('AWS IAM ② – EC2 インスタンスプロファイル（ロール）によるリソースアクセス',
                   nodes, edges, output_path)
 
 
@@ -390,7 +392,7 @@ def _diagram_vpc_1(output_path: str):
         {'label': 'プライベートサブネット', 'x': 9.6, 'y': 1.8, 'w': 2.8, 'h': 2.4,
          'color': '#FEF9E7'},
     ]
-    _draw_diagram('Amazon VPC ① – パブリック / プライベートサブネット 構成',
+    return _draw_diagram('Amazon VPC ① – パブリック / プライベートサブネット 構成',
                   nodes, edges, output_path, clusters=clusters)
 
 
@@ -413,7 +415,7 @@ def _diagram_vpc_2(output_path: str):
         {'label': 'パブリックサブネット',   'x': 4.2, 'y': 1.8, 'w': 3.0, 'h': 2.4,
          'color': '#E8F4FB'},
     ]
-    _draw_diagram('Amazon VPC ② – NAT Gateway 経由のアウトバウンド通信構成',
+    return _draw_diagram('Amazon VPC ② – NAT Gateway 経由のアウトバウンド通信構成',
                   nodes, edges, output_path, clusters=clusters)
 
 
@@ -434,7 +436,7 @@ def _diagram_rds_1(output_path: str):
         {'label': 'AZ-a', 'x': 5.0, 'y': 3.3, 'w': 3.0, 'h': 1.8, 'color': '#EAF7EA'},
         {'label': 'AZ-b', 'x': 5.0, 'y': 0.9, 'w': 3.0, 'h': 1.8, 'color': '#FEF3E7'},
     ]
-    _draw_diagram('Amazon RDS ① – Multi-AZ 冗長構成',
+    return _draw_diagram('Amazon RDS ① – Multi-AZ 冗長構成',
                   nodes, edges, output_path, figsize=(10, 6), xlim=(0, 10), clusters=clusters)
 
 
@@ -451,7 +453,7 @@ def _diagram_rds_2(output_path: str):
         ('app_r', 'replica', 'Read'),
         ('primary', 'replica', '非同期レプリケーション'),
     ]
-    _draw_diagram('Amazon RDS ② – リードレプリカ（読み取りスケールアウト）構成',
+    return _draw_diagram('Amazon RDS ② – リードレプリカ（読み取りスケールアウト）構成',
                   nodes, edges, output_path)
 
 
@@ -470,7 +472,7 @@ def _diagram_lambda_1(output_path: str):
         ('fn', 'ddb', 'Write'),
         ('fn', 's3', 'Put'),
     ]
-    _draw_diagram('AWS Lambda ① – EventBridge トリガー + DynamoDB / S3 構成',
+    return _draw_diagram('AWS Lambda ① – EventBridge トリガー + DynamoDB / S3 構成',
                   nodes, edges, output_path)
 
 
@@ -487,7 +489,7 @@ def _diagram_lambda_2(output_path: str):
         ('sqs', 'fn', 'トリガー（バッチ）'),
         ('fn', 'ddb', 'PutItem'),
     ]
-    _draw_diagram('AWS Lambda ② – SQS トリガーによる非同期処理構成',
+    return _draw_diagram('AWS Lambda ② – SQS トリガーによる非同期処理構成',
                   nodes, edges, output_path)
 
 
@@ -508,7 +510,7 @@ def _diagram_cloudwatch_1(output_path: str):
         ('cw', 'al', '閾値評価'),
         ('al', 'sns', 'アラーム通知'),
     ]
-    _draw_diagram('Amazon CloudWatch ① – メトリクス監視 + SNS 通知構成',
+    return _draw_diagram('Amazon CloudWatch ① – メトリクス監視 + SNS 通知構成',
                   nodes, edges, output_path)
 
 
@@ -527,7 +529,7 @@ def _diagram_cloudwatch_2(output_path: str):
         ('al', 'eb', 'イベント発火'),
         ('eb', 'fn', '自動修復実行'),
     ]
-    _draw_diagram('Amazon CloudWatch ② – Alarm + EventBridge + Lambda 自動修復構成',
+    return _draw_diagram('Amazon CloudWatch ② – Alarm + EventBridge + Lambda 自動修復構成',
                   nodes, edges, output_path)
 
 
@@ -553,7 +555,7 @@ def _diagram_ecs_1(output_path: str):
         {'label': 'ECS Cluster', 'x': 5.6, 'y': 0.8, 'w': 2.8, 'h': 4.4,
          'color': '#EAF4FB'},
     ]
-    _draw_diagram('Amazon ECS ① – Fargate + ALB + RDS 構成',
+    return _draw_diagram('Amazon ECS ① – Fargate + ALB + RDS 構成',
                   nodes, edges, output_path, clusters=clusters)
 
 
@@ -574,7 +576,7 @@ def _diagram_ecs_2(output_path: str):
         ('asg', 'task2'),
         ('asg', 'task3', '追加'),
     ]
-    _draw_diagram('Amazon ECS ② – CloudWatch + Auto Scaling によるタスクスケールアウト',
+    return _draw_diagram('Amazon ECS ② – CloudWatch + Auto Scaling によるタスクスケールアウト',
                   nodes, edges, output_path)
 
 
@@ -593,7 +595,7 @@ def _diagram_dynamodb_1(output_path: str):
         ('ddb', 'streams', '変更キャプチャ'),
         ('streams', 'fn2', 'トリガー'),
     ]
-    _draw_diagram('Amazon DynamoDB ① – Streams + Lambda トリガー構成',
+    return _draw_diagram('Amazon DynamoDB ① – Streams + Lambda トリガー構成',
                   nodes, edges, output_path)
 
 
@@ -608,7 +610,7 @@ def _diagram_dynamodb_2(output_path: str):
         ('fn', 'dax', 'マイクロ秒レスポンス'),
         ('dax', 'ddb', 'キャッシュミス時'),
     ]
-    _draw_diagram('Amazon DynamoDB ② – DAX インメモリキャッシュ構成',
+    return _draw_diagram('Amazon DynamoDB ② – DAX インメモリキャッシュ構成',
                   nodes, edges, output_path, figsize=(12, 5), xlim=(0, 12), ylim=(0, 5))
 
 
@@ -627,7 +629,7 @@ def _diagram_cloudfront_1(output_path: str):
         ('cf', 's3', '静的コンテンツ'),
         ('cf', 'alb', '動的コンテンツ'),
     ]
-    _draw_diagram('Amazon CloudFront ① – S3 + ALB オリジン構成',
+    return _draw_diagram('Amazon CloudFront ① – S3 + ALB オリジン構成',
                   nodes, edges, output_path)
 
 
@@ -644,7 +646,7 @@ def _diagram_cloudfront_2(output_path: str):
         ('waf', 'cf', '悪意あるリクエストをブロック'),
         ('cf', 's3', 'オリジンフェッチ'),
     ]
-    _draw_diagram('Amazon CloudFront ② – WAF 統合によるセキュアな配信構成',
+    return _draw_diagram('Amazon CloudFront ② – WAF 統合によるセキュアな配信構成',
                   nodes, edges, output_path)
 
 
@@ -663,7 +665,7 @@ def _diagram_api_gateway_1(output_path: str):
         ('apigw', 'fn', 'Lambda統合'),
         ('fn', 'ddb', 'CRUD'),
     ]
-    _draw_diagram('Amazon API Gateway ① – Lambda + DynamoDB サーバーレス構成',
+    return _draw_diagram('Amazon API Gateway ① – Lambda + DynamoDB サーバーレス構成',
                   nodes, edges, output_path)
 
 
@@ -682,7 +684,7 @@ def _diagram_api_gateway_2(output_path: str):
         ('apigw', 'fn', '認証済みリクエスト'),
         ('fn', 'ddb', 'CRUD'),
     ]
-    _draw_diagram('Amazon API Gateway ② – Cognito 認証統合構成',
+    return _draw_diagram('Amazon API Gateway ② – Cognito 認証統合構成',
                   nodes, edges, output_path, figsize=(14, 6), xlim=(0, 14))
 
 
@@ -699,7 +701,7 @@ def _diagram_sqs_1(output_path: str):
         ('producer', 'sqs', 'SendMessage'),
         ('sqs', 'consumer', 'トリガー'),
     ]
-    _draw_diagram('Amazon SQS ① – Producer / Consumer 非同期処理構成',
+    return _draw_diagram('Amazon SQS ① – Producer / Consumer 非同期処理構成',
                   nodes, edges, output_path, figsize=(12, 5), xlim=(0, 12), ylim=(0, 5))
 
 
@@ -718,7 +720,7 @@ def _diagram_sqs_2(output_path: str):
         ('sqs', 'dlq', '処理失敗（3回）'),
         ('dlq', 'alert', 'アラート通知'),
     ]
-    _draw_diagram('Amazon SQS ② – デッドレターキュー（DLQ）による障害対応構成',
+    return _draw_diagram('Amazon SQS ② – デッドレターキュー（DLQ）による障害対応構成',
                   nodes, edges, output_path)
 
 
@@ -737,7 +739,7 @@ def _diagram_bedrock_1(output_path: str):
         ('apigw', 'fn', 'リクエスト'),
         ('fn', 'bedrock', 'InvokeModel'),
     ]
-    _draw_diagram('Amazon Bedrock ① – API Gateway + Lambda 経由のテキスト生成構成',
+    return _draw_diagram('Amazon Bedrock ① – API Gateway + Lambda 経由のテキスト生成構成',
                   nodes, edges, output_path)
 
 
@@ -756,7 +758,7 @@ def _diagram_bedrock_2(output_path: str):
         ('kb', 's3', '参照'),
         ('fn', 'claude', 'RAGプロンプト'),
     ]
-    _draw_diagram('Amazon Bedrock ② – Knowledge Base を使った RAG 構成',
+    return _draw_diagram('Amazon Bedrock ② – Knowledge Base を使った RAG 構成',
                   nodes, edges, output_path, figsize=(14, 6), xlim=(0, 14))
 
 
@@ -777,7 +779,7 @@ def _diagram_sagemaker_1(output_path: str):
         ('train', 's3out', 'モデル保存'),
         ('s3out', 'ep', 'デプロイ'),
     ]
-    _draw_diagram('Amazon SageMaker ① – 学習 → モデル保存 → エンドポイントデプロイ構成',
+    return _draw_diagram('Amazon SageMaker ① – 学習 → モデル保存 → エンドポイントデプロイ構成',
                   nodes, edges, output_path)
 
 
@@ -794,7 +796,7 @@ def _diagram_sagemaker_2(output_path: str):
         ('apigw', 'fn', 'プロキシ'),
         ('fn', 'ep', '推論リクエスト'),
     ]
-    _draw_diagram('Amazon SageMaker ② – API Gateway 経由の推論エンドポイント公開構成',
+    return _draw_diagram('Amazon SageMaker ② – API Gateway 経由の推論エンドポイント公開構成',
                   nodes, edges, output_path)
 
 
@@ -815,7 +817,7 @@ def _diagram_rekognition_1(output_path: str):
         ('fn', 'rekog', 'DetectLabels'),
         ('fn', 'ddb', '検出結果保存'),
     ]
-    _draw_diagram('Amazon Rekognition ① – S3 + Lambda による画像解析パイプライン',
+    return _draw_diagram('Amazon Rekognition ① – S3 + Lambda による画像解析パイプライン',
                   nodes, edges, output_path)
 
 
@@ -832,7 +834,7 @@ def _diagram_rekognition_2(output_path: str):
         ('apigw', 'fn', 'プロキシ'),
         ('fn', 'rekog', 'CompareFaces'),
     ]
-    _draw_diagram('Amazon Rekognition ② – API Gateway 経由のリアルタイム顔認証構成',
+    return _draw_diagram('Amazon Rekognition ② – API Gateway 経由のリアルタイム顔認証構成',
                   nodes, edges, output_path)
 
 
@@ -853,7 +855,7 @@ def _diagram_textract_1(output_path: str):
         ('textract', 'fn', 'SNS完了通知'),
         ('fn', 'ddb', '抽出データ保存'),
     ]
-    _draw_diagram('Amazon Textract ① – S3 + Textract 非同期文書解析パイプライン',
+    return _draw_diagram('Amazon Textract ① – S3 + Textract 非同期文書解析パイプライン',
                   nodes, edges, output_path)
 
 
@@ -872,7 +874,7 @@ def _diagram_textract_2(output_path: str):
         ('fn', 'comprehend', '感情分析'),
         ('fn', 's3out', '結果保存'),
     ]
-    _draw_diagram('Amazon Textract ② – Textract + Comprehend テキスト解析パイプライン',
+    return _draw_diagram('Amazon Textract ② – Textract + Comprehend テキスト解析パイプライン',
                   nodes, edges, output_path)
 
 
@@ -897,7 +899,7 @@ def _diagram_step_functions_1(output_path: str):
         ('fn2', 'ddb'),
         ('fn3', 'ddb'),
     ]
-    _draw_diagram('AWS Step Functions ① – 複数 Lambda の順次実行ワークフロー構成',
+    return _draw_diagram('AWS Step Functions ① – 複数 Lambda の順次実行ワークフロー構成',
                   nodes, edges, output_path)
 
 
@@ -916,7 +918,7 @@ def _diagram_step_functions_2(output_path: str):
         ('fn', 'catch', '最終失敗 → Catch'),
         ('catch', 'sqs', 'キューイング'),
     ]
-    _draw_diagram('AWS Step Functions ② – エラーハンドリング（Retry / Catch）構成',
+    return _draw_diagram('AWS Step Functions ② – エラーハンドリング（Retry / Catch）構成',
                   nodes, edges, output_path)
 
 
@@ -937,7 +939,7 @@ def _diagram_sns_1(output_path: str):
         ('sns', 'fn', 'サブスクライブ'),
         ('sns', 'email', 'サブスクライブ'),
     ]
-    _draw_diagram('Amazon SNS ① – Pub/Sub ファンアウトによる複数サブスクライバー通知構成',
+    return _draw_diagram('Amazon SNS ① – Pub/Sub ファンアウトによる複数サブスクライバー通知構成',
                   nodes, edges, output_path)
 
 
@@ -956,7 +958,7 @@ def _diagram_sns_2(output_path: str):
         ('sns', 'email', '担当者に通知'),
         ('sns', 'fn', '自動対応実行'),
     ]
-    _draw_diagram('Amazon SNS ② – CloudWatch Alarm + SNS による障害通知と自動対応構成',
+    return _draw_diagram('Amazon SNS ② – CloudWatch Alarm + SNS による障害通知と自動対応構成',
                   nodes, edges, output_path)
 
 
@@ -975,7 +977,7 @@ def _diagram_elasticache_1(output_path: str):
         ('fn', 'cache', 'キャッシュ参照'),
         ('fn', 'rds', 'キャッシュミス時'),
     ]
-    _draw_diagram('Amazon ElastiCache ① – Lambda + Redis キャッシュ + RDS 構成',
+    return _draw_diagram('Amazon ElastiCache ① – Lambda + Redis キャッシュ + RDS 構成',
                   nodes, edges, output_path)
 
 
@@ -995,7 +997,7 @@ def _diagram_elasticache_2(output_path: str):
         ('ec2a', 'cache', 'セッション読み書き'),
         ('ec2b', 'cache', 'セッション読み書き'),
     ]
-    _draw_diagram('Amazon ElastiCache ② – ALB + EC2 複数台構成でのセッション共有',
+    return _draw_diagram('Amazon ElastiCache ② – ALB + EC2 複数台構成でのセッション共有',
                   nodes, edges, output_path)
 
 
@@ -1014,7 +1016,7 @@ def _diagram_route53_1(output_path: str):
         ('r53', 'primary', 'ヘルスチェックOK'),
         ('r53', 'standby', 'フェイルオーバー'),
     ]
-    _draw_diagram('Amazon Route 53 ① – フェイルオーバールーティング構成',
+    return _draw_diagram('Amazon Route 53 ① – フェイルオーバールーティング構成',
                   nodes, edges, output_path)
 
 
@@ -1033,7 +1035,7 @@ def _diagram_route53_2(output_path: str):
         ('cf', 's3', '静的コンテンツ'),
         ('cf', 'alb', '動的コンテンツ'),
     ]
-    _draw_diagram('Amazon Route 53 ② – CloudFront + S3 / ALB オリジン構成',
+    return _draw_diagram('Amazon Route 53 ② – CloudFront + S3 / ALB オリジン構成',
                   nodes, edges, output_path)
 
 
@@ -1052,7 +1054,7 @@ def _diagram_kinesis_1(output_path: str):
         ('kds', 'fn', 'トリガー（シャード）'),
         ('fn', 'ddb', 'リアルタイム保存'),
     ]
-    _draw_diagram('Amazon Kinesis ① – Data Streams + Lambda リアルタイム処理構成',
+    return _draw_diagram('Amazon Kinesis ① – Data Streams + Lambda リアルタイム処理構成',
                   nodes, edges, output_path)
 
 
@@ -1069,7 +1071,7 @@ def _diagram_kinesis_2(output_path: str):
         ('fh', 's3', '自動バッファリング'),
         ('s3', 'athena', 'SQL クエリ'),
     ]
-    _draw_diagram('Amazon Kinesis ② – Firehose + S3 + Athena データ分析パイプライン',
+    return _draw_diagram('Amazon Kinesis ② – Firehose + S3 + Athena データ分析パイプライン',
                   nodes, edges, output_path)
 
 
@@ -1088,7 +1090,7 @@ def _diagram_cloudtrail_1(output_path: str):
         ('ct', 's3', 'ログ保存（証跡）'),
         ('ct', 'cw', 'リアルタイム配信'),
     ]
-    _draw_diagram('AWS CloudTrail ① – 操作ログの S3 保存 + CloudWatch Logs 配信構成',
+    return _draw_diagram('AWS CloudTrail ① – 操作ログの S3 保存 + CloudWatch Logs 配信構成',
                   nodes, edges, output_path)
 
 
@@ -1107,7 +1109,7 @@ def _diagram_cloudtrail_2(output_path: str):
         ('fn', 'sns', 'アラート通知'),
         ('fn', 'iam', '自動権限取消し'),
     ]
-    _draw_diagram('AWS CloudTrail ② – EventBridge + Lambda によるセキュリティ自動対応構成',
+    return _draw_diagram('AWS CloudTrail ② – EventBridge + Lambda によるセキュリティ自動対応構成',
                   nodes, edges, output_path)
 
 
@@ -1128,7 +1130,7 @@ def _diagram_ec2_ssm_1(output_path: str):
         {'label': 'プライベートサブネット', 'x': 9.0, 'y': 1.8, 'w': 3.2, 'h': 2.4,
          'color': '#FEF9E7'},
     ]
-    _draw_diagram('Amazon EC2 × Systems Manager ① – Session Manager によるキーレス接続構成',
+    return _draw_diagram('Amazon EC2 × Systems Manager ① – Session Manager によるキーレス接続構成',
                   nodes, edges, output_path, clusters=clusters)
 
 
@@ -1143,7 +1145,7 @@ def _diagram_ec2_ssm_2(output_path: str):
         ('ec2', 'cw', 'セッションログ送信'),
         ('cw', 's3', 'エクスポート'),
     ]
-    _draw_diagram('Amazon EC2 × Systems Manager ② – セッション操作ログの記録構成',
+    return _draw_diagram('Amazon EC2 × Systems Manager ② – セッション操作ログの記録構成',
                   nodes, edges, output_path)
 
 
@@ -1160,7 +1162,7 @@ def _diagram_ec2_ebs_1(output_path: str):
         ('ec2', 'root', 'アタッチ'),
         ('ec2', 'data', 'アタッチ（高IOPS）'),
     ]
-    _draw_diagram('Amazon EC2 × EBS ① – 複数ボリューム種類のアタッチ構成',
+    return _draw_diagram('Amazon EC2 × EBS ① – 複数ボリューム種類のアタッチ構成',
                   nodes, edges, output_path)
 
 
@@ -1175,7 +1177,7 @@ def _diagram_ec2_ebs_2(output_path: str):
         ('ebs', 'snap', '定期取得'),
         ('snap', 's3', '長期保管'),
     ]
-    _draw_diagram('Amazon EC2 × EBS ② – スナップショットによるバックアップ構成',
+    return _draw_diagram('Amazon EC2 × EBS ② – スナップショットによるバックアップ構成',
                   nodes, edges, output_path)
 
 
@@ -1192,7 +1194,7 @@ def _diagram_lambda_layers_1(output_path: str):
         ('dev', 'layer', 'publish-layer-version'),
         ('layer', 'fn', 'レイヤーとして追加'),
     ]
-    _draw_diagram('AWS Lambda Layers ① – レイヤーの発行とアタッチ構成',
+    return _draw_diagram('AWS Lambda Layers ① – レイヤーの発行とアタッチ構成',
                   nodes, edges, output_path)
 
 
@@ -1207,7 +1209,7 @@ def _diagram_lambda_layers_2(output_path: str):
         ('layer', 'fn1', '共有'),
         ('layer', 'fn2', '共有'),
     ]
-    _draw_diagram('AWS Lambda Layers ② – 複数関数間でのレイヤー共有構成',
+    return _draw_diagram('AWS Lambda Layers ② – 複数関数間でのレイヤー共有構成',
                   nodes, edges, output_path)
 
 
@@ -1224,7 +1226,7 @@ def _diagram_s3_lifecycle_1(output_path: str):
         ('std', 'ia', '30日後（自動移行）'),
         ('ia', 'glc', '90日後（自動移行）'),
     ]
-    _draw_diagram('Amazon S3 ライフサイクル ① – ストレージクラス自動移行構成',
+    return _draw_diagram('Amazon S3 ライフサイクル ① – ストレージクラス自動移行構成',
                   nodes, edges, output_path)
 
 
@@ -1239,7 +1241,7 @@ def _diagram_s3_lifecycle_2(output_path: str):
         ('s3', 'rule', '日次評価'),
         ('rule', 'del', '条件一致時'),
     ]
-    _draw_diagram('Amazon S3 ライフサイクル ② – 期限切れオブジェクトの自動削除構成',
+    return _draw_diagram('Amazon S3 ライフサイクル ② – 期限切れオブジェクトの自動削除構成',
                   nodes, edges, output_path)
 
 
@@ -1259,7 +1261,7 @@ def _diagram_vpc_endpoint_1(output_path: str):
     clusters = [
         {'label': 'プライベートサブネット', 'x': 0.5, 'y': 1.8, 'w': 2.8, 'h': 2.4, 'color': '#FEF9E7'},
     ]
-    _draw_diagram('Amazon VPC エンドポイント ① – Gateway型（S3）構成',
+    return _draw_diagram('Amazon VPC エンドポイント ① – Gateway型（S3）構成',
                   nodes, edges, output_path, clusters=clusters)
 
 
@@ -1277,7 +1279,7 @@ def _diagram_vpc_endpoint_2(output_path: str):
     clusters = [
         {'label': 'プライベートサブネット', 'x': 0.5, 'y': 1.8, 'w': 2.8, 'h': 2.4, 'color': '#FEF9E7'},
     ]
-    _draw_diagram('Amazon VPC エンドポイント ② – Interface型（PrivateLink）構成',
+    return _draw_diagram('Amazon VPC エンドポイント ② – Interface型（PrivateLink）構成',
                   nodes, edges, output_path, clusters=clusters)
 
 
@@ -1296,7 +1298,7 @@ def _diagram_cloudwatch_insights_1(output_path: str):
         ('ec2', 'logs', 'ログ出力'),
         ('logs', 'insights', 'クエリ実行'),
     ]
-    _draw_diagram('CloudWatch Logs Insights ① – ログ収集とクエリ実行構成',
+    return _draw_diagram('CloudWatch Logs Insights ① – ログ収集とクエリ実行構成',
                   nodes, edges, output_path)
 
 
@@ -1311,7 +1313,7 @@ def _diagram_cloudwatch_insights_2(output_path: str):
         ('insights', 'dash', '可視化'),
         ('insights', 'alarm', 'メトリクスフィルタ'),
     ]
-    _draw_diagram('CloudWatch Logs Insights ② – ダッシュボード可視化とアラーム連携構成',
+    return _draw_diagram('CloudWatch Logs Insights ② – ダッシュボード可視化とアラーム連携構成',
                   nodes, edges, output_path, figsize=(9, 6), xlim=(0, 9))
 
 
@@ -1365,19 +1367,27 @@ def generate_diagrams(topic_id: str, base_path: str) -> list[str]:
     Returns:
         生成された PNG パスのリスト（失敗した図はスキップ）
     """
+    paths, _titles = generate_diagrams_with_titles(topic_id, base_path)
+    return paths
+
+
+def generate_diagrams_with_titles(topic_id: str, base_path: str) -> tuple[list[str], list[str]]:
+    """generate_diagrams() に加えて、各図のタイトル文字列も返す。
+    記事本文生成プロンプトに図の内容を伝え、本文とのズレを防ぐために使う。"""
     generators = _GENERATORS.get(topic_id)
     if generators is None:
         print(f'[diagram_generator] 未対応トピック: {topic_id}')
-        return []
+        return [], []
 
-    paths = []
+    paths, titles = [], []
     for i, generator in enumerate(generators, start=1):
         output_path = f'{base_path}_{i}.png'
         try:
-            generator(output_path)
+            title = generator(output_path)
             if os.path.exists(output_path):
                 paths.append(output_path)
+                titles.append(title or '')
         except Exception as e:
             print(f'[diagram_generator] {topic_id} 図{i} の生成に失敗: {e}')
 
-    return paths
+    return paths, titles
