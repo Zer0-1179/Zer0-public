@@ -258,45 +258,45 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
 </BaseLayout>
 
 <script nonce={Astro.locals.cspNonce}>
-  const navTree = document.getElementById('nav-tree') as HTMLElement;
-  const currentSlug = navTree.dataset.current!;
+  const navTree = document.getElementById('nav-tree');
+  const currentSlug = navTree.dataset.current;
 
   const currentGroup = navTree.querySelector(`.folder-group[data-slug="${currentSlug}"]`);
   if (currentGroup) {
-    (currentGroup.querySelector('.folder-files') as HTMLElement).classList.remove('hidden');
-    const chev = currentGroup.querySelector('.chevron') as HTMLElement | null;
+    currentGroup.querySelector('.folder-files').classList.remove('hidden');
+    const chev = currentGroup.querySelector('.chevron');
     if (chev) chev.style.transform = 'rotate(90deg)';
   }
 
   navTree.querySelectorAll('.folder-toggle').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      const group = (btn as HTMLElement).closest('.folder-group')!;
-      const files   = group.querySelector('.folder-files') as HTMLElement;
-      const chevron = group.querySelector('.chevron') as HTMLElement;
+      const group = btn.closest('.folder-group');
+      const files   = group.querySelector('.folder-files');
+      const chevron = group.querySelector('.chevron');
       const isOpen  = !files.classList.contains('hidden');
       files.classList.toggle('hidden', isOpen);
       chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
     });
   });
 
-  const fileTable  = document.getElementById('file-table')!;
-  const yamlViewer = document.getElementById('yaml-viewer')!;
-  const bcCat      = document.getElementById('bc-cat')!;
-  const bcSep      = document.getElementById('bc-sep')!;
-  const bcFile     = document.getElementById('bc-file')!;
-  const yvName     = document.getElementById('yv-name')!;
-  const yvUpdated  = document.getElementById('yv-updated')!;
-  const yvShort    = document.getElementById('yv-short')!;
-  const yvDesc     = document.getElementById('yv-desc')!;
-  const yvServices = document.getElementById('yv-services')!;
-  const yvFilename = document.getElementById('yv-filename')!;
-  const yvDl       = document.getElementById('yv-dl') as HTMLAnchorElement;
-  const yvContent  = document.getElementById('yv-content')!;
-  const yvCopy     = document.getElementById('yv-copy')!;
-  let activeFileBtn: Element | null = null;
+  const fileTable  = document.getElementById('file-table');
+  const yamlViewer = document.getElementById('yaml-viewer');
+  const bcCat      = document.getElementById('bc-cat');
+  const bcSep      = document.getElementById('bc-sep');
+  const bcFile     = document.getElementById('bc-file');
+  const yvName     = document.getElementById('yv-name');
+  const yvUpdated  = document.getElementById('yv-updated');
+  const yvShort    = document.getElementById('yv-short');
+  const yvDesc     = document.getElementById('yv-desc');
+  const yvServices = document.getElementById('yv-services');
+  const yvFilename = document.getElementById('yv-filename');
+  const yvDl       = document.getElementById('yv-dl');
+  const yvContent  = document.getElementById('yv-content');
+  const yvCopy     = document.getElementById('yv-copy');
+  let activeFileBtn = null;
 
-  function setNavActive(filename: string) {
+  function setNavActive(filename) {
     if (activeFileBtn) {
       activeFileBtn.classList.remove('bg-accent/10');
       activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
@@ -305,9 +305,9 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
     if (btn) {
       btn.classList.add('bg-accent/10');
       btn.querySelector('.file-label')?.classList.add('text-accent');
-      const group  = btn.closest('.folder-group')!;
-      const files  = group.querySelector('.folder-files') as HTMLElement;
-      const chevron = group.querySelector('.chevron') as HTMLElement | null;
+      const group  = btn.closest('.folder-group');
+      const files  = group.querySelector('.folder-files');
+      const chevron = group.querySelector('.chevron');
       if (files.classList.contains('hidden')) {
         files.classList.remove('hidden');
         if (chevron) chevron.style.transform = 'rotate(90deg)';
@@ -316,7 +316,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
     activeFileBtn = btn;
   }
 
-  function showYaml(filename: string, name: string, short: string, desc: string, services: string, updated: string, pushUrl = true) {
+  function showYaml(filename, name, short, desc, services, updated, pushUrl = true) {
     bcSep.classList.remove('hidden');
     bcFile.classList.remove('hidden');
     bcFile.textContent = filename;
@@ -337,7 +337,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
       yvServices.appendChild(span);
     });
     setNavActive(filename);
-    (yamlViewer.closest('.overflow-y-auto') as HTMLElement).scrollTop = 0;
+    yamlViewer.closest('.overflow-y-auto').scrollTop = 0;
     yvContent.textContent = '読み込み中...';
     // deep link: ファイル選択状態をURLに反映し、共有・再訪問時に同じファイルを開けるようにする
     if (pushUrl) history.replaceState(null, '', '?file=' + encodeURIComponent(filename));
@@ -367,16 +367,16 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
       // 旧実装はリンク側の inline onclick="event.stopPropagation()" に頼っていたが、
       // CSP（script-src 'self'）でインラインイベントハンドラはブロックされるため
       // ダウンロードと同時にビューアも開いてしまっていた。
-      if ((e.target as HTMLElement).closest('a')) return;
-      const el = row as HTMLElement;
-      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!, el.dataset.updated!);
+      if (e.target.closest('a')) return;
+      const el = row;
+      showYaml(el.dataset.filename, el.dataset.name, el.dataset.short, el.dataset.desc, el.dataset.services, el.dataset.updated);
     });
   });
 
   navTree.querySelectorAll('.file-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const el = btn as HTMLElement;
-      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!, el.dataset.updated!);
+      const el = btn;
+      showYaml(el.dataset.filename, el.dataset.name, el.dataset.short, el.dataset.desc, el.dataset.services, el.dataset.updated);
     });
   });
 
@@ -385,9 +385,9 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/ja/templates/');
   // deep link: ?file=cfn-xxx.yaml が付いていれば該当ファイルを自動で開く
   function restoreFromUrl() {
     const filename = new URLSearchParams(location.search).get('file');
-    const btn = filename && navTree.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`) as HTMLElement | null;
+    const btn = filename && navTree.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`);
     if (btn) {
-      showYaml(btn.dataset.filename!, btn.dataset.name!, btn.dataset.short!, btn.dataset.desc!, btn.dataset.services!, btn.dataset.updated!, false);
+      showYaml(btn.dataset.filename, btn.dataset.name, btn.dataset.short, btn.dataset.desc, btn.dataset.services, btn.dataset.updated, false);
     } else {
       showFileTable(false);
     }

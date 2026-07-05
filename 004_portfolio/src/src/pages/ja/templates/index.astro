@@ -464,552 +464,590 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
 </BaseLayout>
 
 <script nonce={Astro.locals.cspNonce}>
-  // ── YAML syntax highlighter (VS Code Dark Modern) ──
-  function highlightLines(code: string): string[] {
-    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const sp = (c: string, t: string) => `<span style="color:${c}">${t}</span>`;
-    const C = { comment:'#6A9955', key:'#9CDCFE', str:'#CE9178', num:'#B5CEA8', kw:'#569CD6', tag:'#4EC9B0', anchor:'#DCDCAA' };
-
-    function tokenVal(v: string): string {
-      const t = v.trim();
-      if (!t) return esc(v);
-      if (t[0] === '!') {
-        const m = t.match(/^(![A-Za-z]+)(.*)?$/s);
-        if (m) {
-          const before = v.slice(0, v.indexOf('!'));
-          return esc(before) + sp(C.tag, esc(m[1])) + (m[2] ? sp(C.str, esc(m[2])) : '');
-        }
-      }
-      if (/^[&*][A-Za-z]/.test(t)) return sp(C.anchor, esc(v));
-      if (/^(true|false|yes|no|on|off|null|~)$/i.test(t)) return sp(C.kw, esc(v));
-      if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(t)) return sp(C.num, esc(v));
-      return sp(C.str, esc(v));
-    }
-
-    return code.split('\n').map((line: string) => {
-      if (!line.trim()) return '';
-      if (/^\s*#/.test(line)) return sp(C.comment, esc(line));
-      if (/^---/.test(line)) return sp(C.kw, esc(line));
-      const m = line.match(/^(\s*(?:-\s+)?)((?:[A-Za-z_$][A-Za-z0-9_.$:]*|"[^"]*"|'[^']*'))(\s*:\s*)(.*)?$/);
+function highlightLines(code) {
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const sp = (c, t) => `<span style="color:${c}">${t}</span>`;
+  const C = { comment: "#6A9955", key: "#9CDCFE", str: "#CE9178", num: "#B5CEA8", kw: "#569CD6", tag: "#4EC9B0", anchor: "#DCDCAA" };
+  function tokenVal(v) {
+    const t = v.trim();
+    if (!t) return esc(v);
+    if (t[0] === "!") {
+      const m = t.match(/^(![A-Za-z]+)(.*)?$/s);
       if (m) {
-        const [, pre, key, sep, raw = ''] = m;
-        const ci = raw.search(/ #/);
-        const val = ci !== -1 ? raw.slice(0, ci) : raw;
-        const ic  = ci !== -1 ? raw.slice(ci) : '';
-        return esc(pre) + sp(C.key, esc(key)) + esc(sep) + tokenVal(val) + (ic ? sp(C.comment, esc(ic)) : '');
+        const before = v.slice(0, v.indexOf("!"));
+        return esc(before) + sp(C.tag, esc(m[1])) + (m[2] ? sp(C.str, esc(m[2])) : "");
       }
-      const lm = line.match(/^(\s*-\s+)(.+)?$/);
-      if (lm) return esc(lm[1]) + (lm[2] ? tokenVal(lm[2]) : '');
-      return esc(line);
-    });
-  }
-
-  // ── Build code table ──
-  function buildCodeTable(tbody: HTMLElement, rawCode: string, fontSize = '12.5px', lineHeight = '1.25rem') {
-    const lines = rawCode.split('\n');
-    if (lines[lines.length - 1] === '') lines.pop();
-    const highlighted = highlightLines(rawCode);
-    const frag = document.createDocumentFragment();
-    lines.forEach((_, i) => {
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-[#161b22] transition-colors';
-      const numTd = document.createElement('td');
-      numTd.className = 'select-none text-right pr-4 pl-4 text-[#6e7681] border-r border-[#21262d] align-top whitespace-nowrap w-12';
-      numTd.style.lineHeight = lineHeight;
-      numTd.style.fontSize = fontSize;
-      numTd.textContent = String(i + 1);
-      const codeTd = document.createElement('td');
-      codeTd.className = 'pl-4 pr-8 whitespace-pre align-top text-[#e6edf3]';
-      codeTd.style.lineHeight = lineHeight;
-      codeTd.style.fontSize = fontSize;
-      codeTd.innerHTML = highlighted[i] ?? '​';
-      tr.appendChild(numTd);
-      tr.appendChild(codeTd);
-      frag.appendChild(tr);
-    });
-    tbody.innerHTML = '';
-    tbody.appendChild(frag);
-  }
-
-  // ── Breadcrumb builder ──
-  function buildBreadcrumb(
-    el: HTMLElement,
-    cat: string, difficulty: string, filename: string,
-    onRoot: () => void
-  ) {
-    el.innerHTML = '';
-    const addBtn = (label: string, handler: () => void) => {
-      const b = document.createElement('button');
-      b.textContent = label;
-      b.className = 'hover:text-[#58a6ff] hover:underline transition-colors';
-      b.addEventListener('click', handler);
-      el.appendChild(b);
-    };
-    const addSep = () => {
-      const s = document.createElement('span');
-      s.textContent = ' / ';
-      s.className = 'text-[#484f58] mx-0.5';
-      el.appendChild(s);
-    };
-    const addSpan = (label: string, cls = '') => {
-      const s = document.createElement('span');
-      s.textContent = label;
-      s.className = cls;
-      el.appendChild(s);
-    };
-    addBtn('templates', onRoot); addSep();
-    addSpan(difficulty); addSep();
-    addSpan(cat); addSep();
-    addSpan(filename, 'text-[#c9d1d9] font-semibold');
-  }
-
-  // ── Stats formatter ──
-  function formatStats(text: string): string {
-    const split = text.split('\n');
-    const lines = split[split.length - 1] === '' ? split.length - 1 : split.length;
-    const bytes = new TextEncoder().encode(text).length;
-    const kb = bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB';
-    return `${lines} 行 · ${kb}`;
-  }
-
-  // ── Desktop: current raw code for copy ──
-  let currentRawCode = '';
-  let deskFetch: AbortController | null = null;
-
-  // ─────── Desktop state ───────
-  const readmePanel = document.getElementById('readme-panel')!;
-  const yamlViewer  = document.getElementById('yaml-viewer')!;
-  const tabReadme   = document.getElementById('tab-readme')!;
-  const tabFile     = document.getElementById('tab-file')!;
-  const tabFileName = document.getElementById('tab-file-name')!;
-  const tabClose    = document.getElementById('tab-close')!;
-  const yvBreadcrumb = document.getElementById('yv-breadcrumb')!;
-  const yvName      = document.getElementById('yv-name')!;
-  const yvUpdated   = document.getElementById('yv-updated')!;
-  const yvShort     = document.getElementById('yv-short')!;
-  const yvServices  = document.getElementById('yv-services')!;
-  const yvStats     = document.getElementById('yv-stats')!;
-  const yvBody      = document.getElementById('yv-body')!;
-  const yvCopy      = document.getElementById('yv-copy')!;
-  const yvDl        = document.getElementById('yv-dl') as HTMLAnchorElement;
-  let activeFileBtn: Element | null = null;
-
-  function setActiveTab(which: 'readme' | 'file') {
-    const isReadme = which === 'readme';
-    tabReadme.classList.toggle('border-accent', isReadme);
-    tabReadme.classList.toggle('text-white', isReadme);
-    tabReadme.classList.toggle('border-transparent', !isReadme);
-    tabReadme.classList.toggle('text-slate-400', !isReadme);
-    tabFile.classList.toggle('border-accent', !isReadme);
-    tabFile.classList.toggle('text-white', !isReadme);
-    tabFile.classList.toggle('border-transparent', isReadme);
-    tabFile.classList.toggle('text-slate-400', isReadme);
-    readmePanel.classList.toggle('hidden', !isReadme);
-    yamlViewer.classList.toggle('hidden', isReadme);
-  }
-
-  function setNavActive(filename: string) {
-    if (activeFileBtn) {
-      activeFileBtn.classList.remove('bg-accent/10');
-      activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
     }
-    const btn = document.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`);
-    if (btn) {
-      btn.classList.add('bg-accent/10');
-      btn.querySelector('.file-label')?.classList.add('text-accent');
-      // Open diff-group parent
-      const dg = btn.closest('.diff-group') as HTMLElement | null;
-      if (dg) {
-        const df    = dg.querySelector('.diff-files') as HTMLElement;
-        const dchev = dg.querySelector('.diff-chevron') as HTMLElement;
-        if (df?.classList.contains('hidden')) { df.classList.remove('hidden'); if (dchev) dchev.style.transform = 'rotate(90deg)'; }
+    if (/^[&*][A-Za-z]/.test(t)) return sp(C.anchor, esc(v));
+    if (/^(true|false|yes|no|on|off|null|~)$/i.test(t)) return sp(C.kw, esc(v));
+    if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(t)) return sp(C.num, esc(v));
+    return sp(C.str, esc(v));
+  }
+  return code.split("\n").map((line) => {
+    if (!line.trim()) return "";
+    if (/^\s*#/.test(line)) return sp(C.comment, esc(line));
+    if (/^---/.test(line)) return sp(C.kw, esc(line));
+    const m = line.match(/^(\s*(?:-\s+)?)((?:[A-Za-z_$][A-Za-z0-9_.$:]*|"[^"]*"|'[^']*'))(\s*:\s*)(.*)?$/);
+    if (m) {
+      const [, pre, key, sep, raw = ""] = m;
+      const ci = raw.search(/ #/);
+      const val = ci !== -1 ? raw.slice(0, ci) : raw;
+      const ic = ci !== -1 ? raw.slice(ci) : "";
+      return esc(pre) + sp(C.key, esc(key)) + esc(sep) + tokenVal(val) + (ic ? sp(C.comment, esc(ic)) : "");
+    }
+    const lm = line.match(/^(\s*-\s+)(.+)?$/);
+    if (lm) return esc(lm[1]) + (lm[2] ? tokenVal(lm[2]) : "");
+    return esc(line);
+  });
+}
+function buildCodeTable(tbody, rawCode, fontSize = "12.5px", lineHeight = "1.25rem") {
+  const lines = rawCode.split("\n");
+  if (lines[lines.length - 1] === "") lines.pop();
+  const highlighted = highlightLines(rawCode);
+  const frag = document.createDocumentFragment();
+  lines.forEach((_, i) => {
+    const tr = document.createElement("tr");
+    tr.className = "hover:bg-[#161b22] transition-colors";
+    const numTd = document.createElement("td");
+    numTd.className = "select-none text-right pr-4 pl-4 text-[#6e7681] border-r border-[#21262d] align-top whitespace-nowrap w-12";
+    numTd.style.lineHeight = lineHeight;
+    numTd.style.fontSize = fontSize;
+    numTd.textContent = String(i + 1);
+    const codeTd = document.createElement("td");
+    codeTd.className = "pl-4 pr-8 whitespace-pre align-top text-[#e6edf3]";
+    codeTd.style.lineHeight = lineHeight;
+    codeTd.style.fontSize = fontSize;
+    codeTd.innerHTML = highlighted[i] ?? "\u200B";
+    tr.appendChild(numTd);
+    tr.appendChild(codeTd);
+    frag.appendChild(tr);
+  });
+  tbody.innerHTML = "";
+  tbody.appendChild(frag);
+}
+function buildBreadcrumb(el, cat, difficulty, filename, onRoot) {
+  el.innerHTML = "";
+  const addBtn = (label, handler) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.className = "hover:text-[#58a6ff] hover:underline transition-colors";
+    b.addEventListener("click", handler);
+    el.appendChild(b);
+  };
+  const addSep = () => {
+    const s = document.createElement("span");
+    s.textContent = " / ";
+    s.className = "text-[#484f58] mx-0.5";
+    el.appendChild(s);
+  };
+  const addSpan = (label, cls = "") => {
+    const s = document.createElement("span");
+    s.textContent = label;
+    s.className = cls;
+    el.appendChild(s);
+  };
+  addBtn("templates", onRoot);
+  addSep();
+  addSpan(difficulty);
+  addSep();
+  addSpan(cat);
+  addSep();
+  addSpan(filename, "text-[#c9d1d9] font-semibold");
+}
+function formatStats(text) {
+  const split = text.split("\n");
+  const lines = split[split.length - 1] === "" ? split.length - 1 : split.length;
+  const bytes = new TextEncoder().encode(text).length;
+  const kb = bytes < 1024 ? bytes + " B" : (bytes / 1024).toFixed(1) + " KB";
+  return `${lines} \u884C \xB7 ${kb}`;
+}
+let currentRawCode = "";
+let deskFetch = null;
+const readmePanel = document.getElementById("readme-panel");
+const yamlViewer = document.getElementById("yaml-viewer");
+const tabReadme = document.getElementById("tab-readme");
+const tabFile = document.getElementById("tab-file");
+const tabFileName = document.getElementById("tab-file-name");
+const tabClose = document.getElementById("tab-close");
+const yvBreadcrumb = document.getElementById("yv-breadcrumb");
+const yvName = document.getElementById("yv-name");
+const yvUpdated = document.getElementById("yv-updated");
+const yvShort = document.getElementById("yv-short");
+const yvServices = document.getElementById("yv-services");
+const yvStats = document.getElementById("yv-stats");
+const yvBody = document.getElementById("yv-body");
+const yvCopy = document.getElementById("yv-copy");
+const yvDl = document.getElementById("yv-dl");
+let activeFileBtn = null;
+function setActiveTab(which) {
+  const isReadme = which === "readme";
+  tabReadme.classList.toggle("border-accent", isReadme);
+  tabReadme.classList.toggle("text-white", isReadme);
+  tabReadme.classList.toggle("border-transparent", !isReadme);
+  tabReadme.classList.toggle("text-slate-400", !isReadme);
+  tabFile.classList.toggle("border-accent", !isReadme);
+  tabFile.classList.toggle("text-white", !isReadme);
+  tabFile.classList.toggle("border-transparent", isReadme);
+  tabFile.classList.toggle("text-slate-400", isReadme);
+  readmePanel.classList.toggle("hidden", !isReadme);
+  yamlViewer.classList.toggle("hidden", isReadme);
+}
+function setNavActive(filename) {
+  if (activeFileBtn) {
+    activeFileBtn.classList.remove("bg-accent/10");
+    activeFileBtn.querySelector(".file-label")?.classList.remove("text-accent");
+  }
+  const btn = document.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`);
+  if (btn) {
+    btn.classList.add("bg-accent/10");
+    btn.querySelector(".file-label")?.classList.add("text-accent");
+    const dg = btn.closest(".diff-group");
+    if (dg) {
+      const df = dg.querySelector(".diff-files");
+      const dchev = dg.querySelector(".diff-chevron");
+      if (df?.classList.contains("hidden")) {
+        df.classList.remove("hidden");
+        if (dchev) dchev.style.transform = "rotate(90deg)";
       }
-      // Open category parent
-      const group = btn.closest('.folder-group');
-      const files  = group?.querySelector('.folder-files') as HTMLElement | null;
-      const chev   = group?.querySelector('.chevron') as HTMLElement | null;
-      if (files?.classList.contains('hidden')) { files.classList.remove('hidden'); if (chev) chev.style.transform = 'rotate(90deg)'; }
     }
-    activeFileBtn = btn;
+    const group = btn.closest(".folder-group");
+    const files = group?.querySelector(".folder-files");
+    const chev = group?.querySelector(".chevron");
+    if (files?.classList.contains("hidden")) {
+      files.classList.remove("hidden");
+      if (chev) chev.style.transform = "rotate(90deg)";
+    }
   }
-
-  function showYaml(filename: string, name: string, short: string, services: string, cat: string, difficulty: string, updated: string, pushUrl = true) {
-    // Clear code search on file change
-    document.getElementById('code-search-bar')?.classList.add('hidden');
-    (document.getElementById('code-search-input') as HTMLInputElement|null)!.value = '';
-    yvBody.querySelectorAll<HTMLElement>('.cs-hl').forEach(tr => { tr.classList.remove('cs-hl','cs-cur'); tr.style.removeProperty('background-color'); });
-    tabFileName.textContent = filename;
-    tabFile.classList.remove('hidden');
-    setActiveTab('file');
-    setNavActive(filename);
-
-    yvName.textContent = name || filename;
-    yvUpdated.textContent = updated ? `最終更新 ${updated}` : '';
-    yvShort.textContent = short;
-    yvServices.innerHTML = '';
-    (services || '').split(',').filter(Boolean).forEach((svc) => {
-      const s = document.createElement('span');
-      s.className = 'px-1.5 py-0.5 bg-navy-700/60 text-[#8b949e] text-xs rounded';
-      s.textContent = svc;
-      yvServices.appendChild(s);
-    });
-
-    buildBreadcrumb(yvBreadcrumb, cat, difficulty, filename,
-      () => { setActiveTab('readme'); clearFileUrl(); }
+  activeFileBtn = btn;
+}
+function showYaml(filename, name, short, services, cat, difficulty, updated, pushUrl = true) {
+  document.getElementById("code-search-bar")?.classList.add("hidden");
+  document.getElementById("code-search-input").value = "";
+  yvBody.querySelectorAll(".cs-hl").forEach((tr) => {
+    tr.classList.remove("cs-hl", "cs-cur");
+    tr.style.removeProperty("background-color");
+  });
+  tabFileName.textContent = filename;
+  tabFile.classList.remove("hidden");
+  setActiveTab("file");
+  setNavActive(filename);
+  yvName.textContent = name || filename;
+  yvUpdated.textContent = updated ? `\u6700\u7D42\u66F4\u65B0 ${updated}` : "";
+  yvShort.textContent = short;
+  yvServices.innerHTML = "";
+  (services || "").split(",").filter(Boolean).forEach((svc) => {
+    const s = document.createElement("span");
+    s.className = "px-1.5 py-0.5 bg-navy-700/60 text-[#8b949e] text-xs rounded";
+    s.textContent = svc;
+    yvServices.appendChild(s);
+  });
+  buildBreadcrumb(
+    yvBreadcrumb,
+    cat,
+    difficulty,
+    filename,
+    () => {
+      setActiveTab("readme");
+      clearFileUrl();
+    }
+  );
+  if (pushUrl) history.replaceState(null, "", "?file=" + encodeURIComponent(filename));
+  yvDl.href = "/api/templates/" + filename;
+  yvDl.download = filename;
+  yvStats.textContent = "\u8AAD\u8FBC\u4E2D...";
+  yvBody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-[#6e7681] text-xs">\u8AAD\u307F\u8FBC\u307F\u4E2D...</td></tr>';
+  if (deskFetch) deskFetch.abort();
+  deskFetch = new AbortController();
+  fetch("/api/templates/" + filename, { signal: deskFetch.signal }).then((r) => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  }).then((txt) => {
+    currentRawCode = txt;
+    yvStats.textContent = formatStats(txt);
+    buildCodeTable(yvBody, txt, fontSizes[fontSizeIdx]);
+    yvBody.closest(".overflow-auto")?.scrollTo(0, 0);
+  }).catch((e) => {
+    if (e.name === "AbortError") return;
+    yvBody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 text-red-400 text-xs">\u30A8\u30E9\u30FC: ${e.message}</td></tr>`;
+  });
+}
+function clearFileUrl() {
+  history.replaceState(null, "", location.pathname);
+}
+document.getElementById("tree-root-btn").addEventListener("click", () => {
+  setActiveTab("readme");
+  clearFileUrl();
+});
+tabReadme.addEventListener("click", () => {
+  setActiveTab("readme");
+  clearFileUrl();
+});
+tabFile.addEventListener("click", () => setActiveTab("file"));
+tabClose.addEventListener("click", (e) => {
+  e.stopPropagation();
+  tabFile.classList.add("hidden");
+  setActiveTab("readme");
+  clearFileUrl();
+  if (activeFileBtn) {
+    activeFileBtn.classList.remove("bg-accent/10");
+    activeFileBtn.querySelector(".file-label")?.classList.remove("text-accent");
+    activeFileBtn = null;
+  }
+});
+document.querySelectorAll(".folder-toggle-row").forEach((row) => {
+  row.addEventListener("click", () => {
+    const group = row.closest(".folder-group");
+    if (!group) return;
+    const files = group.querySelector(".folder-files");
+    const chevron = group.querySelector(".chevron");
+    const isOpen = !files.classList.contains("hidden");
+    files.classList.toggle("hidden", isOpen);
+    if (chevron) chevron.style.transform = isOpen ? "" : "rotate(90deg)";
+  });
+});
+document.querySelectorAll(".folder-zip-btn").forEach((b) => b.addEventListener("click", (e) => e.stopPropagation()));
+document.querySelectorAll(".diff-toggle-row").forEach((row) => {
+  row.addEventListener("click", () => {
+    const dg = row.closest(".diff-group");
+    if (!dg) return;
+    const df = dg.querySelector(".diff-files");
+    const dchev = dg.querySelector(".diff-chevron");
+    const isOpen = !df.classList.contains("hidden");
+    df.classList.toggle("hidden", isOpen);
+    if (dchev) dchev.style.transform = isOpen ? "" : "rotate(90deg)";
+  });
+});
+document.querySelectorAll(".file-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    showYaml(
+      btn.dataset.filename,
+      btn.dataset.name,
+      btn.dataset.short,
+      btn.dataset.services,
+      btn.dataset.cat,
+      btn.dataset.difficulty,
+      btn.dataset.updated
     );
-
-    // deep link: ファイル選択状態をURLに反映し、共有・再訪問時に同じファイルを開けるようにする
-    if (pushUrl) history.replaceState(null, '', '?file=' + encodeURIComponent(filename));
-
-    yvDl.href     = '/api/templates/' + filename;
-    yvDl.download = filename;
-    yvStats.textContent = '読込中...';
-    yvBody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-[#6e7681] text-xs">読み込み中...</td></tr>';
-
-    if (deskFetch) deskFetch.abort();
-    deskFetch = new AbortController();
-    fetch('/api/templates/' + filename, { signal: deskFetch.signal })
-      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then((txt) => {
-        currentRawCode = txt;
-        yvStats.textContent = formatStats(txt);
-        buildCodeTable(yvBody, txt, fontSizes[fontSizeIdx]);
-        (yvBody.closest('.overflow-auto') as HTMLElement | null)?.scrollTo(0, 0);
-      })
-      .catch((e: Error) => {
-        if (e.name === 'AbortError') return;
-        yvBody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 text-red-400 text-xs">エラー: ${e.message}</td></tr>`;
-      });
-  }
-
-  // deep link: ファイル未選択状態に戻る際はURLからクエリを取り除く
-  function clearFileUrl() { history.replaceState(null, '', location.pathname); }
-
-  // Desktop event wiring
-  document.getElementById('tree-root-btn')!.addEventListener('click', () => { setActiveTab('readme'); clearFileUrl(); });
-  tabReadme.addEventListener('click', () => { setActiveTab('readme'); clearFileUrl(); });
-  tabFile.addEventListener('click', () => setActiveTab('file'));
-  tabClose.addEventListener('click', (e) => {
-    e.stopPropagation();
-    tabFile.classList.add('hidden');
-    setActiveTab('readme');
-    clearFileUrl();
-    if (activeFileBtn) {
-      activeFileBtn.classList.remove('bg-accent/10');
-      activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
-      activeFileBtn = null;
-    }
   });
-
-  document.querySelectorAll('.folder-toggle-row').forEach((row) => {
-    row.addEventListener('click', () => {
-      const group = row.closest('.folder-group');
-      if (!group) return;
-      const files   = group.querySelector('.folder-files') as HTMLElement;
-      const chevron = group.querySelector('.chevron') as HTMLElement;
-      const isOpen  = !files.classList.contains('hidden');
-      files.classList.toggle('hidden', isOpen);
-      if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
-    });
-  });
-
-  document.querySelectorAll('.folder-zip-btn').forEach((b) => b.addEventListener('click', (e) => e.stopPropagation()));
-
-  // Difficulty subfolder toggle
-  document.querySelectorAll('.diff-toggle-row').forEach((row) => {
-    row.addEventListener('click', () => {
-      const dg = row.closest('.diff-group');
-      if (!dg) return;
-      const df    = dg.querySelector('.diff-files') as HTMLElement;
-      const dchev = dg.querySelector('.diff-chevron') as HTMLElement;
-      const isOpen = !df.classList.contains('hidden');
-      df.classList.toggle('hidden', isOpen);
-      if (dchev) dchev.style.transform = isOpen ? '' : 'rotate(90deg)';
-    });
-  });
-
-  document.querySelectorAll<HTMLElement>('.file-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      showYaml(
-        btn.dataset.filename!,
-        btn.dataset.name!,
-        btn.dataset.short!,
-        btn.dataset.services!,
-        btn.dataset.cat!,
-        btn.dataset.difficulty!,
-        btn.dataset.updated!,
-      );
-    });
-  });
-
-  // deep link: ?file=cfn-xxx.yaml が付いていれば該当ファイルを自動で開く
-  function restoreFromUrl() {
-    const filename = new URLSearchParams(location.search).get('file');
-    const btn = filename && document.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`) as HTMLElement | null;
-    if (btn) {
-      showYaml(
-        btn.dataset.filename!, btn.dataset.name!, btn.dataset.short!,
-        btn.dataset.services!, btn.dataset.cat!, btn.dataset.difficulty!,
-        btn.dataset.updated!, false,
-      );
-    }
-  }
-  restoreFromUrl();
-  window.addEventListener('pageshow', restoreFromUrl);
-
-  yvCopy.addEventListener('click', () => {
-    if (!currentRawCode) return;
-    const done = () => {
-      yvCopy.textContent = 'コピー済！';
-      setTimeout(() => { yvCopy.innerHTML = '<svg class="w-3 h-3 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>コピー'; }, 2000);
-    };
-    if (navigator.clipboard) { navigator.clipboard.writeText(currentRawCode).then(done); }
-    else {
-      const ta = document.createElement('textarea');
-      ta.value = currentRawCode;
-      ta.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-      document.body.removeChild(ta); done();
-    }
-  });
-
-  // ─────── Mobile state ───────
-  const mobCatView   = document.getElementById('mob-cat-view')!;
-  const mobFileView  = document.getElementById('mob-file-view')!;
-  const mobCodeView  = document.getElementById('mob-code-view')!;
-  const mobFolderName = document.getElementById('mob-folder-name')!;
-  const mobFolderZip  = document.getElementById('mob-folder-zip') as HTMLAnchorElement;
-  const mobFileList  = document.getElementById('mob-file-list')!;
-  const mobCodeFilename = document.getElementById('mob-code-filename')!;
-  const mobBreadcrumb   = document.getElementById('mob-breadcrumb')!;
-  const mobShort    = document.getElementById('mob-short')!;
-  const mobStats    = document.getElementById('mob-stats')!;
-  const mobCodeBody = document.getElementById('mob-code-body')!;
-  const mobCopy     = document.getElementById('mob-copy')!;
-  const mobDl       = document.getElementById('mob-dl') as HTMLAnchorElement;
-  let mobCurrentCat = '';
-  let mobCurrentRaw = '';
-  let mobFetch: AbortController | null = null;
-
-  interface TmplData { filename: string; name: string; short: string; desc: string; services: string; tags: string; cat: string; difficulty: string; }
-  const allTemplates: TmplData[] = Array.from(document.querySelectorAll<HTMLElement>('.file-btn')).map((el) => ({
-    filename: el.dataset.filename!,
-    name:     el.dataset.name!,
-    short:    el.dataset.short!,
-    desc:     el.dataset.desc!,
-    services: el.dataset.services!,
-    tags:     el.dataset.tags!,
-    cat:      el.dataset.cat!,
-    difficulty: el.dataset.difficulty!,
-  }));
-
-  function mobShowCats() {
-    mobCatView.style.display = 'flex';
-    mobFileView.style.display = 'none';
-    mobCodeView.style.display = 'none';
-  }
-
-  function mobShowFiles(catSlug: string) {
-    mobCurrentCat = catSlug;
-    mobFolderName.textContent = catSlug;
-    mobFolderZip.href = `/api/templates/download/${catSlug}.zip`;
-    mobFolderZip.download = `cfn-templates-${catSlug}.zip`;
-
-    const addFileBtn = (tmpl: TmplData) => {
-      const btn = document.createElement('button');
-      btn.className = 'flex items-center gap-3 w-full px-4 py-3.5 text-left border-b border-navy-700/20 hover:bg-navy-700/20 active:bg-navy-700/30 transition-colors';
-      btn.innerHTML = `<svg class="w-4 h-4 text-yellow-400/50 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" /></svg><div class="min-w-0 flex-1"><p class="font-mono text-sm text-slate-200 truncate">${tmpl.filename}</p><p class="text-xs text-slate-500 truncate mt-0.5">${tmpl.short}</p></div>`;
-      btn.addEventListener('click', () => mobShowCode(tmpl));
-      mobFileList.appendChild(btn);
-    };
-
-    const addDiffHeader = (diff: string, color: string) => {
-      const h = document.createElement('div');
-      h.className = 'flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono border-b border-navy-700/20 bg-navy-900/40';
-      h.innerHTML = `<svg class="w-3 h-3 ${color}" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg><span class="${color}">${diff}</span>`;
-      mobFileList.appendChild(h);
-    };
-
-    mobFileList.innerHTML = '';
-    const advanced = allTemplates.filter((t) => t.cat === catSlug && t.difficulty === 'advanced');
-    const beginner  = allTemplates.filter((t) => t.cat === catSlug && t.difficulty === 'beginner');
-
-    if (advanced.length > 0) { addDiffHeader('advanced', 'text-orange-400/70'); advanced.forEach(addFileBtn); }
-    if (beginner.length > 0) { addDiffHeader('beginner', 'text-blue-400/70'); beginner.forEach(addFileBtn); }
-    if (mobFileList.childElementCount === 0) {
-      mobFileList.innerHTML = '<p class="px-4 py-6 text-xs text-slate-500 text-center">該当なし</p>';
-    }
-
-    mobCatView.style.display = 'none';
-    mobFileView.style.display = 'flex';
-    mobCodeView.style.display = 'none';
-  }
-
-  function mobShowCode(tmpl: TmplData) {
-    mobCodeFilename.textContent = tmpl.filename;
-    mobDl.href = '/api/templates/' + tmpl.filename;
-    mobDl.download = tmpl.filename;
-    mobShort.textContent = tmpl.short;
-    mobStats.textContent = '読込中...';
-    mobCodeBody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-[#6e7681] text-xs">読み込み中...</td></tr>';
-
-    buildBreadcrumb(mobBreadcrumb, tmpl.cat, tmpl.difficulty, tmpl.filename,
-      () => mobShowCats()
+});
+function restoreFromUrl() {
+  const filename = new URLSearchParams(location.search).get("file");
+  const btn = filename && document.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`);
+  if (btn) {
+    showYaml(
+      btn.dataset.filename,
+      btn.dataset.name,
+      btn.dataset.short,
+      btn.dataset.services,
+      btn.dataset.cat,
+      btn.dataset.difficulty,
+      btn.dataset.updated,
+      false
     );
-
-    mobCatView.style.display = 'none';
-    mobFileView.style.display = 'none';
-    mobCodeView.style.display = 'flex';
-
-    if (mobFetch) mobFetch.abort();
-    mobFetch = new AbortController();
-    fetch('/api/templates/' + tmpl.filename, { signal: mobFetch.signal })
-      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then((txt) => {
-        mobCurrentRaw = txt;
-        mobStats.textContent = formatStats(txt);
-        buildCodeTable(mobCodeBody, txt, '12.5px', '1.25rem');
-        (mobCodeBody.closest('.overflow-auto') as HTMLElement | null)?.scrollTo(0, 0);
-      })
-      .catch((e: Error) => {
-        if (e.name === 'AbortError') return;
-        mobCodeBody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 text-red-400 text-xs">エラー: ${e.message}</td></tr>`;
-      });
   }
-
-  // ── Font size toggle ──
-  const fontSizes = ['11px', '12.5px', '14px', '16px'];
-  let fontSizeIdx = (() => {
-    const s = localStorage.getItem('tmpl-font-size');
-    return s ? Math.max(0, Math.min(fontSizes.length - 1, Number(s))) : 1;
-  })();
-  document.getElementById('yv-font-dec')!.addEventListener('click', () => {
-    if (fontSizeIdx > 0) { fontSizeIdx--; localStorage.setItem('tmpl-font-size', String(fontSizeIdx)); if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]); }
+}
+restoreFromUrl();
+window.addEventListener("pageshow", restoreFromUrl);
+yvCopy.addEventListener("click", () => {
+  if (!currentRawCode) return;
+  const done = () => {
+    yvCopy.textContent = "\u30B3\u30D4\u30FC\u6E08\uFF01";
+    setTimeout(() => {
+      yvCopy.innerHTML = '<svg class="w-3 h-3 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>\u30B3\u30D4\u30FC';
+    }, 2e3);
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(currentRawCode).then(done);
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = currentRawCode;
+    ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    done();
+  }
+});
+const mobCatView = document.getElementById("mob-cat-view");
+const mobFileView = document.getElementById("mob-file-view");
+const mobCodeView = document.getElementById("mob-code-view");
+const mobFolderName = document.getElementById("mob-folder-name");
+const mobFolderZip = document.getElementById("mob-folder-zip");
+const mobFileList = document.getElementById("mob-file-list");
+const mobCodeFilename = document.getElementById("mob-code-filename");
+const mobBreadcrumb = document.getElementById("mob-breadcrumb");
+const mobShort = document.getElementById("mob-short");
+const mobStats = document.getElementById("mob-stats");
+const mobCodeBody = document.getElementById("mob-code-body");
+const mobCopy = document.getElementById("mob-copy");
+const mobDl = document.getElementById("mob-dl");
+let mobCurrentCat = "";
+let mobCurrentRaw = "";
+let mobFetch = null;
+const allTemplates = Array.from(document.querySelectorAll(".file-btn")).map((el) => ({
+  filename: el.dataset.filename,
+  name: el.dataset.name,
+  short: el.dataset.short,
+  desc: el.dataset.desc,
+  services: el.dataset.services,
+  tags: el.dataset.tags,
+  cat: el.dataset.cat,
+  difficulty: el.dataset.difficulty
+}));
+function mobShowCats() {
+  mobCatView.style.display = "flex";
+  mobFileView.style.display = "none";
+  mobCodeView.style.display = "none";
+}
+function mobShowFiles(catSlug) {
+  mobCurrentCat = catSlug;
+  mobFolderName.textContent = catSlug;
+  mobFolderZip.href = `/api/templates/download/${catSlug}.zip`;
+  mobFolderZip.download = `cfn-templates-${catSlug}.zip`;
+  const addFileBtn = (tmpl) => {
+    const btn = document.createElement("button");
+    btn.className = "flex items-center gap-3 w-full px-4 py-3.5 text-left border-b border-navy-700/20 hover:bg-navy-700/20 active:bg-navy-700/30 transition-colors";
+    btn.innerHTML = `<svg class="w-4 h-4 text-yellow-400/50 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" /></svg><div class="min-w-0 flex-1"><p class="font-mono text-sm text-slate-200 truncate">${tmpl.filename}</p><p class="text-xs text-slate-500 truncate mt-0.5">${tmpl.short}</p></div>`;
+    btn.addEventListener("click", () => mobShowCode(tmpl));
+    mobFileList.appendChild(btn);
+  };
+  const addDiffHeader = (diff, color) => {
+    const h = document.createElement("div");
+    h.className = "flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono border-b border-navy-700/20 bg-navy-900/40";
+    h.innerHTML = `<svg class="w-3 h-3 ${color}" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg><span class="${color}">${diff}</span>`;
+    mobFileList.appendChild(h);
+  };
+  mobFileList.innerHTML = "";
+  const advanced = allTemplates.filter((t) => t.cat === catSlug && t.difficulty === "advanced");
+  const beginner = allTemplates.filter((t) => t.cat === catSlug && t.difficulty === "beginner");
+  if (advanced.length > 0) {
+    addDiffHeader("advanced", "text-orange-400/70");
+    advanced.forEach(addFileBtn);
+  }
+  if (beginner.length > 0) {
+    addDiffHeader("beginner", "text-blue-400/70");
+    beginner.forEach(addFileBtn);
+  }
+  if (mobFileList.childElementCount === 0) {
+    mobFileList.innerHTML = '<p class="px-4 py-6 text-xs text-slate-500 text-center">\u8A72\u5F53\u306A\u3057</p>';
+  }
+  mobCatView.style.display = "none";
+  mobFileView.style.display = "flex";
+  mobCodeView.style.display = "none";
+}
+function mobShowCode(tmpl) {
+  mobCodeFilename.textContent = tmpl.filename;
+  mobDl.href = "/api/templates/" + tmpl.filename;
+  mobDl.download = tmpl.filename;
+  mobShort.textContent = tmpl.short;
+  mobStats.textContent = "\u8AAD\u8FBC\u4E2D...";
+  mobCodeBody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-[#6e7681] text-xs">\u8AAD\u307F\u8FBC\u307F\u4E2D...</td></tr>';
+  buildBreadcrumb(
+    mobBreadcrumb,
+    tmpl.cat,
+    tmpl.difficulty,
+    tmpl.filename,
+    () => mobShowCats()
+  );
+  mobCatView.style.display = "none";
+  mobFileView.style.display = "none";
+  mobCodeView.style.display = "flex";
+  if (mobFetch) mobFetch.abort();
+  mobFetch = new AbortController();
+  fetch("/api/templates/" + tmpl.filename, { signal: mobFetch.signal }).then((r) => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  }).then((txt) => {
+    mobCurrentRaw = txt;
+    mobStats.textContent = formatStats(txt);
+    buildCodeTable(mobCodeBody, txt, "12.5px", "1.25rem");
+    mobCodeBody.closest(".overflow-auto")?.scrollTo(0, 0);
+  }).catch((e) => {
+    if (e.name === "AbortError") return;
+    mobCodeBody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 text-red-400 text-xs">\u30A8\u30E9\u30FC: ${e.message}</td></tr>`;
   });
-  document.getElementById('yv-font-reset')!.addEventListener('click', () => {
-    fontSizeIdx = 1; localStorage.setItem('tmpl-font-size', '1'); if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]);
+}
+const fontSizes = ["11px", "12.5px", "14px", "16px"];
+let fontSizeIdx = (() => {
+  const s = localStorage.getItem("tmpl-font-size");
+  return s ? Math.max(0, Math.min(fontSizes.length - 1, Number(s))) : 1;
+})();
+document.getElementById("yv-font-dec").addEventListener("click", () => {
+  if (fontSizeIdx > 0) {
+    fontSizeIdx--;
+    localStorage.setItem("tmpl-font-size", String(fontSizeIdx));
+    if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]);
+  }
+});
+document.getElementById("yv-font-reset").addEventListener("click", () => {
+  fontSizeIdx = 1;
+  localStorage.setItem("tmpl-font-size", "1");
+  if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]);
+});
+document.getElementById("yv-font-inc").addEventListener("click", () => {
+  if (fontSizeIdx < fontSizes.length - 1) {
+    fontSizeIdx++;
+    localStorage.setItem("tmpl-font-size", String(fontSizeIdx));
+    if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]);
+  }
+});
+const codeSearchBar = document.getElementById("code-search-bar");
+const codeSearchInput = document.getElementById("code-search-input");
+const codeSearchCount = document.getElementById("code-search-count");
+let codeSearchMatches = [];
+let codeSearchIdx = 0;
+function clearCSMatches() {
+  codeSearchMatches.forEach((tr) => {
+    tr.classList.remove("cs-hl", "cs-cur");
+    tr.style.removeProperty("background-color");
   });
-  document.getElementById('yv-font-inc')!.addEventListener('click', () => {
-    if (fontSizeIdx < fontSizes.length - 1) { fontSizeIdx++; localStorage.setItem('tmpl-font-size', String(fontSizeIdx)); if (currentRawCode) buildCodeTable(yvBody, currentRawCode, fontSizes[fontSizeIdx]); }
+  codeSearchMatches = [];
+  codeSearchCount.textContent = "";
+}
+function closeCodeSearch() {
+  codeSearchBar.classList.add("hidden");
+  codeSearchInput.value = "";
+  clearCSMatches();
+}
+function updateCSCount() {
+  codeSearchCount.textContent = !codeSearchInput.value ? "" : codeSearchMatches.length === 0 ? "\u4E00\u81F4\u306A\u3057" : `${codeSearchIdx + 1} / ${codeSearchMatches.length}`;
+}
+function scrollToCSMatch() {
+  codeSearchMatches.forEach((tr, i) => {
+    tr.classList.toggle("cs-cur", i === codeSearchIdx);
+    tr.style.backgroundColor = i === codeSearchIdx ? "#3d3a14" : "#2a2a14";
   });
-
-  // ── Code search (Ctrl+F) ──
-  const codeSearchBar = document.getElementById('code-search-bar')!;
-  const codeSearchInput = document.getElementById('code-search-input') as HTMLInputElement;
-  const codeSearchCount = document.getElementById('code-search-count')!;
-  let codeSearchMatches: HTMLElement[] = [];
-  let codeSearchIdx = 0;
-
-  function clearCSMatches() {
-    codeSearchMatches.forEach(tr => { tr.classList.remove('cs-hl','cs-cur'); tr.style.removeProperty('background-color'); });
-    codeSearchMatches = []; codeSearchCount.textContent = '';
-  }
-  function closeCodeSearch() { codeSearchBar.classList.add('hidden'); codeSearchInput.value = ''; clearCSMatches(); }
-  function updateCSCount() {
-    codeSearchCount.textContent = !codeSearchInput.value ? '' : codeSearchMatches.length === 0 ? '一致なし' : `${codeSearchIdx + 1} / ${codeSearchMatches.length}`;
-  }
-  function scrollToCSMatch() {
-    codeSearchMatches.forEach((tr, i) => { tr.classList.toggle('cs-cur', i === codeSearchIdx); tr.style.backgroundColor = i === codeSearchIdx ? '#3d3a14' : '#2a2a14'; });
-    codeSearchMatches[codeSearchIdx]?.scrollIntoView({ block: 'center' });
-    updateCSCount();
-  }
-  function doCodeSearch(q: string) {
-    clearCSMatches();
-    if (!q) return;
-    const ql = q.toLowerCase();
-    yvBody.querySelectorAll<HTMLElement>('tr').forEach(tr => {
-      if ((tr.querySelector('td:nth-child(2)')?.textContent ?? '').toLowerCase().includes(ql)) {
-        tr.classList.add('cs-hl'); tr.style.backgroundColor = '#2a2a14'; codeSearchMatches.push(tr);
-      }
-    });
-    if (codeSearchMatches.length) { codeSearchIdx = 0; scrollToCSMatch(); } else updateCSCount();
-  }
-
-  codeSearchInput.addEventListener('input', () => doCodeSearch(codeSearchInput.value));
-  codeSearchInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); if (!codeSearchMatches.length) return; codeSearchIdx = (codeSearchIdx + (e.shiftKey ? -1 : 1) + codeSearchMatches.length) % codeSearchMatches.length; scrollToCSMatch(); }
-    if (e.key === 'Escape') closeCodeSearch();
-  });
-  document.getElementById('code-search-prev')!.addEventListener('click', () => { if (!codeSearchMatches.length) return; codeSearchIdx = (codeSearchIdx - 1 + codeSearchMatches.length) % codeSearchMatches.length; scrollToCSMatch(); });
-  document.getElementById('code-search-next')!.addEventListener('click', () => { if (!codeSearchMatches.length) return; codeSearchIdx = (codeSearchIdx + 1) % codeSearchMatches.length; scrollToCSMatch(); });
-  document.getElementById('code-search-close')!.addEventListener('click', closeCodeSearch);
-
-  document.addEventListener('keydown', (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f' && !yamlViewer.classList.contains('hidden')) {
-      e.preventDefault(); codeSearchBar.classList.remove('hidden'); codeSearchInput.focus(); codeSearchInput.select();
+  codeSearchMatches[codeSearchIdx]?.scrollIntoView({ block: "center" });
+  updateCSCount();
+}
+function doCodeSearch(q) {
+  clearCSMatches();
+  if (!q) return;
+  const ql = q.toLowerCase();
+  yvBody.querySelectorAll("tr").forEach((tr) => {
+    if ((tr.querySelector("td:nth-child(2)")?.textContent ?? "").toLowerCase().includes(ql)) {
+      tr.classList.add("cs-hl");
+      tr.style.backgroundColor = "#2a2a14";
+      codeSearchMatches.push(tr);
     }
   });
-
-  // ── Search ──
-  const treeSearch = document.getElementById('tree-search') as HTMLInputElement;
-  const treeSearchClear = document.getElementById('tree-search-clear')!;
-  treeSearch.addEventListener('input', () => {
-    const q = treeSearch.value.trim().toLowerCase();
-    treeSearchClear.classList.toggle('hidden', !q);
-    document.querySelectorAll<HTMLElement>('.folder-group').forEach((group) => {
-      let groupHit = false;
-      group.querySelectorAll<HTMLElement>('.diff-group').forEach((dg) => {
-        let diffHit = false;
-        dg.querySelectorAll<HTMLElement>('.file-btn').forEach((btn) => {
-          const match = !q || btn.dataset.filename!.toLowerCase().includes(q);
-          btn.style.display = match ? '' : 'none';
-          if (match) diffHit = true;
-        });
-        dg.style.display = diffHit ? '' : 'none';
-        if (diffHit && q) {
-          const df = dg.querySelector('.diff-files') as HTMLElement;
-          const dc = dg.querySelector('.diff-chevron') as HTMLElement;
-          if (df?.classList.contains('hidden')) { df.classList.remove('hidden'); if (dc) dc.style.transform = 'rotate(90deg)'; }
+  if (codeSearchMatches.length) {
+    codeSearchIdx = 0;
+    scrollToCSMatch();
+  } else updateCSCount();
+}
+codeSearchInput.addEventListener("input", () => doCodeSearch(codeSearchInput.value));
+codeSearchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (!codeSearchMatches.length) return;
+    codeSearchIdx = (codeSearchIdx + (e.shiftKey ? -1 : 1) + codeSearchMatches.length) % codeSearchMatches.length;
+    scrollToCSMatch();
+  }
+  if (e.key === "Escape") closeCodeSearch();
+});
+document.getElementById("code-search-prev").addEventListener("click", () => {
+  if (!codeSearchMatches.length) return;
+  codeSearchIdx = (codeSearchIdx - 1 + codeSearchMatches.length) % codeSearchMatches.length;
+  scrollToCSMatch();
+});
+document.getElementById("code-search-next").addEventListener("click", () => {
+  if (!codeSearchMatches.length) return;
+  codeSearchIdx = (codeSearchIdx + 1) % codeSearchMatches.length;
+  scrollToCSMatch();
+});
+document.getElementById("code-search-close").addEventListener("click", closeCodeSearch);
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "f" && !yamlViewer.classList.contains("hidden")) {
+    e.preventDefault();
+    codeSearchBar.classList.remove("hidden");
+    codeSearchInput.focus();
+    codeSearchInput.select();
+  }
+});
+const treeSearch = document.getElementById("tree-search");
+const treeSearchClear = document.getElementById("tree-search-clear");
+treeSearch.addEventListener("input", () => {
+  const q = treeSearch.value.trim().toLowerCase();
+  treeSearchClear.classList.toggle("hidden", !q);
+  document.querySelectorAll(".folder-group").forEach((group) => {
+    let groupHit = false;
+    group.querySelectorAll(".diff-group").forEach((dg) => {
+      let diffHit = false;
+      dg.querySelectorAll(".file-btn").forEach((btn) => {
+        const match = !q || btn.dataset.filename.toLowerCase().includes(q);
+        btn.style.display = match ? "" : "none";
+        if (match) diffHit = true;
+      });
+      dg.style.display = diffHit ? "" : "none";
+      if (diffHit && q) {
+        const df = dg.querySelector(".diff-files");
+        const dc = dg.querySelector(".diff-chevron");
+        if (df?.classList.contains("hidden")) {
+          df.classList.remove("hidden");
+          if (dc) dc.style.transform = "rotate(90deg)";
         }
-        if (diffHit) groupHit = true;
-      });
-      group.style.display = groupHit ? '' : 'none';
-      if (groupHit && q) {
-        const ff = group.querySelector('.folder-files') as HTMLElement;
-        const ch = group.querySelector('.chevron') as HTMLElement;
-        if (ff?.classList.contains('hidden')) { ff.classList.remove('hidden'); if (ch) ch.style.transform = 'rotate(90deg)'; }
       }
+      if (diffHit) groupHit = true;
     });
-  });
-  treeSearchClear.addEventListener('click', () => { treeSearch.value = ''; treeSearch.dispatchEvent(new Event('input')); treeSearch.focus(); });
-
-  // ── Sidebar collapse/expand
-  const treeSidebar = document.getElementById('tree-sidebar')!;
-  const sidebarToggle = document.getElementById('sidebar-toggle')!;
-  const sidebarShow = document.getElementById('sidebar-show')!;
-  sidebarToggle.addEventListener('click', () => {
-    treeSidebar.classList.add('hidden');
-    sidebarShow.style.display = 'flex';
-    localStorage.setItem('tmpl-sidebar', 'collapsed');
-  });
-  sidebarShow.addEventListener('click', () => {
-    treeSidebar.classList.remove('hidden');
-    sidebarShow.style.display = 'none';
-    localStorage.setItem('tmpl-sidebar', 'expanded');
-  });
-  if (localStorage.getItem('tmpl-sidebar') === 'collapsed') {
-    treeSidebar.classList.add('hidden');
-    sidebarShow.style.display = 'flex';
-  }
-
-
-  document.getElementById('mob-back-cat')!.addEventListener('click', () => mobShowCats());
-  document.getElementById('mob-back-files')!.addEventListener('click', () => mobShowFiles(mobCurrentCat));
-
-  document.querySelectorAll<HTMLElement>('.mob-cat-btn').forEach((btn) => {
-    btn.addEventListener('click', () => mobShowFiles(btn.dataset.slug!));
-  });
-
-  mobCopy.addEventListener('click', () => {
-    if (!mobCurrentRaw) return;
-    const done = () => { mobCopy.textContent = '✓'; setTimeout(() => { mobCopy.textContent = 'コピー'; }, 2000); };
-    if (navigator.clipboard) { navigator.clipboard.writeText(mobCurrentRaw).then(done); }
-    else {
-      const ta = document.createElement('textarea');
-      ta.value = mobCurrentRaw;
-      ta.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-      document.body.removeChild(ta); done();
+    group.style.display = groupHit ? "" : "none";
+    if (groupHit && q) {
+      const ff = group.querySelector(".folder-files");
+      const ch = group.querySelector(".chevron");
+      if (ff?.classList.contains("hidden")) {
+        ff.classList.remove("hidden");
+        if (ch) ch.style.transform = "rotate(90deg)";
+      }
     }
   });
+});
+treeSearchClear.addEventListener("click", () => {
+  treeSearch.value = "";
+  treeSearch.dispatchEvent(new Event("input"));
+  treeSearch.focus();
+});
+const treeSidebar = document.getElementById("tree-sidebar");
+const sidebarToggle = document.getElementById("sidebar-toggle");
+const sidebarShow = document.getElementById("sidebar-show");
+sidebarToggle.addEventListener("click", () => {
+  treeSidebar.classList.add("hidden");
+  sidebarShow.style.display = "flex";
+  localStorage.setItem("tmpl-sidebar", "collapsed");
+});
+sidebarShow.addEventListener("click", () => {
+  treeSidebar.classList.remove("hidden");
+  sidebarShow.style.display = "none";
+  localStorage.setItem("tmpl-sidebar", "expanded");
+});
+if (localStorage.getItem("tmpl-sidebar") === "collapsed") {
+  treeSidebar.classList.add("hidden");
+  sidebarShow.style.display = "flex";
+}
+document.getElementById("mob-back-cat").addEventListener("click", () => mobShowCats());
+document.getElementById("mob-back-files").addEventListener("click", () => mobShowFiles(mobCurrentCat));
+document.querySelectorAll(".mob-cat-btn").forEach((btn) => {
+  btn.addEventListener("click", () => mobShowFiles(btn.dataset.slug));
+});
+mobCopy.addEventListener("click", () => {
+  if (!mobCurrentRaw) return;
+  const done = () => {
+    mobCopy.textContent = "\u2713";
+    setTimeout(() => {
+      mobCopy.textContent = "\u30B3\u30D4\u30FC";
+    }, 2e3);
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(mobCurrentRaw).then(done);
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = mobCurrentRaw;
+    ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    done();
+  }
+});
 </script>
