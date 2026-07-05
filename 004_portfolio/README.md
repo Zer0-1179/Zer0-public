@@ -166,3 +166,4 @@ bash scripts/deploy.sh
 | 2026-07-05 | v3.5       | Fableブラッシュアップ実装7件: 問い合わせフォームは現状維持、GitHub導線をサブディレクトリへ修正、StatsBar/Hero数字強化（テンプレート64本配布・EN版hero.sub資格数抜け修正）、Articles自動生成の透明性表記、hreflang/JSON-LD/OG画像/sitemap lastmodのSEOパック、テンプレートdeep link+検証済みバッジ、CloudWatch構造化ログでPV/DL計測（追加コストゼロ）。本番デプロイ・実機検証済み |
 | 2026-07-05 | v3.6       | HIGH緊急修正: 全5箇所のnonce付きインラインscript（Nav/templates×4）がTypeScript構文（!非nullアサーション・as型キャスト等）のままブラウザへ送信され、SyntaxErrorでハンバーガーメニュー等が機能停止していた。動的nonce属性がAstroのTS変換をバイパスすると判明。esbuildで全script blockを再変換しプレーンJSへ修正。本番で構文検証・実機確認済み |
 | 2026-07-05 | v3.7       | 職務経歴レビュー(Fable)反映: DEA資格年2021→2024に訂正、個人開発(7システム運用中)をタイムラインに追加しProjectsへ導線、直近案件を「PL下で技術支援」に是正、表現重複解消。モバイルCookie問題も修正: SameSite Lax化+有効トークン直接アクセス時はリダイレクトせず描画(Fable推奨案)。本番実機検証済み |
+| 2026-07-06 | v3.8       | HIGH修正: モバイルメニューのnavItems.mapが`label`を見ず`t(key)`のみ表示していたため、翻訳辞書に存在しない管理者リンク（nav.cryptobot）が空文字（見えないリンク）になっていた。デスクトップ側と同じ`label ?? t(key)`に統一し表示を修正。本番でモバイルメニューのHTML出力を確認済み |
