@@ -23,8 +23,8 @@ export const ui = {
 
     'stats.aws': 'AWS認定資格',
     'stats.projects': '個人開発プロジェクト',
-    'stats.aws-services': '使用AWSサービス',
-    'stats.autopost': '日連続自動投稿',
+    'stats.templates': 'CFnテンプレート無料配布',
+    'stats.autopost': '日 Bot無停止自動運用',
     'stats.cost': '全プロジェクト月額コスト',
 
     'section.projects': '開発実績',
@@ -55,6 +55,9 @@ export const ui = {
     'articles.read': '記事を読む',
     'articles.zenn': 'Zenn記事',
     'articles.note': 'note記事',
+    'articles.notice': 'Zenn記事の多くは、自作の記事自動生成Bot（下記プロジェクトで開発）がAWSサービスをテーマに生成し、人手でレビューしたものです。note記事は手動執筆です。',
+    'articles.notice.link1': '初級記事Bot',
+    'articles.notice.link2': '中級記事Bot',
 
     'contact.title': 'お問い合わせ',
     'contact.sub': '各種SNS・プラットフォームでつながりましょう',
@@ -87,14 +90,14 @@ export const ui = {
     'hero.title': 'Cloud Engineer',
     'hero.name': 'Zer0_Infra',
     'hero.tagline': 'AWS × Generative AI Engineer — Cost Optimization Meets Automation',
-    'hero.sub': 'Serverless architecture, IaC, and Amazon Bedrock for system design & development',
+    'hero.sub': 'AWS Certified (10 certs) / Financial institution AWS infrastructure / Serverless automation system development',
     'hero.cta.projects': 'View Projects',
     'hero.cta.contact': 'Contact',
 
     'stats.aws': 'AWS Certifications',
     'stats.projects': 'Projects',
-    'stats.aws-services': 'AWS Services Used',
-    'stats.autopost': 'Days Auto-Post',
+    'stats.templates': 'Free CFn Templates',
+    'stats.autopost': 'Days Non-Stop Bot Uptime',
     'stats.cost': 'All Projects / Month',
 
     'section.projects': 'Projects',
@@ -125,6 +128,9 @@ export const ui = {
     'articles.read': 'Read Article',
     'articles.zenn': 'Zenn Articles',
     'articles.note': 'note Articles',
+    'articles.notice': 'Most Zenn articles are auto-generated on AWS topics by a self-built article-generation bot (see projects below), then reviewed by hand. note articles are written manually.',
+    'articles.notice.link1': 'Beginner Article Bot',
+    'articles.notice.link2': 'Mid-Level Article Bot',
 
     'contact.title': 'Contact',
     'contact.sub': 'Connect with me on social platforms',

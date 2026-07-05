@@ -25,7 +25,10 @@ const categories = getCategoriesWithTemplates().map((cat) => {
 const totalFiles = categories.reduce((s, c) => s + c.count, 0);
 ---
 
-<BaseLayout title={t('templates.title')}>
+<BaseLayout
+  title={`CloudFormationテンプレート${totalFiles}本 無料配布`}
+  description={`実際にAWSへデプロイして動作検証済みのCloudFormationテンプレート${totalFiles}本を無料公開。VPC・Lambda・ECS・RDS等、パラメータを指定するだけで即デプロイ可能。`}
+>
   <div class="mx-auto px-4 pb-0 md:pb-8">
 
     <!-- Page header (hidden everywhere — explorer uses full height) -->
