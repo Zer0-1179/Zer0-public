@@ -32,7 +32,8 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
         │   ├─ matplotlib + AWS公式アイコン（64px PNG）
         │   └─ PNG 生成 × 2枚（メイン構成図 + 詳細図）+ 各図のタイトルを取得
         ├─ Bedrock Claude Haiku（切り口・図の内容をプロンプトに注入して記事本文生成 ~8,000 tokens出力）
-        ├─ 記事品質チェック（文字数・Zenn記法対応・CLIコマンド体裁・構成図枚数）
+        ├─ 軽微な問題を自動修正（古いランタイム表記・h1見出し・コードブロック言語指定・--region漏れ。Bedrock再呼び出しなし）
+        ├─ 記事品質チェック（文字数・Zenn記法対応・CLIコマンド体裁・構成図枚数。自動修正で直らない問題のみメールで警告）
         ├─ S3 PUT（MD + PNG × 2）※ dry_run時はスキップ
         ├─ SSM PUT（トピック・切り口履歴更新）※ dry_run時はスキップ
         └─ SES（生成完了メール通知：タイトル・見出し一覧・コスト概算等を含む）※ dry_run時はスキップ
@@ -101,7 +102,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 │   ├── diagram_generator.py  # matplotlib 図生成エンジン
 │   ├── deploy.sh             # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda.py    # ユニットテスト（14件）
+│       └── test_lambda.py    # ユニットテスト（21件）
 ├── scripts/
 │   ├── build_layer.sh        # Lambda Layer ビルド
 │   └── download_article.sh   # S3 から生成記事をローカルに取得
@@ -125,7 +126,7 @@ DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/
 ## テスト / 動作確認
 
 ```bash
-# ユニットテスト（14件）
+# ユニットテスト（21件）
 cd src && python -m pytest tests/ -v
 
 # Lambda 手動実行（dry_run: S3保存・SES送信・SSM書き込みをスキップし記事生成のみプレビュー）
@@ -169,3 +170,4 @@ bash scripts/download_article.sh
 | 2026-07-03 | v2.4       | **構成図6トピック追加**: v2.0で追加した6サブトピックが構成図未対応で画像なしのまま記事生成されていた問題を修正。各2枚・計12枚の構成図関数を追加し、SSM/EBS/PrivateLink/S3 Glacierの公式アイコンを `aws_icons/` にローカル同梱。本番Lambda実行でPNG生成を確認済み        |
 | 2026-07-05 | v2.5       | **Fableブラッシュアップ**: dry_run実装（S3/SES/SSM書込スキップ）・構成図タイトルを記事プロンプトに注入し本文と整合・切り口4種のランダム変化を追加・トピック選定をBedrock→random.choiceに変更（コスト・偏り解消）・記事品質チェックを実質化（文字数/Markdown対応/CLI体裁等）・メール通知にタイトル/見出し/コスト等追加・Bedrockリトライ設定追加・構成図エッジラベルへ白背景bbox付与・構造化サマリーログ追加。本番Lambdaでdry_run実行検証済み |
 | 2026-07-05 | v2.6       | v2.5の文字数チェックが実態と乖離していた問題を修正。過去ログで実測6,500〜9,500文字が常態と判明（内容充実優先の方針上、正常挙動）のため想定文字数を2,000〜3,500→4,000〜8,000文字に修正し、品質チェックは「3,000文字未満」のみ検出する片側チェックに変更（上限超過は許容） |
+| 2026-07-05 | v2.7       | `_auto_fix_article()`追加：古いランタイム表記・コードブロック外h1見出し・言語指定なしコードブロック・記事全体で`--region`皆無時の単一行コマンド、をBedrock再呼び出しなし（コストゼロ）で自動修正してから保存。品質チェックは自動修正で直らない問題のみ検出しメール警告。メールに「自動修正」欄追加。テスト6件追加（計21件） |

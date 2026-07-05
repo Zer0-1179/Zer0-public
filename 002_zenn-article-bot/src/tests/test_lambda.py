@@ -144,3 +144,56 @@ def test_validate_article_allows_long_article():
     article = "## はじめに\naws s3 ls --region ap-northeast-1\n\n## まとめ\n"
     issues = lambda_function.validate_article(article, 9500)
     assert not any("文字数" in i for i in issues)
+
+
+def test_auto_fix_replaces_old_runtime():
+    """古いLambdaランタイム表記を最新版に自動置換すること"""
+    article = "```bash\naws lambda create-function --runtime python3.12\n```"
+    fixed, fixes = lambda_function._auto_fix_article(article)
+    assert "python3.12" not in fixed
+    assert "python3.13" in fixed
+    assert any("python3.12" in f for f in fixes)
+
+
+def test_auto_fix_promotes_h1_outside_code_block():
+    """コードブロック外のh1見出しは##に格上げし、コードブロック内の# コメントは触らないこと"""
+    article = (
+        "# タイトル\n## はじめに\n本文\n\n"
+        "```bash:例\n# 変数定義\nBUCKET_NAME=example\n```\n"
+    )
+    fixed, fixes = lambda_function._auto_fix_article(article)
+    assert "## タイトル" in fixed
+    assert "# 変数定義" in fixed  # コードブロック内はそのまま
+    assert any("h1見出し" in f for f in fixes)
+
+
+def test_auto_fix_adds_language_to_bare_code_block():
+    """言語指定のないコードブロックに text を補完すること"""
+    article = "## はじめに\n```\nsome output\n```\n## まとめ\n"
+    fixed, fixes = lambda_function._auto_fix_article(article)
+    assert "```text" in fixed
+    assert any("text" in f for f in fixes)
+
+
+def test_auto_fix_appends_region_when_missing_everywhere():
+    """記事全体に--regionが一つも無い場合、単一行の aws コマンドに補完すること"""
+    article = "## はじめに\n```bash\naws s3 ls\n```\n## まとめ\n"
+    fixed, fixes = lambda_function._auto_fix_article(article)
+    assert "aws s3 ls --region ap-northeast-1" in fixed
+    assert any("region" in f for f in fixes)
+
+
+def test_auto_fix_skips_multiline_command_for_region():
+    """行末が\\の複数行コマンドには--regionを補完しない（誤修正防止）こと"""
+    article = "## はじめに\n```bash\naws s3 ls \\\n  --bucket example\n```\n## まとめ\n"
+    fixed, fixes = lambda_function._auto_fix_article(article)
+    assert fixed == article
+    assert fixes == []
+
+
+def test_auto_fix_noop_when_no_issues():
+    """修正対象が無ければテキストは変更されず、修正リストも空であること"""
+    article = "## はじめに\n```bash:例\naws s3 ls --region ap-northeast-1\n```\n## まとめ\n"
+    fixed, fixes = lambda_function._auto_fix_article(article)
+    assert fixed == article
+    assert fixes == []
