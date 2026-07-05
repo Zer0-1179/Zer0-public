@@ -1410,6 +1410,10 @@ MAX_REPLIED_TWEET_HISTORY    = 50  # 同一ツイートへの二重返信を防�
 # 2026-07-05 Fable最終レビューで指摘: 2案中マシな方でも低品質なら投稿されてしまう。
 # 大手アカウントの下に晒される文章のため、_score_tweet基準で一定点未満は投稿せずスキップする。
 _REPLY_MIN_SCORE = 3
+# 2026-07-05: 当初80文字で運用したところ本番実測でLLMが指示を守れず超過する頻度が高く
+# （実測85〜101字が大半）、途中切断スキップが多発しリプ営業がほぼ発動しなくなった。
+# 実測の超過幅を吸収できる120文字に緩和。
+_REPLY_CHAR_LIMIT = 120
 
 
 def load_reply_target_accounts() -> list:
@@ -1544,7 +1548,7 @@ def pick_reply_candidate_tweet(tweets: list, replied_ids: list) -> dict | None:
     return None
 
 
-def build_reply_prompt(tweet_text: str, target_label: str) -> str:
+def build_reply_prompt(tweet_text: str, target_label: str, char_limit: int = _REPLY_CHAR_LIMIT) -> str:
     return f"""なんとか生きてる普通の会社員が、X（旧Twitter）で「{target_label}」の以下の投稿に返信します。
 
 【相手の投稿】
@@ -1578,7 +1582,7 @@ def build_reply_prompt(tweet_text: str, target_label: str) -> str:
 - 会社員としての本音・実感を1つ添える
 - 特定の個人・政党・企業への攻撃、差別的表現、誤情報の断定はしない（あくまで会社員としての実感・本音の範囲）
 - 「です・ます」禁止。常体・口語
-- 80文字以内
+- {char_limit}文字以内
 - 絵文字は使わない
 - ハッシュタグ・URLは含めない
 - 宣伝・営業目的だとわかる文面にしない（「フォローお願いします」等は厳禁）
@@ -1615,18 +1619,18 @@ def attempt_reply_outreach(creds: dict, dry_run: bool) -> None:
 
         prompt = build_reply_prompt(chosen["text"], target)
         raw_reply_text = invoke_bedrock(prompt, n=2)
-        reply_text = trim_body_excluding_hashtags(raw_reply_text, limit=80)
+        reply_text = trim_body_excluding_hashtags(raw_reply_text, limit=_REPLY_CHAR_LIMIT)
         reply_text = strip_model_hashtag_lines(reply_text)
 
         if not reply_text or len(reply_text) < 5:
             print("[Reply] 生成結果が短すぎる/空のためスキップ")
             return
 
-        # 2026-07-05 Fable最終レビューで指摘: 80字トリムで文中がぶった切られたリプは
-        # 大手アカウントの下では特にBot感が強い。80字を超える生成結果は
+        # 2026-07-05 Fable最終レビューで指摘: 文字数トリムで文中がぶった切られたリプは
+        # 大手アカウントの下では特にBot感が強い。上限を超える生成結果は
         # 途中で切れている可能性が高いため、無理に投稿せずスキップする。
-        if len(raw_reply_text) > 80:
-            print(f"[Reply] 生成結果が80字超（{len(raw_reply_text)}字）で途中切断の恐れがあるためスキップ")
+        if len(raw_reply_text) > _REPLY_CHAR_LIMIT:
+            print(f"[Reply] 生成結果が上限{_REPLY_CHAR_LIMIT}字超（{len(raw_reply_text)}字）で途中切断の恐れがあるためスキップ")
             return
 
         reply_score = _score_tweet(reply_text)
