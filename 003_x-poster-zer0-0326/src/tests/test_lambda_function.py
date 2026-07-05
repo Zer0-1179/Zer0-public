@@ -194,9 +194,10 @@ def test_pick_best_tweet_handles_single_candidate():
 # ─────────────────────────────────────────────────────
 
 def test_reply_target_accounts_are_user_approved_list():
-    """対象は必ずユーザーが明示承認した4アカウントのみで、自動追加されないこと"""
+    """対象は必ずユーザーが明示承認した6アカウントのみで、自動追加されないこと"""
     assert set(lf.REPLY_TARGET_ACCOUNTS) == {
         "nikkei", "toyokeizai", "diamond_online", "PRESIDENT_Online",
+        "itmedia_news", "itmedia",
     }
 
 
