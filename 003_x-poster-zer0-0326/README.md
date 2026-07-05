@@ -29,8 +29,9 @@ EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST・リトライ0�
         ├─ カテゴリ別データ取得
         │   ├─ url_reaction: Yahoo!ニュースRSS（経済/国内/エンタメ）から記事取得
         │   └─ trend: Google Trends RSS から急上昇ワード取得（訃報・事件等はNGワードで除外、話題は問わない）
-        ├─ Bedrock Claude Haiku（カテゴリ別プロンプトで生成、リトライ設定あり）
-        ├─ SSM 投稿履歴更新（used_categories / history / recipe_tasks / question_themes）
+        ├─ Bedrock Claude Haiku（カテゴリ別プロンプトで生成、3案自己採点→ベスト選択）
+        ├─ リプライ営業（大手ニュース4アカウントへ1件・NGワード判定つき、失敗してもメイン投稿に影響しない）
+        ├─ SSM 投稿履歴更新（used_categories / history / recipe_tasks / question_themes / reply_targets / replied_tweets）
         └─ X API v2（POST）
 ```
 
@@ -103,6 +104,15 @@ Google Trends急上昇には訃報・事件・災害・政治が頻繁に入る�
 
 Fableの評価で「現在のXでハッシュタグはリーチを生まずBot感のシグナルになる」「『たまには』『毎回じゃなくていい』という指示はLLMが安全側に倒れ実質発動しない」と指摘され、`NO_HASHTAG_RATE`を0.35→0.9に引き上げ、`ABSOLUTE_RULES`/`STYLE_GUIDE`のヘッジ指示を「原則断定」に書き換えた。
 
+### 12. リプライ営業機能（2026-07-05追加）
+
+大手ニュースアカウント（`@nikkei`・`@toyokeizai`・`@diamond_online`・`@PRESIDENT_Online`、すべてユーザーが明示的に承認した実在アカウント）の最新投稿に、既存の週3回スケジュールへ相乗りする形で1件返信する。X APIのRead系エンドポイント（`GET /2/users/by/username/:username`・`GET /2/users/:id/tweets`）が現行プランで追加料金なしに使えることを実地テストで確認した上で実装。
+
+- **対象アカウントは自動選定しない**: `REPLY_TARGET_ACCOUNTS`はユーザーが指定した4件のみで、AIが対象を判断・追加することはない
+- **安全設計**: リプ先ローテーション（直近3件除外）・返信済みツイートの重複回避（履歴50件保持）・政治/災害/訃報等のNGワードフィルタ（`REPLY_NG_WORDS`、トレンド用NGワードに大統領・政権・外交等を追加）でセンシティブな投稿への返信を回避
+- **失敗時はメイン投稿に影響させない**: `attempt_reply_outreach`は例外を内部で捕捉し、ユーザー検索・タイムライン取得・生成のどこで失敗してもログに残すだけでメインのカテゴリ投稿処理は継続する
+- **本番検証で判明した穴と対処**: 実地テストでニュースアカウントの投稿に政治色の強い内容（トランプ大統領関連）が含まれるケースを発見し、`REPLY_NG_WORDS`を拡充して除外するよう修正済み
+
 ## 技術スタック
 
 | レイヤー         | 技術                                                                                                    |
@@ -110,7 +120,7 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 | 実行基盤         | AWS Lambda（Python 3.14）                                                                               |
 | スケジューリング | Amazon EventBridge Scheduler（JST対応・2スロット）                                                      |
 | 生成AI           | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
-| 状態管理         | SSM Parameter Store（8パラメータで履歴管理）                                                            |
+| 状態管理         | SSM Parameter Store（10パラメータで履歴管理）                                                           |
 | 外部データ       | Yahoo!ニュース RSS / Google Trends RSS                                                                  |
 | 投稿先           | X API v2                                                                                                |
 | IaC              | CloudFormation                                                                                          |
@@ -124,7 +134,7 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 │   ├── cfn-x-poster-zer0-0326.yaml
 │   ├── deploy.sh                       # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda_function.py     # ユニットテスト（29件）
+│       └── test_lambda_function.py     # ユニットテスト（35件）
 ├── scripts/
 │   └── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
 └── images/
@@ -146,7 +156,7 @@ bash scripts/test_invoke.sh
 # mode指定（random / trend）
 bash scripts/test_invoke.sh trend
 
-# ユニットテスト（29件）
+# ユニットテスト（35件）
 cd src && python -m pytest tests/ -v
 ```
 
@@ -173,6 +183,8 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | `/ai_bot/history/url_reaction_urls`   | String       | Lambda自動更新 |
 | `/ai_bot/history/recipe_tasks`        | String       | Lambda自動更新（2026-07-05追加） |
 | `/ai_bot/history/question_themes`     | String       | Lambda自動更新（2026-07-05追加） |
+| `/ai_bot/history/reply_targets`       | String       | Lambda自動更新（2026-07-05追加、リプ営業のローテーション） |
+| `/ai_bot/history/replied_tweets`      | String       | Lambda自動更新（2026-07-05追加、返信済みツイートID） |
 
 ## トラブルシューティング
 
@@ -218,3 +230,4 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | 2026-07-05 | v2.5       | **Fableブラッシュアップ**: 001と同じOnFailure SNS通知を追加（RecipientEmail設定時のみ）・Bedrockクライアントにリトライ設定追加＋Timeout 60→90秒・trendカテゴリにNGワードフィルタ追加（炎上防止）・dry_runをイベントペイロード化しtest_invoke.shの本番環境変数書き換え方式を廃止（事故リスク解消）・recipe/jissokuのお題とquestionのテーマ軸にSSM履歴除外を追加（マンネリ化対策）・weightedトリムの重複ロジックを共通ヘルパーに統合し投稿URLをログ/戻り値に追加。ユニットテスト23件新規追加。CFn更新・Lambdaデプロイ・本番dry_run検証済み |
 | 2026-07-05 | v2.6       | **AIコンセプト全面撤廃・バズ狙いへ転換**: ユーザー要望により「AI活用系Bot」の前提を撤廃し、話題をAIに限らない会社員あるある系コンテンツへ変更。全カテゴリのプロンプト・few-shot例・お題・ハッシュタグ・キーワードを非AI一般テーマに書き換え、フック強化（挑発型追加・断定終わりの許容）とバズ狙いの強い意見を明示的に許可（誹謗中傷・誤情報は禁止）。url_reactionのRSSフィードをZenn/Qiita（AI関連タグ）→Yahoo!ニュース（経済/国内/エンタメ）に変更。`pick_ai_relatable_trend`を`pick_relatable_trend`にリネームしAI紐付け要件を撤廃（Tier3で任意の話題を拾う）。テスト24件（AI関連アサーションを新テーマに合わせて更新）全パス。Lambdaデプロイ・本番dry_run検証済み |
 | 2026-07-05 | v2.7       | **Fable評価反映（バズ強化第2弾）**: v2.6の評価をFableに依頼したところ「頻度の壁に加えfew-shot例が旧路線のままで新指示が効いていない」と指摘。①複数案生成→自己採点→ベスト選択パイプライン導入（`invoke_bedrock`が1回のBedrock呼び出しで3案生成し`_score_tweet`/`pick_best_tweet`でヘッジ表現・数字・情報密度を機械採点）②ハッシュタグ原則廃止（`NO_HASHTAG_RATE` 0.35→0.9）③`ABSOLUTE_RULES`/`STYLE_GUIDE`から「たまには」「毎回じゃなくていい」等のヘッジ指示を削除し断定を原則化④「オチを決めない・垂れ流す」指示を「1投稿1メッセージ・情報密度最大」に転換⑤shippaiの「失敗→回避法必須」という`ABSOLUTE_RULES`との自己矛盾を解消し恥の解像度重視に変更⑥trendを「知らなかった型」から賛成/反対/どうでもいいを明確に取る意見型に全面再設計⑦hikaku/recipeの数字・断定を強化。テスト5件追加（計29件）。**リプライ営業機能はX APIのRead権限・料金プラン未確認のため保留**（ユーザーがdeveloper.x.comで確認予定）。Lambdaデプロイ・本番dry_run検証済み。**注意**: trendカテゴリで実在の著名人名を扱った際どい投稿が生成される例を確認（NGワードフィルタは訃報・事件等はカバーするが個人名の炎上ネタは未対応） |
+| 2026-07-05 | v2.8       | **リプライ営業機能を実装**: X APIのRead系エンドポイント（`GET /2/users/me`・`GET /2/users/by/username`・`GET /2/users/:id/tweets`）を実地テストで検証（自分の投稿への実際のリプライ投稿→削除、他アカウント＝日経のタイムライン取得まで確認）し、追加料金なしで利用可能と判明。ユーザーが承認した4アカウント（`@nikkei`・`@toyokeizai`・`@diamond_online`・`@PRESIDENT_Online`）を対象にリプ営業機能を実装。`_build_oauth_header`にOAuth 1.0a署名処理を共通化し`get_x`（GET用）を追加、`attempt_reply_outreach`が既存の週3回スケジュールに相乗りする形で1件返信。リプ先ローテーション・返信済み重複回避・`REPLY_NG_WORDS`（政治・災害・訃報等）フィルタで安全設計。本番検証でニュースアカウントの投稿に政治色の強い内容（トランプ大統領関連）が含まれNGワードフィルタが未対応だった穴を発見し`REPLY_NG_WORDS`を拡充。テスト6件追加（計35件）。Lambdaデプロイ・本番dry_run検証済み |

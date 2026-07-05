@@ -1269,8 +1269,8 @@ def get_x_credentials() -> dict:
     return creds
 
 
-def post_to_x(tweet_text: str, creds: dict, reply_to: str | None = None) -> dict:
-    url   = "https://api.twitter.com/2/tweets"
+def _build_oauth_header(method: str, url: str, creds: dict, extra_params: dict | None = None) -> str:
+    """OAuth 1.0aの署名付きAuthorizationヘッダーを生成する（GET/POST共通）。"""
     ts    = str(int(time.time()))
     nonce = base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")
     oauth = {
@@ -1281,18 +1281,24 @@ def post_to_x(tweet_text: str, creds: dict, reply_to: str | None = None) -> dict
         "oauth_token":            creds["twitter_access_token"],
         "oauth_version":          "1.0",
     }
+    all_params = {**oauth, **(extra_params or {})}
     params_str = "&".join(f"{_percent_encode(k)}={_percent_encode(v)}"
-                          for k, v in sorted(oauth.items()))
-    base_str   = "&".join(["POST", _percent_encode(url), _percent_encode(params_str)])
+                          for k, v in sorted(all_params.items()))
+    base_str   = "&".join([method, _percent_encode(url), _percent_encode(params_str)])
     sign_key   = (_percent_encode(creds["twitter_api_secret"]) + "&"
                   + _percent_encode(creds["twitter_access_token_secret"]))
     sig        = base64.b64encode(
         hmac.new(sign_key.encode(), base_str.encode(), hashlib.sha1).digest()
     ).decode()
     oauth["oauth_signature"] = sig
-    auth_header = "OAuth " + ", ".join(
+    return "OAuth " + ", ".join(
         f'{_percent_encode(k)}="{_percent_encode(v)}"' for k, v in sorted(oauth.items())
     )
+
+
+def post_to_x(tweet_text: str, creds: dict, reply_to: str | None = None) -> dict:
+    url = "https://api.twitter.com/2/tweets"
+    auth_header = _build_oauth_header("POST", url, creds)
     payload_dict = {"text": tweet_text}
     if reply_to:
         payload_dict["reply"] = {"in_reply_to_tweet_id": reply_to}
@@ -1308,6 +1314,212 @@ def post_to_x(tweet_text: str, creds: dict, reply_to: str | None = None) -> dict
             return result
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"X API エラー {e.code}: {e.read().decode()}") from e
+
+
+def get_x(url_path: str, creds: dict, params: dict | None = None) -> dict:
+    """X API v2 のGETエンドポイント（読み取り専用）をOAuth 1.0aで署名して呼び出す。
+    2026-07-05: リプライ営業機能のためのユーザー検索・タイムライン取得に使用。実地テストで
+    Read権限が現行プランで利用可能なことを確認済み（追加料金なし）。"""
+    url = f"https://api.twitter.com{url_path}"
+    auth_header = _build_oauth_header("GET", url, creds, extra_params=params)
+    query = ("?" + urllib.parse.urlencode(params)) if params else ""
+    req = urllib.request.Request(url + query, headers={"Authorization": auth_header})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"X API エラー {e.code}: {e.read().decode()}") from e
+
+
+# ─────────────────────────────────────────────────────
+# リプライ営業（大手アカウントへの返信、2026-07-05追加）
+# ─────────────────────────────────────────────────────
+# ユーザーが実在確認・明示承認した返信先のみを対象とする（対象選定を自動化・AI判断に
+# 委ねることはしない）。頻度は既存スケジュール（週3回）に相乗りさせ、新たな
+# EventBridge実行は追加しない（1回の実行につき最大1件）。
+
+REPLY_TARGET_ACCOUNTS = ["nikkei", "toyokeizai", "diamond_online", "PRESIDENT_Online"]
+MAX_REPLY_TARGET_HISTORY  = 3   # REPLY_TARGET_ACCOUNTS（4件）より必ず小さい値にすること
+MAX_REPLIED_TWEET_HISTORY = 50  # 同一ツイートへの二重返信を防ぐための履歴保持件数
+
+
+def load_reply_target_history() -> list:
+    param = f"{SSM_PREFIX}/history/reply_targets"
+    try:
+        val = ssm_client.get_parameter(Name=param)["Parameter"]["Value"]
+        return json.loads(val)
+    except ssm_client.exceptions.ParameterNotFound:
+        return []
+    except Exception as e:
+        print(f"[Reply] リプ先履歴読み込みエラー: {e}")
+        return []
+
+
+def save_reply_target_history(used: list, new_target: str):
+    updated = (used + [new_target])[-MAX_REPLY_TARGET_HISTORY:]
+    try:
+        ssm_client.put_parameter(
+            Name=f"{SSM_PREFIX}/history/reply_targets",
+            Value=json.dumps(updated), Type="String", Overwrite=True,
+        )
+        print(f"[Reply] リプ先履歴保存: {updated}")
+    except Exception as e:
+        print(f"[Reply] リプ先履歴保存エラー: {e}")
+
+
+def pick_reply_target(used_targets: list) -> str:
+    """直近MAX_REPLY_TARGET_HISTORY件に含まれないアカウントからランダム選択し、
+    毎回同じ相手にリプ営業が偏らないようにする。"""
+    recent = used_targets[-MAX_REPLY_TARGET_HISTORY:]
+    unused = [a for a in REPLY_TARGET_ACCOUNTS if a not in recent]
+    return random.choice(unused) if unused else random.choice(REPLY_TARGET_ACCOUNTS)
+
+
+def load_replied_tweet_ids() -> list:
+    param = f"{SSM_PREFIX}/history/replied_tweets"
+    try:
+        val = ssm_client.get_parameter(Name=param)["Parameter"]["Value"]
+        return json.loads(val)
+    except ssm_client.exceptions.ParameterNotFound:
+        return []
+    except Exception as e:
+        print(f"[Reply] 返信済みツイート履歴読み込みエラー: {e}")
+        return []
+
+
+def save_replied_tweet_id(current: list, new_id: str):
+    updated = (current + [new_id])[-MAX_REPLIED_TWEET_HISTORY:]
+    try:
+        ssm_client.put_parameter(
+            Name=f"{SSM_PREFIX}/history/replied_tweets",
+            Value=json.dumps(updated), Type="String", Overwrite=True,
+        )
+    except Exception as e:
+        print(f"[Reply] 返信済みツイート履歴保存エラー: {e}")
+
+
+def resolve_user_id(username: str, creds: dict) -> str | None:
+    """ユーザー名からユーザーIDを取得する。失敗時はNoneを返し呼び出し元でスキップさせる。"""
+    try:
+        result = get_x(f"/2/users/by/username/{username}", creds)
+        return result.get("data", {}).get("id")
+    except Exception as e:
+        print(f"[Reply] ユーザーID解決エラー (@{username}): {e}")
+        return None
+
+
+def fetch_recent_tweets(user_id: str, creds: dict, max_results: int = 5) -> list:
+    """指定ユーザーの最新ツイートを取得する（RT・リプライは除外）。失敗時は空リスト。"""
+    try:
+        result = get_x(f"/2/users/{user_id}/tweets", creds,
+                       params={"max_results": str(max_results), "exclude": "retweets,replies"})
+        return result.get("data", []) or []
+    except Exception as e:
+        print(f"[Reply] タイムライン取得エラー: {e}")
+        return []
+
+
+# リプ営業はニュースメディアの投稿を対象にするため政治・国際情勢の話題に触れやすい
+# （実地テストでトランプ大統領関連の投稿が候補に上がった）。TREND_NG_WORDSに加えて
+# 大統領・政権・外交等も除外し、政治的な話題への反応を避ける。
+REPLY_NG_WORDS = TREND_NG_WORDS + [
+    "大統領", "首相官邸", "政権", "外交", "与党", "野党", "国会", "トランプ",
+]
+
+
+def _is_sensitive_for_reply(text: str) -> bool:
+    """訃報・事件・災害・政治・国際情勢等、リプ営業には不適切な内容かどうかを判定する。"""
+    return any(ng in text for ng in REPLY_NG_WORDS)
+
+
+def pick_reply_candidate_tweet(tweets: list, replied_ids: list) -> dict | None:
+    """返信対象として適切なツイートを1つ選ぶ。返信済み・センシティブ内容は除外。"""
+    for t in tweets:
+        if t.get("id") in replied_ids:
+            continue
+        if _is_sensitive_for_reply(t.get("text", "")):
+            continue
+        return t
+    return None
+
+
+def build_reply_prompt(tweet_text: str, target_label: str) -> str:
+    return f"""なんとか生きてる普通の会社員が、X（旧Twitter）で「{target_label}」の以下の投稿に返信します。
+
+【相手の投稿】
+{tweet_text}
+
+【良い例（投稿の具体的な内容に触れた上で、会社員目線の本音や関連する体験を一言添える）】
+---
+これ見て思ったけど、給料からの天引き額を明細で改めて見ると毎回めまいがする
+使い道が納得できないとなおさら
+---
+---
+正直この手のニュース、自分の手取りとは別世界の話に感じる
+生活してる側からするとリアリティがない
+---
+---
+記事の内容はわかるけど、結局自分の給料には反映されない話だよなと思ってしまう
+---
+
+【ルール】
+- 相手の投稿の具体的な内容（数字・固有名詞・論点）に触れること。「わかります」「そうですね」のような当たり障りのない相槌は禁止
+- 会社員としての本音・実感を1つ添える（仕事・お金・生活の視点）。税金・手取りへの不満などの切り口もOK
+- 特定の個人・政党・企業への攻撃、差別的表現、誤情報の断定はしない（あくまで会社員としての実感・本音の範囲）
+- 「です・ます」禁止。常体・口語
+- 80文字以内
+- 絵文字は使わない
+- ハッシュタグ・URLは含めない
+- 宣伝・営業目的だとわかる文面にしない（「フォローお願いします」等は厳禁）
+
+返信本文のみ出力。"""
+
+
+def attempt_reply_outreach(creds: dict, dry_run: bool) -> None:
+    """大手アカウントの最新投稿に1件だけ返信する。
+    どのステップで失敗してもログに残すだけでメインの投稿処理には影響させない
+    （リプ営業はあくまで付随機能であり、これが原因でメイン投稿が止まってはならない）。"""
+    try:
+        used_targets = load_reply_target_history()
+        target = pick_reply_target(used_targets)
+        print(f"[Reply] リプ先候補: @{target} (直近使用: {used_targets[-MAX_REPLY_TARGET_HISTORY:]})")
+
+        user_id = resolve_user_id(target, creds)
+        if not user_id:
+            print("[Reply] ユーザーID解決失敗のためスキップ")
+            return
+
+        tweets = fetch_recent_tweets(user_id, creds)
+        if not tweets:
+            print("[Reply] 取得できるツイートがないためスキップ")
+            return
+
+        replied_ids = load_replied_tweet_ids()
+        chosen = pick_reply_candidate_tweet(tweets, replied_ids)
+        if not chosen:
+            print("[Reply] 返信可能なツイートがない（センシティブ or 返信済み）ためスキップ")
+            return
+
+        prompt = build_reply_prompt(chosen["text"], target)
+        reply_text = invoke_bedrock(prompt, n=2)
+        reply_text = trim_body_excluding_hashtags(reply_text, limit=80)
+        reply_text = strip_model_hashtag_lines(reply_text)
+
+        if not reply_text or len(reply_text) < 5:
+            print("[Reply] 生成結果が短すぎる/空のためスキップ")
+            return
+
+        print(f"[Reply] @{target} の投稿「{chosen['text'][:40]}...」に返信予定:\n{reply_text}")
+
+        if dry_run:
+            print("[Reply] [DRY_RUN] 返信投稿・履歴更新をスキップ")
+            return
+
+        post_to_x(reply_text, creds, reply_to=chosen["id"])
+        save_reply_target_history(used_targets, target)
+        save_replied_tweet_id(replied_ids, chosen["id"])
+    except Exception as e:
+        print(f"[Reply] リプ営業処理でエラー（無視して続行）: {e}")
 
 
 # ─────────────────────────────────────────────────────
@@ -1437,13 +1649,19 @@ def lambda_handler(event, context):
             print("[Hashtag] 今回はタグなしで投稿")
     print(f"[Tweet]\n{tweet}\n[文字数] len={len(tweet)} weighted={x_weighted_length(tweet)}/{TWEET_MAX_LEN}")
 
+    # X認証情報はdry_runでもリプ営業のプレビューに使うため、DRY RUN判定より先に取得する
+    creds = get_x_credentials()
+
+    # ── リプライ営業（大手アカウントへの返信。既存の週3回スケジュールに相乗り） ──
+    print("[Reply] リプ営業を試行中...")
+    attempt_reply_outreach(creds, dry_run)
+
     # ── DRY RUN ───────────────────────────────────────
     if dry_run:
         print("[DRY RUN] 投稿スキップ（SSM履歴は更新しません）")
         return {"statusCode": 200, "category": category, "tweet": tweet, "dry_run": True}
 
     # ── X投稿 ─────────────────────────────────────────
-    creds  = get_x_credentials()
     result = post_to_x(tweet, creds)
 
     # url_reaction: 記事URLをリプライにぶら下げる（本文に入れるとリーチが抑制されるため）
