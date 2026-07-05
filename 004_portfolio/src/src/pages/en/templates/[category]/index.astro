@@ -100,6 +100,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
                         data-short={tmpl.descShortEn}
                         data-desc={tmpl.descEn}
                         data-services={tmpl.services.join(',')}
+                        data-updated={tmpl.updatedAt}
                       >
                         <svg class="w-3.5 h-3.5 text-slate-600 group-hover/file:text-slate-400 shrink-0 transition-colors" viewBox="0 0 20 20" fill="currentColor">
                           <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
@@ -163,6 +164,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
                   data-short={tmpl.descShortEn}
                   data-desc={tmpl.descEn}
                   data-services={tmpl.services.join(',')}
+                  data-updated={tmpl.updatedAt}
                 >
                   <svg class="w-4 h-4 text-slate-600 group-hover:text-slate-400 shrink-0 transition-colors" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
@@ -172,6 +174,9 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
                   </span>
                   <span class="text-slate-500 text-xs flex-1 truncate hidden md:block">
                     {tmpl.descShortEn}
+                  </span>
+                  <span title="Deployed and tested on real AWS" class="hidden sm:flex items-center gap-1 text-green-500/70 text-xs shrink-0">
+                    <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
                   </span>
                   <span class="text-slate-600 text-xs shrink-0 hidden sm:block">{tmpl.updatedAt}</span>
                   <a
@@ -201,6 +206,11 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
                   <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
                 </svg>
                 <span id="yv-name" class="font-mono text-accent text-sm font-medium truncate"></span>
+                <span title="Deployed and tested on real AWS" class="flex items-center gap-1 text-green-500/80 text-xs shrink-0">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                  Verified
+                </span>
+                <span id="yv-updated" class="text-slate-600 text-xs shrink-0"></span>
               </div>
               <p id="yv-short" class="text-slate-400 text-xs ml-6 leading-relaxed"></p>
               <div id="yv-services" class="flex gap-1 flex-wrap mt-1.5 ml-6"></div>
@@ -276,6 +286,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
   const bcSep      = document.getElementById('bc-sep')!;
   const bcFile     = document.getElementById('bc-file')!;
   const yvName     = document.getElementById('yv-name')!;
+  const yvUpdated  = document.getElementById('yv-updated')!;
   const yvShort    = document.getElementById('yv-short')!;
   const yvDesc     = document.getElementById('yv-desc')!;
   const yvServices = document.getElementById('yv-services')!;
@@ -305,13 +316,14 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
     activeFileBtn = btn;
   }
 
-  function showYaml(filename: string, name: string, short: string, desc: string, services: string) {
+  function showYaml(filename: string, name: string, short: string, desc: string, services: string, updated: string, pushUrl = true) {
     bcSep.classList.remove('hidden');
     bcFile.classList.remove('hidden');
     bcFile.textContent = filename;
     fileTable.classList.add('hidden');
     yamlViewer.classList.remove('hidden');
     yvName.textContent     = filename;
+    yvUpdated.textContent  = updated ? `Updated ${updated}` : '';
     yvFilename.textContent = filename;
     yvShort.textContent    = short;
     yvDesc.textContent     = desc;
@@ -327,13 +339,15 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
     setNavActive(filename);
     (yamlViewer.closest('.overflow-y-auto') as HTMLElement).scrollTop = 0;
     yvContent.textContent = 'Loading...';
+    // deep link: reflect the selected file in the URL so it can be shared/revisited
+    if (pushUrl) history.replaceState(null, '', '?file=' + encodeURIComponent(filename));
     fetch('/api/templates/' + filename)
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
       .then((txt) => { yvContent.textContent = txt; })
       .catch((e) => { yvContent.textContent = 'Error: ' + e.message; });
   }
 
-  function showFileTable() {
+  function showFileTable(pushUrl = true) {
     yamlViewer.classList.add('hidden');
     fileTable.classList.remove('hidden');
     bcSep.classList.add('hidden');
@@ -344,6 +358,7 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
       activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent');
       activeFileBtn = null;
     }
+    if (pushUrl) history.replaceState(null, '', location.pathname);
   }
 
   document.querySelectorAll('.file-row').forEach((row) => {
@@ -354,20 +369,31 @@ if (!cat || cat.files.length === 0) return Astro.redirect('/en/templates/');
       // at the same time as the download.
       if ((e.target as HTMLElement).closest('a')) return;
       const el = row as HTMLElement;
-      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!);
+      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!, el.dataset.updated!);
     });
   });
 
   navTree.querySelectorAll('.file-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const el = btn as HTMLElement;
-      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!);
+      showYaml(el.dataset.filename!, el.dataset.name!, el.dataset.short!, el.dataset.desc!, el.dataset.services!, el.dataset.updated!);
     });
   });
 
-  bcCat.addEventListener('click', showFileTable);
+  bcCat.addEventListener('click', () => showFileTable());
 
-  window.addEventListener('pageshow', () => { showFileTable(); });
+  // deep link: auto-open the file if ?file=cfn-xxx.yaml is present
+  function restoreFromUrl() {
+    const filename = new URLSearchParams(location.search).get('file');
+    const btn = filename && navTree.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`) as HTMLElement | null;
+    if (btn) {
+      showYaml(btn.dataset.filename!, btn.dataset.name!, btn.dataset.short!, btn.dataset.desc!, btn.dataset.services!, btn.dataset.updated!, false);
+    } else {
+      showFileTable(false);
+    }
+  }
+
+  window.addEventListener('pageshow', restoreFromUrl);
 
   yvCopy.addEventListener('click', () => {
     const text = yvContent.textContent;

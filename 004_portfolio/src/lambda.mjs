@@ -6,6 +6,13 @@ import JSZip from 'jszip';
 const app = express();
 app.disable('x-powered-by');
 
+// 2026-07-05 Fableブラッシュアップ: 計測が一切なくPV・DL数が分からない問題への対応。
+// 追加AWSリソース（CloudFront標準ログ・RUM等）を使わず、既存のCloudWatch Logsに
+// 構造化ログを1行出力するだけの方式（追加コストゼロ）。集計は scripts/query-analytics.sh を参照。
+function logMetric(metric, fields) {
+  console.log(JSON.stringify({ metric, ...fields }));
+}
+
 const GITHUB_RAW_BASE =
   'https://raw.githubusercontent.com/Zer0-1179/Zer0-public/main/templates';
 
@@ -81,6 +88,7 @@ app.get('/api/templates/download/:zipname', async (req, res) => {
     const failed = results.filter(r => r.status === 'rejected');
     if (failed.length === entries.length) return res.status(502).send('Failed to fetch templates');
     const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    logMetric('template_zip_download', { zipname, fileCount: entries.length - failed.length });
     res.status(200)
       .set('Content-Type', 'application/zip')
       .set('Content-Disposition', `attachment; filename="${downloadName}"`)
@@ -104,6 +112,7 @@ app.get('/api/templates/:filename', async (req, res) => {
     const response = await fetch(`${GITHUB_RAW_BASE}/${meta.diff}/${meta.cat}/${filename}`, { signal: AbortSignal.timeout(10000) });
     if (!response.ok) return res.status(404).send('Not Found');
     const content = await response.text();
+    logMetric('template_download', { filename, category: meta.cat, difficulty: meta.diff });
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(content);
@@ -147,6 +156,16 @@ app.use((req, res, next) => {
     }
     return origWriteHead(statusCode, ...args);
   };
+  next();
+});
+
+// ページビュー計測: ここまでに/api/*・/のルートは処理済みのため、
+// このミドルウェアに到達するGETリクエストは実質すべてAstroが描画するページ
+app.use((req, res, next) => {
+  if (req.method === 'GET') {
+    const [, lang] = req.path.split('/');
+    logMetric('pageview', { path: req.path, lang: lang === 'en' ? 'en' : 'ja' });
+  }
   next();
 });
 
