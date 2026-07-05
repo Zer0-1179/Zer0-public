@@ -89,8 +89,8 @@ if (Astro.locals.isAdmin) {
 <div class="h-16"></div>
 
 <script nonce={Astro.locals.cspNonce}>
-  const btn = document.getElementById('menu-btn')!;
-  const menu = document.getElementById('mobile-menu')!;
+  const btn = document.getElementById('menu-btn');
+  const menu = document.getElementById('mobile-menu');
   const lines = btn.querySelectorAll('.hamburger-line');
 
   function toggleMenu() {
@@ -98,22 +98,22 @@ if (Astro.locals.isAdmin) {
     menu.classList.toggle('hidden', !opening);
     btn.setAttribute('aria-expanded', String(opening));
     if (opening) {
-      (lines[0] as HTMLElement).style.transform = 'translateY(8px) rotate(45deg)';
-      (lines[1] as HTMLElement).style.opacity = '0';
-      (lines[2] as HTMLElement).style.transform = 'translateY(-8px) rotate(-45deg)';
+      lines[0].style.transform = 'translateY(8px) rotate(45deg)';
+      lines[1].style.opacity = '0';
+      lines[2].style.transform = 'translateY(-8px) rotate(-45deg)';
     } else {
-      (lines[0] as HTMLElement).style.transform = '';
-      (lines[1] as HTMLElement).style.opacity = '';
-      (lines[2] as HTMLElement).style.transform = '';
+      lines[0].style.transform = '';
+      lines[1].style.opacity = '';
+      lines[2].style.transform = '';
     }
   }
 
   function closeMenu() {
     menu.classList.add('hidden');
     btn.setAttribute('aria-expanded', 'false');
-    (lines[0] as HTMLElement).style.transform = '';
-    (lines[1] as HTMLElement).style.opacity = '';
-    (lines[2] as HTMLElement).style.transform = '';
+    lines[0].style.transform = '';
+    lines[1].style.opacity = '';
+    lines[2].style.transform = '';
   }
 
   btn.addEventListener('click', toggleMenu);
