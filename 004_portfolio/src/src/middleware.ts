@@ -75,15 +75,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // ?admin=<トークン> / ?admin=off はどのページでも受け付ける
   const adminParam = context.url.searchParams.get('admin');
+  const isValidTokenParam = !!adminParam && adminParam !== 'off' && !!expected && safeCompare(adminParam, expected);
+
   if (adminParam === 'off') {
     isAdmin = false;
     setCookie = buildCookie('', 0);
-  } else if (adminParam && expected && safeCompare(adminParam, expected)) {
+  } else if (isValidTokenParam) {
     isAdmin = true;
     setCookie = buildCookie(expected, ADMIN_COOKIE_MAX_AGE_S);
   }
 
-  if (adminParam !== null) {
+  // 2026-07-05 Fableレビューで推奨（案B）: 保護ページに有効なトークン付きでアクセスした場合は
+  // リダイレクトせずこのリクエストの中で直接描画する。モバイルブラウザでCookieの往復
+  // （保存・再送信）が信頼できず「指定URLでアクセスしたのに見れない」報告があったための対応。
+  // Cookie自体（下記SameSite=Lax）は利便性向上のため引き続き発行するが、
+  // ブックマークした保護ページ直指定のURLはCookieの成否に一切依存せず毎回確実に動作する。
+  const skipRedirectForDirectAccess = isValidTokenParam && context.url.pathname.startsWith(PRIVATE_PATH_PREFIX);
+
+  if (adminParam !== null && !skipRedirectForDirectAccess) {
     // トークンをURL・ブラウザ履歴に残さないよう、クエリを外してリダイレクト
     const cleanUrl = new URL(context.url);
     cleanUrl.searchParams.delete('admin');
@@ -115,6 +124,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // 検索エンジン・キャッシュへの露出を避ける
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
+
+  // 直接描画（skipRedirectForDirectAccess）の場合はリダイレクトを経由しないため、
+  // ここで実レスポンスにCookieを付与する（append: 他のSet-Cookieを上書きしない）。
+  if (setCookie && skipRedirectForDirectAccess) {
+    response.headers.append('Set-Cookie', setCookie);
+  }
+
+  // 保護ページのURLにトークンが残るケース（skipRedirectForDirectAccess時）に備え、
+  // 外部リソース（Google Fonts等）へのリクエストでクエリ文字列が漏れないよう明示する
+  // （モダンブラウザのデフォルトでも安全だが念のため）。
+  response.headers.set('Referrer-Policy', 'same-origin');
 
   response.headers.set(
     'Content-Security-Policy',
