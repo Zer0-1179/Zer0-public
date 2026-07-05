@@ -457,7 +457,7 @@ aws s3 ls
 - curlコマンドやブラウザ確認では**成功時のレスポンス例を必ずコードブロックで示す**（「結果が表示されます」のような曖昧な表現は使わない）
 - `:::message` や `:::details` は前後に必ず空行を入れること
 - コードブロック内のサンプル日付は**本日の日付（{today}）** を基準にする（`2024`や`2023`等の過去の年は使わない。連番が必要な場合は翌日・数時間後など`{today}`前後の日付を使う）
-- **文字数**: 2,000〜3,500文字程度（水増しより内容の充実を優先する）
+- **文字数**: 4,000〜8,000文字程度が目安（水増しは避けつつ、完全なコード例・正確な内容を優先する。目安を大きく下回る場合のみ注意する）
 
 ---
 
@@ -886,8 +886,10 @@ def validate_article(article_text: str, char_count: int) -> list[str]:
     elif "--region" not in article_text:
         issues.append("AWS CLIコマンドに --region の明示が見当たりません")
 
-    if not (1500 <= char_count <= 4500):
-        issues.append(f"文字数が想定レンジ(2,000〜3,500文字程度)から外れています: {char_count:,}文字")
+    # 目標は4,000〜8,000文字程度だが、内容充実を優先する方針上、実測は8,000〜9,500文字台になることもある
+    # （2026-07-05確認）。上限超過は許容し、極端に短い場合（＝内容不足・生成異常の兆候）のみ検出する
+    if char_count < 3000:
+        issues.append(f"文字数が目安(4,000〜8,000文字程度)に対して少なすぎます: {char_count:,}文字")
 
     open_count  = sum(1 for l in lines if l.strip().startswith(":::") and l.strip() != ":::")
     close_count = sum(1 for l in lines if l.strip() == ":::")
@@ -1137,7 +1139,7 @@ def run(dry_run: bool = False):
 
     # Step 3: 記事生成
     _t = time.time()
-    print("Step 3: 記事を生成中（2,000〜3,500文字）...")
+    print("Step 3: 記事を生成中（4,000〜8,000文字程度）...")
     article, title, is_truncated, gen_meta = generate_article(topic, today, angle, diagram_titles)
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")
