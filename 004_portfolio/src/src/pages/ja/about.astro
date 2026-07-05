@@ -18,7 +18,7 @@ const awsCerts = [
   { name: 'Solutions Architect Associate', abbr: 'SAA', year: '2021' },
   { name: 'SysOps Administrator Associate', abbr: 'SOA', year: '2022' },
   { name: 'Developer Associate', abbr: 'DVA', year: '2022' },
-  { name: 'Data Engineer Associate', abbr: 'DEA', year: '2021' },
+  { name: 'Data Engineer Associate', abbr: 'DEA', year: '2024' },
   { name: 'ML Engineer Associate', abbr: 'MLA', year: '2025' },
   { name: 'Security Specialty', abbr: 'SCS', year: '2024' },
   { name: 'AI Practitioner', abbr: 'AIF', year: '2025' },
@@ -38,9 +38,16 @@ const otherCerts = [
 
 const career = [
   {
+    period: '2026.03 — 現在',
+    title: '個人開発（サーバーレス自動化システム）',
+    desc: 'Lambda + Amazon Bedrock + EventBridge を組み合わせたサーバーレス自動化システムを7件設計・構築し、無停止で運用中（自動投稿Bot・記事自動生成Bot・自動売買Bot・PWA等）。CloudFormationテンプレート64本を無料公開。実務では扱う機会が少ない生成AI活用・サーバーレス設計を自主的に実践する場として位置付けている。',
+    tags: ['Lambda', 'Amazon Bedrock', 'EventBridge', 'CloudFormation', 'Astro'],
+    link: { href: '/ja/projects/', label: '実績を見る →' },
+  },
+  {
     period: '2024.11 — 現在',
     title: '大手金融機関 社内システムインテグレーション / スマホアプリ追加機能',
-    desc: '2件のAWSプロジェクトを並行でリード。CloudFormation IaC化により環境構築・変更作業の工数を約40%削減。CloudWatch/EventBridge/Lambda による自動監視基盤を設計・構築し、障害通知を自動化することで夜間の手動確認工数を削減。PLへの技術支援・顧客折衝も主導。',
+    desc: 'PLの下で2件のAWSプロジェクトの技術面を並行支援。CloudFormationによるIaC化を主導し環境構築・変更作業の工数を約40%削減。CloudWatch/EventBridge/Lambda による自動監視基盤を設計・構築し、障害通知を自動化することで夜間の手動確認工数を削減。要件整理や顧客折衝にも同席。',
     tags: ['EC2', 'RDS/Aurora', 'ALB/NLB', 'CloudFormation', 'CloudWatch', 'EventBridge', 'Lambda', 'HULFT', 'OpenLiberty'],
   },
   {
@@ -52,25 +59,25 @@ const career = [
   {
     period: '2023.04 — 2023.07',
     title: '社内AWS基盤構築・運用',
-    desc: 'Cost Explorer によるコスト可視化で月次AWS費用の削減提案を実現。AWS CLI スクリプトにより VPC/EC2/S3/IAM の構築作業を自動化し、手動ミスと作業時間を大幅に削減。',
+    desc: 'Cost Explorer によるコスト可視化で月次AWS費用の削減を実現。AWS CLI スクリプトにより VPC/EC2/S3/IAM の構築作業を自動化し、手動ミスと作業時間を大幅に圧縮。',
     tags: ['VPC', 'EC2', 'S3', 'IAM', 'CloudFormation', 'AWS CLI'],
   },
   {
     period: '2022.10 — 2022.11',
-    title: '社内システム設計・構築',
+    title: 'NW機器バージョンアップ検証環境の設計・構築',
     desc: 'FortiGate バージョンアップ向け疑似環境を1週間で設計・構築。構成図とプレゼン資料を作成し、関係者への技術説明・提案を主導。',
     tags: ['FortiGate', 'Linux', 'draw.io'],
   },
   {
     period: '2021.09 — 2022.09',
     title: 'データセンター ネットワーク運用・監視（通信キャリア向け）',
-    desc: '通信キャリア向けDCで物理サーバ・NW機器の監視・運用を担当。障害発生時はエスカレーション対応・記録を担い、インシデント管理フローを習得。固定資産管理を担当し、台帳の正確性維持に貢献。',
+    desc: '通信キャリア向けDCで物理サーバ・NW機器の監視・運用を担当。障害発生時はエスカレーション対応・記録を担い、インシデント管理フローを習得。固定資産管理を担当し、台帳の正確性を維持した。',
     tags: ['Linux', 'VMware'],
   },
   {
     period: '2021.05 — 2021.07',
     title: 'Oracle DB 構築・運用',
-    desc: 'Oracle 19c 環境の構築・設定作業を担当。RAT を活用した 12c→19c マイグレーション検証に参加。RHEL 8.2 上での構築手順のドキュメント化に注力し、手順書の整備に貢献。',
+    desc: 'Oracle 19c 環境の構築・設定作業を担当。RAT を活用した 12c→19c マイグレーション検証に参加。RHEL 8.2 上での構築手順をドキュメント化し、手順書を整備した。',
     tags: ['Oracle 19c', 'RHEL 8.2', 'RAT'],
   },
 ];
@@ -170,20 +177,24 @@ const career = [
 
     <!-- 職務経歴 -->
     <section>
-      <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.career')}</h2>
+      <h2 class="text-accent text-xs uppercase tracking-wider mb-4">{t('about.career')}</h2>
+      <p class="text-slate-400 text-sm leading-relaxed mb-8 max-w-2xl">{t('about.career.summary')}</p>
       <div class="relative">
         <div class="absolute left-4 top-0 bottom-0 w-px bg-navy-700/60"></div>
         <div class="space-y-8">
-          {career.map(({ period, title, desc, tags }) => (
+          {career.map(({ period, title, desc, tags, link }) => (
             <div class="relative pl-12">
               <div class="absolute left-3 top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-navy-900 -translate-x-1/2"></div>
               <div class="text-accent text-xs mb-1">{period}</div>
               <h3 class="text-white font-semibold mb-2">{title}</h3>
               <p class="text-slate-400 text-sm leading-relaxed mb-3">{desc}</p>
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 {tags.map((tag) => (
                   <span class="px-2 py-0.5 bg-navy-700/60 text-slate-300 text-xs rounded border border-navy-600/50">{tag}</span>
                 ))}
+                {link && (
+                  <a href={link.href} class="text-accent text-xs hover:text-accent-light transition-colors ml-1">{link.label}</a>
+                )}
               </div>
             </div>
           ))}

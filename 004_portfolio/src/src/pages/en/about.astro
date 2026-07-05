@@ -18,7 +18,7 @@ const awsCerts = [
   { name: 'Solutions Architect Associate', abbr: 'SAA', year: '2021' },
   { name: 'SysOps Administrator Associate', abbr: 'SOA', year: '2022' },
   { name: 'Developer Associate', abbr: 'DVA', year: '2022' },
-  { name: 'Data Engineer Associate', abbr: 'DEA', year: '2021' },
+  { name: 'Data Engineer Associate', abbr: 'DEA', year: '2024' },
   { name: 'ML Engineer Associate', abbr: 'MLA', year: '2025' },
   { name: 'Security Specialty', abbr: 'SCS', year: '2024' },
   { name: 'AI Practitioner', abbr: 'AIF', year: '2025' },
@@ -38,9 +38,16 @@ const otherCerts = [
 
 const career = [
   {
+    period: '2026.03 — Present',
+    title: 'Personal Projects (Serverless Automation Systems)',
+    desc: 'Designed and built 7 serverless automation systems combining Lambda, Amazon Bedrock, and EventBridge, all running unattended (auto-posting bots, article generation bots, an auto-trading bot, a PWA, and more). Published 64 free CloudFormation templates. Uses this as a hands-on space to practice generative AI and serverless design that come up less often in day-to-day work.',
+    tags: ['Lambda', 'Amazon Bedrock', 'EventBridge', 'CloudFormation', 'Astro'],
+    link: { href: '/en/projects/', label: 'View Projects →' },
+  },
+  {
     period: '2024.11 — Present',
     title: 'Major Financial Institution — System Integration & Mobile App Feature Addition',
-    desc: 'Led 2 AWS projects simultaneously. Reduced environment build and change effort by ~40% through CloudFormation IaC. Designed automated monitoring with CloudWatch/EventBridge/Lambda, replacing manual nightly checks with instant alert delivery. Drove technical support for PL and client negotiations.',
+    desc: 'Provided parallel technical support for 2 AWS projects under the PL. Led CloudFormation IaC adoption, reducing environment build and change effort by ~40%. Designed automated monitoring with CloudWatch/EventBridge/Lambda, replacing manual nightly checks with instant alert delivery. Also joined requirements discussions and client negotiations.',
     tags: ['EC2', 'RDS/Aurora', 'ALB/NLB', 'CloudFormation', 'CloudWatch', 'EventBridge', 'Lambda', 'HULFT', 'OpenLiberty'],
   },
   {
@@ -52,25 +59,25 @@ const career = [
   {
     period: '2023.04 — 2023.07',
     title: 'Internal AWS Infrastructure Operations',
-    desc: 'Delivered cost reduction proposals through Cost Explorer visibility. Automated VPC/EC2/S3/IAM provisioning with AWS CLI scripts, significantly reducing manual setup time and configuration errors.',
+    desc: 'Delivered cost reduction through Cost Explorer visibility. Automated VPC/EC2/S3/IAM provisioning with AWS CLI scripts, significantly compressing manual setup time and configuration errors.',
     tags: ['VPC', 'EC2', 'S3', 'IAM', 'CloudFormation', 'AWS CLI'],
   },
   {
     period: '2022.10 — 2022.11',
-    title: 'Internal System Design & Build',
+    title: 'Network Equipment Upgrade Test Environment Design & Build',
     desc: 'Designed and built a FortiGate upgrade test environment in one week. Created network diagrams and presentation materials, leading technical explanations and proposals to stakeholders.',
     tags: ['FortiGate', 'Linux', 'draw.io'],
   },
   {
     period: '2021.09 — 2022.09',
     title: 'Data Center Network Operations & Monitoring (Telecom Carrier)',
-    desc: 'Monitored and operated physical servers and network equipment at a telecom carrier DC. Handled incident escalation and logging, gaining hands-on experience with incident management workflows. Managed fixed asset records, maintaining accurate inventory documentation.',
+    desc: 'Monitored and operated physical servers and network equipment at a telecom carrier DC. Handled incident escalation and logging, gaining hands-on experience with incident management workflows. Managed fixed asset records, keeping inventory documentation accurate.',
     tags: ['Linux', 'VMware'],
   },
   {
     period: '2021.05 — 2021.07',
     title: 'Oracle Database Build & Operations',
-    desc: 'Handled Oracle 19c environment build and configuration tasks. Participated in 12c→19c migration validation using RAT. Focused on documenting the build procedure on RHEL 8.2, contributing to the team runbook.',
+    desc: 'Handled Oracle 19c environment build and configuration tasks. Participated in 12c→19c migration validation using RAT. Documented the build procedure on RHEL 8.2 and put together the team runbook.',
     tags: ['Oracle 19c', 'RHEL 8.2', 'RAT'],
   },
 ];
@@ -170,20 +177,24 @@ const career = [
 
     <!-- Career -->
     <section>
-      <h2 class="text-accent text-xs uppercase tracking-wider mb-6">{t('about.career')}</h2>
+      <h2 class="text-accent text-xs uppercase tracking-wider mb-4">{t('about.career')}</h2>
+      <p class="text-slate-400 text-sm leading-relaxed mb-8 max-w-2xl">{t('about.career.summary')}</p>
       <div class="relative">
         <div class="absolute left-4 top-0 bottom-0 w-px bg-navy-700/60"></div>
         <div class="space-y-8">
-          {career.map(({ period, title, desc, tags }) => (
+          {career.map(({ period, title, desc, tags, link }) => (
             <div class="relative pl-12">
               <div class="absolute left-3 top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-navy-900 -translate-x-1/2"></div>
               <div class="text-accent text-xs mb-1">{period}</div>
               <h3 class="text-white font-semibold mb-2">{title}</h3>
               <p class="text-slate-400 text-sm leading-relaxed mb-3">{desc}</p>
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 {tags.map((tag) => (
                   <span class="px-2 py-0.5 bg-navy-700/60 text-slate-300 text-xs rounded border border-navy-600/50">{tag}</span>
                 ))}
+                {link && (
+                  <a href={link.href} class="text-accent text-xs hover:text-accent-light transition-colors ml-1">{link.label}</a>
+                )}
               </div>
             </div>
           ))}
