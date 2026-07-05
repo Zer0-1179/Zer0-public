@@ -155,6 +155,7 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
                           data-tags={tmpl.tagsEn.join(',')}
                           data-cat={cat.slug}
                           data-difficulty={diff}
+                          data-updated={tmpl.updatedAt}
                           title={tmpl.descShortEn}
                         >
                           <svg class="w-3.5 h-3.5 text-slate-600 group-hover/file:text-slate-400 shrink-0 transition-colors" viewBox="0 0 20 20" fill="currentColor">
@@ -300,6 +301,11 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
                 <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
               </svg>
               <span id="yv-name" class="font-mono text-[13px] text-accent font-medium shrink-0"></span>
+              <span title="Deployed and tested on real AWS" class="flex items-center gap-1 text-green-500/80 text-[11px] shrink-0">
+                <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                Verified
+              </span>
+              <span id="yv-updated" class="text-[#6e7681] text-[11px] shrink-0"></span>
               <div id="yv-services" class="flex gap-1 flex-wrap"></div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -540,6 +546,7 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
   const tabClose    = document.getElementById('tab-close')!;
   const yvBreadcrumb = document.getElementById('yv-breadcrumb')!;
   const yvName      = document.getElementById('yv-name')!;
+  const yvUpdated   = document.getElementById('yv-updated')!;
   const yvShort     = document.getElementById('yv-short')!;
   const yvServices  = document.getElementById('yv-services')!;
   const yvStats     = document.getElementById('yv-stats')!;
@@ -573,7 +580,7 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
     activeFileBtn = btn;
   }
 
-  function showYaml(filename: string, name: string, short: string, services: string, cat: string, difficulty: string) {
+  function showYaml(filename: string, name: string, short: string, services: string, cat: string, difficulty: string, updated: string, pushUrl = true) {
     document.getElementById('code-search-bar')?.classList.add('hidden');
     (document.getElementById('code-search-input') as HTMLInputElement|null)!.value = '';
     yvBody.querySelectorAll<HTMLElement>('.cs-hl').forEach(tr => { tr.classList.remove('cs-hl','cs-cur'); tr.style.removeProperty('background-color'); });
@@ -582,6 +589,7 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
     setActiveTab('file');
     setNavActive(filename);
     yvName.textContent = name || filename;
+    yvUpdated.textContent = updated ? `Updated ${updated}` : '';
     yvShort.textContent = short;
     yvServices.innerHTML = '';
     (services || '').split(',').filter(Boolean).forEach((svc) => {
@@ -590,8 +598,10 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
       s.textContent = svc; yvServices.appendChild(s);
     });
     buildBreadcrumb(yvBreadcrumb, cat, difficulty, filename,
-      () => setActiveTab('readme')
+      () => { setActiveTab('readme'); clearFileUrl(); }
     );
+    // deep link: reflect the selected file in the URL so it can be shared/revisited
+    if (pushUrl) history.replaceState(null, '', '?file=' + encodeURIComponent(filename));
     yvDl.href = '/api/templates/' + filename; yvDl.download = filename;
     yvStats.textContent = 'Loading...';
     yvBody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-[#6e7681] text-xs">Loading...</td></tr>';
@@ -609,11 +619,14 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
       });
   }
 
-  document.getElementById('tree-root-btn')!.addEventListener('click', () => setActiveTab('readme'));
-  tabReadme.addEventListener('click', () => setActiveTab('readme'));
+  // deep link: clear the query string when returning to the no-file-selected state
+  function clearFileUrl() { history.replaceState(null, '', location.pathname); }
+
+  document.getElementById('tree-root-btn')!.addEventListener('click', () => { setActiveTab('readme'); clearFileUrl(); });
+  tabReadme.addEventListener('click', () => { setActiveTab('readme'); clearFileUrl(); });
   tabFile.addEventListener('click', () => setActiveTab('file'));
   tabClose.addEventListener('click', (e) => {
-    e.stopPropagation(); tabFile.classList.add('hidden'); setActiveTab('readme');
+    e.stopPropagation(); tabFile.classList.add('hidden'); setActiveTab('readme'); clearFileUrl();
     if (activeFileBtn) { activeFileBtn.classList.remove('bg-accent/10'); activeFileBtn.querySelector('.file-label')?.classList.remove('text-accent'); activeFileBtn = null; }
   });
   document.querySelectorAll('.folder-toggle-row').forEach((row) => {
@@ -636,8 +649,23 @@ const totalFiles = categories.reduce((s, c) => s + c.count, 0);
     });
   });
   document.querySelectorAll<HTMLElement>('.file-btn').forEach((btn) => {
-    btn.addEventListener('click', () => showYaml(btn.dataset.filename!, btn.dataset.name!, btn.dataset.short!, btn.dataset.services!, btn.dataset.cat!, btn.dataset.difficulty!));
+    btn.addEventListener('click', () => showYaml(btn.dataset.filename!, btn.dataset.name!, btn.dataset.short!, btn.dataset.services!, btn.dataset.cat!, btn.dataset.difficulty!, btn.dataset.updated!));
   });
+
+  // deep link: auto-open the file if ?file=cfn-xxx.yaml is present
+  function restoreFromUrl() {
+    const filename = new URLSearchParams(location.search).get('file');
+    const btn = filename && document.querySelector(`.file-btn[data-filename="${CSS.escape(filename)}"]`) as HTMLElement | null;
+    if (btn) {
+      showYaml(
+        btn.dataset.filename!, btn.dataset.name!, btn.dataset.short!,
+        btn.dataset.services!, btn.dataset.cat!, btn.dataset.difficulty!,
+        btn.dataset.updated!, false,
+      );
+    }
+  }
+  restoreFromUrl();
+  window.addEventListener('pageshow', restoreFromUrl);
   yvCopy.addEventListener('click', () => {
     if (!currentRawCode) return;
     const done = () => { yvCopy.textContent = 'Copied!'; setTimeout(() => { yvCopy.innerHTML = '<svg class="w-3 h-3 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>Copy'; }, 2000); };

@@ -8,14 +8,14 @@
 
 ## 概要
 
-| 項目       | 内容                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------- |
+| 項目       | 内容                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
 | 投稿頻度   | 週3回実行（月・木20:00 JST + 日曜10:00 JST）。**1回の実行での投稿数は1〜3件**（下記「投稿カテゴリ」の注記参照） |
-| カテゴリ数 | 6カテゴリ（recipe/jissoku/hikaku/shippai/fukugyo/question）+ 固定2スロット（url_reaction/trend）        |
-| 重複防止   | 直近4投稿で同カテゴリが連続しないようSSMで履歴管理                                                      |
-| 曜日別制御 | 月曜: url_reaction 50% / ローテーション 50% ・木曜: question固定 ・日曜: trend                          |
-| 生成AI     | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
-| 月額コスト | ~$0.38（約57円）                                                                                        |
+| カテゴリ数 | 6カテゴリ（recipe/jissoku/hikaku/shippai/fukugyo/question）+ 固定2スロット（url_reaction/trend）                |
+| 重複防止   | 直近4投稿で同カテゴリが連続しないようSSMで履歴管理                                                              |
+| 曜日別制御 | 月曜: url_reaction 50% / ローテーション 50% ・木曜: question固定 ・日曜: trend                                  |
+| 生成AI     | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95）         |
+| 月額コスト | ~$0.38（約57円）                                                                                                |
 
 ## アーキテクチャ
 
