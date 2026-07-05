@@ -25,7 +25,10 @@ const categories = getCategoriesWithTemplates().map((cat) => {
 const totalFiles = categories.reduce((s, c) => s + c.count, 0);
 ---
 
-<BaseLayout title={t('templates.title')}>
+<BaseLayout
+  title={`${totalFiles} Free CloudFormation Templates`}
+  description={`${totalFiles} production-tested CloudFormation templates, free to download. VPC, Lambda, ECS, RDS and more — just set parameters and deploy.`}
+>
   <div class="mx-auto px-4 pb-0 md:pb-8">
 
     <!-- Page header (hidden everywhere — explorer uses full height) -->

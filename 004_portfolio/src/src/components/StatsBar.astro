@@ -1,6 +1,7 @@
 ---
 import { getLangFromUrl, useTranslations } from '../i18n/utils';
 import { projects } from '../data/projects';
+import { templates } from '../data/templates';
 
 const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
@@ -9,10 +10,12 @@ const startDate = new Date('2026-03-26');
 const today = new Date();
 const diffDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
+// 2026-07-05 Fableブラッシュアップ: 「使用AWSサービス数」は弱い数字なので、
+// 最大の差別化資産である配布テンプレート本数を前面に出す構成へ変更
 const stats = [
   { value: '10', label: t('stats.aws') },
   { value: String(projects.length), label: t('stats.projects') },
-  { value: String([...new Set(projects.flatMap((p) => p.services))].length), label: t('stats.aws-services') },
+  { value: String(templates.length), label: t('stats.templates') },
   { value: `${diffDays}+`, label: t('stats.autopost') },
   { value: '~$5.0', label: t('stats.cost') },
 ];
