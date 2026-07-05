@@ -95,6 +95,14 @@ Google Trends急上昇には訃報・事件・災害・政治が頻繁に入る�
 - **trendのAI紐付けを撤廃**: `pick_ai_relatable_trend`→`pick_relatable_trend`にリネームし、Tier1/2キーワードを仕事・お金・生活全般に変更。Tier3（任意の日本語キーワード）フォールバックは維持のため実質どんな話題も拾える
 - リスク許容度は「積極的」（賛否が分かれてもいい）とユーザーが明示。ただし誹謗中傷・差別・誤情報の断定は引き続き禁止
 
+### 10. 複数案生成→自己採点→ベスト選択（2026-07-05追加）
+
+一発生成では「上振れ」の投稿を引けないというFableの指摘を受け、`invoke_bedrock`を1回のBedrock呼び出しで3案生成する構成に変更。`_score_tweet`（ヘッジ表現で終わっていないか・数字の有無・情報密度）で機械採点し、`pick_best_tweet`で最良の1案を採用する。Bedrock呼び出し回数は変えず（1回のプロンプトに「3つ生成して`===`区切りで出力」と指示）追加コストを最小化している。
+
+### 11. ハッシュタグ原則廃止・ヘッジ表現の排除（2026-07-05追加）
+
+Fableの評価で「現在のXでハッシュタグはリーチを生まずBot感のシグナルになる」「『たまには』『毎回じゃなくていい』という指示はLLMが安全側に倒れ実質発動しない」と指摘され、`NO_HASHTAG_RATE`を0.35→0.9に引き上げ、`ABSOLUTE_RULES`/`STYLE_GUIDE`のヘッジ指示を「原則断定」に書き換えた。
+
 ## 技術スタック
 
 | レイヤー         | 技術                                                                                                    |
@@ -116,7 +124,7 @@ Google Trends急上昇には訃報・事件・災害・政治が頻繁に入る�
 │   ├── cfn-x-poster-zer0-0326.yaml
 │   ├── deploy.sh                       # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda_function.py     # ユニットテスト（23件）
+│       └── test_lambda_function.py     # ユニットテスト（29件）
 ├── scripts/
 │   └── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
 └── images/
@@ -138,7 +146,7 @@ bash scripts/test_invoke.sh
 # mode指定（random / trend）
 bash scripts/test_invoke.sh trend
 
-# ユニットテスト（23件）
+# ユニットテスト（29件）
 cd src && python -m pytest tests/ -v
 ```
 
@@ -209,3 +217,4 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | 2026-07-03 | v2.4       | **第2巡Fableレビュー HIGH修正**: 001と共通の加重文字数バグを修正（weighted length安全弁を追加）。複数タグ1行のケースでタグ除去漏れが再発する不具合を行単位判定に変更。EventBridge Schedulerのデフォルトリトライ（185回）を無効化（二重投稿防止）・6フィード直列取得のtimeoutを10→5秒に短縮              |
 | 2026-07-05 | v2.5       | **Fableブラッシュアップ**: 001と同じOnFailure SNS通知を追加（RecipientEmail設定時のみ）・Bedrockクライアントにリトライ設定追加＋Timeout 60→90秒・trendカテゴリにNGワードフィルタ追加（炎上防止）・dry_runをイベントペイロード化しtest_invoke.shの本番環境変数書き換え方式を廃止（事故リスク解消）・recipe/jissokuのお題とquestionのテーマ軸にSSM履歴除外を追加（マンネリ化対策）・weightedトリムの重複ロジックを共通ヘルパーに統合し投稿URLをログ/戻り値に追加。ユニットテスト23件新規追加。CFn更新・Lambdaデプロイ・本番dry_run検証済み |
 | 2026-07-05 | v2.6       | **AIコンセプト全面撤廃・バズ狙いへ転換**: ユーザー要望により「AI活用系Bot」の前提を撤廃し、話題をAIに限らない会社員あるある系コンテンツへ変更。全カテゴリのプロンプト・few-shot例・お題・ハッシュタグ・キーワードを非AI一般テーマに書き換え、フック強化（挑発型追加・断定終わりの許容）とバズ狙いの強い意見を明示的に許可（誹謗中傷・誤情報は禁止）。url_reactionのRSSフィードをZenn/Qiita（AI関連タグ）→Yahoo!ニュース（経済/国内/エンタメ）に変更。`pick_ai_relatable_trend`を`pick_relatable_trend`にリネームしAI紐付け要件を撤廃（Tier3で任意の話題を拾う）。テスト24件（AI関連アサーションを新テーマに合わせて更新）全パス。Lambdaデプロイ・本番dry_run検証済み |
+| 2026-07-05 | v2.7       | **Fable評価反映（バズ強化第2弾）**: v2.6の評価をFableに依頼したところ「頻度の壁に加えfew-shot例が旧路線のままで新指示が効いていない」と指摘。①複数案生成→自己採点→ベスト選択パイプライン導入（`invoke_bedrock`が1回のBedrock呼び出しで3案生成し`_score_tweet`/`pick_best_tweet`でヘッジ表現・数字・情報密度を機械採点）②ハッシュタグ原則廃止（`NO_HASHTAG_RATE` 0.35→0.9）③`ABSOLUTE_RULES`/`STYLE_GUIDE`から「たまには」「毎回じゃなくていい」等のヘッジ指示を削除し断定を原則化④「オチを決めない・垂れ流す」指示を「1投稿1メッセージ・情報密度最大」に転換⑤shippaiの「失敗→回避法必須」という`ABSOLUTE_RULES`との自己矛盾を解消し恥の解像度重視に変更⑥trendを「知らなかった型」から賛成/反対/どうでもいいを明確に取る意見型に全面再設計⑦hikaku/recipeの数字・断定を強化。テスト5件追加（計29件）。**リプライ営業機能はX APIのRead権限・料金プラン未確認のため保留**（ユーザーがdeveloper.x.comで確認予定）。Lambdaデプロイ・本番dry_run検証済み。**注意**: trendカテゴリで実在の著名人名を扱った際どい投稿が生成される例を確認（NGワードフィルタは訃報・事件等はカバーするが個人名の炎上ネタは未対応） |
