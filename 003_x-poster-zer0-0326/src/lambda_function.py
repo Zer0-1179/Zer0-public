@@ -1338,17 +1338,55 @@ def get_x(url_path: str, creds: dict, params: dict | None = None) -> dict:
 # 委ねることはしない）。頻度は既存スケジュール（週3回）に相乗りさせ、新たな
 # EventBridge実行は追加しない（1回の実行につき最大1件）。
 
-REPLY_TARGET_ACCOUNTS = [
-    "nikkei", "toyokeizai", "dol_editors", "PRE_ONLINE",
-    "itmedia_news", "itmedia",
-]
+# 初回起動時のデフォルト値（SSMパラメータが未設定の場合のみ使用・自動書き込みされる）。
+# 運用中にリプ先を変更したい場合は、このデフォルト値を書き換えて再デプロイする必要はなく、
+# 以下のコマンドでSSMパラメータを直接更新するだけでよい（コード変更・再デプロイ不要）:
+#   aws ssm put-parameter --name /ai_bot/reply_target_accounts \
+#     --value '["nikkei","toyokeizai","dol_editors","PRE_ONLINE","itmedia_news","itmedia",
+#                "livedoornews","asahi","sankei_news","mainichi"]' \
+#     --type String --overwrite --region ap-northeast-1
 # 2026-07-05: 当初の候補"diamond_online"はフォロワー15人の無関係な個人アカウントに、
 # "PRESIDENT_Online"はXのユーザー名文字数上限(15文字)違反で無効だったことが
 # GET /2/users/by/username の実地確認で判明。正しい公式ハンドル（dol_editors・
 # PRE_ONLINE、いずれもprofile descriptionで公式アカウントと確認済み）に差し替え。
 # nikkeibp（日経BP）は凍結済みアカウントのため不採用。
-MAX_REPLY_TARGET_HISTORY  = 3   # REPLY_TARGET_ACCOUNTS（6件）より必ず小さい値にすること
-MAX_REPLIED_TWEET_HISTORY = 50  # 同一ツイートへの二重返信を防ぐための履歴保持件数
+DEFAULT_REPLY_TARGET_ACCOUNTS = [
+    "nikkei", "toyokeizai", "dol_editors", "PRE_ONLINE",
+    "itmedia_news", "itmedia",
+    "livedoornews", "asahi", "sankei_news", "mainichi",
+]
+MAX_REPLY_TARGET_HISTORY_CAP = 5   # 除外履歴の上限（対象数が増えても際限なく増やさない）
+MAX_REPLIED_TWEET_HISTORY    = 50  # 同一ツイートへの二重返信を防ぐための履歴保持件数
+
+
+def load_reply_target_accounts() -> list:
+    """リプ先アカウント一覧をSSMから読み込む。未設定時はデフォルト値をSSMに書き込んでから返す。
+    運用中の変更はコード修正・再デプロイ不要で、SSMパラメータの直接更新だけで反映される。"""
+    param = f"{SSM_PREFIX}/reply_target_accounts"
+    try:
+        val = ssm_client.get_parameter(Name=param)["Parameter"]["Value"]
+        accounts = json.loads(val)
+        if isinstance(accounts, list) and accounts:
+            return accounts
+    except ssm_client.exceptions.ParameterNotFound:
+        pass
+    except Exception as e:
+        print(f"[Reply] 対象アカウント読み込みエラー（デフォルトを使用）: {e}")
+    try:
+        ssm_client.put_parameter(
+            Name=param, Value=json.dumps(DEFAULT_REPLY_TARGET_ACCOUNTS),
+            Type="String", Overwrite=True,
+        )
+    except Exception as e:
+        print(f"[Reply] デフォルト対象アカウントのSSM書き込みエラー: {e}")
+    return DEFAULT_REPLY_TARGET_ACCOUNTS
+
+
+def _reply_target_history_limit(accounts: list) -> int:
+    """除外履歴の保持件数を対象アカウント数に応じて動的に決める。
+    アカウント数-1件をMAX_REPLY_TARGET_HISTORY_CAPまでに収め、候補が必ず1件以上残るようにする
+    （対象数を変更しても恒久ロックしない設計）。"""
+    return max(1, min(MAX_REPLY_TARGET_HISTORY_CAP, len(accounts) - 1))
 
 
 def load_reply_target_history() -> list:
@@ -1363,8 +1401,9 @@ def load_reply_target_history() -> list:
         return []
 
 
-def save_reply_target_history(used: list, new_target: str):
-    updated = (used + [new_target])[-MAX_REPLY_TARGET_HISTORY:]
+def save_reply_target_history(used: list, new_target: str, accounts: list):
+    limit = _reply_target_history_limit(accounts)
+    updated = (used + [new_target])[-limit:]
     try:
         ssm_client.put_parameter(
             Name=f"{SSM_PREFIX}/history/reply_targets",
@@ -1375,12 +1414,13 @@ def save_reply_target_history(used: list, new_target: str):
         print(f"[Reply] リプ先履歴保存エラー: {e}")
 
 
-def pick_reply_target(used_targets: list) -> str:
-    """直近MAX_REPLY_TARGET_HISTORY件に含まれないアカウントからランダム選択し、
-    毎回同じ相手にリプ営業が偏らないようにする。"""
-    recent = used_targets[-MAX_REPLY_TARGET_HISTORY:]
-    unused = [a for a in REPLY_TARGET_ACCOUNTS if a not in recent]
-    return random.choice(unused) if unused else random.choice(REPLY_TARGET_ACCOUNTS)
+def pick_reply_target(used_targets: list, accounts: list) -> str:
+    """直近履歴（アカウント数に応じて動的に決まる件数）に含まれないアカウントから
+    ランダム選択し、毎回同じ相手にリプ営業が偏らないようにする。"""
+    limit = _reply_target_history_limit(accounts)
+    recent = used_targets[-limit:]
+    unused = [a for a in accounts if a not in recent]
+    return random.choice(unused) if unused else random.choice(accounts)
 
 
 def load_replied_tweet_ids() -> list:
@@ -1432,6 +1472,9 @@ def fetch_recent_tweets(user_id: str, creds: dict, max_results: int = 5) -> list
 # 大統領・政権・外交等も除外し、政治的な話題への反応を避ける。
 REPLY_NG_WORDS = TREND_NG_WORDS + [
     "大統領", "首相官邸", "政権", "外交", "与党", "野党", "国会", "トランプ",
+    # 2026-07-05: 朝日新聞の実タイムラインに「線状降水帯直前予測」等の進行中の災害警報が
+    # 含まれ、TREND_NG_WORDS（台風・水害等の一般語）だけでは検知できなかったため追加
+    "警報", "線状降水帯", "洪水", "土砂災害", "避難指示", "避難勧告", "津波",
 ]
 
 
@@ -1488,9 +1531,11 @@ def attempt_reply_outreach(creds: dict, dry_run: bool) -> None:
     どのステップで失敗してもログに残すだけでメインの投稿処理には影響させない
     （リプ営業はあくまで付随機能であり、これが原因でメイン投稿が止まってはならない）。"""
     try:
+        accounts = load_reply_target_accounts()
         used_targets = load_reply_target_history()
-        target = pick_reply_target(used_targets)
-        print(f"[Reply] リプ先候補: @{target} (直近使用: {used_targets[-MAX_REPLY_TARGET_HISTORY:]})")
+        target = pick_reply_target(used_targets, accounts)
+        limit = _reply_target_history_limit(accounts)
+        print(f"[Reply] リプ先候補: @{target} (対象{len(accounts)}件中・直近使用: {used_targets[-limit:]})")
 
         user_id = resolve_user_id(target, creds)
         if not user_id:
@@ -1524,7 +1569,7 @@ def attempt_reply_outreach(creds: dict, dry_run: bool) -> None:
             return
 
         post_to_x(reply_text, creds, reply_to=chosen["id"])
-        save_reply_target_history(used_targets, target)
+        save_reply_target_history(used_targets, target, accounts)
         save_replied_tweet_id(replied_ids, chosen["id"])
     except Exception as e:
         print(f"[Reply] リプ営業処理でエラー（無視して続行）: {e}")
