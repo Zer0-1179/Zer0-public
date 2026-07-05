@@ -22,14 +22,15 @@
 ![アーキテクチャ図](images/003_architecture.png)
 
 ```text
-EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST）
-  └─▶ Lambda（Python 3.14）
+EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST・リトライ0回）
+  └─▶ Lambda（Python 3.14・Timeout 90秒）失敗時 → SNS → メール通知
         ├─ 曜日判定 → カテゴリ選択（SSM 履歴参照）
+        │   └─ recipe/jissoku: お題、question: テーマ軸もSSM履歴除外つきで選択
         ├─ カテゴリ別データ取得
         │   ├─ url_reaction: Zenn/Qiita RSS から AI記事取得
-        │   └─ trend: Google Trends RSS から急上昇ワード取得
-        ├─ Bedrock Claude Haiku（カテゴリ別プロンプトで生成）
-        ├─ SSM 投稿履歴更新（used_categories / history）
+        │   └─ trend: Google Trends RSS から急上昇ワード取得（訃報・事件等はNGワードで除外）
+        ├─ Bedrock Claude Haiku（カテゴリ別プロンプトで生成、リトライ設定あり）
+        ├─ SSM 投稿履歴更新（used_categories / history / recipe_tasks / question_themes）
         └─ X API v2（POST）
 ```
 
@@ -72,6 +73,18 @@ EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST）
 
 `#AI活用` / `#生成AI` / `#ChatGPT` など10個のハッシュタグプールから投稿ごとに選択し、特定タグへの依存を避ける。アルゴリズムの変動に対してリスク分散。
 
+### 6. 実行失敗のSNS通知（2026-07-05追加）
+
+Scheduler・Lambda双方のリトライを0にしているため、失敗した回の投稿は静かに消えログを見ない限り気づけなかった。001と同じ`EventInvokeConfig.DestinationConfig.OnFailure → SNS → email`パターンを移植し、`RecipientEmail`パラメータ設定時のみ有効化（未設定なら通知設定自体をスキップ）。
+
+### 7. recipe/jissoku・questionのお題/テーマ重複回避（2026-07-05追加）
+
+カテゴリ自体は直近4件除外があるが、recipe/jissokuが共有する12業務お題・questionの10テーマ軸には重複回避がなく、確率1/12や1/10で近い内容が連続しうる問題があった。002のトピック除外方式と同じくSSM履歴（recipe_tasksは直近5件、question_themesは直近4件、いずれも総数より必ず小さい値）で直近使用分を除外してから選択する。
+
+### 8. trendカテゴリのNGワードフィルタ（2026-07-05追加）
+
+Google Trends急上昇には訃報・事件・災害・政治が頻繁に入るため、「訃報トレンド×AIを絡めた軽いつぶやき」が生成されるとアカウントの信頼を損なうリスクがあった。Tier1〜3の全候補から、訃報・逮捕・災害・政治関連のNGワードを含むキーワードを事前除外する。
+
 ## 技術スタック
 
 | レイヤー         | 技術                                                                                                    |
@@ -91,9 +104,11 @@ EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST）
 ├── src/
 │   ├── lambda_function.py              # メインロジック
 │   ├── cfn-x-poster-zer0-0326.yaml
-│   └── deploy.sh                       # デプロイスクリプト
+│   ├── deploy.sh                       # デプロイスクリプト
+│   └── tests/
+│       └── test_lambda_function.py     # ユニットテスト（23件）
 ├── scripts/
-│   └── test_invoke.sh                  # テストスクリプト（DRY_RUN対応）
+│   └── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
 └── images/
     └── 003_architecture.png
 ```
@@ -108,10 +123,13 @@ bash src/deploy.sh
 # コードのみ更新
 bash src/deploy.sh
 
-# DRY_RUN テスト（実投稿なし）
+# dry_run テスト（実投稿・SSM履歴更新なし。ペイロードで指定するため本番環境変数は変更しない）
 bash scripts/test_invoke.sh
 # mode指定（random / trend）
 bash scripts/test_invoke.sh trend
+
+# ユニットテスト（23件）
+cd src && python -m pytest tests/ -v
 ```
 
 ## 運用コマンド
@@ -135,17 +153,20 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | `/ai_bot/history/used_categories`     | String       | Lambda自動更新 |
 | `/ai_bot/history/{category}`          | String       | Lambda自動更新 |
 | `/ai_bot/history/url_reaction_urls`   | String       | Lambda自動更新 |
+| `/ai_bot/history/recipe_tasks`        | String       | Lambda自動更新（2026-07-05追加） |
+| `/ai_bot/history/question_themes`     | String       | Lambda自動更新（2026-07-05追加） |
 
 ## トラブルシューティング
 
 | 症状                   | 原因                           | 対処                                                        |
 | ---------------------- | ------------------------------ | ----------------------------------------------------------- |
-| 投稿されない           | DRY_RUN=true のまま            | Lambda 環境変数 `DRY_RUN` を `false` に更新                 |
+| 投稿されない           | 環境変数 `DRY_RUN=true` のまま | Lambda 環境変数 `DRY_RUN` を `false` に更新                 |
 | 同カテゴリが連続投稿   | SSM履歴破損                    | `/ai_bot/history/used_categories` を削除してリセット        |
 | X API 403 Forbidden    | APIクレジット不足              | developer.x.com でクレジット残高確認・チャージ              |
 | X API 401 Unauthorized | アクセストークン期限切れ       | `bash src/setup_ssm.sh` で4キーを再登録                     |
 | Bedrock エラー         | モデルアクセス未承認           | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化 |
 | url_reaction 記事が0件 | Zenn/Qiita RSSフィード取得失敗 | CloudWatch Logs で HTTP ステータス確認                      |
+| 実行失敗に気づかない  | 通知メール未設定               | CFn `RecipientEmail` パラメータを設定してスタック更新（2026-07-05追加） |
 
 ## コスト内訳
 
@@ -176,3 +197,4 @@ aws ssm delete-parameter --name "/ai_bot/history/used_categories" --region ap-no
 | 2026-06-15 | v2.1       | コードレビュー反映：trend / url_reaction の固定スロットを used_categories に書き込まないよう修正（ローテーション枠が圧迫されるバグを解消）。`save_url_history` の未使用引数 `used_urls` を削除。マジックナンバー（タグなし率・月曜url_reaction率・本文上限）を定数化                                    |
 | 2026-06-27 | v2.3       | コードレビュー反映（IAM最小権限化）：Bedrock IAM Resource の全リージョンワイルドカード `arn:aws:bedrock:*::foundation-model/...` を削除し、明示の `ap-northeast-1` と `ap-northeast-3` の2リージョンに統一（001 と同じ最小権限構成に揃える）                                                            |
 | 2026-07-03 | v2.4       | **第2巡Fableレビュー HIGH修正**: 001と共通の加重文字数バグを修正（weighted length安全弁を追加）。複数タグ1行のケースでタグ除去漏れが再発する不具合を行単位判定に変更。EventBridge Schedulerのデフォルトリトライ（185回）を無効化（二重投稿防止）・6フィード直列取得のtimeoutを10→5秒に短縮              |
+| 2026-07-05 | v2.5       | **Fableブラッシュアップ**: 001と同じOnFailure SNS通知を追加（RecipientEmail設定時のみ）・Bedrockクライアントにリトライ設定追加＋Timeout 60→90秒・trendカテゴリにNGワードフィルタ追加（炎上防止）・dry_runをイベントペイロード化しtest_invoke.shの本番環境変数書き換え方式を廃止（事故リスク解消）・recipe/jissokuのお題とquestionのテーマ軸にSSM履歴除外を追加（マンネリ化対策）・weightedトリムの重複ロジックを共通ヘルパーに統合し投稿URLをログ/戻り値に追加。ユニットテスト23件新規追加。CFn更新・Lambdaデプロイ・本番dry_run検証済み |

@@ -6,9 +6,16 @@ import hmac, hashlib, base64
 from datetime import datetime, timezone, timedelta
 
 import boto3
+from botocore.config import Config
 
 # ---- AWS クライアント ----
-bedrock    = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
+# ツイート生成は max_tokens=512 と小さいため read_timeout は短めでよい。
+# 一過性のスロットリング・5xxで即失敗しないようリトライを設定（002と同じ方針）。
+bedrock    = boto3.client(
+    "bedrock-runtime", region_name="ap-northeast-1",
+    config=Config(connect_timeout=10, read_timeout=30,
+                  retries={"max_attempts": 3, "mode": "adaptive"}),
+)
 ssm_client = boto3.client("ssm",             region_name="ap-northeast-1")
 
 # ---- 定数 ----
@@ -19,6 +26,10 @@ JST                  = timezone(timedelta(hours=9))
 
 CATEGORIES           = ["recipe", "jissoku", "hikaku", "shippai", "fukugyo", "question"]
 MAX_CATEGORY_HISTORY = 4   # 6カテゴリ中、直近4件を避けて選択
+# RECIPE_TASKS（12件）と同値にすると、全消化後に除外リストが恒久的に「全お題」を
+# 含んだまま固定化するバグ（002で2026-07-03に発見・修正済み）が再発するため、
+# 総数より必ず小さい値にすること
+MAX_RECIPE_TASK_HISTORY = 5
 MAX_USED_URLS        = 28
 URL_HISTORY_DAYS     = 90   # 使用済みURLの保持期間（日）
 NO_HASHTAG_RATE      = 0.35 # Bot感軽減: この確率でハッシュタグなし投稿にする
@@ -82,6 +93,14 @@ AI_TIER2 = [
     "ショッピング", "EC", "通販",
 ]
 
+# trendカテゴリの炎上防止用NGワード。訃報・事件・災害・政治等はAI活用ネタと
+# 絡めて投稿すると不謹慎に見えアカウントの信頼を損なうため、Tier1〜3すべてから除外する。
+TREND_NG_WORDS = [
+    "死去", "訃報", "逝去", "追悼", "逮捕", "事故", "事件", "地震", "台風", "水害",
+    "火災", "殺", "自殺", "戦争", "ミサイル", "紛争", "選挙", "議員", "内閣", "首相",
+    "炎上", "不倫", "引退", "容疑", "被害", "噴火", "遭難", "訴訟", "賠償",
+]
+
 # キーワード抽出用のトピックリスト
 TOPIC_WORDS = [
     "AI", "ChatGPT", "Claude", "副業", "自動化", "時短", "収益",
@@ -89,6 +108,22 @@ TOPIC_WORDS = [
     "業務", "SNS", "ブログ", "記事", "生産性", "時間", "案件",
     "残業", "転職", "給料", "評価", "定時", "note",
 ]
+
+# question 用のテーマ軸（木曜固定＋ローテーションで最頻出カテゴリのため、
+# few-shot例とtemperatureだけでは数週間スパンで似た問いが再来しやすい対策）
+QUESTION_THEMES = [
+    "ツールの使い分け（ChatGPT/Claude/Gemini等をどう選ぶか）",
+    "課金の損得（無料版で粘るか課金するか）",
+    "職場でのAI利用カミングアウト（言えてる？隠してる？）",
+    "AI時代のスキル不安（自分の仕事は大丈夫か）",
+    "効率化の逆説（早くなった分、仕事が増えただけでは？）",
+    "AIとの付き合い方の学習方法（どう身につけた？）",
+    "上司・同僚との温度差（周りは使ってる？使ってない？）",
+    "AIを使いこなせてる自信（使ってる、と使いこなせてる、の差）",
+    "副業の始め方・きっかけ",
+    "定時・働き方への複雑な気持ち",
+]
+MAX_QUESTION_THEME_HISTORY = 4   # QUESTION_THEMES（10件）より必ず小さい値にすること
 
 # recipe / jissoku 用の業務お題（投稿ごとにローテーション）
 RECIPE_TASKS = [
@@ -239,6 +274,78 @@ def save_used_categories(used: list, new_category: str):
         print(f"[History] カテゴリ履歴保存エラー: {e}")
 
 
+def load_recipe_task_history() -> list:
+    """SSMからrecipe/jissoku共通のお題使用履歴を読み込む。"""
+    param = f"{SSM_PREFIX}/history/recipe_tasks"
+    try:
+        val = ssm_client.get_parameter(Name=param)["Parameter"]["Value"]
+        return json.loads(val)
+    except ssm_client.exceptions.ParameterNotFound:
+        return []
+    except Exception as e:
+        print(f"[History] お題履歴読み込みエラー: {e}")
+        return []
+
+
+def save_recipe_task_history(used: list, new_task: str):
+    """SSMにお題使用履歴を保存する。直近MAX_RECIPE_TASK_HISTORY件を保持。"""
+    updated = (used + [new_task])[-MAX_RECIPE_TASK_HISTORY:]
+    try:
+        ssm_client.put_parameter(
+            Name=f"{SSM_PREFIX}/history/recipe_tasks",
+            Value=json.dumps(updated, ensure_ascii=False),
+            Type="String",
+            Overwrite=True,
+        )
+        print(f"[History] お題履歴保存: {updated}")
+    except Exception as e:
+        print(f"[History] お題履歴保存エラー: {e}")
+
+
+def pick_recipe_task(used_tasks: list) -> str:
+    """直近MAX_RECIPE_TASK_HISTORY件に含まれないお題からランダム選択。
+    全お題が直近に含まれる場合は完全ランダム選択にフォールバックする。"""
+    recent = used_tasks[-MAX_RECIPE_TASK_HISTORY:]
+    unused = [t for t in RECIPE_TASKS if t not in recent]
+    return random.choice(unused) if unused else random.choice(RECIPE_TASKS)
+
+
+def load_question_theme_history() -> list:
+    """SSMからquestionのテーマ使用履歴を読み込む。"""
+    param = f"{SSM_PREFIX}/history/question_themes"
+    try:
+        val = ssm_client.get_parameter(Name=param)["Parameter"]["Value"]
+        return json.loads(val)
+    except ssm_client.exceptions.ParameterNotFound:
+        return []
+    except Exception as e:
+        print(f"[History] テーマ履歴読み込みエラー: {e}")
+        return []
+
+
+def save_question_theme_history(used: list, new_theme: str):
+    """SSMにquestionのテーマ使用履歴を保存する。直近MAX_QUESTION_THEME_HISTORY件を保持。"""
+    updated = (used + [new_theme])[-MAX_QUESTION_THEME_HISTORY:]
+    try:
+        ssm_client.put_parameter(
+            Name=f"{SSM_PREFIX}/history/question_themes",
+            Value=json.dumps(updated, ensure_ascii=False),
+            Type="String",
+            Overwrite=True,
+        )
+        print(f"[History] テーマ履歴保存: {updated}")
+    except Exception as e:
+        print(f"[History] テーマ履歴保存エラー: {e}")
+
+
+def pick_question_theme(used_themes: list) -> str:
+    """直近MAX_QUESTION_THEME_HISTORY件に含まれないテーマからランダム選択。
+    全テーマが直近に含まれる場合は完全ランダム選択にフォールバックする。"""
+    recent = used_themes[-MAX_QUESTION_THEME_HISTORY:]
+    unused = [t for t in QUESTION_THEMES if t not in recent]
+    return random.choice(unused) if unused else random.choice(QUESTION_THEMES)
+
+
 def load_url_history() -> list:
     """SSMから使用済みURL履歴を読み込み、URL文字列のリストを返す。
     URL_HISTORY_DAYS日以上古いエントリは自動除外する。"""
@@ -376,7 +483,13 @@ def fetch_google_trends_jp() -> list:
 
 
 def pick_ai_relatable_trend(keywords: list) -> str | None:
-    """AIと絡められるトレンドキーワードを優先度順に1つ選ぶ。"""
+    """AIと絡められるトレンドキーワードを優先度順に1つ選ぶ。
+    訃報・事件・災害・政治等のNGワードを含むキーワードは炎上防止のため事前に除外する。"""
+    before = len(keywords)
+    keywords = [kw for kw in keywords if not any(ng in kw for ng in TREND_NG_WORDS)]
+    if len(keywords) != before:
+        print(f"[Trends] NGワードにより{before - len(keywords)}件除外")
+
     tier1 = [kw for kw in keywords if any(t in kw for t in AI_TIER1)]
     if tier1:
         print(f"[Trends] Tier1マッチ: {tier1}")
@@ -513,9 +626,8 @@ def build_url_reaction_prompt(article: dict, history: list) -> str:
 
 ツイート本文のみ出力。"""
 
-def build_recipe_prompt(history: list, hashtag: str) -> str:
+def build_recipe_prompt(history: list, hashtag: str, task: str) -> str:
     avoid = _past_keywords_hint(history)
-    task  = random.choice(RECIPE_TASKS)
     return f"""AIを仕事で使っている普通の会社員が、X（旧Twitter）に「コピペで使えるプロンプトのレシピ」を投稿します。
 キャラ：AIに頼りながらなんとか生きてる普通の会社員。ただしやり方は具体的
 ターゲット：AIを仕事で使い始めた会社員。読んだ人が「保存しよ」と思うのがゴール
@@ -633,9 +745,8 @@ AIに作業の半分を任せてから
 
 末尾に「#副業」を1行で付ける。URLは含めない。ツイート本文のみ出力。"""
 
-def build_jissoku_prompt(history: list, hashtag: str) -> str:
+def build_jissoku_prompt(history: list, hashtag: str, task: str) -> str:
     avoid = _past_keywords_hint(history)
-    task  = random.choice(RECIPE_TASKS)
     return f"""AIを仕事で使っている普通の会社員が、X（旧Twitter）に「AIで仕事がどれだけ変わったかのbefore/after実録」を投稿します。
 キャラ：AIに頼りながらなんとか生きてる普通の会社員
 ターゲット：AI活用に興味ある会社員。「そんなに変わるのか、自分もやってみよう」と思わせる
@@ -692,11 +803,14 @@ AIの調べた内容そのままは怖いから裏取りはする
 
 末尾に「{hashtag}」を1行で付ける。URLは含めない。ツイート本文のみ出力。"""
 
-def build_question_prompt(history: list, hashtag: str) -> str:
+def build_question_prompt(history: list, hashtag: str, theme: str) -> str:
     avoid = _past_keywords_hint(history)
     return f"""AIを使いながら働く会社員がX（旧Twitter）に投稿する「問いかけ・議論を呼ぶ質問系」のつぶやきを1件生成してください。
 ターゲット：AI・副業・仕事に興味ある会社員・思わず返信したくなる・自分の答えを言いたくなる問いかけ
 {avoid}
+【今回のテーマ（この軸で問いかけを作る）】
+{theme}
+
 【良い例】
 ---
 AIで仕事が早くなった分
@@ -981,6 +1095,22 @@ def strip_model_hashtag_lines(text: str) -> str:
     return '\n'.join(lines).rstrip()
 
 
+def _fit_weighted_budget(body: str, tags: str) -> str:
+    """本文+タグ全体のXの weighted length が TWEET_MAX_LEN を超える場合、
+    タグ分の重みを差し引いた予算まで本文を1文字ずつ削って収める安全弁。
+    trim_body_excluding_hashtags と url_reaction 分岐の両方から使う共通ヘルパー
+    （以前は同じロジックが2箇所に重複していたため、片方だけ修正漏れする事故があった）。"""
+    combined = f"{body}\n{tags}" if tags else body
+    if x_weighted_length(combined) <= TWEET_MAX_LEN:
+        return combined
+    tag_weighted = x_weighted_length(f"\n{tags}") if tags else 0
+    budget = TWEET_MAX_LEN - tag_weighted
+    while body and x_weighted_length(body) > budget:
+        body = body[:-1]
+    body = body.rstrip()
+    return f"{body}\n{tags}" if tags else body
+
+
 def trim_body_excluding_hashtags(text: str, limit: int = BODY_LIMIT) -> str:
     """末尾ハッシュタグ行を分離し、本文を limit 文字以内に収めて再結合する。
     さらに本文+タグ全体のXの weighted length が280を超える場合は、
@@ -1006,17 +1136,7 @@ def trim_body_excluding_hashtags(text: str, limit: int = BODY_LIMIT) -> str:
         idx = max(cut.rfind(s) for s in "\n。！？!?…〜笑")
         body = (cut[:idx + 1] if idx >= limit // 2 else cut[:limit - 1] + "…").rstrip()
 
-    combined = f"{body}\n{tags}" if tags else body
-
-    if x_weighted_length(combined) > TWEET_MAX_LEN:
-        tag_weighted = x_weighted_length(f"\n{tags}") if tags else 0
-        budget = TWEET_MAX_LEN - tag_weighted
-        while body and x_weighted_length(body) > budget:
-            body = body[:-1]
-        body = body.rstrip()
-        combined = f"{body}\n{tags}" if tags else body
-
-    return combined
+    return _fit_weighted_budget(body, tags)
 
 
 # ─────────────────────────────────────────────────────
@@ -1105,7 +1225,9 @@ def post_to_x(tweet_text: str, creds: dict, reply_to: str | None = None) -> dict
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             result = json.loads(r.read())
-            print(f"[X] 投稿成功: tweet_id={result['data']['id']}")
+            tweet_id = result["data"]["id"]
+            print(f"[X] 投稿成功: tweet_id={tweet_id}")
+            print(f"[X] https://x.com/i/web/status/{tweet_id}")
             return result
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"X API エラー {e.code}: {e.read().decode()}") from e
@@ -1116,10 +1238,14 @@ def post_to_x(tweet_text: str, creds: dict, reply_to: str | None = None) -> dict
 # ─────────────────────────────────────────────────────
 
 def lambda_handler(event, context):
-    now     = datetime.now(JST)
-    mode    = event.get("mode", "random")
-    weekday = now.weekday()  # 0=月 1=火 2=水 3=木 4=金 5=土 6=日
-    print(f"[Start] {now.strftime('%Y-%m-%d %H:%M JST')} / mode={mode} / weekday={weekday} / DRY_RUN={DRY_RUN}")
+    event = event or {}
+    now      = datetime.now(JST)
+    mode     = event.get("mode", "random")
+    # event側のdry_runを優先しつつ環境変数DRY_RUNも後方互換で見る（test_invoke.shの
+    # 「本番環境変数を書き換えて戻す」運用は事故りやすいため、ペイロード指定に一本化する）
+    dry_run  = bool(event.get("dry_run", DRY_RUN))
+    weekday  = now.weekday()  # 0=月 1=火 2=水 3=木 4=金 5=土 6=日
+    print(f"[Start] {now.strftime('%Y-%m-%d %H:%M JST')} / mode={mode} / weekday={weekday} / dry_run={dry_run}")
 
     # ── カテゴリ決定 ──────────────────────────────────
     used_categories = load_used_categories()
@@ -1181,13 +1307,30 @@ def lambda_handler(event, context):
 
     # ── プロンプト構築 ────────────────────────────────
     cat_hashtag = pick_category_hashtag(category)
+    # recipe/jissokuは共通の12お題からお題を選ぶ。直近MAX_RECIPE_TASK_HISTORY件は
+    # 除外し、確率1/12での連続同一お題を防ぐ（002のrecent-angles方式を横展開）
+    recipe_task_history = None
+    recipe_task = None
+    if category in ("recipe", "jissoku"):
+        recipe_task_history = load_recipe_task_history()
+        recipe_task = pick_recipe_task(recipe_task_history)
+        print(f"[Task] {recipe_task} (直近使用: {recipe_task_history[-MAX_RECIPE_TASK_HISTORY:]})")
+
+    # questionは木曜固定＋ローテーションで最頻出のため、テーマ軸をSSM履歴除外つきで選ぶ
+    question_theme_history = None
+    question_theme = None
+    if category == "question":
+        question_theme_history = load_question_theme_history()
+        question_theme = pick_question_theme(question_theme_history)
+        print(f"[Theme] {question_theme} (直近使用: {question_theme_history[-MAX_QUESTION_THEME_HISTORY:]})")
+
     builders = {
-        "recipe":   lambda h: build_recipe_prompt(h, cat_hashtag),
-        "jissoku":  lambda h: build_jissoku_prompt(h, cat_hashtag),
+        "recipe":   lambda h: build_recipe_prompt(h, cat_hashtag, recipe_task),
+        "jissoku":  lambda h: build_jissoku_prompt(h, cat_hashtag, recipe_task),
         "hikaku":   lambda h: build_hikaku_prompt(h, cat_hashtag),
         "shippai":  lambda h: build_shippai_prompt(h, cat_hashtag),
         "fukugyo":  lambda h: build_fukugyo_prompt(h),
-        "question": lambda h: build_question_prompt(h, cat_hashtag),
+        "question": lambda h: build_question_prompt(h, cat_hashtag, question_theme),
     }
     if category == "trend":
         prompt = build_trend_prompt(trend_kw, history)
@@ -1204,14 +1347,8 @@ def lambda_handler(event, context):
         body  = trim_body_excluding_hashtags(raw, limit=URL_REACTION_LIMIT)
         body  = strip_model_hashtag_lines(body)  # drop model-inserted hashtag lines
         htag  = pick_hashtag(body + " " + url_article["title"])
-        tweet = f"{body}\n{htag}"
         # ハッシュタグ再付加後にXのweighted lengthで最終チェック（安全弁）
-        if x_weighted_length(tweet) > TWEET_MAX_LEN:
-            tag_weighted = x_weighted_length(f"\n{htag}")
-            budget = TWEET_MAX_LEN - tag_weighted
-            while body and x_weighted_length(body) > budget:
-                body = body[:-1]
-            tweet = f"{body.rstrip()}\n{htag}"
+        tweet = _fit_weighted_budget(body, htag)
     else:
         tweet = trim_body_excluding_hashtags(raw)
 
@@ -1221,12 +1358,12 @@ def lambda_handler(event, context):
         if stripped:
             tweet = stripped
             print("[Hashtag] 今回はタグなしで投稿")
-    print(f"[Tweet]\n{tweet}\n[文字数] {len(tweet)}")
+    print(f"[Tweet]\n{tweet}\n[文字数] len={len(tweet)} weighted={x_weighted_length(tweet)}/{TWEET_MAX_LEN}")
 
     # ── DRY RUN ───────────────────────────────────────
-    if DRY_RUN:
+    if dry_run:
         print("[DRY RUN] 投稿スキップ（SSM履歴は更新しません）")
-        return {"statusCode": 200, "category": category, "tweet": tweet}
+        return {"statusCode": 200, "category": category, "tweet": tweet, "dry_run": True}
 
     # ── X投稿 ─────────────────────────────────────────
     creds  = get_x_credentials()
@@ -1250,11 +1387,17 @@ def lambda_handler(event, context):
         # used_categories に書き込むと dedup ウィンドウ（直近MAX_CATEGORY_HISTORY件）を
         # ローテーション外カテゴリで圧迫してしまうため、CATEGORIES のものだけ記録する。
         save_used_categories(used_categories, category)
+    if recipe_task is not None:
+        save_recipe_task_history(recipe_task_history, recipe_task)
+    if question_theme is not None:
+        save_question_theme_history(question_theme_history, question_theme)
 
+    tweet_id = result.get("data", {}).get("id")
     return {
         "statusCode": 200,
         "category":   category,
-        "tweet_id":   result.get("data", {}).get("id"),
+        "tweet_id":   tweet_id,
+        "tweet_url":  f"https://x.com/i/web/status/{tweet_id}" if tweet_id else None,
         "keywords":   keywords,
         "timestamp":  now.isoformat(),
     }

@@ -18,6 +18,16 @@ Parameters:
     Default: /ai_bot
     Description: SSM parameter prefix (e.g. /ai_bot)
 
+  RecipientEmail:
+    Type: String
+    Default: ""
+    Description: Email address to notify when the Lambda async invocation fails (leave empty to skip)
+
+# ---- Conditions ----
+# HasRecipientEmail: RecipientEmailが空文字でない場合にtrue。SNSトピック・購読・OnFailure設定の要否に使う。
+Conditions:
+  HasRecipientEmail: !Not [!Equals [!Ref RecipientEmail, ""]]
+
 # ---- Resources ----
 Resources:
 
@@ -66,7 +76,8 @@ Resources:
     Properties:
       FunctionName: x-poster-zer0-0326
       Runtime: python3.14
-      Timeout: 60
+      # url_reactionのRSS直列取得（最大30秒）+ Bedrockリトライ余裕を確保するため60→90に引き上げ
+      Timeout: 90
       MemorySize: 128
       ReservedConcurrentExecutions: 1
       Handler: lambda_function.lambda_handler
@@ -86,10 +97,50 @@ Resources:
   # 非同期呼び出しデフォルトリトライ（2回）も無効化する（二重投稿防止の多重防御）
   PosterEventInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
+    # sns:Publish権限がIAMに伝播する前にLambdaが宛先権限を検証し失敗することがあるため、
+    # ポリシーアタッチ後に作成されるよう明示的に依存させる。
+    DependsOn: PosterSnsPublishPolicy
     Properties:
       FunctionName: !Ref PosterFunction
       Qualifier: $LATEST
       MaximumRetryAttempts: 0
+      DestinationConfig: !If
+        - HasRecipientEmail
+        - OnFailure:
+            Destination: !Ref PosterAlarmTopic
+        - !Ref AWS::NoValue
+
+  # リトライ0＋通知なしのままだと、失敗した回の投稿はログを見ない限り気づけない。
+  # Lambda非同期呼び出し失敗時にSNS経由でメール通知する（RecipientEmail設定時のみ）。
+  PosterAlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasRecipientEmail
+    Properties:
+      TopicName: x-poster-zer0-0326-alarms
+
+  PosterAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasRecipientEmail
+    Properties:
+      TopicArn: !Ref PosterAlarmTopic
+      Protocol: email
+      Endpoint: !Ref RecipientEmail
+
+  # OnFailure通知はこのFunction実行ロールの権限でDestinationConfig先へpublishするため、
+  # 実行ロール側にsns:Publish権限が必要（RecipientEmail設定時のみ）。
+  PosterSnsPublishPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasRecipientEmail
+    Properties:
+      PolicyName: x-poster-zer0-0326-sns-publish
+      Roles:
+        - !Ref PosterRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: sns:Publish
+            Resource: !Ref PosterAlarmTopic
 
   # CloudWatch log group
   PosterLogGroup:
