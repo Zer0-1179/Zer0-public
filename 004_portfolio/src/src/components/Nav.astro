@@ -73,12 +73,12 @@ if (Astro.locals.isAdmin) {
     class="md:hidden hidden border-t border-navy-700/50 bg-navy-950/98"
   >
     <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col gap-1">
-      {navItems.map(({ key, href }) => (
+      {navItems.map(({ key, href, label }) => (
         <a
           href={href}
           class="px-4 py-3 text-sm text-slate-300 hover:text-accent hover:bg-navy-800 rounded transition-colors"
         >
-          {t(key)}
+          {label ?? t(key as any)}
         </a>
       ))}
     </div>
