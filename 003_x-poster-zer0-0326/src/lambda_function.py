@@ -1339,9 +1339,14 @@ def get_x(url_path: str, creds: dict, params: dict | None = None) -> dict:
 # EventBridge実行は追加しない（1回の実行につき最大1件）。
 
 REPLY_TARGET_ACCOUNTS = [
-    "nikkei", "toyokeizai", "diamond_online", "PRESIDENT_Online",
+    "nikkei", "toyokeizai", "dol_editors", "PRE_ONLINE",
     "itmedia_news", "itmedia",
-]  # 2026-07-05: nikkeibp（日経BP）は凍結済みアカウントのためX API実地確認で不採用
+]
+# 2026-07-05: 当初の候補"diamond_online"はフォロワー15人の無関係な個人アカウントに、
+# "PRESIDENT_Online"はXのユーザー名文字数上限(15文字)違反で無効だったことが
+# GET /2/users/by/username の実地確認で判明。正しい公式ハンドル（dol_editors・
+# PRE_ONLINE、いずれもprofile descriptionで公式アカウントと確認済み）に差し替え。
+# nikkeibp（日経BP）は凍結済みアカウントのため不採用。
 MAX_REPLY_TARGET_HISTORY  = 3   # REPLY_TARGET_ACCOUNTS（6件）より必ず小さい値にすること
 MAX_REPLIED_TWEET_HISTORY = 50  # 同一ツイートへの二重返信を防ぐための履歴保持件数
 
