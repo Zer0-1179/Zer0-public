@@ -71,7 +71,6 @@ aws cloudformation deploy \
   --parameter-overrides \
     SenderEmail="${SENDER_EMAIL}" \
     RecipientEmail="${RECIPIENT_EMAIL}" \
-    BedrockModelId="${BEDROCK_MODEL_ID:-jp.anthropic.claude-haiku-4-5-20251001-v1:0}" \
     DiagramsLayerArn="${LAYER_ARN}" \
   --no-fail-on-empty-changeset
 echo "  ✓ スタックデプロイ完了"

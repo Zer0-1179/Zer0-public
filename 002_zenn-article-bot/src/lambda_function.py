@@ -6,16 +6,19 @@ import boto3
 import datetime
 from botocore.config import Config
 try:
-    from diagram_generator import generate_diagrams
+    from diagram_generator import generate_diagrams_with_titles
 except ImportError:
-    def generate_diagrams(topic_id, base_path):
-        return []
+    def generate_diagrams_with_titles(topic_id, base_path):
+        return [], []
 
 # AWS clients
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name="ap-northeast-1",
-    config=Config(read_timeout=880, connect_timeout=10),
+    config=Config(
+        read_timeout=880, connect_timeout=10,
+        retries={"max_attempts": 4, "mode": "adaptive"},
+    ),
 )
 ses = boto3.client("ses", region_name="ap-northeast-1")
 s3  = boto3.client("s3",  region_name="ap-northeast-1")
@@ -27,7 +30,6 @@ _IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 # Environment variables
 SES_SENDER_EMAIL    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT_EMAIL = os.environ["SES_RECIPIENT_EMAIL"]
-BEDROCK_MODEL_ID         = os.environ.get("BEDROCK_MODEL_ID",         "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 BEDROCK_ARTICLE_MODEL_ID = os.environ.get("BEDROCK_ARTICLE_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 OUTPUT_DIR = os.environ.get(
     "OUTPUT_DIR",
@@ -45,6 +47,19 @@ OUTPUT_KEEP_MAX     = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
 # （2026-07-03 第2巡レビューで修正）。総数より必ず小さい値にすること。
 SSM_PARAM_PATH      = "/zenn-article-bot/recent-topics"
 RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "20"))
+
+# 記事の「切り口」バリエーション（2026-07-05追加）。28トピックは月2本ペースで
+# 約14ヶ月で一巡するため、2周目以降も同じ記事にならないよう切り口を変えて多様性を出す。
+_DEFAULT_ANGLES = [
+    "コスト最適化の観点（無料枠・課金項目・節約のコツを中心に）",
+    "セキュリティ設定の観点（権限・暗号化・アクセス制御を中心に）",
+    "他サービスとの連携パターンの観点（組み合わせて使う実践例を中心に）",
+    "初心者がつまずきやすいポイント集の観点（設定ミス・エラー対処を中心に）",
+]
+SSM_ANGLE_PARAM_PATH = "/zenn-article-bot/recent-angles"
+# _DEFAULT_ANGLES の総数(4件)と同値にすると、トピック除外と同じ「全消化後の
+# 恒久ロック」バグ（2026-07-03発見）が再発するため、必ず総数より小さい値にすること
+RECENT_ANGLES_LIMIT = int(os.environ.get("RECENT_ANGLES_LIMIT", "3"))
 
 AWS_TOPICS = [
     {
@@ -306,10 +321,15 @@ TITLE: ここに記事タイトルを書く
 ## テーマ
 {topic_name}：{topic_subtitle}
 
+## 今回の切り口
+{angle}
+この切り口を軸に記事を構成してください（同じサービスでも切り口を変えることで内容の重複を避けます）。
+
 ## キーワード（記事中に自然に含めること）
 {keywords}
 
 {docs_section}
+{diagram_section}
 ## 読者像
 プログラミング経験はあるが、AWSをほぼ使ったことがない初級エンジニア。
 「概念を知りたい」より「実際に動かして仕事で使いたい」が動機。
@@ -496,38 +516,57 @@ def fetch_aws_docs(topic_id: str, max_chars: int = 6000) -> str:
         return ""
 
 
-# ─── SSM: トピック重複除外 ────────────────────────────────────────────────────
+# ─── SSM: トピック・切り口の重複除外 ──────────────────────────────────────────
 
-def get_recent_topics() -> list[str]:
-    """SSM から直近のトピックIDリストを取得する（最大 RECENT_TOPICS_LIMIT 件）"""
+def _get_recent_ids(ssm_path: str) -> list[str]:
+    """SSM から直近のID履歴リストを取得する（トピック・切り口共通）"""
     try:
-        response = ssm.get_parameter(Name=SSM_PARAM_PATH)
+        response = ssm.get_parameter(Name=ssm_path)
         ids = json.loads(response["Parameter"]["Value"])
         return ids if isinstance(ids, list) else []
     except ssm.exceptions.ParameterNotFound:
         return []
     except Exception as e:
-        print(f"[WARNING] SSM読み込みエラー。トピック除外なしで続行します（同テーマが連続生成される可能性あり）: {e}")
+        print(f"[WARNING] SSM読み込みエラー（{ssm_path}）。除外なしで続行します（同内容が連続生成される可能性あり）: {e}")
         return []
 
 
-def save_topic_to_ssm(topic_id: str):
-    """選択したトピックを SSM に保存する（最新 RECENT_TOPICS_LIMIT 件を保持）"""
-    recent = get_recent_topics()
-    if topic_id in recent:
-        recent.remove(topic_id)
-    recent.append(topic_id)
-    recent = recent[-RECENT_TOPICS_LIMIT:]
+def _save_recent_id(ssm_path: str, item_id: str, limit: int, dry_run: bool = False) -> None:
+    """選択したIDをSSMに保存する（最新limit件を保持、トピック・切り口共通）"""
+    if dry_run:
+        print(f"[DRY_RUN] SSM書き込みスキップ: {ssm_path}")
+        return
+    recent = _get_recent_ids(ssm_path)
+    if item_id in recent:
+        recent.remove(item_id)
+    recent.append(item_id)
+    recent = recent[-limit:]
     try:
         ssm.put_parameter(
-            Name=SSM_PARAM_PATH,
+            Name=ssm_path,
             Value=json.dumps(recent),
             Type="String",
             Overwrite=True,
         )
-        print(f"SSM保存完了: {recent}")
+        print(f"SSM保存完了（{ssm_path}）: {recent}")
     except Exception as e:
-        print(f"SSM書き込みエラー（無視して続行）: {e}")
+        print(f"SSM書き込みエラー（{ssm_path}、無視して続行）: {e}")
+
+
+def get_recent_topics() -> list[str]:
+    return _get_recent_ids(SSM_PARAM_PATH)
+
+
+def save_topic_to_ssm(topic_id: str, dry_run: bool = False) -> None:
+    _save_recent_id(SSM_PARAM_PATH, topic_id, RECENT_TOPICS_LIMIT, dry_run=dry_run)
+
+
+def get_recent_angles() -> list[str]:
+    return _get_recent_ids(SSM_ANGLE_PARAM_PATH)
+
+
+def save_angle_to_ssm(angle: str, dry_run: bool = False) -> None:
+    _save_recent_id(SSM_ANGLE_PARAM_PATH, angle, RECENT_ANGLES_LIMIT, dry_run=dry_run)
 
 
 def _extract_bedrock_text(result: dict) -> str | None:
@@ -541,57 +580,34 @@ def _extract_bedrock_text(result: dict) -> str | None:
     return text if isinstance(text, str) else None
 
 
-# ─── トピック選択 ─────────────────────────────────────────────────────────────
+# ─── トピック・切り口の選択 ────────────────────────────────────────────────────
 
-def select_topic_with_bedrock(excluded_ids: list[str]) -> dict:
-    """Bedrock を使って重複を避けながらトピックを選択する"""
+def select_topic(excluded_ids: list[str]) -> dict:
+    """重複を避けながらランダムにトピックを選択する。
+    以前はBedrockに選ばせていたが、LLMのランダム選択は先頭・有名サービスに
+    偏りやすいうえフォールバックも常にrandom.choiceだったため実質的な効果がなく、
+    Bedrock呼び出し1回分のコスト・レイテンシ・障害点だけが残っていた
+    （2026-07-05ブラッシュアップでrandom.choiceに統一）。"""
     available = [t for t in AWS_TOPICS if t["id"] not in excluded_ids]
     if not available:
         # 全トピックが除外済みの場合（通常は発生しない）はリセット
         print("全トピックが除外済みのためリセットします")
         available = AWS_TOPICS
+    return random.choice(available)
 
-    topic_list = "\n".join([f"- {t['id']}: {t['name']}" for t in available])
 
-    prompt = f"""以下のAWSサービス一覧から、今週の記事テーマを1つランダムに選んでください。
-選択する際は、純粋にランダムに選んでください。
-
-{topic_list}
-
-選んだサービスのIDのみを返してください（例: ec2）。説明は不要です。"""
-
-    response = bedrock.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 20,
-            "messages": [{"role": "user", "content": prompt}],
-        }),
-    )
-
-    result   = json.loads(response["body"].read())
-    raw_text = _extract_bedrock_text(result)
-    if raw_text is None:
-        print(f"[WARNING] トピック選択のBedrock応答が空（stop_reason={result.get('stop_reason')}）→ ランダムフォールバック")
-    topic_id = (raw_text or "").strip().lower()
-    usage = result.get("usage", {})
-    print(f"[Bedrock/topic] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
-
-    # Bedrock の返答が除外リストにない available トピックと一致するか確認
-    for topic in available:
-        if topic["id"] == topic_id:
-            return topic
-
-    # 一致しない場合は available からランダム選択
+def select_angle(excluded_angles: list[str]) -> str:
+    """直近使用した切り口を避けながらランダムに選択する"""
+    available = [a for a in _DEFAULT_ANGLES if a not in excluded_angles]
+    if not available:
+        available = _DEFAULT_ANGLES
     return random.choice(available)
 
 
 # ─── 記事生成 ─────────────────────────────────────────────────────────────────
 
-def generate_article(topic: dict, today: str) -> tuple[str, str, bool]:
-    """Bedrock を使って記事を生成する。(article_text, title, is_truncated) を返す"""
+def generate_article(topic: dict, today: str, angle: str, diagram_titles: list[str]) -> tuple[str, str, bool, dict]:
+    """Bedrock を使って記事を生成する。(article_text, title, is_truncated, meta) を返す"""
     docs_content = fetch_aws_docs(topic["id"])
     docs_section = (
         "## AWS公式ドキュメント（根拠情報）\n"
@@ -600,12 +616,22 @@ def generate_article(topic: dict, today: str) -> tuple[str, str, bool]:
         f"{docs_content}\n\n---\n"
         if docs_content else ""
     )
+    diagram_section = ""
+    if diagram_titles:
+        diagram_lines = "\n".join(f"- 図{i}: {t}" for i, t in enumerate(diagram_titles, start=1))
+        diagram_section = (
+            "## 構成図（本文と整合させること）\n"
+            "記事中には以下の構成図が挿入されます。図の直前の説明文・ハンズオン手順の内容はこの構成と一致させてください。\n"
+            f"{diagram_lines}\n\n---\n"
+        )
     prompt = ARTICLE_PROMPT_TEMPLATE.format(
         topic_name=topic["name"],
         topic_subtitle=topic["subtitle"],
         keywords=topic["keywords"],
         today=today,
         docs_section=docs_section,
+        diagram_section=diagram_section,
+        angle=angle,
     )
 
     response = bedrock.invoke_model(
@@ -658,7 +684,15 @@ def generate_article(topic: dict, today: str) -> tuple[str, str, bool]:
                 break
         text = "".join(lines[end:]).lstrip()
 
-    return text, title, is_truncated
+    meta = {
+        "cost_usd": cost_usd,
+        "stop_reason": stop_reason,
+        "in_tokens": in_tok,
+        "out_tokens": out_tok,
+        "docs_chars": len(docs_content),
+        "angle": angle,
+    }
+    return text, title, is_truncated, meta
 
 
 # ─── MD 生成（画像プレースホルダー付き） ─────────────────────────────────────
@@ -738,7 +772,7 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
 
 SSM_COUNTER_PATH = "/zenn-article-bot/article-counter"
 
-def _next_article_number(output_dir: str) -> str:
+def _next_article_number(output_dir: str, dry_run: bool = False) -> str:
     """SSMカウンターから次の記事番号を取得してインクリメントする（例: '016'）"""
     try:
         resp = ssm.get_parameter(Name=SSM_COUNTER_PATH)
@@ -749,10 +783,13 @@ def _next_article_number(output_dir: str) -> str:
         print(f"[WARNING] 記事番号カウンターの値が不正です。0から再開します: {e}")
         current = 0
     next_num = current + 1
-    try:
-        ssm.put_parameter(Name=SSM_COUNTER_PATH, Value=str(next_num), Type="String", Overwrite=True)
-    except Exception as e:
-        print(f"[WARNING] 記事番号カウンターの保存に失敗（番号は採番済みとして続行）: {e}")
+    if dry_run:
+        print(f"[DRY_RUN] 記事番号カウンター書き込みスキップ（プレビュー番号: {next_num:03d}）")
+    else:
+        try:
+            ssm.put_parameter(Name=SSM_COUNTER_PATH, Value=str(next_num), Type="String", Overwrite=True)
+        except Exception as e:
+            print(f"[WARNING] 記事番号カウンターの保存に失敗（番号は採番済みとして続行）: {e}")
     return f"{next_num:03d}"
 
 
@@ -766,13 +803,12 @@ def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
         print(f"古い記事フォルダを削除: {os.path.basename(folder)}")
 
 
-def save_to_local(topic: dict, article: str, timestamp: str, title: str = "") -> tuple[str, list[str]]:
-    """記事を MD ファイルに保存し、構成図 PNG も生成する。(mdパス, pngパスリスト) を返す"""
-    output_dir = os.path.expanduser(OUTPUT_DIR)
+def _prepare_article_paths(topic: dict, timestamp: str, output_dir: str, dry_run: bool = False) -> tuple[str, str]:
+    """記事の出力先ディレクトリを準備する。(mdパス, 構成図ベースパス) を返す"""
     os.makedirs(output_dir, exist_ok=True)
 
     base_name   = f"{timestamp}_{topic['id']}"
-    num         = _next_article_number(output_dir)
+    num         = _next_article_number(output_dir, dry_run=dry_run)
     article_dir = os.path.join(output_dir, f"{num}_{base_name}")
     images_dir  = os.path.join(article_dir, "images")
     os.makedirs(article_dir, exist_ok=True)
@@ -780,10 +816,14 @@ def save_to_local(topic: dict, article: str, timestamp: str, title: str = "") ->
 
     md_path  = os.path.join(article_dir, f"{base_name}.md")
     png_base = os.path.join(images_dir,  f"{base_name}_diagram")
+    return md_path, png_base
 
-    # 構成図を生成（最大2枚）
-    png_paths = generate_diagrams(topic["id"], png_base)
 
+def save_to_local(
+    topic: dict, article: str, md_path: str, png_paths: list[str],
+    timestamp: str, title: str, output_dir: str, dry_run: bool = False,
+) -> str:
+    """記事を MD ファイルに保存する（構成図は生成済みの png_paths を使用）。mdパスを返す"""
     # 図1・図2ともに {DIAGRAM_N} マーカーで記事中に挿入（マーカー不在時はフォールバック）
     article_with_images = _embed_image_placeholders(article, png_paths, topic["name"])
 
@@ -808,8 +848,11 @@ published: false
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_content)
 
-    _cleanup_old_articles(output_dir)
-    return md_path, png_paths
+    if dry_run:
+        print("[DRY_RUN] 古い記事フォルダのクリーンアップをスキップ")
+    else:
+        _cleanup_old_articles(output_dir)
+    return md_path
 
 
 # ─── S3 アップロード ──────────────────────────────────────────────────────────
@@ -830,14 +873,54 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
     return f"s3://{S3_BUCKET}/{s3_base}/"
 
 
-# ─── AWS CLI コマンドチェック ────────────────────────────────────────────────
+# ─── 記事品質チェック ─────────────────────────────────────────────────────────
 
-def validate_cli_in_article(article_text: str) -> list[str]:
-    """記事内にAWS CLIコマンドが含まれているかチェックする"""
+def validate_article(article_text: str, char_count: int) -> list[str]:
+    """記事の品質を機械的にチェックする（文字数・Markdown記法・CLIコマンドの体裁など）"""
+    import re as _re
     issues = []
+    lines = article_text.splitlines()
+
     if "aws " not in article_text:
         issues.append("AWS CLIコマンドが見つかりません")
-    print(f"[CLI検証] 必須要素チェック完了 / 問題{len(issues)}件")
+    elif "--region" not in article_text:
+        issues.append("AWS CLIコマンドに --region の明示が見当たりません")
+
+    if not (1500 <= char_count <= 4500):
+        issues.append(f"文字数が想定レンジ(2,000〜3,500文字程度)から外れています: {char_count:,}文字")
+
+    open_count  = sum(1 for l in lines if l.strip().startswith(":::") and l.strip() != ":::")
+    close_count = sum(1 for l in lines if l.strip() == ":::")
+    if open_count != close_count:
+        issues.append(f":::message / :::details の開始・終了が対応していません（開始{open_count}件 / 終了{close_count}件）")
+
+    in_code = False
+    bad_code_blocks = 0
+    h1_found = False
+    for l in lines:
+        if l.startswith("```"):
+            if not in_code and l.strip() == "```":
+                bad_code_blocks += 1
+            in_code = not in_code
+            continue
+        # h1見出しチェックはMarkdown本文のみ対象（コードブロック内のシェルコメント "# ..." を誤検出しないため）
+        if not in_code and _re.match(r'^# [^#]', l):
+            h1_found = True
+    if bad_code_blocks:
+        issues.append(f"言語/ファイル名指定のないコードブロックが{bad_code_blocks}件あります")
+    if h1_found:
+        issues.append("h1見出し（# ）が混入しています（見出しは##以下を使うルール）")
+
+    for old_runtime in ("python3.12", "python3.11", "python3.10", "python3.9", "nodejs20.x", "nodejs18.x"):
+        if old_runtime in article_text:
+            issues.append(f"古いLambdaランタイム記載が見つかりました: {old_runtime}")
+
+    if "## はじめに" not in article_text:
+        issues.append("## はじめに セクションが見つかりません")
+    if "## まとめ" not in article_text:
+        issues.append("## まとめ セクションが見つかりません")
+
+    print(f"[記事検証] 必須要素チェック完了 / 問題{len(issues)}件")
     return issues
 
 
@@ -845,8 +928,8 @@ def validate_cli_in_article(article_text: str) -> list[str]:
 
 def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
-    timestamp: str, s3_url: str = "", is_truncated: bool = False,
-    cfn_issues: list | None = None,
+    timestamp: str, title: str = "", s3_url: str = "", is_truncated: bool = False,
+    issues: list | None = None, angle: str = "", gen_meta: dict | None = None,
 ):
     """SES でメール通知を送信する"""
     import html as _html
@@ -854,6 +937,16 @@ def send_email_notification(
     preview    = article[:300].replace("\n", " ")
     preview_html = _html.escape(preview)
     diagram_info = ", ".join(os.path.basename(p) for p in png_paths) if png_paths else "生成なし"
+
+    gen_meta = gen_meta or {}
+    headings = [l[3:].strip() for l in article.splitlines() if l.startswith("## ")]
+    headings_text = "\n".join(f"  - {h}" for h in headings) if headings else "  (見出しなし)"
+    headings_html = "".join(f"<li>{_html.escape(h)}</li>" for h in headings) if headings else "<li>(見出しなし)</li>"
+    docs_fetched = gen_meta.get("docs_chars", 0) > 0
+    docs_info = f"取得成功（{gen_meta['docs_chars']:,}文字）" if docs_fetched else "取得なし"
+    cost_usd = gen_meta.get("cost_usd")
+    cost_info = f"${cost_usd:.4f}" if cost_usd is not None else "不明"
+    stop_reason = gen_meta.get("stop_reason", "unknown")
 
     subject = (
         f"【⚠️ 記事が途中で切れています】{topic['name']} - {timestamp}"
@@ -876,26 +969,33 @@ def send_email_notification(
         if s3_url else ""
     )
 
-    cfn_issues = cfn_issues or []
+    issues = issues or []
     truncation_warning_text = """
 ⚠️ 警告: 記事が途中で切れています
 記事の生成がmax_tokensに達したため、末尾が不完全な可能性があります。
 Zennに投稿する前に内容を必ず確認してください。
 """ if is_truncated else ""
 
-    cfn_warning_text = (
-        "⚠️ AWS CLIチェックで問題が見つかりました:\n"
-        + "\n".join(f"  - {i}" for i in cfn_issues) + "\n"
-    ) if cfn_issues else ""
+    issues_warning_text = (
+        "⚠️ 記事品質チェックで問題が見つかりました:\n"
+        + "\n".join(f"  - {i}" for i in issues) + "\n"
+    ) if issues else ""
 
     body_text = f"""Zenn技術記事の自動生成が完了しました。
-{truncation_warning_text}{cfn_warning_text}
+{truncation_warning_text}{issues_warning_text}
 ■ 記事情報
+- タイトル: {title}
 - テーマ: {topic['name']}（{topic['subtitle']}）
+- 切り口: {angle}
 - 文字数: {char_count:,}文字
 - 生成日時: {timestamp}
 - 構成図PNG: {diagram_info}
 - S3保存先: {s3_url}
+- AWS公式ドキュメント: {docs_info}
+- Bedrockコスト概算: {cost_info}（stop_reason={stop_reason}）
+
+■ 見出し一覧
+{headings_text}
 
 ■ 記事プレビュー（先頭300文字）
 {preview}...
@@ -920,15 +1020,15 @@ Zennに投稿する前に内容を必ず確認してください。
   </div>
 """ if is_truncated else ""
 
-    cfn_issues_html = (
+    issues_html = (
         '<div style="background:#fde8e8;border:2px solid #e53e3e;padding:15px;border-radius:8px;margin:20px 0;">'
-        '<h3 style="color:#c53030;margin-top:0;">⚠️ AWS CLIチェックで問題が見つかりました</h3>'
+        '<h3 style="color:#c53030;margin-top:0;">⚠️ 記事品質チェックで問題が見つかりました</h3>'
         '<ul style="color:#c53030;margin:0;">'
-        + "".join(f'<li><code>{i}</code></li>' for i in cfn_issues)
+        + "".join(f'<li><code>{i}</code></li>' for i in issues)
         + '</ul></div>'
-    ) if cfn_issues else (
+    ) if issues else (
         '<div style="background:#e8f5e9;border:1px solid #66bb6a;padding:10px 15px;border-radius:8px;margin:20px 0;">'
-        '<p style="color:#2e7d32;margin:0;">✅ AWS CLIチェック — 問題なし</p>'
+        '<p style="color:#2e7d32;margin:0;">✅ 記事品質チェック — 問題なし</p>'
         '</div>'
     )
 
@@ -937,21 +1037,34 @@ Zennに投稿する前に内容を必ず確認してください。
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <h2 style="color:#3EA8FF;">Zenn技術記事の自動生成が完了しました</h2>
   {truncation_warning_html}
-  {cfn_issues_html}
+  {issues_html}
 
   <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>記事情報</h3>
     <table style="width:100%;border-collapse:collapse;">
+      <tr><td style="padding:5px;font-weight:bold;">タイトル</td>
+          <td>{_html.escape(title)}</td></tr>
       <tr><td style="padding:5px;font-weight:bold;">テーマ</td>
           <td>{topic['name']}（{topic['subtitle']}）</td></tr>
+      <tr><td style="padding:5px;font-weight:bold;">切り口</td>
+          <td>{_html.escape(angle)}</td></tr>
       <tr><td style="padding:5px;font-weight:bold;">文字数</td>
           <td>{char_count:,}文字</td></tr>
       <tr><td style="padding:5px;font-weight:bold;">生成日時</td>
           <td>{timestamp}</td></tr>
       <tr><td style="padding:5px;font-weight:bold;">構成図PNG</td>
           <td><ul style="margin:0;padding-left:16px;">{png_list_html}</ul></td></tr>
+      <tr><td style="padding:5px;font-weight:bold;">AWS公式ドキュメント</td>
+          <td>{docs_info}</td></tr>
+      <tr><td style="padding:5px;font-weight:bold;">Bedrockコスト概算</td>
+          <td>{cost_info}（stop_reason={stop_reason}）</td></tr>
       {s3_row}
     </table>
+  </div>
+
+  <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0;">
+    <h3>見出し一覧</h3>
+    <ul style="margin:0;padding-left:16px;">{headings_html}</ul>
   </div>
 
   <div style="background:#fff8e1;padding:15px;border-radius:8px;margin:20px 0;">
@@ -990,78 +1103,123 @@ Zennに投稿する前に内容を必ず確認してください。
 
 # ─── メイン処理 ───────────────────────────────────────────────────────────────
 
-def run():
+def run(dry_run: bool = False):
     _total_start = time.time()
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     today     = now.strftime("%Y-%m-%d")
 
-    print(f"[{timestamp}] Zenn技術記事自動生成を開始します")
+    if dry_run:
+        print(f"[{timestamp}] [DRY_RUN] Zenn技術記事自動生成を開始します（S3保存・メール送信・SSM書き込みをスキップ）")
+    else:
+        print(f"[{timestamp}] Zenn技術記事自動生成を開始します")
 
-    # Step 1: 直近トピック取得 → Bedrock でトピック選択 → SSM に保存
+    # Step 1: トピック・切り口の選択
     _t = time.time()
-    print("Step 1: Bedrockでトピックを選択中...")
+    print("Step 1: トピック・切り口を選択中...")
     recent_topics = get_recent_topics()
     print(f"  除外トピック（直近{len(recent_topics)}件）: {recent_topics}")
-    topic = select_topic_with_bedrock(excluded_ids=recent_topics)
-    print(f"  選択されたトピック: {topic['name']} [{time.time()-_t:.1f}s]")
-    save_topic_to_ssm(topic["id"])
+    topic = select_topic(excluded_ids=recent_topics)
+    save_topic_to_ssm(topic["id"], dry_run=dry_run)
 
-    # Step 2: 記事生成
+    recent_angles = get_recent_angles()
+    angle = select_angle(excluded_angles=recent_angles)
+    save_angle_to_ssm(angle, dry_run=dry_run)
+    print(f"  選択されたトピック: {topic['name']} / 切り口: {angle} [{time.time()-_t:.1f}s]")
+
+    # Step 2: 出力先準備 + 構成図生成（記事プロンプトに図の内容を伝えるため記事生成より先に行う）
     _t = time.time()
-    print("Step 2: 記事を生成中（2,000〜3,500文字）...")
-    article, title, is_truncated = generate_article(topic, today)
+    print("Step 2: 構成図を生成中...")
+    output_dir = os.path.expanduser(OUTPUT_DIR)
+    md_path, png_base = _prepare_article_paths(topic, timestamp, output_dir, dry_run=dry_run)
+    png_paths, diagram_titles = generate_diagrams_with_titles(topic["id"], png_base)
+    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]" if png_paths else f"  PNG生成: スキップ [{time.time()-_t:.1f}s]")
+
+    # Step 3: 記事生成
+    _t = time.time()
+    print("Step 3: 記事を生成中（2,000〜3,500文字）...")
+    article, title, is_truncated, gen_meta = generate_article(topic, today, angle, diagram_titles)
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")
 
-    # Step 3: ローカル保存（MD + PNG）
+    # Step 4: ローカル保存（MD + 画像プレースホルダー埋め込み）
     _t = time.time()
-    print("Step 3: ファイル保存中（記事MD + 構成図PNG）...")
-    md_path, png_paths = save_to_local(topic, article, timestamp, title)
-    print(f"  MD保存完了: {md_path}")
-    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]" if png_paths else f"  PNG生成: スキップ [{time.time()-_t:.1f}s]")
+    print("Step 4: ファイル保存中...")
+    save_to_local(topic, article, md_path, png_paths, timestamp, title, output_dir, dry_run=dry_run)
+    print(f"  MD保存完了: {md_path} [{time.time()-_t:.1f}s]")
 
-    # Step 4: S3 アップロード
+    # Step 5: S3 アップロード
     _t = time.time()
-    print("Step 4: S3にアップロード中...")
-    s3_folder = f"{timestamp}_{topic['id']}"
-    s3_url    = upload_to_s3(md_path, png_paths, s3_folder)
-    print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
+    if dry_run:
+        print("Step 5: [DRY_RUN] S3アップロードをスキップ")
+        s3_url = "(dry_run: S3アップロードなし)"
+    else:
+        print("Step 5: S3にアップロード中...")
+        s3_folder = f"{timestamp}_{topic['id']}"
+        s3_url    = upload_to_s3(md_path, png_paths, s3_folder)
+        print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
 
-    # Step 5: AWS CLIコマンドチェック
+    # Step 6: 記事品質チェック
     _t = time.time()
-    print("Step 5: AWS CLIコマンドをチェック中...")
+    print("Step 6: 記事品質をチェック中...")
     try:
-        cfn_issues = validate_cli_in_article(article)
-        if cfn_issues:
-            print(f"  ⚠️ CLI検証問題: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
+        issues = validate_article(article, char_count)
+        if len(png_paths) < 2:
+            issues.append(f"構成図が{len(png_paths)}枚しか生成されていません（想定: 2枚）")
+        if issues:
+            print(f"  ⚠️ 品質チェック問題: {len(issues)}件 [{time.time()-_t:.1f}s]")
         else:
-            print(f"  ✓ CLI検証問題なし [{time.time()-_t:.1f}s]")
+            print(f"  ✓ 品質チェック問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
-        print(f"  CLIチェックスキップ（無視して続行）: {e}")
-        cfn_issues = []
+        print(f"  品質チェックスキップ（無視して続行）: {e}")
+        issues = []
 
-    # Step 6: SES メール通知
+    # Step 7: SES メール通知
     _t = time.time()
-    print("Step 6: メール通知を送信中...")
-    send_email_notification(topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues)
-    print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
+    if dry_run:
+        print("Step 7: [DRY_RUN] メール送信をスキップ")
+        print(f"  [DRY_RUN] タイトル: {title}")
+        print(f"  [DRY_RUN] 品質チェック結果: {issues if issues else '問題なし'}")
+    else:
+        print("Step 7: メール通知を送信中...")
+        send_email_notification(
+            topic, article, md_path, png_paths, timestamp, title,
+            s3_url, is_truncated, issues, angle, gen_meta,
+        )
+        print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
+
+    # 構造化サマリーログ（CloudWatch Logs Insights での集計用）
+    print(json.dumps({
+        "metric": "zenn_article_generated",
+        "topic": topic["id"],
+        "angle": angle,
+        "chars": char_count,
+        "cost_usd": gen_meta.get("cost_usd"),
+        "truncated": is_truncated,
+        "docs_fetched": gen_meta.get("docs_chars", 0) > 0,
+        "images": len(png_paths),
+        "quality_issues": len(issues),
+        "duration_s": round(time.time() - _total_start, 1),
+        "dry_run": dry_run,
+    }, ensure_ascii=False))
 
     print(f"[{timestamp}] 処理完了 (合計: {time.time()-_total_start:.1f}s)")
     return topic, char_count, md_path, png_paths, s3_url
 
 
 def lambda_handler(event, context):
-    topic, char_count, md_path, png_paths, s3_url = run()
+    dry_run = bool((event or {}).get("dry_run", False))
+    topic, char_count, md_path, png_paths, s3_url = run(dry_run=dry_run)
     return {
         "statusCode": 200,
         "body": json.dumps(
             {
-                "message": "記事生成が完了しました",
+                "message": "記事生成が完了しました" if not dry_run else "記事生成が完了しました（dry_run）",
                 "topic":   topic["name"],
                 "character_count": char_count,
                 "images_generated": len(png_paths),
                 "s3_url": s3_url,
+                "dry_run": dry_run,
             },
             ensure_ascii=False,
         ),
