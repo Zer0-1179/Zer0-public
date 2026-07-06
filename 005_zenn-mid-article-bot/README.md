@@ -27,7 +27,7 @@
 EventBridge（毎月1日・15日 21:00 JST）
   └─▶ Lambda（Python 3.14 / 512MB / 900秒）
         ├─ Bedrock Claude Haiku（トピック選択: ~10 tokens）
-        ├─ SSM からトピック履歴取得（直近4件除外）
+        ├─ SSM からトピック履歴取得（直近12件除外）
         ├─ Bedrock Claude Sonnet（記事本文生成: ~12,000 tokens出力）
         ├─ diagram_generator.py（matplotlib + AWS公式アイコン）
         ├─ S3 PUT（MD + PNG × 1）
@@ -151,3 +151,5 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 | 2026-07-02 | v2.7       | 記事品質改善2点。①primary_serviceの公式ドキュメントURLをコード側で「参考」節に確定挿入（LLMのURL生成なし）②「はじめに」に「この記事でわかること」3行サマリーを追加                                                                                                                                            |
 | 2026-07-02 | v2.8       | Fableコードレビュー反映。構成図の矢印を方向性主張なしの直線に変更（実際と逆向きの表示を修正）・Sonnet5切替時のKeyError修正・S3失敗時のBedrockコスト重複回避・microservices_base等の細部修正                                                                                                                   |
 | 2026-07-02 | v2.9       | Fableレビュー続き。壊れていたテスト2件を修正しHIGHバグを検出：`generate_article`のtextブロック抽出がthinking打ち切り時にStopIterationでクラッシュする問題を修正、BedrockクライアントのReadTimeout自動リトライを無効化（コスト二重発生防止）、CFnのBedrock ARNリージョンワイルドカードを明示化、回帰テスト追加 |
+| 2026-07-06 | v3.0       | Fableブラッシュアップ実施。トピック重複除外を12件に拡張し再登場時はタイトルに周回数を付与、記事品質の機械チェック追加(検出のみ)、メールに見出しアウトライン・レビューチェックリスト追加、根拠ドキュメントを3サービス全件取得、MD+PNGをメール添付、14トピックで構成図矢印を安全に復活                                            |
+| 2026-07-06 | v3.1       | deploy.shがaws_icons/・fonts/をLambda ZIPに同梱しておらず、本番の構成図は日本語が文字化けしアイコンも自作の色付きボックスに全滅していた重大な既存バグを発見・修正。両ディレクトリをzip対象に追加し実機確認済み                                                                                             |
