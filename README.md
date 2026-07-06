@@ -13,7 +13,9 @@
 ├── 004_portfolio/                 # Astro SSR ポートフォリオサイト
 ├── 005_Zenn_Mid_Article_Bot/      # Zenn中級者向け技術記事自動生成ボット（毎月2回）
 ├── 006_Zer0_CryptoBot/            # 仮想通貨自動売買Bot（BTC/ETH/SOL・信用取引・30分毎ポジション管理）
-└── 007_Zer0_TouringApp/           # 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）
+├── 007_Zer0_TouringApp/           # 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）
+├── 100_Ritsuan/                   # 会社（Ritsuan）関連プロジェクト格納フォルダ（非公開）
+└── 110_work_research/             # 業務検証用フォルダ（非公開）
 ```
 
 ## 運用ルール
@@ -33,3 +35,5 @@
 | `005_Zenn_Mid_Article_Bot`  | 毎月1日・15日21時にAWS中級者向けZenn技術記事を自動生成・S3保存                                  | 稼働中     |
 | `006_Zer0_CryptoBot`        | BTC/ETH/SOLをBinanceシグナル+bitbank信用取引で自動売買（4時間毎シグナル・30分毎ポジション管理） | 稼働中     |
 | `007_Zer0_TouringApp`       | 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）                                   | 稼働中     |
+| `100_Ritsuan`               | 会社（Ritsuan）関連プロジェクト格納フォルダ。`001_WP_Blog_Bot`（WP自動投稿Bot）は情報開示待ちで未着手 | 準備中     |
+| `110_work_research`         | 業務検証用フォルダ。`cw-alarm-updater`（EC2/FSxリストア後にCloudWatchアラームのディメンションを自動更新するLambda） | 検証完了   |
