@@ -6,6 +6,9 @@ import time
 import boto3
 import datetime
 from botocore.config import Config
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 try:
     from diagram_generator import generate_diagrams
 except ImportError:
@@ -45,7 +48,12 @@ OUTPUT_KEEP_MAX = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
 
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/mid-article-bot/recent-topics"
-RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "4"))
+# 16トピック中、除外しすぎて即リセットにならない範囲で最大限除外する。
+# 旧デフォルト4だと最短2ヶ月強で同一トピックが再登場し、記事タイトルが完全一致し得た
+RECENT_TOPICS_LIMIT = int(os.environ.get("RECENT_TOPICS_LIMIT", "12"))
+
+# SSM: トピックごとの累計生成回数（再登場時のタイトル重複防止用サフィックスに使用）
+SSM_PARAM_OCCURRENCE = "/mid-article-bot/topic-occurrence"
 
 # ─── Bedrock 呼び出しパラメータ（定数化） ────────────────────────────────────
 BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
@@ -244,7 +252,7 @@ AWS_TOPICS = [
     },
 ]
 
-# ─── AWS公式ドキュメント URL マップ（primary_service キー） ───────────────────
+# ─── AWS公式ドキュメント URL マップ（サービスIDキー） ─────────────────────────
 DOCS_URL_MAP: dict[str, str] = {
     "apigateway":    "https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/welcome.html",
     "cloudfront":    "https://docs.aws.amazon.com/ja_jp/AmazonCloudFront/latest/DeveloperGuide/Introduction.html",
@@ -263,6 +271,62 @@ DOCS_URL_MAP: dict[str, str] = {
     "xray":          "https://docs.aws.amazon.com/ja_jp/xray/latest/devguide/aws-xray.html",
     "rds":           "https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/Welcome.html",
     "glue":          "https://docs.aws.amazon.com/ja_jp/glue/latest/dg/what-is-glue.html",
+    # ── v2.9で追加: 各トピック3サービス全件の根拠ドキュメント取得用 ──
+    "lambda":              "https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/welcome.html",
+    "dynamodb":            "https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/Introduction.html",
+    "s3":                  "https://docs.aws.amazon.com/ja_jp/AmazonS3/latest/userguide/Welcome.html",
+    "s3_crr":              "https://docs.aws.amazon.com/ja_jp/AmazonS3/latest/userguide/replication.html",
+    "acm":                 "https://docs.aws.amazon.com/ja_jp/acm/latest/userguide/acm-overview.html",
+    "alb":                 "https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/introduction.html",
+    "ecr":                 "https://docs.aws.amazon.com/ja_jp/AmazonECR/latest/userguide/what-is-ecr.html",
+    "sqs":                 "https://docs.aws.amazon.com/ja_jp/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html",
+    "opensearch_serverless": "https://docs.aws.amazon.com/ja_jp/opensearch-service/latest/developerguide/serverless.html",
+    "codebuild":           "https://docs.aws.amazon.com/ja_jp/codebuild/latest/userguide/welcome.html",
+    "step_functions":      "https://docs.aws.amazon.com/ja_jp/step-functions/latest/dg/welcome.html",
+    "athena":              "https://docs.aws.amazon.com/ja_jp/athena/latest/ug/what-is.html",
+    "budgets":             "https://docs.aws.amazon.com/ja_jp/cost-management/latest/userguide/budgets-managing-costs.html",
+    "security_hub":        "https://docs.aws.amazon.com/ja_jp/securityhub/latest/userguide/what-is-securityhub.html",
+    "control_tower":       "https://docs.aws.amazon.com/ja_jp/controltower/latest/userguide/what-is-control-tower.html",
+    "iam_identity_center": "https://docs.aws.amazon.com/ja_jp/singlesignon/latest/userguide/what-is.html",
+}
+
+# ─── トピックの services 表記文字列 → DOCS_URL_MAP キー ───────────────────────
+# AWS_TOPICS の services リストに現れる文字列と厳密に一致させる（存在しない組み合わせは
+# 取得スキップになるだけで安全）
+_SERVICE_NAME_TO_DOCS_ID: dict[str, str] = {
+    "API Gateway": "apigateway",
+    "Lambda": "lambda",
+    "DynamoDB": "dynamodb",
+    "S3": "s3",
+    "CloudFront": "cloudfront",
+    "ACM": "acm",
+    "ECS Fargate": "ecs",
+    "ALB": "alb",
+    "ECR": "ecr",
+    "Kinesis Data Streams": "kinesis",
+    "X-Ray": "xray",
+    "Route 53": "route53",
+    "RDS": "rds",
+    "S3 Cross-Region Replication": "s3_crr",
+    "SNS": "sns",
+    "SQS": "sqs",
+    "Amazon Bedrock": "bedrock",
+    "OpenSearch Serverless": "opensearch_serverless",
+    "CodePipeline": "codepipeline",
+    "CodeBuild": "codebuild",
+    "SageMaker AI": "sagemaker",
+    "Step Functions": "step_functions",
+    "CloudTrail": "cloudtrail",
+    "Athena": "athena",
+    "Cost Explorer": "cost_explorer",
+    "AWS Budgets": "budgets",
+    "GuardDuty": "guardduty",
+    "Security Hub": "security_hub",
+    "AWS Backup": "backup",
+    "AWS Organizations": "organizations",
+    "Control Tower": "control_tower",
+    "IAM Identity Center": "iam_identity_center",
+    "AWS Glue": "glue",
 }
 
 # ─── Zennフロントマター用メタ情報 ─────────────────────────────────────────────
@@ -563,6 +627,46 @@ def save_topic_to_ssm(topic_id: str):
         print(f"SSM書き込みエラー（無視して続行）: {e}")
 
 
+def get_topic_occurrence(topic_id: str) -> int:
+    """SSM からトピックの累計生成回数を取得する（0=初回）。
+    RECENT_TOPICS_LIMIT引き上げでも全トピック消化後は再登場し得るため、
+    再登場時に記事タイトルへ回次サフィックスを付与し完全一致を避ける。
+    """
+    try:
+        response = ssm.get_parameter(Name=SSM_PARAM_OCCURRENCE)
+        counts = json.loads(response["Parameter"]["Value"])
+        return counts.get(topic_id, 0) if isinstance(counts, dict) else 0
+    except ssm.exceptions.ParameterNotFound:
+        return 0
+    except Exception as e:
+        print(f"[WARNING] SSM occurrence読み込みエラー（0として続行）: {e}")
+        return 0
+
+
+def increment_topic_occurrence(topic_id: str) -> None:
+    """トピックの累計生成回数をSSMに保存する（get_topic_occurrenceと同じ辞書を更新）"""
+    try:
+        response = ssm.get_parameter(Name=SSM_PARAM_OCCURRENCE)
+        counts = json.loads(response["Parameter"]["Value"])
+        if not isinstance(counts, dict):
+            counts = {}
+    except ssm.exceptions.ParameterNotFound:
+        counts = {}
+    except Exception as e:
+        print(f"[WARNING] SSM occurrence読み込みエラー（新規カウントとして続行）: {e}")
+        counts = {}
+    counts[topic_id] = counts.get(topic_id, 0) + 1
+    try:
+        ssm.put_parameter(
+            Name=SSM_PARAM_OCCURRENCE,
+            Value=json.dumps(counts),
+            Type="String",
+            Overwrite=True,
+        )
+    except Exception as e:
+        print(f"SSM occurrence書き込みエラー（無視して続行）: {e}")
+
+
 # ─── トピック選択 ─────────────────────────────────────────────────────────────
 
 def select_topic_with_bedrock(excluded_ids: list[str], model_id: str) -> dict:
@@ -613,12 +717,27 @@ architectureとusecaseが交互になるように選ぶと良いですが、純�
 
 # ─── 記事生成 ─────────────────────────────────────────────────────────────────
 
+DOCS_MAX_CHARS_PER_SERVICE = 2500  # 3サービス分を取得するため1件あたりの上限を絞る
+
+
 def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]:
     """Bedrock を使って記事を生成する。(article_text, is_truncated) を返す"""
-    docs_content = fetch_aws_docs(topic.get("primary_service", ""))
+    # v2.9: primary_service 1件だけでなく、トピックの3サービス全件から根拠情報を取得する
+    # （従来はハルシネーション抑制策が主軸1サービスにしか効いていなかった）
+    docs_parts = []
+    seen_ids: set[str] = set()
+    for svc in topic["services"]:
+        doc_id = _SERVICE_NAME_TO_DOCS_ID.get(svc, "")
+        if not doc_id or doc_id in seen_ids:
+            continue
+        seen_ids.add(doc_id)
+        content = fetch_aws_docs(doc_id, max_chars=DOCS_MAX_CHARS_PER_SERVICE)
+        if content:
+            docs_parts.append(f"### {svc}\n{content}")
+    docs_content = "\n\n".join(docs_parts)
     docs_section = (
         "## AWS公式ドキュメント（根拠情報）\n"
-        "以下はAWS公式ドキュメントから取得した情報です。技術的事実はこの内容を根拠として正確に記述し、矛盾しないようにしてください。\n"
+        "以下は各AWSサービスの公式ドキュメントから取得した情報です。技術的事実はこの内容を根拠として正確に記述し、矛盾しないようにしてください。\n"
         "ドキュメントに記載のない事実は、確実に知っている場合のみ記述し、不確かな場合は記述しないか「〜の場合があります」等の不確定表現を使ってください。\n\n"
         f"{docs_content}\n\n---\n"
         if docs_content else ""
@@ -822,7 +941,7 @@ def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
             print(f"古い記事フォルダ削除エラー（無視して続行）: {os.path.basename(folder)} — {e}")
 
 
-def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[str]]:
+def save_to_local(topic: dict, article: str, timestamp: str, occurrence: int = 1) -> tuple[str, list[str]]:
     """記事を MD ファイルに保存し、構成図 PNG も生成する。(mdパス, pngパスリスト) を返す"""
     output_dir = os.path.expanduser(OUTPUT_DIR)
     os.makedirs(output_dir, exist_ok=True)
@@ -850,8 +969,11 @@ def save_to_local(topic: dict, article: str, timestamp: str) -> tuple[str, list[
     meta = _ZENN_META.get(topic["id"], {"emoji": "☁️", "topics": ["aws", "architecture"]})
     topics_json = json.dumps(meta["topics"], ensure_ascii=False)
 
+    # 再登場（occurrence>=2）時は完全同一タイトルにならないよう回次サフィックスを付与する
+    title_suffix = f"（{occurrence}周目）" if occurrence >= 2 else ""
+
     full_content = f"""---
-title: "{topic['name']}：{topic['subtitle']}"
+title: "{topic['name']}：{topic['subtitle']}{title_suffix}"
 emoji: "{meta['emoji']}"
 type: "tech"
 topics: {topics_json}
@@ -923,6 +1045,95 @@ def validate_cli_in_article(article_text: str) -> list[str]:
     return issues
 
 
+# ─── 記事品質チェック（検出のみ・書き換えは行わない） ────────────────────────
+# v2.3→v2.4でAI自動修正機能（検出→書き換え）を撤回した教訓を踏まえ、
+# ここでは機械的に検出してメールで警告するだけに留め、記事本文には一切手を加えない。
+
+_REQUIRED_HEADING_KEYWORDS = ["アーキテクチャ", "選定理由", "構成手順", "コスト", "まとめ", "参考"]
+_BANNED_PHRASES = ["することができます", "本記事では", "ぜひ試してみてください"]
+_OUTDATED_RUNTIME_PATTERNS = ["python3.13", "python3.12", "python3.11", "nodejs20.x", "nodejs18.x"]
+
+
+def validate_article_quality(article_text: str) -> list[str]:
+    """プロンプトで要求している品質ルールのうち機械チェック可能なものを検出する。
+    見出しはテーマに応じた改題を許容しているため厳密な文字列一致ではなくキーワード部分一致で判定する。
+    """
+    issues = []
+
+    headings = [line for line in article_text.split("\n") if line.startswith("## ")]
+    heading_text = " ".join(headings)
+    for kw in _REQUIRED_HEADING_KEYWORDS:
+        if kw not in heading_text:
+            issues.append(f"見出しに「{kw}」を含むセクションが見当たりません")
+
+    for phrase in _BANNED_PHRASES:
+        if phrase in article_text:
+            issues.append(f"禁止表現「{phrase}」が含まれています")
+
+    if re.search(r"SageMaker(?! AI)", article_text):
+        issues.append("旧称「SageMaker」（正式には「SageMaker AI」）表記の可能性があります")
+
+    for pattern in _OUTDATED_RUNTIME_PATTERNS:
+        if pattern in article_text:
+            issues.append(f"旧Runtime表記「{pattern}」が含まれています")
+
+    for year in ("2023年", "2024年"):
+        if year in article_text:
+            issues.append(f"過去の年表記「{year}」が含まれています（本日の日付基準か確認してください）")
+
+    if len(article_text) < 3000:
+        issues.append(f"文字数が{len(article_text):,}文字と少なすぎます（生成失敗の可能性）")
+
+    print(f"[品質検証] 機械チェック完了 / 問題{len(issues)}件")
+    return issues
+
+
+def extract_article_outline(article_text: str) -> list[tuple[str, int]]:
+    """見出し（##/###）ごとの文字数を集計する（通知メールでのレビュー支援用）"""
+    lines = article_text.split("\n")
+    sections: list[tuple[str, int]] = []
+    current_heading = None
+    current_len = 0
+    for line in lines:
+        if line.startswith("## ") or line.startswith("### "):
+            if current_heading is not None:
+                sections.append((current_heading, current_len))
+            current_heading = line.lstrip("#").strip()
+            current_len = 0
+        elif current_heading is not None:
+            current_len += len(line)
+    if current_heading is not None:
+        sections.append((current_heading, current_len))
+    return sections
+
+
+# トピック別のレビュー着眼点（過去に実バグが見つかった箇所を中心に厳選、網羅は狙わない）
+_REVIEW_HINTS: dict[str, list[str]] = {
+    "cost_optimization": [
+        "Cost Explorer の GetCostAndUsage 等API呼び出しが$0.01/回と明記されているか",
+        "Budgets のコスト反映が最大24時間かかる旨が書かれているか",
+        "Savings Plans購入後のキャンセル不可・推奨額80〜90%スタートの記載があるか",
+    ],
+    "log_analytics": [
+        "Athenaのパーティション（Partition Projection等）の説明が省略されていないか",
+        "CloudTrailログのS3保存形式（gzip等）の記述が実態と合っているか",
+    ],
+    "security_hardening": [
+        "GuardDuty・Security Hubのリージョン別有効化が必要な点に触れているか",
+    ],
+    "microservices_base": [
+        "X-Rayのトレース有効化（Active Tracing設定）の手順が漏れていないか",
+    ],
+    "multi_region_dr": [
+        "Route 53ヘルスチェックの評価間隔・フェイルオーバー条件が具体的に書かれているか",
+    ],
+    "bedrock_rag": [
+        "Knowledge Base同期・チャンキング設定の説明が概念だけで終わっていないか",
+    ],
+}
+_DEFAULT_REVIEW_HINT = "料金・バージョン表記が最新か、AWS公式ドキュメントで確認してください"
+
+
 # ─── SES メール通知 ───────────────────────────────────────────────────────────
 
 def send_email_notification(
@@ -930,13 +1141,23 @@ def send_email_notification(
     timestamp: str, s3_url: str = "", is_truncated: bool = False,
     cfn_issues: list | None = None,
 ):
-    """SES でメール通知を送信する"""
+    """SES でメール通知を送信する（MD・PNG添付付き）"""
     import html as _html
     char_count = len(article)
     preview    = article[:300].replace("\n", " ")
     preview_html = _html.escape(preview)
     services_str = " + ".join(topic["services"])
     diagram_info = ", ".join(os.path.basename(p) for p in png_paths) if png_paths else "生成なし"
+
+    outline = extract_article_outline(article)
+    outline_text = "\n".join(f"  - {h}（約{c:,}文字）" for h, c in outline) or "  （見出しが検出できませんでした）"
+    outline_html = "".join(
+        f'<li>{_html.escape(h)} <span style="color:#888;">（約{c:,}文字）</span></li>' for h, c in outline
+    ) or "<li>（見出しが検出できませんでした）</li>"
+
+    review_hints = _REVIEW_HINTS.get(topic["id"], [_DEFAULT_REVIEW_HINT])
+    review_hints_text = "\n".join(f"  - {h}" for h in review_hints)
+    review_hints_html = "".join(f'<li>{_html.escape(h)}</li>' for h in review_hints)
 
     subject = (
         f"【⚠️ 記事が途中で切れています】{topic['name']} - {timestamp}"
@@ -980,6 +1201,12 @@ Zennに投稿する前に内容を必ず確認してください。
 - 生成日時: {timestamp}
 - 構成図PNG: {diagram_info}
 - S3保存先: {s3_url}
+
+■ 見出しアウトライン
+{outline_text}
+
+■ レビューチェックリスト（{topic['name']}）
+{review_hints_text}
 
 ■ 記事プレビュー（先頭300文字）
 {preview}...
@@ -1042,6 +1269,16 @@ Zennに投稿する前に内容を必ず確認してください。
     </table>
   </div>
 
+  <div style="background:#f0f7ff;padding:15px;border-radius:8px;margin:20px 0;">
+    <h3>見出しアウトライン</h3>
+    <ul style="margin:0;padding-left:16px;">{outline_html}</ul>
+  </div>
+
+  <div style="background:#f0f7ff;padding:15px;border-radius:8px;margin:20px 0;">
+    <h3>レビューチェックリスト</h3>
+    <ul style="margin:0;padding-left:16px;">{review_hints_html}</ul>
+  </div>
+
   <div style="background:#fff8e1;padding:15px;border-radius:8px;margin:20px 0;">
     <h3>記事プレビュー</h3>
     <p style="color:#555;">{preview_html}...</p>
@@ -1063,18 +1300,58 @@ Zennに投稿する前に内容を必ず確認してください。
 </html>
 """
 
-    ses.send_email(
-        Source=SES_SENDER_EMAIL,
-        Destination={"ToAddresses": [SES_RECIPIENT_EMAIL]},
-        Message={
-            "Subject": {"Data": subject, "Charset": "UTF-8"},
-            "Body": {
-                "Text": {"Data": body_text, "Charset": "UTF-8"},
-                "Html": {"Data": body_html, "Charset": "UTF-8"},
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = SES_SENDER_EMAIL
+    msg["To"] = SES_RECIPIENT_EMAIL
+
+    msg_body = MIMEMultipart("alternative")
+    msg_body.attach(MIMEText(body_text, "plain", "utf-8"))
+    msg_body.attach(MIMEText(body_html, "html", "utf-8"))
+    msg.attach(msg_body)
+
+    # MD・PNGを添付し、メールを開くだけでレビューを開始できるようにする。
+    # 添付自体の失敗は本文送信を止める理由にならないため個別にtry/exceptで囲む
+    try:
+        with open(md_path, "rb") as f:
+            md_part = MIMEApplication(f.read(), _subtype="markdown")
+        md_part.add_header("Content-Disposition", "attachment", filename=os.path.basename(md_path))
+        msg.attach(md_part)
+    except Exception as e:
+        print(f"MD添付エラー（無視して続行）: {e}")
+
+    for png_path in png_paths:
+        try:
+            with open(png_path, "rb") as f:
+                png_part = MIMEApplication(f.read(), _subtype="png")
+            png_part.add_header("Content-Disposition", "attachment", filename=os.path.basename(png_path))
+            msg.attach(png_part)
+        except Exception as e:
+            print(f"PNG添付エラー（無視して続行）: {e}")
+
+    try:
+        ses.send_raw_email(
+            Source=SES_SENDER_EMAIL,
+            Destinations=[SES_RECIPIENT_EMAIL],
+            RawMessage={"Data": msg.as_string()},
+        )
+        print(f"メール送信完了（添付付き）: {subject}")
+    except Exception as e:
+        # 添付付き送信が失敗しても記事自体はS3に保存済みのため、通知だけは
+        # 添付なしの通常メールにフォールバックして必ず届ける
+        print(f"添付付きメール送信失敗。添付なしでフォールバック送信します: {e}")
+        ses.send_email(
+            Source=SES_SENDER_EMAIL,
+            Destination={"ToAddresses": [SES_RECIPIENT_EMAIL]},
+            Message={
+                "Subject": {"Data": subject, "Charset": "UTF-8"},
+                "Body": {
+                    "Text": {"Data": body_text, "Charset": "UTF-8"},
+                    "Html": {"Data": body_html, "Charset": "UTF-8"},
+                },
             },
-        },
-    )
-    print(f"メール送信完了: {subject}")
+        )
+        print(f"メール送信完了（添付なしフォールバック）: {subject}")
 
 
 # ─── Lambda ハンドラ ──────────────────────────────────────────────────────────
@@ -1105,6 +1382,9 @@ def lambda_handler(event, context):
     print(f"  選択されたトピック: {topic['name']} ({topic['id']}) [{time.time()-_t:.1f}s]")
     print(f"  記事タイプ: {topic['article_type']}")
     print(f"  使用サービス: {', '.join(topic['services'])}")
+    # このトピックの累計生成回次（タイトル重複防止サフィックス用。実際の保存はStep 6で行う）
+    occurrence = get_topic_occurrence(topic["id"]) + 1
+    print(f"  このトピックの生成回次: {occurrence}回目")
 
     # Step 3: 記事生成
     _t = time.time()
@@ -1115,7 +1395,7 @@ def lambda_handler(event, context):
     # Step 4: ローカル保存 + 構成図生成
     _t = time.time()
     print("Step 4: ローカルに保存中（記事MD + 構成図PNG）...")
-    md_path, png_paths = save_to_local(topic, article, timestamp)
+    md_path, png_paths = save_to_local(topic, article, timestamp, occurrence)
     print(f"  MD保存完了: {md_path}")
     print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
 
@@ -1136,18 +1416,19 @@ def lambda_handler(event, context):
     # Step 6: SSM 更新
     print("Step 6: SSMにトピックを保存中...")
     save_topic_to_ssm(topic["id"])
+    increment_topic_occurrence(topic["id"])
 
-    # Step 7: AWS CLIコマンドチェック
+    # Step 7: 記事品質チェック（AWS CLI要素＋機械的な品質ルール、検出のみ）
     _t = time.time()
-    print("Step 7: AWS CLIコマンドをチェック中...")
+    print("Step 7: 記事の品質をチェック中...")
     try:
-        cfn_issues = validate_cli_in_article(article)
+        cfn_issues = validate_cli_in_article(article) + validate_article_quality(article)
         if cfn_issues:
-            print(f"  ⚠️ CLI検証問題: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
+            print(f"  ⚠️ 検証問題: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
         else:
-            print(f"  ✓ CLI検証問題なし [{time.time()-_t:.1f}s]")
+            print(f"  ✓ 検証問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
-        print(f"  CLIチェックスキップ（無視して続行）: {e}")
+        print(f"  品質チェックスキップ（無視して続行）: {e}")
         cfn_issues = []
 
     # Step 8: メール通知

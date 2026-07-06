@@ -299,6 +299,7 @@ def _draw_diagram(
     xlim: tuple = (0, 14),
     ylim: tuple = None,
     clusters: list = None,
+    directed: bool = False,
 ):
     """
     nodes   : [{'id': str, 'icon': str|None, 'label': str, 'x': float, 'y': float}]
@@ -306,6 +307,7 @@ def _draw_diagram(
     clusters: [{'label': str, 'x': float, 'y': float, 'w': float, 'h': float, 'color': str}]
     ylim    : None で自動計算（ノード・クラスターの範囲から余白付きで決定）
     figsize : None で xlim/ylim の比率から自動計算
+    directed: True で矢印付き（from→to）、False で無向の接続線
     """
     # ── クラスター枠がノードと重ならないよう自動パディング調整 ──────────────
     # ルール: アイコン端(HALF=0.55)から枠まで水平0.45・上0.55・下1.05以上確保
@@ -423,12 +425,14 @@ def _draw_diagram(
                 xy=(n2['x'], n2['y']),
                 xytext=(n1['x'], n1['y']),
                 arrowprops=dict(
-                    # 矢印なしの直線。services の並び順は必ずしも実際のデータフロー方向と
-                    # 一致しない（例: CloudFrontはS3から取得する側で逆向き）ため、
-                    # 誤った方向性を主張しないよう「連携している」ことだけを示す。
-                    arrowstyle='-', color='#555555', lw=1.5,
+                    # directed=Falseの場合は矢印なしの直線。services の並び順は必ずしも
+                    # 実際のデータフロー方向と一致しない（例: CloudFrontはS3から取得する側で
+                    # 逆向き）ため、_TOPIC_FLOWSで人手検証済みの向きが定義されているトピックのみ
+                    # directed=Trueで矢印を描く（誤った方向性を主張しない安全策）。
+                    arrowstyle='-|>' if directed else '-', color='#555555', lw=1.5,
                     shrinkA=SHRINK, shrinkB=SHRINK,
                     connectionstyle='arc3,rad=0.0',
+                    mutation_scale=16 if directed else 1,
                 ),
                 zorder=3,
             )
@@ -535,13 +539,95 @@ def _label_for_service(name: str) -> str:
     return _SERVICE_LABEL_OVERRIDE.get(name, name)
 
 
-def _diagram_generic(topic_name: str, services: list[str], output_path: str):
+# ─── トピック別の検証済みデータフロー（矢印の安全な復活用） ──────────────────
+# サービス間の関係性は一律の並び順推定ではなく人手で技術的に検証した上でのみ定義する。
+# 制約: edges は必ず order 内で隣接するペアのみを結ぶこと（非隣接ペアを結ぶと矢印が
+# 中間ノードを貫通しCLAUDE.mdの構成図ルールに反するため）。安全に定義できない
+# トピック（3サービスが単一方向のパイプラインでなく並列的な構成要素の場合）は
+# あえて定義せず、_diagram_generic側で無向線にフォールバックさせる。
+_TOPIC_FLOWS: dict[str, dict] = {
+    "serverless_ec": {
+        "order": ["API Gateway", "Lambda", "DynamoDB"],
+        "edges": [("API Gateway", "Lambda"), ("Lambda", "DynamoDB")],
+    },
+    "static_web_hosting": {
+        "order": ["S3", "CloudFront", "ACM"],
+        "edges": [("CloudFront", "S3"), ("ACM", "CloudFront")],
+    },
+    "container_platform": {
+        "order": ["ALB", "ECS Fargate", "ECR"],
+        "edges": [("ALB", "ECS Fargate"), ("ECR", "ECS Fargate")],
+    },
+    "event_driven_pipeline": {
+        "order": ["Kinesis Data Streams", "Lambda", "S3"],
+        "edges": [("Kinesis Data Streams", "Lambda"), ("Lambda", "S3")],
+    },
+    "microservices_base": {
+        "order": ["API Gateway", "Lambda", "X-Ray"],
+        "edges": [("API Gateway", "Lambda"), ("Lambda", "X-Ray")],
+    },
+    # multi_region_dr: Route 53 / RDS / S3 CRR は独立したDR構成要素で単一方向の
+    # パイプラインではないため未定義（無向線にフォールバック）
+    "realtime_notify": {
+        "order": ["SNS", "SQS", "Lambda"],
+        "edges": [("SNS", "SQS"), ("SQS", "Lambda")],
+    },
+    "bedrock_rag": {
+        "order": ["S3", "Amazon Bedrock", "OpenSearch Serverless"],
+        "edges": [("S3", "Amazon Bedrock"), ("Amazon Bedrock", "OpenSearch Serverless")],
+    },
+    "cicd_pipeline": {
+        "order": ["CodePipeline", "CodeBuild", "ECR"],
+        "edges": [("CodePipeline", "CodeBuild"), ("CodeBuild", "ECR")],
+    },
+    "ml_pipeline": {
+        "order": ["Step Functions", "SageMaker AI", "S3"],
+        "edges": [("Step Functions", "SageMaker AI"), ("SageMaker AI", "S3")],
+    },
+    "log_analytics": {
+        "order": ["CloudTrail", "S3", "Athena"],
+        "edges": [("CloudTrail", "S3"), ("S3", "Athena")],
+    },
+    # cost_optimization: Cost Explorer / Budgets / Lambda は並列的なコスト統制ツールで
+    # 単一方向のパイプラインではないため未定義（無向線にフォールバック）
+    "security_hardening": {
+        "order": ["CloudTrail", "GuardDuty", "Security Hub"],
+        "edges": [("CloudTrail", "GuardDuty"), ("GuardDuty", "Security Hub")],
+    },
+    "backup_dr": {
+        "order": ["RDS", "AWS Backup", "DynamoDB"],
+        "edges": [("AWS Backup", "RDS"), ("AWS Backup", "DynamoDB")],
+    },
+    "multi_account": {
+        "order": ["AWS Organizations", "Control Tower", "IAM Identity Center"],
+        "edges": [("Control Tower", "AWS Organizations"), ("Control Tower", "IAM Identity Center")],
+    },
+    "data_lake": {
+        "order": ["S3", "AWS Glue", "Athena"],
+        "edges": [("S3", "AWS Glue"), ("AWS Glue", "Athena")],
+    },
+}
+
+
+def _diagram_generic(topic_id: str, topic_name: str, services: list[str], output_path: str):
     """トピックの services リストから直接ノードを組み立てる汎用フロー図。
     手作業のトピック別ハードコード図は、記事本文（services準拠）との不整合が
     繰り返し発生したため廃止し、この関数に一本化した。servicesと図が構造的に
     一致するため、本文と図が食い違うバグが原理的に起きない。
+    _TOPIC_FLOWSに人手検証済みの定義があるトピックのみ有向矢印を描き、
+    それ以外は従来どおり無向の接続線にフォールバックする。
     """
-    n = len(services)
+    flow = _TOPIC_FLOWS.get(topic_id)
+    directed = flow is not None
+    ordered_services = flow["order"] if flow else services
+    # flow定義がAWS_TOPICSのservices実体と食い違っていた場合（記事本文との不整合を防ぐため）
+    # 安全側の無向線モードにフォールバックする
+    if flow and sorted(ordered_services) != sorted(services):
+        print(f"[diagram_generator][WARNING] '{topic_id}' のflow定義がservicesと不一致のため無向線にフォールバックします")
+        ordered_services = services
+        directed = False
+
+    n = len(ordered_services)
     spacing = 4.2
     nodes = [
         {
@@ -551,11 +637,17 @@ def _diagram_generic(topic_name: str, services: list[str], output_path: str):
             "x": 1.5 + i * spacing,
             "y": 3.5,
         }
-        for i, svc in enumerate(services)
+        for i, svc in enumerate(ordered_services)
     ]
-    # ラベルなしの接続線のみ（servicesの並び順が実際のデータフロー方向と
-    # 一致するとは限らないため、「データ連携」等の特定の関係性は主張しない）
-    edges = [(f"n{i}", f"n{i+1}") for i in range(n - 1)]
+
+    if directed:
+        name_to_id = {svc: f"n{i}" for i, svc in enumerate(ordered_services)}
+        edges = [(name_to_id[a], name_to_id[b]) for a, b in flow["edges"]]
+    else:
+        # ラベルなしの接続線のみ（servicesの並び順が実際のデータフロー方向と
+        # 一致するとは限らないため、「データ連携」等の特定の関係性は主張しない）
+        edges = [(f"n{i}", f"n{i+1}") for i in range(n - 1)]
+
     title = f"{topic_name} – 構成図"
     # サービス数が変わってもノードが xlim の外にクリップされないよう、
     # ノード数に応じて右端の余白を動的に確保する（既定14はn=3までカバー）
@@ -564,13 +656,13 @@ def _diagram_generic(topic_name: str, services: list[str], output_path: str):
     # トピックによってグローバルサービス（CloudFront/Route 53等）が混在するため、
     # 特定リージョンを断定せず汎用的な "AWS Cloud" 枠にする
     cluster = _outer_cluster(nodes, label="AWS Cloud", icon="aws_cloud_logo")
-    _draw_diagram(title, nodes, edges, output_path, xlim=xlim, clusters=[cluster])
+    _draw_diagram(title, nodes, edges, output_path, xlim=xlim, clusters=[cluster], directed=directed)
 
 
 def generate_diagrams(topic: dict, base_path: str) -> list[str]:
     """
     指定トピックの構成図1枚を生成し、PNGパスのリストを返す。
-    topic     : AWS_TOPICS の要素（"name"・"services" を使用）
+    topic     : AWS_TOPICS の要素（"id"・"name"・"services" を使用）
     base_path : 拡張子なしのパス（例: /tmp/20260501_210000_serverless_ec_diagram）
     """
     services = topic.get("services") or []
@@ -580,7 +672,7 @@ def generate_diagrams(topic: dict, base_path: str) -> list[str]:
 
     out_path = f"{base_path}_1.png"
     try:
-        _diagram_generic(topic["name"], services, out_path)
+        _diagram_generic(topic.get("id", ""), topic["name"], services, out_path)
         print(f"  PNG生成完了: {out_path}")
         return [out_path]
     except Exception as e:
