@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v0.3 (2026-07-07)
+
+- SES送信ドメイン`info.zer0-infra.com`をドメインID（Easy DKIM）として検証。CloudFormationテンプレート（`cfn-ses-domain.yaml`、スタック名`zer0-nyusatsu-ses-domain`）で管理し、DKIM CNAMEレコード3件をお名前.com側DNSに登録して検証成功（`VerificationStatus: SUCCESS`）
+
 ## v0.2 (2026-07-07)
 
 - Fable調査で対象エリアを横浜市に確定（愛知県は規約の目的外利用禁止条項がグレーのため見送り、横浜市はGET URLのみで取得可・著作権ポリシーで事実データの自由利用が明記されており法的にクリーン）

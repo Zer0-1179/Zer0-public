@@ -1,0 +1,242 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Nyusatsu Notify Bot (008) - Inbound mail relay for nyusatsu@zer0-infra.com.
+  SES receives mail into S3, a Lambda forwards it to the owner's mailbox via
+  SES, and a custom resource activates the SES receipt rule set (no native
+  CloudFormation resource exists for that account-level setting).
+
+# -----------------------------------------------
+# Parameters
+# 受信アドレス・転送元(検証済みドメイン)アドレスをパラメータ化する。
+# -----------------------------------------------
+Parameters:
+  ReceivingAddress:
+    Type: String
+    Default: nyusatsu@zer0-infra.com
+    Description: SESで受信する問合せ用メールアドレス
+  ForwardFromAddress:
+    Type: String
+    Default: relay@info.zer0-infra.com
+    Description: 転送メールのSource（SESで検証済みのinfo.zer0-infra.comドメイン配下）
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues:
+      - 7
+      - 14
+      - 30
+    Description: Lambda実行ログの保持日数
+
+# -----------------------------------------------
+# Resources
+# S3(受信メール一時保管) -> Lambda(転送) の非同期パイプラインと、
+# SES受信ルールセット・ルール、ルールセット有効化用カスタムリソースを定義する。
+# -----------------------------------------------
+Resources:
+  MailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: zer0-nyusatsu-mail-s3
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-incoming-mail
+            Status: Enabled
+            Prefix: incoming/
+            ExpirationInDays: 30
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ForwarderFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: incoming/
+    DependsOn:
+      - ForwarderInvokePermission
+
+  MailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSESPuts
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${MailBucket}/incoming/*"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  ForwarderLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/zer0-nyusatsu-mail-forwarder
+      RetentionInDays: !Ref LogRetentionDays
+
+  # IAM Role for the mail forwarder Lambda function.
+  # Description must stay ASCII-only per project convention.
+  ForwarderFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zer0-nyusatsu-mail-forwarder-role
+      Description: Execution role for Nyusatsu inbound mail forwarder Lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: zer0-nyusatsu-mail-forwarder-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ForwarderLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub "arn:aws:s3:::${MailBucket}/incoming/*"
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/notify-email
+              - Effect: Allow
+                Action:
+                  - ses:SendRawEmail
+                Resource: "*"
+
+  ForwarderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zer0-nyusatsu-mail-forwarder
+      Description: nyusatsu@zer0-infra.com宛メールを個人メールアドレスへ転送する
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt ForwarderFunctionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          NOTIFY_EMAIL_PARAM_NAME: /zer0/008-nyusatsu/notify-email
+          FORWARD_FROM_ADDRESS: !Ref ForwardFromAddress
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              # Placeholder. Deployed via `aws lambda update-function-code`
+              # per CLAUDE.md rule (no SAM, no S3 build artifact).
+              return {"statusCode": 200, "body": "placeholder"}
+    DependsOn:
+      - ForwarderLogGroup
+
+  ForwarderInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ForwarderFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:aws:s3:::zer0-nyusatsu-mail-s3"
+
+  NyusatsuReceiptRuleSet:
+    Type: AWS::SES::ReceiptRuleSet
+    Properties:
+      RuleSetName: zer0-nyusatsu-rules
+
+  NyusatsuReceiptRule:
+    Type: AWS::SES::ReceiptRule
+    Properties:
+      RuleSetName: !Ref NyusatsuReceiptRuleSet
+      Rule:
+        Name: zer0-nyusatsu-inbound
+        Enabled: true
+        ScanEnabled: true
+        TlsPolicy: Optional
+        Recipients:
+          - !Ref ReceivingAddress
+        Actions:
+          - S3Action:
+              BucketName: !Ref MailBucket
+              ObjectKeyPrefix: incoming/
+    DependsOn:
+      - MailBucketPolicy
+
+  # IAM Role for the custom resource that activates the SES receipt rule
+  # set (no native CloudFormation resource exists for this account-level
+  # setting, so a Lambda-backed custom resource calls the SES API).
+  ActivateRuleSetFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zer0-nyusatsu-activate-ruleset-role
+      Description: Execution role for SES active receipt rule set custom resource
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: zer0-nyusatsu-activate-ruleset-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ses:SetActiveReceiptRuleSet
+                Resource: "*"
+
+  ActivateRuleSetFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zer0-nyusatsu-activate-ruleset
+      Description: CloudFormationカスタムリソース経由でSES受信ルールセットを有効化する
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt ActivateRuleSetFunctionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              # Placeholder. Deployed via `aws lambda update-function-code`
+              # per CLAUDE.md rule (no SAM, no S3 build artifact).
+              return {"statusCode": 200, "body": "placeholder"}
+
+  ActivateRuleSet:
+    Type: Custom::ActivateSesRuleSet
+    Properties:
+      ServiceToken: !GetAtt ActivateRuleSetFunction.Arn
+      RuleSetName: !Ref NyusatsuReceiptRuleSet
+    DependsOn:
+      - NyusatsuReceiptRule
+
+# -----------------------------------------------
+# Outputs
+# 受信バケット名を運用確認用に出力する。
+# -----------------------------------------------
+Outputs:
+  MailBucketName:
+    Description: S3 bucket name for incoming raw mail
+    Value: !Ref MailBucket
