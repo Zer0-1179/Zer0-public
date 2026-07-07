@@ -48,72 +48,76 @@ def _load(key):
 def draw():
     HALF = 0.55
 
+    # 3本の独立した横方向レーン(収集Bot/LP事前登録/問合せ転送)を縦に並べ、
+    # 各レーンのLambdaから共有のSES送信ノード(ses_out)へは、他レーンのノード
+    # が存在しない右側の専用縦帯(x=19.5付近)を通って合流させる。
     nodes = [
-        # --- 収集Bot（既存） ---
-        {'id': 'eb',       'icon': 'eventbridge', 'label': 'EventBridge\n毎日 6:00 JST',            'x': 2.3,  'y': 9.4},
-        {'id': 'lambda',   'icon': 'lambda',      'label': 'Lambda\ncollector',                     'x': 6.3,  'y': 9.4},
-        {'id': 'dlq',      'icon': 'sqs',         'label': 'SQS (DLQ)',                             'x': 6.3,  'y': 7.2},
-        {'id': 'ssm',      'icon': 'ssm',         'label': 'SSM\n設定値',                            'x': 10.3, 'y': 9.6},
-        {'id': 'cw',       'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                      'x': 10.3, 'y': 7.4},
-        {'id': 'ses_out',  'icon': 'ses',         'label': 'SES\n送信(info.zer0-infra.com)',        'x': 14.3, 'y': 8.5},
+        # --- レーン1: 収集Bot(既存)  y=12.0 ---
+        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n毎日 6:00 JST',          'x': 2.0,  'y': 12.0},
+        {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\ncollector',                   'x': 6.0,  'y': 12.0},
+        {'id': 'dlq',     'icon': 'sqs',         'label': 'SQS (DLQ)',                           'x': 6.0,  'y': 9.7},
+        {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\n設定値',                          'x': 9.5,  'y': 10.6},
+        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                    'x': 9.5,  'y': 8.1},
+        {'id': 'site',    'icon': 'user',        'label': '横浜市 入札サイト\n(公開情報)',        'x': 24.5, 'y': 12.0},
 
-        # --- LP・事前登録（新規） ---
-        {'id': 'cf',        'icon': 'cloudfront', 'label': 'CloudFront\nnyusatsu.zer0-infra.com',   'x': 6.3,  'y': 5.3},
-        {'id': 's3lp',      'icon': 's3',         'label': 'S3\nLP静的サイト',                       'x': 2.3,  'y': 5.3},
-        {'id': 'apigw',     'icon': 'api_gateway','label': 'API Gateway\n事前登録API',               'x': 10.3, 'y': 5.3},
-        {'id': 'lambda_wl', 'icon': 'lambda',     'label': 'Lambda\nlp-waitlist',                   'x': 14.3, 'y': 5.3},
-        {'id': 'ddb_wl',    'icon': 'dynamodb',   'label': 'DynamoDB\nlp-waitlist',                 'x': 18.0, 'y': 5.3},
+        # --- レーン2: LP事前登録(新規)  y=6.5 ---
+        {'id': 'browser', 'icon': 'user',        'label': 'LP利用者\n(ブラウザ)',                 'x': 0.8,  'y': 6.5},
+        {'id': 'cf',      'icon': 'cloudfront',  'label': 'CloudFront\nnyusatsu.zer0-infra.com',  'x': 5.0,  'y': 6.5},
+        {'id': 's3lp',    'icon': 's3',          'label': 'S3\nLP静的サイト',                     'x': 5.0,  'y': 4.2},
+        {'id': 'apigw',   'icon': 'api_gateway', 'label': 'API Gateway\n事前登録API',             'x': 9.5,  'y': 6.5},
+        {'id': 'lambda_wl','icon': 'lambda',     'label': 'Lambda\nlp-waitlist',                  'x': 13.5, 'y': 6.5},
+        {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'DynamoDB\nlp-waitlist',                'x': 13.5, 'y': 3.8},
 
-        # --- 問合せメール転送（新規） ---
-        {'id': 'ses_in',    'icon': 'ses',        'label': 'SES 受信\nnyusatsu@zer0-infra.com',      'x': 14.3, 'y': 2.2},
-        {'id': 's3mail',    'icon': 's3',         'label': 'S3\n受信メール(一時)',                    'x': 10.3, 'y': 2.2},
-        {'id': 'lambda_fw', 'icon': 'lambda',     'label': 'Lambda\nmail-forwarder',                'x': 6.3,  'y': 2.2},
+        # --- レーン3: 問合せメール転送(新規)  y=1.0 ---
+        {'id': 'inquirer','icon': 'user',        'label': '問合せ送信者\n(外部)',                 'x': 0.8,  'y': 1.0},
+        {'id': 'ses_in',  'icon': 'ses',         'label': 'SES 受信\nnyusatsu@zer0-infra.com',    'x': 5.0,  'y': 1.0},
+        {'id': 's3mail',  'icon': 's3',          'label': 'S3\n受信メール(一時)',                 'x': 9.5,  'y': 1.0},
+        {'id': 'lambda_fw','icon': 'lambda',     'label': 'Lambda\nmail-forwarder',               'x': 13.5, 'y': 1.0},
 
-        # --- 外部アクター ---
-        {'id': 'site',     'icon': 'user', 'label': '横浜市 入札サイト\n(公開情報)',   'x': 21.3, 'y': 9.4},
-        {'id': 'browser',  'icon': 'user', 'label': 'LP利用者\n(ブラウザ)',           'x': 2.3,  'y': 2.2},
-        {'id': 'inquirer', 'icon': 'user', 'label': '問合せ送信者\n(外部)',           'x': 2.3,  'y': 0.4},
-        {'id': 'recv',     'icon': 'user', 'label': '通知先/転送先\nメール',          'x': 21.3, 'y': 5.3},
+        # --- 共有: SES送信・通知先(右端の専用縦帯) ---
+        {'id': 'ses_out', 'icon': 'ses',         'label': 'SES 送信\ninfo.zer0-infra.com',        'x': 20.5, 'y': 6.5},
+        {'id': 'recv',    'icon': 'user',        'label': '通知先/転送先\nメール',                'x': 24.5, 'y': 6.5},
     ]
 
     edges = [
-        ('eb',       'lambda',  ''),
-        ('lambda',   'site',    'GET収集'),
-        ('lambda',   'ssm',     '設定取得'),
-        ('lambda',   'ses_out', ''),
-        ('lambda',   'cw',      ''),
-        ('lambda',   'dlq',     ''),
-        ('ses_out',  'recv',    ''),
+        ('eb',        'lambda',   ''),
+        ('lambda',    'site',     'GET収集'),
+        ('lambda',    'ssm',      '設定取得'),
+        ('lambda',    'cw',       ''),
+        ('lambda',    'dlq',      ''),
+        ('lambda',    'ses_out',  ''),
 
-        ('browser',  'cf',      'HTTPS'),
-        ('cf',       's3lp',    ''),
-        ('browser',  'apigw',   '事前登録\nfetch'),
-        ('apigw',    'lambda_wl', ''),
-        ('lambda_wl','ddb_wl',  ''),
-        ('lambda_wl','ses_out', '登録通知'),
+        ('browser',   'cf',       'HTTPS'),
+        ('cf',        's3lp',     ''),
+        ('browser',   'apigw',    '事前登録\nfetch'),
+        ('apigw',     'lambda_wl',''),
+        ('lambda_wl', 'ddb_wl',   ''),
+        ('lambda_wl', 'ses_out',  '登録通知'),
 
-        ('inquirer', 'ses_in',  'メール送信'),
-        ('ses_in',   's3mail',  ''),
-        ('s3mail',   'lambda_fw', ''),
-        ('lambda_fw','ses_out', '転送'),
+        ('inquirer',  'ses_in',   'メール送信'),
+        ('ses_in',    's3mail',   ''),
+        ('s3mail',    'lambda_fw',''),
+        ('lambda_fw', 'ses_out',  '転送'),
+
+        ('ses_out',   'recv',     ''),
     ]
 
     clusters = [
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 0.9, 'y': 1.1, 'w': 18.4, 'h': 8.9,
+            'x': 3.6, 'y': -0.4, 'w': 18.5, 'h': 13.4,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
             'label': '外部（非AWS）', 'icon': None,
-            'x': 19.9, 'y': 3.9, 'w': 2.6, 'h': 6.6,
+            'x': -0.6, 'y': -0.4, 'w': 2.6, 'h': 8.0,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
         {
             'label': '外部（非AWS）', 'icon': None,
-            'x': 0.5, 'y': -0.5, 'w': 2.6, 'h': 3.5,
+            'x': 23.0, 'y': 4.6, 'w': 2.9, 'h': 8.6,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
@@ -137,9 +141,9 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
-    fig, ax = plt.subplots(figsize=(20, 10), dpi=150)
-    ax.set_xlim(0, 23)
-    ax.set_ylim(-0.8, 10.2)
+    fig, ax = plt.subplots(figsize=(24, 13), dpi=150)
+    ax.set_xlim(-1.2, 26.2)
+    ax.set_ylim(-1.2, 13.6)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')
@@ -197,8 +201,8 @@ def draw():
             ax.text(mx, my + 0.18, label, ha='center', va='bottom',
                     fontsize=7, color='#666666',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
-                              edgecolor='none', alpha=0.85),
-                    zorder=4)
+                              edgecolor='none', alpha=0.9),
+                    zorder=5)
 
     for n in nodes:
         x, y = n['x'], n['y']
@@ -208,7 +212,7 @@ def draw():
                       aspect='auto', zorder=4, interpolation='bilinear')
         ax.text(x, y - HALF - 0.2, n['label'],
                 ha='center', va='top', fontsize=7.5,
-                color='#232F3E', fontweight='bold', zorder=5)
+                color='#232F3E', fontweight='bold', zorder=4.5)
 
     out = os.path.join(_BASE, 'images', '008_architecture.png')
     plt.tight_layout()

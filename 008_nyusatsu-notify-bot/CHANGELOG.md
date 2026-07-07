@@ -1,43 +1,9 @@
-# CHANGELOG
+# 008_Nyusatsu_Notify_Bot 変更履歴
 
-## v0.4 (2026-07-07)
-
-- SES送信元を個人Gmailアドレスからドメイン認証済みの`notify@info.zer0-infra.com`へ切替（`zer0-nyusatsu-notify-bot`スタックを`SesSenderEmail`パラメータ更新でデプロイ）
-- LP事前登録バックエンドを実装（`cfn-lp-backend.yaml`）: DynamoDB（`zer0-nyusatsu-lp-waitlist`、PAY_PER_REQUEST）+ API Gateway（HTTP API）+ Lambda（`zer0-nyusatsu-lp-waitlist`）。メールアドレスをDynamoDBに保存しSESで自分宛に通知。重複登録・不正メール形式の判定もLambda側で実装し、curlでの登録・重複・不正入力の3パターンを動作確認
-- 問合せメール受信転送を実装（`cfn-mail-relay.yaml`）: `nyusatsu@zer0-infra.com`宛メールをSES受信ルールでS3（`zer0-nyusatsu-mail-s3`）に保存し、Lambda（`zer0-nyusatsu-mail-forwarder`）が個人メールへ転送。SES受信ルールセットの有効化（`ses:SetActiveReceiptRuleSet`）はCloudFormationネイティブリソースが存在しないため、Lambdaバックエンドのカスタムリソース（`Custom::ActivateSesRuleSet`）で実施。S3への直接テストメール投入でLambda転送処理の動作確認済み
-  - 実装時、カスタムリソース用Lambdaのインライン`ZipFile`コードは実際には`index.<拡張子>`という固定ファイル名でパッケージされる仕様を見落とし、`Handler`を`lambda_function.lambda_handler`のままにしていたため`Runtime.ImportModuleError`でCustom Resourceが応答不能になり、スタックの作成・削除がそれぞれ約1時間（CloudFormationのカスタムリソース既定タイムアウト）ハング。`Handler: index.lambda_handler`に修正して解消。また、同Lambdaのロググループを明示的な`AWS::Logs::LogGroup`として管理していなかったため保持期限なしの野良ロググループが残っていたのを追加修正
-- LP静的サイトを実装（`lp/src/index.html`）: Apple風のスクロール連動アニメーション付き1枚LP。清掃・ビルメンテナンス業向けの課題提起・仕組み・対象エリア/業種・料金・FAQ・事前登録フォームを掲載
-- LPホスティングを構築（`lp/infra/certificate.yaml` + `lp/infra/cfn-lp-hosting.yaml`）: S3 + CloudFront + ACM証明書（`nyusatsu.zer0-infra.com`）の2段構成。CSPは`connect-src`にAPI GatewayエンドポイントのみS3+CloudFront配信で公開し、セキュリティヘッダー・CORS設定を確認済み
-- アーキテクチャ図（`images/008_architecture.png`）を新規リソース（LP・事前登録API・メール転送）を反映した内容に全面更新
-- MXレコード（`zer0-infra.com` apex、`inbound-smtp.ap-northeast-1.amazonaws.com`、優先度10）をお名前.comに追加。DNS反映待ち
-
-## v0.3 (2026-07-07)
-
-- SES送信ドメイン`info.zer0-infra.com`をドメインID（Easy DKIM）として検証。CloudFormationテンプレート（`cfn-ses-domain.yaml`、スタック名`zer0-nyusatsu-ses-domain`）で管理し、DKIM CNAMEレコード3件をお名前.com側DNSに登録して検証成功（`VerificationStatus: SUCCESS`）
-
-## v0.2 (2026-07-07)
-
-- Fable調査で対象エリアを横浜市に確定（愛知県は規約の目的外利用禁止条項がグレーのため見送り、横浜市はGET URLのみで取得可・著作権ポリシーで事実データの自由利用が明記されており法的にクリーン）
-- 横浜市「ヨコハマ・入札のとびら」の実ページ構造を調査（KokokuList=公告一覧、KokokuAnkenList=案件一覧、工事/物品/委託の3セクション構成、cp932エンコーディング）
-- 収集Lambda（`lambda/collector/lambda_function.py`）を実装
-  - 公告番号(kokoku_no)一覧取得→DynamoDBで未処理判定→「委託」セクションのみ正規表現で抽出→キーワードフィルタ→SES通知→処理済み記録
-  - 初回実行はブートストラップモード（既存分を通知なしで既読登録）
-- CloudFormationテンプレート（`cfn-nyusatsu-notify-bot.yaml`）を作成しデプロイ（Lambda/DynamoDB/SQS DLQ/SSM Parameter/EventBridge Rule/IAM Role、SAM不使用）
-- 実データでの動作確認完了
-  - ブートストラップ実行（81号）が300秒タイムアウト内に完走（初期実装ではbootstrap時も不要なsleepが入り244秒とタイムアウトに近かったため、bootstrap時はsleepをスキップするよう修正）
-  - 2回目以降の実行が新規0件で2秒程度に短縮されることを確認
-  - 未処理号を1件人為的に作成し、実データでのフェッチ→パース→キーワードマッチ→SES送信→DynamoDB記録の一連の流れがエラーなく完走することを確認
-- アーキテクチャ図（`images/008_architecture.png`）を作成
-- Stripe決済導入ガイド（`docs_payment_setup.md`）を作成。アカウント開設はユーザー自身の作業（KYC必須のため代行不可）と明記
-- README.mdを実装内容に合わせて全面更新
-
-## v0.1 (2026-07-07)
-
-- プロジェクト企画開始
-- Fableによる調査で以下を確定
-  - ビジネスモデル: 官公庁入札情報の自動収集→フィルタ→メール通知のサブスクサービス
-  - 価格帯: 月3,000〜5,000円のセルフサーブ帯（NJSS等の高価格帯とは別のニッチ）を狙う
-  - 第一ターゲット業種: 清掃・ビルメンテナンス業（許認可障壁が低く、個人・中小の参加実績が豊富なため）
-  - 決済: Stripe等の既存サービスを利用し自前決済システムは開発しない方針
-  - 法的リスク: 公開ページ・公式APIのみを対象とし、規約禁止サイトは除外、事実データのみを扱う
-- README.md作成、CloudFormation/Lambda等の実装は未着手
+| 日付       | バージョン | 内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-07 | v0.1       | プロジェクト企画開始。Fable調査でビジネスモデル（官公庁入札情報の自動収集→フィルタ→メール通知のサブスク）・価格帯（月3,000〜5,000円のセルフサーブ帯）・第一ターゲット業種（清掃・ビルメンテナンス業）・決済方針（Stripe等の既存サービス利用）・法的リスク（公開ページ/公式APIのみ対象、事実データのみ扱う）を確定。README.md作成、CFn/Lambda等の実装は未着手                                                                                                                                                                                                                     |
+| 2026-07-07 | v0.2       | 横浜市パイロット版を実装・デプロイ・動作確認完了。Fable調査で対象エリアを横浜市に確定（愛知県は規約の目的外利用禁止条項がグレーのため見送り）。収集Lambda（`lambda/collector/lambda_function.py`）を実装: 公告番号一覧取得→DynamoDBで未処理判定→「委託」セクションのみ正規表現抽出→キーワードフィルタ→SES通知→処理済み記録、初回はブートストラップモード。CFnテンプレート（`cfn-nyusatsu-notify-bot.yaml`）を作成しデプロイ（SAM不使用）。実データでの動作確認完了（ブートストラップ81号、未処理号1件のフル動作確認）。アーキテクチャ図・Stripe決済導入ガイド（`docs_payment_setup.md`）を作成                                                                                          |
+| 2026-07-07 | v0.3       | SES送信ドメイン`info.zer0-infra.com`をドメインID（Easy DKIM）として検証・CFn管理化（`cfn-ses-domain.yaml`、スタック`zer0-nyusatsu-ses-domain`）。DKIM CNAMEレコード3件をお名前.com側DNSに登録して検証成功（`VerificationStatus: SUCCESS`）                                                                                                                                                                                                                                                                                                                                     |
+| 2026-07-07 | v0.4       | LP事前登録バックエンド（DynamoDB+API Gateway HTTP API+Lambda、`cfn-lp-backend.yaml`）・問合せメール受信転送（SES受信ルール+S3+Lambda+カスタムリソース、`cfn-mail-relay.yaml`）・LP静的サイト（Apple風スクロールアニメーション、`lp/src/index.html`）・LPホスティング（S3+CloudFront+ACM、`nyusatsu.zer0-infra.com`）を追加。SES送信元を個人Gmailからドメイン認証済み`notify@info.zer0-infra.com`へ切替。`zer0-infra.com` apexもSESドメインIDとして追加検証（受信にはSES側のドメイン検証が別途必須なための追加対応）。MXレコード追加・DNS反映・実メールでの転送確認まで完了。**判明した制約**: カスタムリソース用LambdaはCFnから同期呼び出しされ応答必須のため、インライン`ZipFile`のHandlerは`index.<拡張子>`にする必要がある（`lambda_function.lambda_handler`のままだとImportModuleErrorでスタック作成・削除が各約1時間ハングする） |
+| 2026-07-07 | v0.5       | Fableレビュー反映。**高**: 構成図（`images/008_architecture.png`）がレイアウト規約に複数違反（矢印のアイコン貫通・クラスター重なり・auto-padding発火）していたため座標を全面組み直し。問合せメール転送Lambdaに非同期呼び出し失敗時のDLQ（`zer0-nyusatsu-mail-forwarder-dlq`）を追加し、大きな添付付きメールの転送失敗時にサイレント消失しないようにした。**中**: SES受信ルールセット無効化用カスタムリソースが削除時に無条件で全ルールセットを解除していたため、自分のルールセットがアクティブな場合のみ解除するよう修正。LPホスティングのCSP `connect-src` に生のAPI Gateway IDをハードコードしていたのを`ApiOrigin`パラメータ化。`lp/infra/certificate.yaml`を命名規則違反だったため`cfn-certificate.yaml`にリネームしセクションコメントを追加。**低**: LP事前登録Lambdaで通知メール送信失敗時も登録自体は成功として返すよう修正。`WaitlistTable`に`UpdateReplacePolicy: Retain`を追加。カスタムリソースの`urlopen`にタイムアウト指定を追加。README/システム仕様書/CHANGELOG.mdの変更履歴を他プロジェクトと同じ「日付\|バージョン\|内容」テーブル形式・古い順（末尾追記）に統一 |

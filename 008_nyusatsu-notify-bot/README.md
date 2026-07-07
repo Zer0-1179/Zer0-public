@@ -113,8 +113,8 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近3件のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-| バージョン | 日付 | 内容 |
-| ---------- | ---- | ---- |
-| v0.4 | 2026-07-07 | LP事前登録(DynamoDB+API Gateway+Lambda)・問合せメール転送(SES受信+S3+Lambda)・LP静的サイト(`nyusatsu.zer0-infra.com`、S3+CloudFront)を追加。SES送信元を`info.zer0-infra.com`へ切替。MXレコードは反映待ち |
-| v0.3 | 2026-07-07 | SES送信ドメイン`info.zer0-infra.com`をEasy DKIMで検証・CFn管理化（`zer0-nyusatsu-ses-domain`スタック） |
-| v0.2 | 2026-07-07 | 横浜市パイロット版を実装・デプロイ・動作確認完了。収集Lambda・DynamoDB・SES通知・EventBridge日次スケジュール・CFnテンプレート・構成図を整備 |
+| 日付 | バージョン | 内容 |
+| ---- | ---------- | ---- |
+| 2026-07-07 | v0.3 | SES送信ドメイン`info.zer0-infra.com`をEasy DKIMで検証・CFn管理化（`zer0-nyusatsu-ses-domain`スタック） |
+| 2026-07-07 | v0.4 | LP事前登録(DynamoDB+API Gateway+Lambda)・問合せメール転送(SES受信+S3+Lambda)・LP静的サイト(`nyusatsu.zer0-infra.com`、S3+CloudFront)を追加。SES送信元を`info.zer0-infra.com`へ切替。MXレコード反映・実メール転送まで確認済み |
+| 2026-07-07 | v0.5 | Fableレビュー反映。構成図のレイアウト規約違反を修正、メール転送LambdaにDLQ追加、CSPのAPI IDハードコード解消、その他中低優先度の指摘を修正 |

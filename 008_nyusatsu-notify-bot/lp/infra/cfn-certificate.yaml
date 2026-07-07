@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Zer0-nyusatsu-lp - ACM certificate for nyusatsu.zer0-infra.com (must deploy in us-east-1)
 
+# -----------------------------------------------
+# Resources
+# CloudFront用のACM証明書(us-east-1固定、DNS検証)を1件定義する。
+# -----------------------------------------------
 Resources:
 
   NyusatsuLpCertificate:
@@ -9,6 +13,10 @@ Resources:
       DomainName: nyusatsu.zer0-infra.com
       ValidationMethod: DNS
 
+# -----------------------------------------------
+# Outputs
+# cfn-lp-hosting.yaml へCertificateArnパラメータとして渡す値を出力する。
+# -----------------------------------------------
 Outputs:
   CertificateArn:
     Description: ACM certificate ARN for CloudFront

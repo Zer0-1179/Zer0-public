@@ -59,20 +59,26 @@ def lambda_handler(event, context):
             return _response(200, {"status": "already_registered"})
         raise
 
-    notify_email = _get_param(NOTIFY_EMAIL_PARAM_NAME)
-    sender_email = _get_param(SES_SENDER_PARAM_NAME)
-    ses.send_email(
-        Source=sender_email,
-        Destination={"ToAddresses": [notify_email]},
-        Message={
-            "Subject": {"Data": "[Nyusatsu LP] 事前登録がありました", "Charset": "UTF-8"},
-            "Body": {
-                "Text": {
-                    "Data": f"事前登録メールアドレス: {email}",
-                    "Charset": "UTF-8",
-                }
+    # 登録（DynamoDB書き込み）は既に成功しているため、オーナー通知メールが
+    # 失敗しても利用者にはエラーを返さない（再送すると already_registered に
+    # なるだけで実害はないが、登録できたのにエラー表示は避けたい）。
+    try:
+        notify_email = _get_param(NOTIFY_EMAIL_PARAM_NAME)
+        sender_email = _get_param(SES_SENDER_PARAM_NAME)
+        ses.send_email(
+            Source=sender_email,
+            Destination={"ToAddresses": [notify_email]},
+            Message={
+                "Subject": {"Data": "[Nyusatsu LP] 事前登録がありました", "Charset": "UTF-8"},
+                "Body": {
+                    "Text": {
+                        "Data": f"事前登録メールアドレス: {email}",
+                        "Charset": "UTF-8",
+                    }
+                },
             },
-        },
-    )
+        )
+    except Exception:
+        pass
 
     return _response(200, {"status": "registered"})
