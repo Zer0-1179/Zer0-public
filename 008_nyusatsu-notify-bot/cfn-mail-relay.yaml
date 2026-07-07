@@ -111,7 +111,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:DeleteObject
-                Resource: !Sub "arn:aws:s3:::${MailBucket}/incoming/*"
+                # ハードコードしたARN文字列を使用(MailBucketへの!Ref/!Sub参照は
+                # MailBucket→ForwarderFunction→ForwarderFunctionRole→MailBucket
+                # という循環依存をCFnに検出されるため)。バケット名はBucketNameで
+                # 固定済みなので実害はない。
+                Resource: "arn:aws:s3:::zer0-nyusatsu-mail-s3/incoming/*"
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
