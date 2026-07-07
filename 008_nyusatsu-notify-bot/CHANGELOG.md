@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v0.4 (2026-07-07)
+
+- SES送信元を個人Gmail（`sinnjibaby@gmail.com`）からドメイン認証済みの`notify@info.zer0-infra.com`へ切替（`zer0-nyusatsu-notify-bot`スタックを`SesSenderEmail`パラメータ更新でデプロイ）
+- LP事前登録バックエンドを実装（`cfn-lp-backend.yaml`）: DynamoDB（`zer0-nyusatsu-lp-waitlist`、PAY_PER_REQUEST）+ API Gateway（HTTP API）+ Lambda（`zer0-nyusatsu-lp-waitlist`）。メールアドレスをDynamoDBに保存しSESで自分宛に通知。重複登録・不正メール形式の判定もLambda側で実装し、curlでの登録・重複・不正入力の3パターンを動作確認
+- 問合せメール受信転送を実装（`cfn-mail-relay.yaml`）: `nyusatsu@zer0-infra.com`宛メールをSES受信ルールでS3（`zer0-nyusatsu-mail-s3`）に保存し、Lambda（`zer0-nyusatsu-mail-forwarder`）が個人メールへ転送。SES受信ルールセットの有効化（`ses:SetActiveReceiptRuleSet`）はCloudFormationネイティブリソースが存在しないため、Lambdaバックエンドのカスタムリソース（`Custom::ActivateSesRuleSet`）で実施。S3への直接テストメール投入でLambda転送処理の動作確認済み
+  - 実装時、カスタムリソース用Lambdaのインライン`ZipFile`コードは実際には`index.<拡張子>`という固定ファイル名でパッケージされる仕様を見落とし、`Handler`を`lambda_function.lambda_handler`のままにしていたため`Runtime.ImportModuleError`でCustom Resourceが応答不能になり、スタックの作成・削除がそれぞれ約1時間（CloudFormationのカスタムリソース既定タイムアウト）ハング。`Handler: index.lambda_handler`に修正して解消。また、同Lambdaのロググループを明示的な`AWS::Logs::LogGroup`として管理していなかったため保持期限なしの野良ロググループが残っていたのを追加修正
+- LP静的サイトを実装（`lp/src/index.html`）: Apple風のスクロール連動アニメーション付き1枚LP。清掃・ビルメンテナンス業向けの課題提起・仕組み・対象エリア/業種・料金・FAQ・事前登録フォームを掲載
+- LPホスティングを構築（`lp/infra/certificate.yaml` + `lp/infra/cfn-lp-hosting.yaml`）: S3 + CloudFront + ACM証明書（`nyusatsu.zer0-infra.com`）の2段構成。CSPは`connect-src`にAPI GatewayエンドポイントのみS3+CloudFront配信で公開し、セキュリティヘッダー・CORS設定を確認済み
+- アーキテクチャ図（`images/008_architecture.png`）を新規リソース（LP・事前登録API・メール転送）を反映した内容に全面更新
+- MXレコード（`zer0-infra.com` apex、`inbound-smtp.ap-northeast-1.amazonaws.com`、優先度10）をお名前.comに追加。DNS反映待ち
+
 ## v0.3 (2026-07-07)
 
 - SES送信ドメイン`info.zer0-infra.com`をドメインID（Easy DKIM）として検証。CloudFormationテンプレート（`cfn-ses-domain.yaml`、スタック名`zer0-nyusatsu-ses-domain`）で管理し、DKIM CNAMEレコード3件をお名前.com側DNSに登録して検証成功（`VerificationStatus: SUCCESS`）

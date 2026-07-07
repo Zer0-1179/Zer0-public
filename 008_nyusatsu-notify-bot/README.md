@@ -76,7 +76,21 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | SSM Parameter | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords` |
 | EventBridge Rule | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST） |
 | CloudFormationスタック | `zer0-nyusatsu-ses-domain` |
-| SES ドメインID | `info.zer0-infra.com`（Easy DKIM、検証済み） |
+| SES ドメインID | `info.zer0-infra.com`（Easy DKIM、検証済み。送信元 `notify@info.zer0-infra.com`） |
+| CloudFormationスタック | `zer0-nyusatsu-lp-backend`（事前登録API） |
+| DynamoDBテーブル | `zer0-nyusatsu-lp-waitlist` |
+| Lambda関数 | `zer0-nyusatsu-lp-waitlist`（Python 3.13） |
+| API Gateway | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register`） |
+| CloudFormationスタック | `zer0-nyusatsu-mail-relay`（問合せメール受信転送） |
+| S3バケット | `zer0-nyusatsu-mail-s3`（受信メール一時保管） |
+| Lambda関数 | `zer0-nyusatsu-mail-forwarder`, `zer0-nyusatsu-activate-ruleset`（Python 3.13） |
+| SES 受信ルールセット | `zer0-nyusatsu-rules`（`nyusatsu@zer0-infra.com`宛を受信） |
+| CloudFormationスタック | `zer0-nyusatsu-lp-cert`（us-east-1）, `zer0-nyusatsu-lp-hosting`（LP配信） |
+| S3バケット / CloudFront | `zer0-nyusatsu-lp-s3` / `nyusatsu.zer0-infra.com` |
+
+## ランディングページ（LP）・事前登録
+
+集客用LP `https://nyusatsu.zer0-infra.com` を公開（S3 + CloudFront + ACM）。Apple風のスクロール連動アニメーションで、課題提起・仕組み・対象エリア/業種・料金・FAQを掲載し、メールアドレス入力の事前登録フォームを設置。フォーム送信は`zer0-nyusatsu-lp-api`（HTTP API）経由でLambdaが`zer0-nyusatsu-lp-waitlist`（DynamoDB）に保存し、SESで運営者に通知する。フッターには問合せ用アドレス`nyusatsu@zer0-infra.com`を記載し、SES受信ルール→S3→Lambda（`zer0-nyusatsu-mail-forwarder`）で個人メールへ自動転送する。
 
 ## 動作確認済み事項（2026-07-07）
 
@@ -84,14 +98,16 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 - 2回目以降の実行で新規号0件時に即時終了することを確認
 - 未処理号を1件人為的に作り、実データで「委託」セクション抽出→キーワードマッチ→SES送信→DynamoDB記録の一連の流れがエラーなく完走することを確認
 - SESはサンドボックスモード（送信元・宛先とも検証済みメールのみ送信可）。本番顧客への送信には本番アクセス申請が必要
+- LP事前登録API: 登録・重複登録判定・不正メール形式の拒否をcurlで確認済み
+- 問合せメール転送: S3への直接投入でLambda転送処理（DynamoDB不要、SES送信のみ）が正常完了することを確認済み。MXレコードはお名前.comに追加済みでDNS反映待ち
 
 ## 今後の進め方
 
-1. 実際に清掃関連案件がヒットした際の通知メール文面の実地確認（次回の自然発生を待つか、追加のマッチングテストを実施）
-2. SES本番アクセス申請（サンドボックス解除）
-3. Stripe決済導入（[docs_payment_setup.md](./docs_payment_setup.md)）
-4. ランディングページ作成・集客開始
-5. 横浜市での検証が安定したら対象エリア拡大を検討
+1. MXレコードのDNS反映確認後、実メールでの問合せ転送のエンドツーエンドテスト
+2. 実際に清掃関連案件がヒットした際の通知メール文面の実地確認
+3. SES本番アクセス申請（サンドボックス解除）
+4. Stripe決済導入（[docs_payment_setup.md](./docs_payment_setup.md)）
+5. LPでの集客開始・横浜市での検証が安定したら対象エリア拡大を検討
 
 ## 変更履歴
 
@@ -99,6 +115,6 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 | バージョン | 日付 | 内容 |
 | ---------- | ---- | ---- |
+| v0.4 | 2026-07-07 | LP事前登録(DynamoDB+API Gateway+Lambda)・問合せメール転送(SES受信+S3+Lambda)・LP静的サイト(`nyusatsu.zer0-infra.com`、S3+CloudFront)を追加。SES送信元を`info.zer0-infra.com`へ切替。MXレコードは反映待ち |
 | v0.3 | 2026-07-07 | SES送信ドメイン`info.zer0-infra.com`をEasy DKIMで検証・CFn管理化（`zer0-nyusatsu-ses-domain`スタック） |
 | v0.2 | 2026-07-07 | 横浜市パイロット版を実装・デプロイ・動作確認完了。収集Lambda・DynamoDB・SES通知・EventBridge日次スケジュール・CFnテンプレート・構成図を整備 |
-| v0.1 | 2026-07-07 | プロジェクト企画開始。ビジネスモデル・ターゲット業種（清掃業）・技術構成の初期構想をまとめた |
