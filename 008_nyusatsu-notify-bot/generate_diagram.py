@@ -28,6 +28,10 @@ ICONS = {
     'cloudwatch':  f'{_SVC}/Arch_Management-Governance/64/Arch_Amazon-CloudWatch_64.png',
     'sqs':         f'{_SVC}/Arch_App-Integration/64/Arch_Amazon-Simple-Queue-Service_64.png',
     'ses':         f'{_SVC}/Arch_Business-Applications/64/Arch_Amazon-Simple-Email-Service_64.png',
+    's3':          f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
+    'cloudfront':  f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
+    'api_gateway': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
+    'dynamodb':    f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
     'region':      f'{_GRP}/Region_32.png',
 }
 
@@ -45,36 +49,71 @@ def draw():
     HALF = 0.55
 
     nodes = [
-        {'id': 'eb',     'icon': 'eventbridge', 'label': 'EventBridge\n毎日 6:00 JST',       'x': 2.0,  'y': 4.0},
-        {'id': 'lambda', 'icon': 'lambda',      'label': 'Lambda\nzer0-nyusatsu-collector',  'x': 5.5,  'y': 4.0},
-        {'id': 'dlq',    'icon': 'sqs',         'label': 'SQS (DLQ)',                        'x': 5.5,  'y': 1.6},
-        {'id': 'ssm',    'icon': 'ssm',         'label': 'SSM\n設定値(宛先/キーワード)',      'x': 9.5,  'y': 6.6},
-        {'id': 'ses',    'icon': 'ses',         'label': 'SES\n通知メール送信',               'x': 9.5,  'y': 4.1},
-        {'id': 'cw',     'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                 'x': 9.5,  'y': 1.6},
-        {'id': 'site',   'icon': 'user',        'label': '横浜市 入札サイト\n(公開情報)',      'x': 13.0, 'y': 5.7},
-        {'id': 'recv',   'icon': 'user',        'label': '通知先\nメール',                    'x': 13.0, 'y': 3.0},
+        # --- 収集Bot（既存） ---
+        {'id': 'eb',       'icon': 'eventbridge', 'label': 'EventBridge\n毎日 6:00 JST',            'x': 2.3,  'y': 9.4},
+        {'id': 'lambda',   'icon': 'lambda',      'label': 'Lambda\ncollector',                     'x': 6.3,  'y': 9.4},
+        {'id': 'dlq',      'icon': 'sqs',         'label': 'SQS (DLQ)',                             'x': 6.3,  'y': 7.2},
+        {'id': 'ssm',      'icon': 'ssm',         'label': 'SSM\n設定値',                            'x': 10.3, 'y': 9.6},
+        {'id': 'cw',       'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                      'x': 10.3, 'y': 7.4},
+        {'id': 'ses_out',  'icon': 'ses',         'label': 'SES\n送信(info.zer0-infra.com)',        'x': 14.3, 'y': 8.5},
+
+        # --- LP・事前登録（新規） ---
+        {'id': 'cf',        'icon': 'cloudfront', 'label': 'CloudFront\nnyusatsu.zer0-infra.com',   'x': 6.3,  'y': 5.3},
+        {'id': 's3lp',      'icon': 's3',         'label': 'S3\nLP静的サイト',                       'x': 2.3,  'y': 5.3},
+        {'id': 'apigw',     'icon': 'api_gateway','label': 'API Gateway\n事前登録API',               'x': 10.3, 'y': 5.3},
+        {'id': 'lambda_wl', 'icon': 'lambda',     'label': 'Lambda\nlp-waitlist',                   'x': 14.3, 'y': 5.3},
+        {'id': 'ddb_wl',    'icon': 'dynamodb',   'label': 'DynamoDB\nlp-waitlist',                 'x': 18.0, 'y': 5.3},
+
+        # --- 問合せメール転送（新規） ---
+        {'id': 'ses_in',    'icon': 'ses',        'label': 'SES 受信\nnyusatsu@zer0-infra.com',      'x': 14.3, 'y': 2.2},
+        {'id': 's3mail',    'icon': 's3',         'label': 'S3\n受信メール(一時)',                    'x': 10.3, 'y': 2.2},
+        {'id': 'lambda_fw', 'icon': 'lambda',     'label': 'Lambda\nmail-forwarder',                'x': 6.3,  'y': 2.2},
+
+        # --- 外部アクター ---
+        {'id': 'site',     'icon': 'user', 'label': '横浜市 入札サイト\n(公開情報)',   'x': 21.3, 'y': 9.4},
+        {'id': 'browser',  'icon': 'user', 'label': 'LP利用者\n(ブラウザ)',           'x': 2.3,  'y': 2.2},
+        {'id': 'inquirer', 'icon': 'user', 'label': '問合せ送信者\n(外部)',           'x': 2.3,  'y': 0.4},
+        {'id': 'recv',     'icon': 'user', 'label': '通知先/転送先\nメール',          'x': 21.3, 'y': 5.3},
     ]
 
     edges = [
-        ('eb',     'lambda', ''),
-        ('lambda', 'site',   'GET収集'),
-        ('lambda', 'ssm',    '設定取得'),
-        ('lambda', 'ses',    '通知依頼'),
-        ('lambda', 'cw',     ''),
-        ('lambda', 'dlq',    ''),
-        ('ses',    'recv',   'メール送信'),
+        ('eb',       'lambda',  ''),
+        ('lambda',   'site',    'GET収集'),
+        ('lambda',   'ssm',     '設定取得'),
+        ('lambda',   'ses_out', ''),
+        ('lambda',   'cw',      ''),
+        ('lambda',   'dlq',     ''),
+        ('ses_out',  'recv',    ''),
+
+        ('browser',  'cf',      'HTTPS'),
+        ('cf',       's3lp',    ''),
+        ('browser',  'apigw',   '事前登録\nfetch'),
+        ('apigw',    'lambda_wl', ''),
+        ('lambda_wl','ddb_wl',  ''),
+        ('lambda_wl','ses_out', '登録通知'),
+
+        ('inquirer', 'ses_in',  'メール送信'),
+        ('ses_in',   's3mail',  ''),
+        ('s3mail',   'lambda_fw', ''),
+        ('lambda_fw','ses_out', '転送'),
     ]
 
     clusters = [
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 0.5, 'y': 0.4, 'w': 10.0, 'h': 7.3,
+            'x': 0.9, 'y': 1.1, 'w': 18.4, 'h': 8.9,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
             'label': '外部（非AWS）', 'icon': None,
-            'x': 11.9, 'y': 1.4, 'w': 2.6, 'h': 5.4,
+            'x': 19.9, 'y': 3.9, 'w': 2.6, 'h': 6.6,
+            'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
+            'linestyle': '-', 'linewidth': 1.5,
+        },
+        {
+            'label': '外部（非AWS）', 'icon': None,
+            'x': 0.5, 'y': -0.5, 'w': 2.6, 'h': 3.5,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
@@ -98,9 +137,9 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
-    fig, ax = plt.subplots(figsize=(15, 8.5), dpi=150)
-    ax.set_xlim(0, 15)
-    ax.set_ylim(0, 8.5)
+    fig, ax = plt.subplots(figsize=(20, 10), dpi=150)
+    ax.set_xlim(0, 23)
+    ax.set_ylim(-0.8, 10.2)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')
