@@ -180,6 +180,12 @@ Resources:
     DependsOn:
       - MailBucketPolicy
 
+  ActivateRuleSetLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/zer0-nyusatsu-activate-ruleset
+      RetentionInDays: !Ref LogRetentionDays
+
   # IAM Role for the custom resource that activates the SES receipt rule
   # set (no native CloudFormation resource exists for this account-level
   # setting, so a Lambda-backed custom resource calls the SES API).
@@ -202,10 +208,9 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: "*"
+                Resource: !GetAtt ActivateRuleSetLogGroup.Arn
               - Effect: Allow
                 Action:
                   - ses:SetActiveReceiptRuleSet
