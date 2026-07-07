@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Zer0-nyusatsu-lp - ACM certificate for nyusatsu.zer0-infra.com (must deploy in us-east-1)
+
+Resources:
+
+  NyusatsuLpCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: nyusatsu.zer0-infra.com
+      ValidationMethod: DNS
+
+Outputs:
+  CertificateArn:
+    Description: ACM certificate ARN for CloudFront
+    Value: !Ref NyusatsuLpCertificate
+    Export:
+      Name: Zer0-nyusatsu-lp-cert-CertificateArn

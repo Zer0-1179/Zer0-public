@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Nyusatsu Notify Bot (008) - Static LP hosting for nyusatsu.zer0-infra.com.
+  S3 + CloudFront only, no server-side rendering.
+
+# -----------------------------------------------
+# Parameters
+# ACM証明書ARN(us-east-1のcertificate.yamlスタックのOutput)を受け取る。
+# 未指定時はカスタムドメインなしでCloudFrontデフォルトドメインのみ有効。
+# -----------------------------------------------
+Parameters:
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate ARN from us-east-1 (Zer0-nyusatsu-lp-cert stack output)
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
+
+# -----------------------------------------------
+# Resources
+# S3(静的アセット) + CloudFront(OAC経由配信) のみで構成する。
+# バックエンドAPI(waitlist登録)は別スタック(cfn-lp-backend.yaml)の
+# API Gatewayエンドポイントへブラウザから直接fetchするため、
+# CloudFrontにオリジンとして追加する必要はない。
+# -----------------------------------------------
+Resources:
+  LpBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: zer0-nyusatsu-lp-s3
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  LpOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "zer0-nyusatsu-lp-oac-${AWS::AccountId}"
+        Description: Nyusatsu LP OAC
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  LpBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LpBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontOAC
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${LpBucket}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub
+                  - "arn:aws:cloudfront::${AWS::AccountId}:distribution/${DistId}"
+                  - DistId: !Ref LpDistribution
+
+  LpResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: zer0-nyusatsu-lp-security-headers
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: "default-src 'self'; connect-src 'self' https://b5tllbp0wk.execute-api.ap-northeast-1.amazonaws.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'"
+            Override: true
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Value: "camera=(), microphone=(), geolocation=()"
+              Override: true
+
+  LpDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Zer0-nyusatsu-lp static site
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_200
+        Aliases: !If
+          - HasCertificate
+          - [nyusatsu.zer0-infra.com]
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasCertificate
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt LpBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt LpOAC.Id
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          # AWS マネージドポリシー: CachingOptimized
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref LpResponseHeadersPolicy
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+      Tags:
+        - Key: Project
+          Value: Zer0-nyusatsu-lp
+
+# -----------------------------------------------
+# Outputs
+# バケット名・配信ドメイン・カスタムドメインURLを出力する。
+# -----------------------------------------------
+Outputs:
+  BucketName:
+    Description: S3 bucket name
+    Value: !Ref LpBucket
+  DistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref LpDistribution
+  CloudFrontUrl:
+    Description: CloudFront default domain URL
+    Value: !Sub "https://${LpDistribution.DomainName}"
+  CustomDomainUrl:
+    Description: Custom domain URL (requires DNS CNAME at registrar)
+    Value: !If
+      - HasCertificate
+      - "https://nyusatsu.zer0-infra.com"
+      - "N/A (CertificateArn not provided)"
