@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Nyusatsu Notify Bot (008) - Daily collector for Yokohama city procurement
+  announcements, filters cleaning/building-maintenance related cases, and
+  sends email notification via SES.
+
+# -----------------------------------------------
+# Metadata
+# ParameterGroups で通知先・収集設定・ログ設定を視覚的にグループ化する。
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 通知設定
+        Parameters:
+          - NotifyEmail
+          - SesSenderEmail
+      - Label:
+          default: 収集設定
+        Parameters:
+          - Keywords
+      - Label:
+          default: ログ設定
+        Parameters:
+          - LogRetentionDays
+    ParameterLabels:
+      NotifyEmail:
+        default: 通知先メールアドレス
+      SesSenderEmail:
+        default: SES送信元メールアドレス（検証済みである必要あり）
+      Keywords:
+        default: 抽出キーワード（カンマ区切り）
+      LogRetentionDays:
+        default: CloudWatch Logs保持日数
+
+# -----------------------------------------------
+# Parameters
+# デプロイ時にメールアドレス・キーワード・ログ保持日数を指定する。
+# NotifyEmail/SesSenderEmailは個人情報のためデフォルト値を持たせず、必ず明示指定させる。
+# -----------------------------------------------
+Parameters:
+  NotifyEmail:
+    Type: String
+    Description: 入札情報の通知を受け取るメールアドレス
+  SesSenderEmail:
+    Type: String
+    Description: SESで検証済みの送信元メールアドレス
+  Keywords:
+    Type: String
+    Default: "清掃,美化,害虫防除,ねずみ防除"
+    Description: 案件名に含まれていれば通知対象とするキーワード（カンマ区切り）
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues:
+      - 7
+      - 14
+      - 30
+    Description: Lambda実行ログの保持日数
+
+# -----------------------------------------------
+# Resources
+# 収集Lambda・実行ロール・DynamoDB(処理済み号管理)・SSM(設定値)・
+# EventBridge(毎日起動)・DLQ(失敗時退避)・CloudWatch Logsを定義する。
+# -----------------------------------------------
+Resources:
+  ProcessedKokokuTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      TableName: zer0-nyusatsu-processed-kokoku
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: kokoku_no
+          AttributeType: N
+      KeySchema:
+        - AttributeName: kokoku_no
+          KeyType: HASH
+
+  NotifyEmailParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/notify-email
+      Type: String
+      Value: !Ref NotifyEmail
+      Description: Nyusatsu Notify Bot notification recipient email
+
+  SesSenderParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/ses-sender
+      Type: String
+      Value: !Ref SesSenderEmail
+      Description: Nyusatsu Notify Bot SES verified sender email
+
+  KeywordsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/keywords
+      Type: String
+      Value: !Ref Keywords
+      Description: Nyusatsu Notify Bot filter keywords (comma separated)
+
+  NotifyBotDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: zer0-nyusatsu-notify-bot-dlq
+      MessageRetentionPeriod: 1209600
+
+  CollectorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/zer0-nyusatsu-collector
+      RetentionInDays: !Ref LogRetentionDays
+
+  # IAM Role for the collector Lambda function.
+  # Description must stay ASCII-only per project convention.
+  CollectorFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zer0-nyusatsu-collector-role
+      Description: Execution role for Nyusatsu Notify Bot collector Lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: zer0-nyusatsu-collector-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CollectorLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt ProcessedKokokuTable.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NotifyEmailParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SesSenderParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${KeywordsParameter}
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt NotifyBotDLQ.Arn
+
+  CollectorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zer0-nyusatsu-collector
+      Description: 横浜市入札公告を収集し清掃関連案件をメール通知するBot
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt CollectorFunctionRole.Arn
+      Timeout: 300
+      MemorySize: 256
+      DeadLetterConfig:
+        TargetArn: !GetAtt NotifyBotDLQ.Arn
+      Environment:
+        Variables:
+          PROCESSED_TABLE_NAME: !Ref ProcessedKokokuTable
+          NOTIFY_EMAIL_PARAM_NAME: !Ref NotifyEmailParameter
+          SES_SENDER_PARAM_NAME: !Ref SesSenderParameter
+          KEYWORDS_PARAM_NAME: !Ref KeywordsParameter
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              # Placeholder. Deployed via `aws lambda update-function-code`
+              # per CLAUDE.md rule (no SAM, no S3 build artifact).
+              return {"statusCode": 200, "body": "placeholder"}
+    DependsOn:
+      - CollectorLogGroup
+
+  SchedulerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CollectorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DailyScheduleRule.Arn
+
+  DailyScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: zer0-nyusatsu-daily-schedule
+      Description: 毎日6時(JST)にNyusatsu Notify Bot収集Lambdaを起動する
+      ScheduleExpression: cron(0 21 * * ? *)
+      State: ENABLED
+      Targets:
+        - Id: CollectorFunctionTarget
+          Arn: !GetAtt CollectorFunction.Arn
+          DeadLetterConfig:
+            Arn: !GetAtt NotifyBotDLQ.Arn
+
+# -----------------------------------------------
+# Outputs
+# 他スタックからの参照はないが、運用確認用にARN/名称を出力する。
+# -----------------------------------------------
+Outputs:
+  CollectorFunctionName:
+    Description: Nyusatsu Notify Bot collector Lambda function name
+    Value: !Ref CollectorFunction
+  ProcessedKokokuTableName:
+    Description: DynamoDB table name for processed kokoku_no tracking
+    Value: !Ref ProcessedKokokuTable
