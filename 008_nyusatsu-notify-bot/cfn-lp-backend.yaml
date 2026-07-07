@@ -55,6 +55,7 @@ Resources:
   WaitlistTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: zer0-nyusatsu-lp-waitlist
       BillingMode: PAY_PER_REQUEST
@@ -130,8 +131,11 @@ Resources:
       Code:
         ZipFile: |
           def lambda_handler(event, context):
-              # Placeholder. Deployed via `aws lambda update-function-code`
-              # per CLAUDE.md rule (no SAM, no S3 build artifact).
+              # Placeholder (Handler does not match this file, so this
+              # never actually executes). Real code is deployed via
+              # `aws lambda update-function-code` per CLAUDE.md rule
+              # (no SAM, no S3 build artifact) before this function is
+              # invoked by any real trigger.
               return {"statusCode": 200, "body": "placeholder"}
     DependsOn:
       - WaitlistLogGroup

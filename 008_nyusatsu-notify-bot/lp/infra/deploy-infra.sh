@@ -8,6 +8,7 @@ set -e
 
 STACK_NAME="zer0-nyusatsu-lp-hosting"
 CERT_STACK_NAME="zer0-nyusatsu-lp-cert"
+BACKEND_STACK_NAME="zer0-nyusatsu-lp-backend"
 REGION="${AWS_DEFAULT_REGION:-ap-northeast-1}"
 CERT_REGION="us-east-1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -17,7 +18,7 @@ echo "=== Nyusatsu LP インフラ構築 ==="
 # ── [1/3] 証明書スタック (us-east-1) ──────────────────────────
 echo "[1/3] ACM証明書スタックをデプロイ中 ($CERT_REGION)..."
 aws cloudformation deploy \
-  --template-file "${SCRIPT_DIR}/certificate.yaml" \
+  --template-file "${SCRIPT_DIR}/cfn-certificate.yaml" \
   --stack-name "$CERT_STACK_NAME" \
   --region "$CERT_REGION" \
   --no-fail-on-empty-changeset
@@ -30,6 +31,17 @@ CERT_ARN=$(aws cloudformation describe-stacks \
 
 echo "  証明書ARN: $CERT_ARN"
 
+# cfn-lp-backend.yaml の ApiEndpoint (.../register) からオリジン部分だけ取り出し、
+# CSP connect-src に渡す（API IDはバックエンドスタック再作成のたびに変わるため
+# ハードコードせずここで都度取得する）。
+API_ORIGIN=$(aws cloudformation describe-stacks \
+  --stack-name "$BACKEND_STACK_NAME" \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text | sed 's|/register$||')
+
+echo "  Waitlist APIオリジン: $API_ORIGIN"
+
 # ── [2/3] メインスタック (ap-northeast-1) ─────────────────────
 echo "[2/3] メインスタックをデプロイ中 ($REGION)..."
 aws cloudformation deploy \
@@ -37,7 +49,7 @@ aws cloudformation deploy \
   --stack-name "$STACK_NAME" \
   --region "$REGION" \
   --no-fail-on-empty-changeset \
-  --parameter-overrides CertificateArn="$CERT_ARN"
+  --parameter-overrides CertificateArn="$CERT_ARN" ApiOrigin="$API_ORIGIN"
 
 # ── [3/3] 出力情報の表示 ───────────────────────────────────────
 echo "[3/3] 作成されたリソース情報:"

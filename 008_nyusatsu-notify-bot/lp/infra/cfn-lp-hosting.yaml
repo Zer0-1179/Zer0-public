@@ -13,7 +13,18 @@ Parameters:
     Type: String
     Default: ""
     Description: ACM certificate ARN from us-east-1 (Zer0-nyusatsu-lp-cert stack output)
+  ApiOrigin:
+    Type: String
+    Default: https://b5tllbp0wk.execute-api.ap-northeast-1.amazonaws.com
+    Description: >-
+      Waitlist API origin (ApiEndpoint output of zer0-nyusatsu-lp-backend,
+      without the /register path) allowed in the CSP connect-src. Re-supply
+      this if the backend stack is ever recreated (the API ID changes).
 
+# -----------------------------------------------
+# Conditions
+# CertificateArnが空文字でなければカスタムドメイン(Aliases/ACM)を有効化する。
+# -----------------------------------------------
 Conditions:
   HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
 
@@ -83,7 +94,7 @@ Resources:
             ReferrerPolicy: strict-origin-when-cross-origin
             Override: true
           ContentSecurityPolicy:
-            ContentSecurityPolicy: "default-src 'self'; connect-src 'self' https://b5tllbp0wk.execute-api.ap-northeast-1.amazonaws.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'"
+            ContentSecurityPolicy: !Sub "default-src 'self'; connect-src 'self' ${ApiOrigin}; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'"
             Override: true
         CustomHeadersConfig:
           Items:
