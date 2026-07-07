@@ -217,7 +217,9 @@ Resources:
       FunctionName: zer0-nyusatsu-activate-ruleset
       Description: CloudFormationカスタムリソース経由でSES受信ルールセットを有効化する
       Runtime: python3.13
-      Handler: lambda_function.lambda_handler
+      # インラインZipFileはCFn内部で必ずindex.<拡張子>という名前になるため
+      # Handlerはindex.lambda_handlerを指定する(lambda_function.pyではない)。
+      Handler: index.lambda_handler
       Role: !GetAtt ActivateRuleSetFunctionRole.Arn
       Timeout: 30
       MemorySize: 128
