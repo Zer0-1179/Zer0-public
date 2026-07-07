@@ -1,8 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  Nyusatsu Notify Bot (008) - SES domain identity for info.zer0-infra.com
-  with Easy DKIM signing. DKIM CNAME records must be added manually at the
-  domain registrar because zer0-infra.com DNS is managed outside Route53.
+  Nyusatsu Notify Bot (008) - SES domain identity (Easy DKIM signing) for
+  a domain used by this project. DKIM CNAME records must be added manually
+  at the domain registrar because zer0-infra.com DNS is managed outside
+  Route53. Reused for multiple domains via separate stacks with different
+  SesDomainIdentity parameter values (info.zer0-infra.com for sending,
+  zer0-infra.com apex for receiving).
 
 # -----------------------------------------------
 # Parameters
