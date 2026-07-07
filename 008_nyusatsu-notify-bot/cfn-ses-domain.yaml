@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Nyusatsu Notify Bot (008) - SES domain identity for info.zer0-infra.com
+  with Easy DKIM signing. DKIM CNAME records must be added manually at the
+  domain registrar because zer0-infra.com DNS is managed outside Route53.
+
+# -----------------------------------------------
+# Parameters
+# デプロイ時にSESで検証するドメインID（サブドメイン）を指定する。
+# -----------------------------------------------
+Parameters:
+  SesDomainIdentity:
+    Type: String
+    Default: info.zer0-infra.com
+    Description: SESで検証するドメインID（サブドメイン）
+
+# -----------------------------------------------
+# Resources
+# SESドメインID(Easy DKIM)を定義する。DKIM検証用CNAMEレコードはOutputsで
+# 出力し、お名前.com側のDNS管理画面へ手動で登録する（zer0-infra.comの
+# DNSはRoute53ではなくお名前.comで管理されているため）。
+# -----------------------------------------------
+Resources:
+  NyusatsuSesDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref SesDomainIdentity
+      DkimSigningAttributes:
+        NextSigningKeyLength: RSA_2048_BIT
+
+# -----------------------------------------------
+# Outputs
+# DKIM検証用CNAMEレコード（ホスト名・値）を3組出力する。
+# お名前.comのDNS設定画面に3レコードとも登録すること。
+# -----------------------------------------------
+Outputs:
+  DkimToken01Name:
+    Description: DKIM CNAME record 1 - host name
+    Value: !GetAtt NyusatsuSesDomainIdentity.DkimDNSTokenName1
+  DkimToken01Value:
+    Description: DKIM CNAME record 1 - value
+    Value: !GetAtt NyusatsuSesDomainIdentity.DkimDNSTokenValue1
+  DkimToken02Name:
+    Description: DKIM CNAME record 2 - host name
+    Value: !GetAtt NyusatsuSesDomainIdentity.DkimDNSTokenName2
+  DkimToken02Value:
+    Description: DKIM CNAME record 2 - value
+    Value: !GetAtt NyusatsuSesDomainIdentity.DkimDNSTokenValue2
+  DkimToken03Name:
+    Description: DKIM CNAME record 3 - host name
+    Value: !GetAtt NyusatsuSesDomainIdentity.DkimDNSTokenName3
+  DkimToken03Value:
+    Description: DKIM CNAME record 3 - value
+    Value: !GetAtt NyusatsuSesDomainIdentity.DkimDNSTokenValue3
