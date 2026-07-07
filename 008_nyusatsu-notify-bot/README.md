@@ -75,6 +75,8 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | SQS(DLQ) | `zer0-nyusatsu-notify-bot-dlq` |
 | SSM Parameter | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords` |
 | EventBridge Rule | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST） |
+| CloudFormationスタック | `zer0-nyusatsu-ses-domain` |
+| SES ドメインID | `info.zer0-infra.com`（Easy DKIM、検証済み） |
 
 ## 動作確認済み事項（2026-07-07）
 
@@ -97,5 +99,6 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 | バージョン | 日付 | 内容 |
 | ---------- | ---- | ---- |
+| v0.3 | 2026-07-07 | SES送信ドメイン`info.zer0-infra.com`をEasy DKIMで検証・CFn管理化（`zer0-nyusatsu-ses-domain`スタック） |
 | v0.2 | 2026-07-07 | 横浜市パイロット版を実装・デプロイ・動作確認完了。収集Lambda・DynamoDB・SES通知・EventBridge日次スケジュール・CFnテンプレート・構成図を整備 |
 | v0.1 | 2026-07-07 | プロジェクト企画開始。ビジネスモデル・ターゲット業種（清掃業）・技術構成の初期構想をまとめた |
