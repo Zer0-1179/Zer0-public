@@ -61,6 +61,11 @@ const websiteJsonLd = {
 <html lang={lang}>
   <head>
     <meta charset="UTF-8" />
+    <!-- スクロール入場アニメーション用: JS実行環境であることをペイント前に示す。
+         これが無いとno-js環境で要素が消えたままになる（global.cssのjs-animゲート参照） -->
+    <script nonce={Astro.locals.cspNonce}>
+      document.documentElement.classList.add('js-anim');
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={metaDesc} />
     <!-- OGP -->
@@ -101,5 +106,47 @@ const websiteJsonLd = {
       <slot />
     </main>
     <Footer />
+    <script nonce={Astro.locals.cspNonce}>
+      (function () {
+        var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function animateCounters(el) {
+          if (reduced) return;
+          var nums = el.querySelectorAll('[data-count-to]');
+          for (var i = 0; i < nums.length; i++) {
+            (function (node) {
+              var target = parseInt(node.getAttribute('data-count-to'), 10);
+              if (isNaN(target)) return;
+              var start = performance.now();
+              var duration = 700;
+              function tick(now) {
+                var p = Math.min((now - start) / duration, 1);
+                var eased = 1 - Math.pow(1 - p, 3);
+                node.textContent = String(Math.round(eased * target));
+                if (p < 1) requestAnimationFrame(tick);
+                else node.textContent = String(target);
+              }
+              node.textContent = '0';
+              requestAnimationFrame(tick);
+            })(nums[i]);
+          }
+        }
+
+        var targets = document.querySelectorAll('.card-rise, .reveal-io, .hero-anim');
+        if (!targets.length) return;
+
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-in');
+              animateCounters(entry.target);
+              io.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.25 });
+
+        for (var i = 0; i < targets.length; i++) io.observe(targets[i]);
+      })();
+    </script>
   </body>
 </html>

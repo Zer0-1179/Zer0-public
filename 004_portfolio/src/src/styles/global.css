@@ -35,3 +35,80 @@ html {
 *::-webkit-scrollbar-thumb:hover {
   background: #2d5282;
 }
+
+/* ── スクロール入場アニメーション ──────────────────────────
+   JS未実行時は常に最終状態（フル表示）。html.js-anim が付いた場合のみ
+   非表示の初期状態に切り替わり、.is-in 付与でアニメーションしながら復帰する。 */
+
+/* 案C: レイヤーせり上がり（プロジェクトカード用） */
+.card-rise { opacity: 1; transform: none; box-shadow: 0 20px 40px -24px rgba(0, 180, 216, 0.3); }
+html.js-anim .card-rise {
+  opacity: 0;
+  transform: translateY(28px) scale(0.97);
+  box-shadow: 0 0 0 rgba(0, 180, 216, 0);
+  /* border-color はカードのhover遷移(transition-all duration-200)を保つために含める */
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 0.8, 0.28, 1),
+    transform 0.6s cubic-bezier(0.16, 0.8, 0.28, 1),
+    box-shadow 0.6s cubic-bezier(0.16, 0.8, 0.28, 1),
+    border-color 0.2s ease;
+  transition-delay: var(--stagger-delay, 0s), var(--stagger-delay, 0s), var(--stagger-delay, 0s), 0s;
+}
+html.js-anim .card-rise.is-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  box-shadow: 0 20px 40px -24px rgba(0, 180, 216, 0.3);
+}
+
+/* 案A: 精密製図線（Hero見出し・統計数値用） */
+.hero-rule { width: 40px; height: 1px; background: var(--color-accent); }
+html.js-anim .hero-anim .hero-rule {
+  width: 0;
+  transition: width 0.65s cubic-bezier(0.16, 0.8, 0.28, 1);
+}
+html.js-anim .hero-anim.is-in .hero-rule { width: 40px; }
+
+.wipe-heading { clip-path: inset(0 0 0 0); }
+html.js-anim .hero-anim .wipe-heading {
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.75s cubic-bezier(0.16, 0.8, 0.28, 1) 0.1s;
+}
+html.js-anim .hero-anim.is-in .wipe-heading { clip-path: inset(0 0 0 0); }
+
+.hero-fade { opacity: 1; transform: none; }
+html.js-anim .hero-anim .hero-fade {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.5s ease var(--fade-delay, 0.5s),
+    transform 0.5s ease var(--fade-delay, 0.5s);
+}
+html.js-anim .hero-anim.is-in .hero-fade { opacity: 1; transform: translateY(0); }
+
+/* 統計数値のカウントアップ対象（reveal-io と併用） */
+.reveal-io { opacity: 1; transform: none; }
+html.js-anim .reveal-io {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 0.8, 0.28, 1),
+    transform 0.6s cubic-bezier(0.16, 0.8, 0.28, 1);
+  transition-delay: var(--stagger-delay, 0s);
+}
+html.js-anim .reveal-io.is-in { opacity: 1; transform: translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  html.js-anim .card-rise,
+  html.js-anim .reveal-io,
+  html.js-anim .hero-anim .wipe-heading,
+  html.js-anim .hero-anim .hero-fade {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: inset(0 0 0 0) !important;
+  }
+  html.js-anim .hero-anim .hero-rule {
+    transition: none !important;
+    width: 40px !important;
+  }
+}

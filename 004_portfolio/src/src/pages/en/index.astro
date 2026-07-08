@@ -48,7 +48,7 @@ try {
       <a href="/en/projects/" class="text-accent text-sm hover:text-accent-light transition-colors hidden md:block">{t('section.projects.link')}</a>
     </div>
     <div class="grid md:grid-cols-3 gap-5">
-      {featured.map((p) => <ProjectCard project={p} />)}
+      {featured.map((p, i) => <ProjectCard project={p} index={i} />)}
     </div>
   </section>
 
