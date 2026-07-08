@@ -54,7 +54,7 @@ const t = useTranslations('en');
         return (
           <article
             class="group card-rise bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden hover:border-accent/40 transition-all duration-200 flex flex-col"
-            style={`--stagger-delay: ${(i % 2) * 0.08}s`}
+            style={`--stagger-delay: ${((i % 2) * 0.08).toFixed(2)}s`}
           >
 
             <!-- Architecture Preview -->

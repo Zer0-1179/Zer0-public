@@ -16,7 +16,7 @@ const desc = lang === 'ja' ? project.descJa : project.descEn;
 
 <article
   class="group card-rise bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden hover:border-accent/40 transition-all duration-200 flex flex-col"
-  style={`--stagger-delay: ${index * 0.08}s`}
+  style={`--stagger-delay: ${(index * 0.08).toFixed(2)}s`}
 >
 
   <!-- 構成図プレビュー -->

@@ -6,14 +6,18 @@ interface Props {
   link: string;
   date: string;
   source: 'zenn' | 'note';
+  index?: number;
 }
 
-const { title, link, date, source } = Astro.props;
+const { title, link, date, source, index = 0 } = Astro.props;
 const lang = getLangFromUrl(Astro.url);
 const formattedDate = new Date(date).toLocaleDateString(lang === 'ja' ? 'ja-JP' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 ---
 
-<article class="group flex gap-4 py-4 border-b border-navy-700/40 last:border-0 hover:bg-navy-800/30 -mx-4 px-4 rounded transition-colors">
+<article
+  class="reveal-io group flex gap-4 py-4 border-b border-navy-700/40 last:border-0 hover:bg-navy-800/30 -mx-4 px-4 rounded transition-colors"
+  style={`--stagger-delay: ${(index * 0.05).toFixed(2)}s`}
+>
   <div class="flex-shrink-0 mt-1">
     <span class={`px-2 py-0.5 text-xs rounded font-medium ${source === 'zenn' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
       {source === 'zenn' ? 'Zenn' : 'note'}

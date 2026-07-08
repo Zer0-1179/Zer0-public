@@ -67,7 +67,7 @@ try {
         {zennArticles.length > 0
           ? (
             <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">
-              {zennArticles.map((a) => <ArticleCard {...a} />)}
+              {zennArticles.map((a, i) => <ArticleCard {...a} index={i} />)}
             </div>
           )
           : <p class="text-slate-500 text-sm">記事を取得できませんでした</p>
@@ -88,7 +88,7 @@ try {
         {noteArticles.length > 0
           ? (
             <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">
-              {noteArticles.map((a) => <ArticleCard {...a} />)}
+              {noteArticles.map((a, i) => <ArticleCard {...a} index={i} />)}
             </div>
           )
           : <p class="text-slate-500 text-sm">記事を取得できませんでした</p>

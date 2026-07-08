@@ -26,7 +26,7 @@ const stats = [
     {stats.map(({ value, label }, i) => {
       const isNumeric = /^\d+$/.test(value);
       return (
-        <div class="text-center reveal-io" style={`--stagger-delay: ${i * 0.06}s`}>
+        <div class="text-center reveal-io" style={`--stagger-delay: ${(i * 0.06).toFixed(2)}s`}>
           <div class="text-3xl md:text-4xl font-bold text-accent mb-1 tabular-nums" data-count-to={isNumeric ? value : undefined}>{value}</div>
           <div class="text-slate-400 text-sm">{label}</div>
         </div>

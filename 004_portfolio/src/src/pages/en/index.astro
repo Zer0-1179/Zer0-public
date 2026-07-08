@@ -64,10 +64,11 @@ try {
       </a>
     </div>
     <div class="flex flex-wrap gap-3">
-      {getCategoriesWithTemplates().map((cat) => (
+      {getCategoriesWithTemplates().map((cat, i) => (
         <a
           href={`/en/templates/${cat.slug}/`}
-          class="flex items-center gap-2 px-4 py-2.5 bg-navy-800/40 border border-navy-700/50 rounded-lg text-sm text-slate-300 hover:border-accent/50 hover:text-white transition-colors"
+          class="reveal-io flex items-center gap-2 px-4 py-2.5 bg-navy-800/40 border border-navy-700/50 rounded-lg text-sm text-slate-300 hover:border-accent/50 hover:text-white transition-colors"
+          style={`--stagger-delay: ${(i * 0.05).toFixed(2)}s`}
         >
           <span>{cat.labelEn}</span>
           <span class="text-xs text-slate-500 bg-navy-900/60 px-1.5 py-0.5 rounded">{getTemplatesByCategory(cat.slug).length}</span>
@@ -89,7 +90,7 @@ try {
         <a href="/en/articles/" class="text-accent text-sm hover:text-accent-light transition-colors hidden md:block">{t('section.articles.link')}</a>
       </div>
       <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">
-        {articles.map((a) => <ArticleCard {...a} />)}
+        {articles.map((a, i) => <ArticleCard {...a} index={i} />)}
       </div>
     </section>
   )}
