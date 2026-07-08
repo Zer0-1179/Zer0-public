@@ -78,6 +78,19 @@ Resources:
         - AttributeName: kokoku_no
           KeyType: HASH
 
+  WeeklyStatsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      TableName: zer0-nyusatsu-weekly-stats
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: stats_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: stats_id
+          KeyType: HASH
+
   NotifyEmailParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -145,6 +158,12 @@ Resources:
                 Resource: !GetAtt ProcessedKokokuTable.Arn
               - Effect: Allow
                 Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt WeeklyStatsTable.Arn
+              - Effect: Allow
+                Action:
                   - ssm:GetParameter
                 Resource:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NotifyEmailParameter}
@@ -175,6 +194,7 @@ Resources:
       Environment:
         Variables:
           PROCESSED_TABLE_NAME: !Ref ProcessedKokokuTable
+          WEEKLY_STATS_TABLE_NAME: !Ref WeeklyStatsTable
           NOTIFY_EMAIL_PARAM_NAME: !Ref NotifyEmailParameter
           SES_SENDER_PARAM_NAME: !Ref SesSenderParameter
           KEYWORDS_PARAM_NAME: !Ref KeywordsParameter
@@ -219,3 +239,6 @@ Outputs:
   ProcessedKokokuTableName:
     Description: DynamoDB table name for processed kokoku_no tracking
     Value: !Ref ProcessedKokokuTable
+  WeeklyStatsTableName:
+    Description: DynamoDB table name for weekly digest counter
+    Value: !Ref WeeklyStatsTable
