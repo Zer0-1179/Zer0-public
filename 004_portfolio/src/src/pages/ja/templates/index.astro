@@ -751,7 +751,7 @@ window.addEventListener("pageshow", restoreFromUrl);
 yvCopy.addEventListener("click", () => {
   if (!currentRawCode) return;
   const done = () => {
-    yvCopy.textContent = "\u30B3\u30D4\u30FC\u6E08\uFF01";
+    yvCopy.textContent = "\u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F\uFF01";
     setTimeout(() => {
       yvCopy.innerHTML = '<svg class="w-3 h-3 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>\u30B3\u30D4\u30FC';
     }, 2e3);
