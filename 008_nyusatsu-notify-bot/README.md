@@ -2,17 +2,17 @@
 
 > 横浜市が公開する入札（調達）公告を自動収集し、清掃・ビルメンテナンス業を営む中小企業・個人事業主向けに、清掃関連キーワードに合致する案件だけをメールで自動通知するサブスクリプションサービス。
 
-**現在のステータス: パイロット実装・AWS上でテスト運用中（横浜市単体・課金導入前）**
+**現在のステータス: パイロット実装・AWS上でテスト運用中（横浜市単体・課金導入前）**  
 
 ## 概要
 
-| 項目 | 内容 |
-| ---- | ---- |
-| 対象自治体 | 横浜市（「ヨコハマ・入札のとびら」発注情報） |
-| 対象業種 | 清掃・ビルメンテナンス業 |
-| 収集頻度 | 毎日 6:00 JST（EventBridge Scheduler） |
-| 通知方法 | Amazon SES によるメール送信 |
-| 収集元URL | `https://keiyaku.city.yokohama.lg.jp/epco/servlet/p?job=KokokuList` |
+| 項目       | 内容                                                                |
+| ---------- | ------------------------------------------------------------------- |
+| 対象自治体 | 横浜市（「ヨコハマ・入札のとびら」発注情報）                        |
+| 対象業種   | 清掃・ビルメンテナンス業                                            |
+| 収集頻度   | 毎日 6:00 JST（EventBridge Scheduler）                              |
+| 通知方法   | Amazon SES によるメール送信                                         |
+| 収集元URL  | `https://keiyaku.city.yokohama.lg.jp/epco/servlet/p?job=KokokuList` |
 
 ## アーキテクチャ
 
@@ -58,35 +58,35 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 ## ビジネスモデル
 
-| 項目 | 内容 |
-| ---- | ---- |
-| 提供形態 | メールによる定期通知 |
-| 料金 | 月額3,000〜5,000円程度のセルフサーブ帯を想定（未確定・現在は無料テスト運用） |
-| 決済 | Stripe Payment Links を利用予定（[docs_payment_setup.md](./docs_payment_setup.md)参照）。自前の決済システムは開発しない |
-| 収集元 | 横浜市発注情報（パイロット）。将来的にエリア拡大を検討 |
+| 項目     | 内容                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 提供形態 | メールによる定期通知                                                                                                    |
+| 料金     | 月額3,000〜5,000円程度のセルフサーブ帯を想定（未確定・現在は無料テスト運用）                                            |
+| 決済     | Stripe Payment Links を利用予定（[docs_payment_setup.md](./docs_payment_setup.md)参照）。自前の決済システムは開発しない |
+| 収集元   | 横浜市発注情報（パイロット）。将来的にエリア拡大を検討                                                                  |
 
 ## AWSリソース（デプロイ済み）
 
-| リソース | 名称 |
-| -------- | ---- |
-| CloudFormationスタック | `zer0-nyusatsu-notify-bot` |
-| Lambda関数 | `zer0-nyusatsu-collector`（Python 3.13） |
-| DynamoDBテーブル | `zer0-nyusatsu-processed-kokoku` |
-| SQS(DLQ) | `zer0-nyusatsu-notify-bot-dlq` |
-| SSM Parameter | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords` |
-| EventBridge Rule | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST） |
-| CloudFormationスタック | `zer0-nyusatsu-ses-domain` |
-| SES ドメインID | `info.zer0-infra.com`（Easy DKIM、検証済み。送信元 `notify@info.zer0-infra.com`） |
-| CloudFormationスタック | `zer0-nyusatsu-lp-backend`（事前登録API） |
-| DynamoDBテーブル | `zer0-nyusatsu-lp-waitlist` |
-| Lambda関数 | `zer0-nyusatsu-lp-waitlist`（Python 3.13） |
-| API Gateway | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register`） |
-| CloudFormationスタック | `zer0-nyusatsu-mail-relay`（問合せメール受信転送） |
-| S3バケット | `zer0-nyusatsu-mail-s3`（受信メール一時保管） |
-| Lambda関数 | `zer0-nyusatsu-mail-forwarder`, `zer0-nyusatsu-activate-ruleset`（Python 3.13） |
-| SES 受信ルールセット | `zer0-nyusatsu-rules`（`nyusatsu@zer0-infra.com`宛を受信） |
-| CloudFormationスタック | `zer0-nyusatsu-lp-cert`（us-east-1）, `zer0-nyusatsu-lp-hosting`（LP配信） |
-| S3バケット / CloudFront | `zer0-nyusatsu-lp-s3` / `nyusatsu.zer0-infra.com` |
+| リソース                | 名称                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| CloudFormationスタック  | `zer0-nyusatsu-notify-bot`                                                                        |
+| Lambda関数              | `zer0-nyusatsu-collector`（Python 3.13）                                                          |
+| DynamoDBテーブル        | `zer0-nyusatsu-processed-kokoku`                                                                  |
+| SQS(DLQ)                | `zer0-nyusatsu-notify-bot-dlq`                                                                    |
+| SSM Parameter           | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords` |
+| EventBridge Rule        | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST）                             |
+| CloudFormationスタック  | `zer0-nyusatsu-ses-domain`                                                                        |
+| SES ドメインID          | `info.zer0-infra.com`（Easy DKIM、検証済み。送信元 `notify@info.zer0-infra.com`）                 |
+| CloudFormationスタック  | `zer0-nyusatsu-lp-backend`（事前登録API）                                                         |
+| DynamoDBテーブル        | `zer0-nyusatsu-lp-waitlist`                                                                       |
+| Lambda関数              | `zer0-nyusatsu-lp-waitlist`（Python 3.13）                                                        |
+| API Gateway             | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register`）                                              |
+| CloudFormationスタック  | `zer0-nyusatsu-mail-relay`（問合せメール受信転送）                                                |
+| S3バケット              | `zer0-nyusatsu-mail-s3`（受信メール一時保管）                                                     |
+| Lambda関数              | `zer0-nyusatsu-mail-forwarder`, `zer0-nyusatsu-activate-ruleset`（Python 3.13）                   |
+| SES 受信ルールセット    | `zer0-nyusatsu-rules`（`nyusatsu@zer0-infra.com`宛を受信）                                        |
+| CloudFormationスタック  | `zer0-nyusatsu-lp-cert`（us-east-1）, `zer0-nyusatsu-lp-hosting`（LP配信）                        |
+| S3バケット / CloudFront | `zer0-nyusatsu-lp-s3` / `nyusatsu.zer0-infra.com`                                                 |
 
 ## ランディングページ（LP）・事前登録
 
@@ -111,8 +111,8 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近3件のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-| 日付 | バージョン | 内容 |
-| ---- | ---------- | ---- |
-| 2026-07-07 | v0.5 | Fableレビュー反映。構成図のレイアウト規約違反を修正、メール転送LambdaにDLQ追加、CSPのAPI IDハードコード解消、その他中低優先度の指摘を修正 |
-| 2026-07-08 | v0.6 | Fable検証レビュー(2巡目)反映。構成図の残存違反を修正、CHANGELOG文字数是正、誤字修正、LP側API IDハードコード解消、SES失敗時の警告ログ追加、S3バケット理由を明記 |
-| 2026-07-08 | v0.7 | SES本番アクセスをリクエストし承認・取得済み。送信上限200通/日→50,000通/日に拡大。任意の宛先へ送信可能に |
+| 日付       | バージョン | 内容                                                                                                                                                           |
+| ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-07 | v0.5       | Fableレビュー反映。構成図のレイアウト規約違反を修正、メール転送LambdaにDLQ追加、CSPのAPI IDハードコード解消、その他中低優先度の指摘を修正                      |
+| 2026-07-08 | v0.6       | Fable検証レビュー(2巡目)反映。構成図の残存違反を修正、CHANGELOG文字数是正、誤字修正、LP側API IDハードコード解消、SES失敗時の警告ログ追加、S3バケット理由を明記 |
+| 2026-07-08 | v0.7       | SES本番アクセスをリクエストし承認・取得済み。送信上限200通/日→50,000通/日に拡大。任意の宛先へ送信可能に                                                        |
