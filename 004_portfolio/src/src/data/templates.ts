@@ -1055,7 +1055,7 @@ export const templates: Template[] = [
     filename: 'cfn-cw-alarm-auto-update-basic.yaml',
     nameJa: 'CloudWatch アラーム自動更新（初級）',
     nameEn: 'CloudWatch Alarm Auto-Updater (Basic)',
-    descJa: 'EC2/FSxリストア後にCloudWatchアラームのIDを自動更新するLambda+EventBridgeセット。ProjectNameのみパラメータ。タグで紐付けたアラームのディメンションを起動のたびに最新IDへ上書きするシンプル版。',
+    descJa: 'EC2/FSxリストア後にCloudWatchアラームのIDを自動更新するLambda+EventBridgeセット。ProjectNameのみパラメータ。タグで紐付けたアラームのディメンションを起動のたびに最新IDへ上書きするシンプル版（EC2/FSxとも常時監視有効）。',
     descEn: 'Lambda + EventBridge set that auto-updates CloudWatch Alarm dimensions after EC2/FSx restore. ProjectName-only parameter. Simple version with fixed defaults — both EC2 and FSx monitoring always enabled.',
     descShortJa: 'ProjectNameのみ・EC2/FSxリストア後アラームID自動更新',
     descShortEn: 'ProjectName only, auto-updates alarm dimensions after EC2/FSx restore',
