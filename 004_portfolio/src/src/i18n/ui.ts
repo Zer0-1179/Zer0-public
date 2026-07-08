@@ -24,7 +24,8 @@ export const ui = {
     'stats.aws': 'AWS認定資格',
     'stats.projects': '個人開発プロジェクト',
     'stats.templates': 'CFnテンプレート無料配布',
-    'stats.autopost': '日 Bot無停止自動運用',
+    'stats.autopost': 'Bot無停止自動運用',
+    'stats.autopost.unit': '日',
     'stats.cost': '全プロジェクト月額コスト',
 
     'section.projects': '開発実績',
@@ -99,6 +100,7 @@ export const ui = {
     'stats.projects': 'Projects',
     'stats.templates': 'Free CFn Templates',
     'stats.autopost': 'Days Non-Stop Bot Uptime',
+    'stats.autopost.unit': '',
     'stats.cost': 'All Projects / Month',
 
     'section.projects': 'Projects',
