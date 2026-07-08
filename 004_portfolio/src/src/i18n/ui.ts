@@ -29,7 +29,7 @@ export const ui = {
     'stats.cost': '全プロジェクト月額コスト',
 
     'section.projects': '開発実績',
-    'section.projects.sub': 'AWSとAIを活用した自動化システムの開発実績',
+    'section.projects.sub': 'AWSとAIを活用した自動化システム',
     'section.articles': '最新ブログ',
     'section.articles.sub': 'Zenn・noteで発信中',
     'section.templates': 'CFnテンプレート',

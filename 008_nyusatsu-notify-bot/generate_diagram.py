@@ -57,7 +57,7 @@ def draw():
         {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\ncollector',                   'x': 6.0,  'y': 12.0},
         {'id': 'dlq',     'icon': 'sqs',         'label': 'SQS (DLQ)',                           'x': 6.0,  'y': 9.7},
         {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\n設定値',                          'x': 9.5,  'y': 10.6},
-        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                    'x': 9.5,  'y': 8.1},
+        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                    'x': 9.5,  'y': 8.5},
         {'id': 'site',    'icon': 'user',        'label': '横浜市 入札サイト\n(公開情報)',        'x': 24.5, 'y': 12.0},
 
         # --- レーン2: LP事前登録(新規)  y=6.5 ---
