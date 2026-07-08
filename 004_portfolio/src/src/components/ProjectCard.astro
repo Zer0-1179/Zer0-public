@@ -4,16 +4,20 @@ import type { Project } from '../data/projects';
 
 interface Props {
   project: Project;
+  index?: number;
 }
 
-const { project } = Astro.props;
+const { project, index = 0 } = Astro.props;
 const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
 const name = lang === 'ja' ? project.nameJa : project.nameEn;
 const desc = lang === 'ja' ? project.descJa : project.descEn;
 ---
 
-<article class="group bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden hover:border-accent/40 transition-all duration-200 flex flex-col">
+<article
+  class="group card-rise bg-navy-800/40 border border-navy-700/50 rounded-xl overflow-hidden hover:border-accent/40 transition-all duration-200 flex flex-col"
+  style={`--stagger-delay: ${index * 0.08}s`}
+>
 
   <!-- 構成図プレビュー -->
   <div class="bg-slate-100 overflow-hidden h-44 flex items-center justify-center">
