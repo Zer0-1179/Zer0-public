@@ -83,7 +83,7 @@ Resources:
       LogGroupName: /aws/lambda/zer0-nyusatsu-mail-forwarder
       RetentionInDays: !Ref LogRetentionDays
 
-  # 転送失敗時（例: SESのSendRawEmail上限约10MBを超える大きな添付）に
+  # 転送失敗時（例: SESのSendRawEmail上限約10MBを超える大きな添付）に
   # 問合せメールがサイレントに消失しないよう、非同期呼び出し失敗時の
   # 退避先として使う。
   ForwarderDLQ:

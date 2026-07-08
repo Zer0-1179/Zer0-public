@@ -7,6 +7,7 @@
 set -e
 
 STACK_NAME="zer0-nyusatsu-lp-hosting"
+BACKEND_STACK_NAME="zer0-nyusatsu-lp-backend"
 REGION="${AWS_DEFAULT_REGION:-ap-northeast-1}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -22,8 +23,22 @@ DIST_ID=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
   --output text)
 
+# API GatewayのIDはバックエンドスタック再作成のたびに変わるため、
+# src/index.html には埋め込まず、デプロイ時にlp-backendスタックのOutputから
+# 都度取得してビルド用一時ディレクトリに注入する（ソース側はプレースホルダのまま保つ）。
+API_ENDPOINT=$(aws cloudformation describe-stacks \
+  --stack-name "$BACKEND_STACK_NAME" \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text)
+
+BUILD_DIR="$(mktemp -d)"
+trap 'rm -rf "$BUILD_DIR"' EXIT
+cp -r "${SCRIPT_DIR}/src/." "$BUILD_DIR/"
+sed -i "s|__API_ENDPOINT__|${API_ENDPOINT}|g" "${BUILD_DIR}/index.html"
+
 echo "[1/2] S3へ同期中 (s3://$BUCKET_NAME)..."
-aws s3 sync "${SCRIPT_DIR}/src/" "s3://${BUCKET_NAME}/" --delete --region "$REGION"
+aws s3 sync "${BUILD_DIR}/" "s3://${BUCKET_NAME}/" --delete --region "$REGION"
 
 echo "[2/2] CloudFrontキャッシュを無効化中 (Distribution: $DIST_ID)..."
 aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" >/dev/null

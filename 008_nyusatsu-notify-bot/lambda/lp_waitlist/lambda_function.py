@@ -1,10 +1,14 @@
 import json
+import logging
 import os
 import re
 import time
 
 import boto3
 from botocore.exceptions import ClientError
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb")
 ssm = boto3.client("ssm")
@@ -79,6 +83,6 @@ def lambda_handler(event, context):
             },
         )
     except Exception:
-        pass
+        logger.warning("owner notification email failed for %s", email, exc_info=True)
 
     return _response(200, {"status": "registered"})

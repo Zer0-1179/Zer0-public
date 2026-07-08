@@ -85,11 +85,14 @@ def draw():
         ('lambda',    'ssm',      '設定取得'),
         ('lambda',    'cw',       ''),
         ('lambda',    'dlq',      ''),
-        ('lambda',    'ses_out',  ''),
+        # ssm/cw列(x=9.5)とlambda_wl(x=13.5)を避けるため、上方の専用帯(y=12.8)→
+        # ses_out直上(x=20.5)経由の迂回ルートを取る(直線区間のみで構成)。
+        ('lambda',    'ses_out',  '', [(7.0, 12.8), (20.5, 12.8)]),
 
         ('browser',   'cf',       'HTTPS'),
         ('cf',        's3lp',     ''),
-        ('browser',   'apigw',    '事前登録\nfetch'),
+        # cfアイコン(x=5.0,y=6.5)を貫通しないよう、上方(y=7.3)を迂回する。
+        ('browser',   'apigw',    '事前登録\nfetch', [(2.0, 7.3), (8.0, 7.3)]),
         ('apigw',     'lambda_wl',''),
         ('lambda_wl', 'ddb_wl',   ''),
         ('lambda_wl', 'ses_out',  '登録通知'),
@@ -105,19 +108,19 @@ def draw():
     clusters = [
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 3.6, 'y': -0.4, 'w': 18.5, 'h': 13.4,
+            'x': 3.6, 'y': -0.65, 'w': 18.5, 'h': 13.85,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
             'label': '外部（非AWS）', 'icon': None,
-            'x': -0.6, 'y': -0.4, 'w': 2.6, 'h': 8.0,
+            'x': -0.6, 'y': -0.65, 'w': 2.6, 'h': 8.25,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
         {
             'label': '外部（非AWS）', 'icon': None,
-            'x': 23.0, 'y': 4.6, 'w': 2.9, 'h': 8.6,
+            'x': 23.0, 'y': 4.6, 'w': 2.8, 'h': 8.6,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
@@ -185,19 +188,28 @@ def draw():
     for edge in edges:
         from_id, to_id = edge[0], edge[1]
         label = edge[2] if len(edge) > 2 else ''
+        waypoints = edge[3] if len(edge) > 3 else []
         n1, n2 = node_map[from_id], node_map[to_id]
-        ax.annotate(
-            '', xy=(n2['x'], n2['y']), xytext=(n1['x'], n1['y']),
-            arrowprops=dict(
-                arrowstyle='->', color='#555555', lw=1.5,
-                shrinkA=SHRINK, shrinkB=SHRINK,
-                connectionstyle='arc3,rad=0.0',
-            ),
-            zorder=3,
-        )
+        # 途中に経由点(waypoints)がある場合は直線区間を複数つなぎ、矢頭は最終区間のみに描く。
+        pts = [(n1['x'], n1['y'])] + waypoints + [(n2['x'], n2['y'])]
+        n_seg = len(pts) - 1
+        for i in range(n_seg):
+            ax.annotate(
+                '', xy=pts[i + 1], xytext=pts[i],
+                arrowprops=dict(
+                    arrowstyle='->' if i == n_seg - 1 else '-',
+                    color='#555555', lw=1.5,
+                    shrinkA=SHRINK if i == 0 else 0,
+                    shrinkB=SHRINK if i == n_seg - 1 else 0,
+                    connectionstyle='arc3,rad=0.0',
+                ),
+                zorder=3,
+            )
         if label:
-            mx = (n1['x'] + n2['x']) / 2
-            my = (n1['y'] + n2['y']) / 2
+            mi = n_seg // 2
+            mp1, mp2 = pts[mi], pts[mi + 1]
+            mx = (mp1[0] + mp2[0]) / 2
+            my = (mp1[1] + mp2[1]) / 2
             ax.text(mx, my + 0.18, label, ha='center', va='bottom',
                     fontsize=7, color='#666666',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
