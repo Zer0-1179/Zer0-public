@@ -16,7 +16,7 @@ const stats = [
   { value: '10', label: t('stats.aws') },
   { value: String(projects.length), label: t('stats.projects') },
   { value: String(templates.length), label: t('stats.templates') },
-  { value: `${diffDays}+`, label: t('stats.autopost') },
+  { value: `${diffDays}+${t('stats.autopost.unit')}`, label: t('stats.autopost') },
   { value: '~$5.0', label: t('stats.cost') },
 ];
 ---
