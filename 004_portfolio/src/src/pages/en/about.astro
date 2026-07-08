@@ -182,8 +182,8 @@ const career = [
       <div class="relative">
         <div class="absolute left-4 top-0 bottom-0 w-px bg-navy-700/60"></div>
         <div class="space-y-8">
-          {career.map(({ period, title, desc, tags, link }) => (
-            <div class="relative pl-12">
+          {career.map(({ period, title, desc, tags, link }, i) => (
+            <div class="reveal-io relative pl-12" style={`--stagger-delay: ${(i * 0.08).toFixed(2)}s`}>
               <div class="absolute left-3 top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-navy-900 -translate-x-1/2"></div>
               <div class="text-accent text-xs mb-1">{period}</div>
               <h3 class="text-white font-semibold mb-2">{title}</h3>

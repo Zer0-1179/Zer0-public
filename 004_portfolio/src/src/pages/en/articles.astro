@@ -55,7 +55,7 @@ try {
           <a href={socialLinks.zenn} target="_blank" rel="noopener noreferrer" class="text-accent text-xs hover:text-accent-light transition-colors">Profile →</a>
         </div>
         {zennArticles.length > 0
-          ? <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">{zennArticles.map((a) => <ArticleCard {...a} />)}</div>
+          ? <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">{zennArticles.map((a, i) => <ArticleCard {...a} index={i} />)}</div>
           : <p class="text-slate-500 text-sm">Could not fetch articles</p>
         }
       </div>
@@ -68,7 +68,7 @@ try {
           <a href={socialLinks.note} target="_blank" rel="noopener noreferrer" class="text-accent text-xs hover:text-accent-light transition-colors">Profile →</a>
         </div>
         {noteArticles.length > 0
-          ? <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">{noteArticles.map((a) => <ArticleCard {...a} />)}</div>
+          ? <div class="bg-navy-800/30 border border-navy-700/40 rounded-lg px-4">{noteArticles.map((a, i) => <ArticleCard {...a} index={i} />)}</div>
           : <p class="text-slate-500 text-sm">Could not fetch articles</p>
         }
       </div>
