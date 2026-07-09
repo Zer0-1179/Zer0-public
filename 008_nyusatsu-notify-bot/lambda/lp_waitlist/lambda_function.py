@@ -8,6 +8,7 @@ import os
 import re
 import time
 import urllib.parse
+from email.message import EmailMessage
 
 import boto3
 from botocore.exceptions import ClientError
@@ -101,7 +102,10 @@ def _base_url(event) -> str:
 
 
 def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
-    body = (
+    """確認メールをHTML(「登録を確定する」をクリック可能なリンクとして埋め込む)+
+    プレーンテキスト(URLそのまま、フォールバック)のmultipart/alternativeで送る。
+    生URLをメール本文に長く表示しないための対応。"""
+    text_body = (
         "入札情報通知Bot（横浜市パイロット版）への事前登録を受け付けました。\n\n"
         f"登録メールアドレス: {email}\n\n"
         "以下のリンクをクリックして登録を確定してください。クリックするまで登録は完了せず、"
@@ -113,13 +117,30 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
         "心当たりのない場合は、上記リンクをクリックせずこのメールを破棄してください。"
         "その場合、登録情報は自動的に有効化されません。"
     )
-    ses.send_email(
+    html_body = (
+        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
+        "line-height:1.7;color:#222\">"
+        "<p>入札情報通知Bot（横浜市パイロット版）への事前登録を受け付けました。</p>"
+        f"<p>登録メールアドレス: {html.escape(email)}</p>"
+        f"<p><a href=\"{html.escape(confirm_url)}\">登録を確定する</a><br>"
+        "クリックするまで登録は完了せず、通知メールも配信されません。</p>"
+        "<hr style=\"margin:24px 0;border:none;border-top:1px solid #ddd\">"
+        "<p style=\"font-size:13px;color:#666\">"
+        "本サービスは、横浜市が公開する入札公告のうち清掃・ビルメンテナンス関連案件を"
+        "毎朝自動収集し、メールでお知らせするサービスです（現在無料テスト運用中）。<br><br>"
+        "心当たりのない場合は、上記リンクをクリックせずこのメールを破棄してください。"
+        "その場合、登録情報は自動的に有効化されません。</p></body></html>"
+    )
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = email
+    msg["Subject"] = "【入札情報通知Bot】登録確認のお願い"
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+    ses.send_raw_email(
         Source=sender,
-        Destination={"ToAddresses": [email]},
-        Message={
-            "Subject": {"Data": "【入札情報通知Bot】登録確認のお願い", "Charset": "UTF-8"},
-            "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
-        },
+        Destinations=[email],
+        RawMessage={"Data": msg.as_bytes()},
     )
 
 
