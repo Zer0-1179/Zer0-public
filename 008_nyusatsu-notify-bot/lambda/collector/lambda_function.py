@@ -175,7 +175,9 @@ def build_unsubscribe_url(email: str) -> str:
     return f"{base_url}/unsubscribe?email={urllib.parse.quote(email)}&token={token}"
 
 
-def notification_footer(unsubscribe_url: str) -> str:
+def notification_footer_text(unsubscribe_url: str) -> str:
+    """プレーンテキスト版フッター。URLをそのまま記載する
+    (HTML非対応メーラー向けのフォールバック)。"""
     return (
         "\n\n---\n"
         "本メールは入札情報通知Bot（横浜市パイロット版）が自動送信しています。\n"
@@ -184,10 +186,27 @@ def notification_footer(unsubscribe_url: str) -> str:
     )
 
 
+def build_html_body(body: str, unsubscribe_url: str) -> str:
+    """「配信停止」の文字にリンクを埋め込んだHTML版本文を組み立てる。
+    生URLをメール本文にそのまま表示すると長く読みにくいための対応。"""
+    escaped_body = html.escape(body).replace("\n", "<br>")
+    return (
+        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
+        "line-height:1.7;color:#222\">"
+        f"<div>{escaped_body}</div>"
+        "<hr style=\"margin:24px 0;border:none;border-top:1px solid #ddd\">"
+        "<p style=\"font-size:13px;color:#666\">"
+        "本メールは入札情報通知Bot（横浜市パイロット版）が自動送信しています。<br>"
+        f"<a href=\"{html.escape(unsubscribe_url)}\">配信停止はこちら</a><br>"
+        f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
+        "</p></body></html>"
+    )
+
+
 def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body: str) -> None:
-    """List-Unsubscribeヘッダー(RFC 8058のOne-Click Unsubscribe含む)を付与して
-    SESでメールを送信する。本文フッターにも解除URLを明記する
-    (ヘッダー非対応メーラー向け、Fable指摘A-3)。"""
+    """List-Unsubscribeヘッダー(RFC 8058のOne-Click Unsubscribe含む)を付与し、
+    HTML版(「配信停止」をクリック可能なリンクとして埋め込む)+プレーンテキスト版
+    (URLそのまま、フォールバック)のmultipart/alternativeでSES送信する。"""
     unsubscribe_url = build_unsubscribe_url(recipient)
     msg = EmailMessage()
     msg["From"] = sender
@@ -195,7 +214,8 @@ def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body:
     msg["Subject"] = subject
     msg["List-Unsubscribe"] = f"<{unsubscribe_url}>, <mailto:{INQUIRY_EMAIL}>"
     msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-    msg.set_content(body + notification_footer(unsubscribe_url))
+    msg.set_content(body + notification_footer_text(unsubscribe_url))
+    msg.add_alternative(build_html_body(body, unsubscribe_url), subtype="html")
     ses.send_raw_email(
         Source=sender,
         Destinations=[recipient],
