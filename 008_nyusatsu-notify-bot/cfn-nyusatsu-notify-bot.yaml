@@ -21,6 +21,10 @@ Metadata:
         Parameters:
           - Keywords
       - Label:
+          default: セキュリティ設定
+        Parameters:
+          - HmacSecret
+      - Label:
           default: ログ設定
         Parameters:
           - LogRetentionDays
@@ -31,6 +35,8 @@ Metadata:
         default: SES送信元メールアドレス（検証済みである必要あり）
       Keywords:
         default: 抽出キーワード（カンマ区切り）
+      HmacSecret:
+        default: 確認・配信停止リンク署名用の秘密鍵
       LogRetentionDays:
         default: CloudWatch Logs保持日数
 
@@ -50,6 +56,10 @@ Parameters:
     Type: String
     Default: "清掃,美化,害虫防除,ねずみ防除"
     Description: 案件名に含まれていれば通知対象とするキーワード（カンマ区切り）
+  HmacSecret:
+    Type: String
+    NoEcho: true
+    Description: 登録確認・配信停止リンクの署名に使うランダム文字列（32文字以上推奨、デプロイ時に生成して指定）
   LogRetentionDays:
     Type: Number
     Default: 14
@@ -62,7 +72,8 @@ Parameters:
 # -----------------------------------------------
 # Resources
 # 収集Lambda・実行ロール・DynamoDB(処理済み号管理)・SSM(設定値)・
-# EventBridge(毎日起動)・DLQ(失敗時退避)・CloudWatch Logsを定義する。
+# EventBridge(毎日起動)・DLQ(失敗時退避)・CloudWatch Logs・
+# DLQ滞留監視用CloudWatch Alarm・通知用SNSを定義する。
 # -----------------------------------------------
 Resources:
   ProcessedKokokuTable:
@@ -115,11 +126,56 @@ Resources:
       Value: !Ref Keywords
       Description: Nyusatsu Notify Bot filter keywords (comma separated)
 
+  HmacSecretParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/hmac-secret
+      Type: String
+      Value: !Ref HmacSecret
+      Description: Nyusatsu Notify Bot HMAC secret for confirm/unsubscribe link signing
+
   NotifyBotDLQ:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: zer0-nyusatsu-notify-bot-dlq
       MessageRetentionPeriod: 1209600
+
+  # SNS Topic for CloudWatch Alarm notifications.
+  # DLQ滞留アラームの通知先。既存のNotifyEmailパラメータをEmail購読先として再利用する。
+  NotifyBotAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: zer0-nyusatsu-alarm-topic
+
+  # Email subscription for the alarm topic.
+  # NotifyEmailパラメータのアドレスにアラーム通知メールを送る。
+  NotifyBotAlarmTopicSubscription01:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotifyBotAlarmTopic
+      Protocol: email
+      Endpoint: !Ref NotifyEmail
+
+  # CloudWatch Alarm for DLQ message buildup.
+  # NotifyBotDLQにメッセージが1件以上滞留したら発報する。収集Lambdaの失敗継続を検知する目的。
+  NotifyBotDlqAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: zer0-nyusatsu-dlq-messages-alarm-01
+      AlarmDescription: 入札情報収集LambdaのDLQにメッセージが滞留しています
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt NotifyBotDLQ.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref NotifyBotAlarmTopic
 
   CollectorLogGroup:
     Type: AWS::Logs::LogGroup
@@ -169,6 +225,8 @@ Resources:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NotifyEmailParameter}
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SesSenderParameter}
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${KeywordsParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacSecretParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/unsubscribe-base-url
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -198,6 +256,8 @@ Resources:
           NOTIFY_EMAIL_PARAM_NAME: !Ref NotifyEmailParameter
           SES_SENDER_PARAM_NAME: !Ref SesSenderParameter
           KEYWORDS_PARAM_NAME: !Ref KeywordsParameter
+          HMAC_SECRET_PARAM_NAME: !Ref HmacSecretParameter
+          UNSUBSCRIBE_BASE_URL_PARAM_NAME: /zer0/008-nyusatsu/unsubscribe-base-url
       Code:
         ZipFile: |
           def lambda_handler(event, context):

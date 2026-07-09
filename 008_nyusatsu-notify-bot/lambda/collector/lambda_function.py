@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import html
 import json
 import logging
@@ -7,6 +10,7 @@ import time
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
+from email.message import EmailMessage
 
 import boto3
 
@@ -14,10 +18,13 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 BASE_URL = "https://keiyaku.city.yokohama.lg.jp/epco/servlet/p"
-USER_AGENT = "Zer0-NyusatsuNotifyBot/1.0 (+contact via SES sender address)"
+USER_AGENT = "Zer0-NyusatsuNotifyBot/1.0 (+contact: nyusatsu@zer0-infra.com)"
 REQUEST_INTERVAL_SEC = 3
 JST = timezone(timedelta(hours=9))
 INQUIRY_EMAIL = "nyusatsu@zer0-infra.com"
+# Lambdaの残り実行時間がこの値を下回ったら、未処理の号を翌日の実行に持ち越す
+# (mark_processed前に打ち切ることで、送信済みメールの重複送信を防ぐ)
+TIME_BUDGET_MARGIN_MS = 60000
 
 # 詳細ページ取得時のjavascript関数名→job値の対応（一覧ページのリンク文字列から実測して判明）
 DETAIL_JOB_MAP = {
@@ -153,11 +160,46 @@ def get_param(name: str) -> str:
     return ssm.get_parameter(Name=name)["Parameter"]["Value"]
 
 
-def notification_footer() -> str:
+def make_unsubscribe_token(email: str) -> str:
+    """lp_waitlist Lambdaのmake_token(email, "unsubscribe")と同一アルゴリズム。
+    両Lambdaが同じSSM秘密鍵(HMAC_SECRET_PARAM_NAME)を参照するため、ここで生成した
+    トークンはlp_waitlist側の/unsubscribeエンドポイントでそのまま検証できる。"""
+    secret = get_param(os.environ["HMAC_SECRET_PARAM_NAME"])
+    digest = hmac.new(secret.encode(), f"{email}:unsubscribe".encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
+def build_unsubscribe_url(email: str) -> str:
+    base_url = get_param(os.environ["UNSUBSCRIBE_BASE_URL_PARAM_NAME"])
+    token = make_unsubscribe_token(email)
+    return f"{base_url}/unsubscribe?email={urllib.parse.quote(email)}&token={token}"
+
+
+def notification_footer(unsubscribe_url: str) -> str:
     return (
         "\n\n---\n"
         "本メールは入札情報通知Bot（横浜市パイロット版）が自動送信しています。\n"
-        f"お問い合わせ・配信停止をご希望の場合は {INQUIRY_EMAIL} までご連絡ください。"
+        f"配信停止はこちら: {unsubscribe_url}\n"
+        f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
+    )
+
+
+def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body: str) -> None:
+    """List-Unsubscribeヘッダー(RFC 8058のOne-Click Unsubscribe含む)を付与して
+    SESでメールを送信する。本文フッターにも解除URLを明記する
+    (ヘッダー非対応メーラー向け、Fable指摘A-3)。"""
+    unsubscribe_url = build_unsubscribe_url(recipient)
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg["Subject"] = subject
+    msg["List-Unsubscribe"] = f"<{unsubscribe_url}>, <mailto:{INQUIRY_EMAIL}>"
+    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    msg.set_content(body + notification_footer(unsubscribe_url))
+    ses.send_raw_email(
+        Source=sender,
+        Destinations=[recipient],
+        RawMessage={"Data": msg.as_bytes()},
     )
 
 
@@ -179,16 +221,10 @@ def send_notification(kokoku_no: int, matches: list[dict]) -> None:
             line += f"  {deadline_display}\n"
         lines.append(line)
     lines.append(f"\n詳細一覧: {detail_url}")
-    lines.append(notification_footer())
     body = "\n".join(lines)
 
-    ses.send_email(
-        Source=sender,
-        Destination={"ToAddresses": [recipient]},
-        Message={
-            "Subject": {"Data": f"【入札通知】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件", "Charset": "UTF-8"},
-            "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
-        },
+    send_email_with_unsubscribe(
+        sender, recipient, f"【入札通知】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件", body
     )
 
 
@@ -229,16 +265,8 @@ def send_weekly_digest(total_matches: int, days_run: int) -> None:
         body = f"先週は{days_run}回の巡回で、清掃関連案件を合計{total_matches}件通知しました。\nBotは正常に稼働しています。"
     else:
         body = f"先週は{days_run}回の巡回を行いましたが、該当する案件はありませんでした。\nBotは正常に稼働しています。"
-    body += notification_footer()
 
-    ses.send_email(
-        Source=sender,
-        Destination={"ToAddresses": [recipient]},
-        Message={
-            "Subject": {"Data": "【入札情報通知Bot】週次稼働レポート", "Charset": "UTF-8"},
-            "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
-        },
-    )
+    send_email_with_unsubscribe(sender, recipient, "【入札情報通知Bot】週次稼働レポート", body)
 
 
 def lambda_handler(event, context):
@@ -255,6 +283,17 @@ def lambda_handler(event, context):
     total_matches = 0
     for idx, kokoku_no in enumerate(new_numbers):
         if not bootstrap:
+            # 詳細ページPOST+3秒sleepが号ごとに累積するため、残り時間が不足したら
+            # ここで打ち切る。未処理のままなので翌日の実行が自動的に引き継ぐ
+            # (mark_processed前に抜けるため、送信済みメールの重複送信は起きない)。
+            if context.get_remaining_time_in_millis() < TIME_BUDGET_MARGIN_MS:
+                logger.warning(
+                    "time budget exhausted at idx=%d, deferring remaining %d kokoku_no to next run",
+                    idx,
+                    len(new_numbers) - idx,
+                )
+                break
+
             if idx > 0:
                 time.sleep(REQUEST_INTERVAL_SEC)
 
