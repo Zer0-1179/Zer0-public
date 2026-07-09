@@ -275,6 +275,9 @@
   .form-msg { margin-top: 16px; font-size: 13.5px; min-height: 20px; }
   .form-msg.ok { color: #8fd6b8; }
   .form-msg.err { color: #f2a5a5; }
+  /* honeypot: bot対策の非表示フィールド。display:noneはbotに無視されやすいため
+     画面外配置で隠す(スクリーンリーダーからもaria-hiddenで除外)。 */
+  .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
   /* ── Footer ─────────────────────────────── */
   footer {
@@ -411,6 +414,7 @@
   <p class="lead">事前登録いただいた方から、テスト運用のご案内をお送りします。</p>
   <form class="register-form" id="registerForm">
     <input type="email" id="emailInput" placeholder="メールアドレス" required />
+    <input type="text" id="websiteInput" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
     <button type="submit">登録する</button>
   </form>
   <div class="form-msg" id="formMsg"></div>
@@ -419,6 +423,7 @@
 <footer>
   <p>清掃・ビルメンテナンス業向け 入札情報通知Bot（パイロット版）</p>
   <p>お問い合わせ: <a href="mailto:nyusatsu@zer0-infra.com">nyusatsu@zer0-infra.com</a></p>
+  <p><a href="privacy.html">プライバシーポリシー</a></p>
 </footer>
 
 <script>
@@ -464,19 +469,20 @@
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('emailInput').value.trim();
+    const website = document.getElementById('websiteInput').value.trim();
     msg.className = 'form-msg';
     msg.textContent = '送信中...';
     try {
       const res = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, website }),
       });
       const data = await res.json();
       if (res.ok && (data.status === 'registered' || data.status === 'already_registered')) {
         msg.classList.add('ok');
         msg.textContent = data.status === 'registered'
-          ? '事前登録ありがとうございます。ご案内までお待ちください。'
+          ? '確認メールをお送りしました。メール内のリンクをクリックして登録を完了してください。'
           : 'すでに登録済みのメールアドレスです。';
         form.reset();
       } else {

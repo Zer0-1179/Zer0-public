@@ -2,7 +2,7 @@
 
 > 横浜市が公開する入札（調達）公告を自動収集し、清掃・ビルメンテナンス業を営む中小企業・個人事業主向けに、清掃関連キーワードに合致する案件だけをメールで自動通知するサブスクリプションサービス。
 
-**現在のステータス: パイロット実装・AWS上でテスト運用中（横浜市単体・課金導入前）**  
+**現在のステータス: v0.9。パイロット実装・AWS上でテスト運用中（横浜市単体・課金導入前）。登録確認メール・二重オプトイン・ワンクリック配信停止まで実装済み**  
 
 ## 概要
 
@@ -73,14 +73,16 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | Lambda関数              | `zer0-nyusatsu-collector`（Python 3.13）                                                          |
 | DynamoDBテーブル        | `zer0-nyusatsu-processed-kokoku`                                                                  |
 | SQS(DLQ)                | `zer0-nyusatsu-notify-bot-dlq`                                                                    |
-| SSM Parameter           | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords` |
+| SSM Parameter           | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords`, `/zer0/008-nyusatsu/hmac-secret`, `/zer0/008-nyusatsu/unsubscribe-base-url` |
 | EventBridge Rule        | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST）                             |
+| SNS Topic               | `zer0-nyusatsu-alarm-topic`（DLQ滞留アラームの通知先、NotifyEmail宛）                             |
+| CloudWatch Alarm        | `zer0-nyusatsu-dlq-messages-alarm-01`                                                             |
 | CloudFormationスタック  | `zer0-nyusatsu-ses-domain`                                                                        |
 | SES ドメインID          | `info.zer0-infra.com`（Easy DKIM、検証済み。送信元 `notify@info.zer0-infra.com`）                 |
 | CloudFormationスタック  | `zer0-nyusatsu-lp-backend`（事前登録API）                                                         |
 | DynamoDBテーブル        | `zer0-nyusatsu-lp-waitlist`                                                                       |
 | Lambda関数              | `zer0-nyusatsu-lp-waitlist`（Python 3.13）                                                        |
-| API Gateway             | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register`）                                              |
+| API Gateway             | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register` / `GET /confirm` / `GET+POST /unsubscribe`）   |
 | CloudFormationスタック  | `zer0-nyusatsu-mail-relay`（問合せメール受信転送）                                                |
 | S3バケット              | `zer0-nyusatsu-mail-s3`（受信メール一時保管）                                                     |
 | Lambda関数              | `zer0-nyusatsu-mail-forwarder`, `zer0-nyusatsu-activate-ruleset`（Python 3.13）                   |
@@ -90,7 +92,9 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 ## ランディングページ（LP）・事前登録
 
-集客用LP `https://nyusatsu.zer0-infra.com` を公開（S3 + CloudFront + ACM）。Apple風のスクロール連動アニメーションで、課題提起・仕組み・対象エリア/業種・料金・FAQを掲載し、メールアドレス入力の事前登録フォームを設置。フォーム送信は`zer0-nyusatsu-lp-api`（HTTP API）経由でLambdaが`zer0-nyusatsu-lp-waitlist`（DynamoDB）に保存し、SESで運営者に通知する。フッターには問合せ用アドレス`nyusatsu@zer0-infra.com`を記載し、SES受信ルール→S3→Lambda（`zer0-nyusatsu-mail-forwarder`）で個人メールへ自動転送する。
+集客用LP `https://nyusatsu.zer0-infra.com` を公開（S3 + CloudFront + ACM）。Apple風のスクロール連動アニメーションで、課題提起・仕組み・対象エリア/業種・料金・FAQを掲載し、メールアドレス入力の事前登録フォームを設置。フッターには問合せ用アドレス`nyusatsu@zer0-infra.com`とプライバシーポリシー（`privacy.html`）を記載し、問合せメールはSES受信ルール→S3→Lambda（`zer0-nyusatsu-mail-forwarder`）で個人メールへ自動転送する。
+
+**登録〜配信停止フロー（v0.9、二重オプトイン）**: フォーム送信は`zer0-nyusatsu-lp-api`（HTTP API）経由でLambda（`zer0-nyusatsu-lp-waitlist`）が`zer0-nyusatsu-lp-waitlist`（DynamoDB、`status: pending/active/unsubscribed`）に保存し、登録者本人へ確認メール（広告要素なしのトランザクショナルメール）を送信する。メール内の確認リンク（HMAC-SHA256署名付きトークン、`GET /confirm`）をクリックすると`active`になり運営者へ通知される。通知メール・週次サマリーメールには`List-Unsubscribe`/`List-Unsubscribe-Post`ヘッダー（RFC 8058 One-Click対応）と本文中のワンクリック解除リンク（`GET+POST /unsubscribe`）を付与。フォームには非表示のhoneypotフィールドでbot登録を弾く。
 
 ## 動作確認済み事項（2026-07-07）
 
@@ -101,15 +105,25 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 - LP事前登録API: 登録・重複登録判定・不正メール形式の拒否をcurlで確認済み
 - 問合せメール転送: S3への直接投入でLambda転送処理（DynamoDB不要、SES送信のみ）が正常完了することを確認済み。MXレコードはお名前.comに追加済みでDNS反映待ち
 
+## 動作確認済み事項（2026-07-09）
+
+ユーザーから「登録者に確認メールは届くのか、配信停止はワンクリックか」と問われ監査した結果判明した重大なギャップ（LP登録と実通知が未接続・確認メールなし・配信停止が手動返信のみ）を修正し、実メールで全フローを検証した。
+
+- 登録→確認メール受信→確認リンククリック→`active`化→運営者通知、の一連を実メール（Gmail）で確認済み
+- honeypotフィールドを埋めた送信が実際にDynamoDBへ登録されないことを確認済み
+- 配信停止: `GET /unsubscribe`は確認ページを返すのみで状態変化なし、`POST /unsubscribe`で実際に`unsubscribed`になることを確認済み。不正トークンは400で拒否
+- 監査の過程で、問合せメール転送Lambda（`zer0-nyusatsu-mail-forwarder`）が実コード未反映（プレースホルダーのまま）で受信メールが消失する状態になっていたことを発見。実コードを反映し、滞留していたメールも手動再処理して復旧
+
 ## 今後の進め方
 
-課金開始前にFableで市場調査をやり直した結果（2026-07-08）、法務対応（特商法表記・利用規約・プライバシーポリシー）と流量計測が課金開始の前提条件と判明した。
+課金開始前にFableで市場調査をやり直した結果（2026-07-08）、法務対応（特商法表記・利用規約・プライバシーポリシー）と流量計測が課金開始の前提条件と判明した。2026-07-09の監査でA群（登録確認・ワンクリック配信停止等）は完了。
 
 1. 課金開始前必須の法務対応（特商法表記・利用規約・プライバシーポリシー、バーチャルオフィス等の検討）
 2. 流量計測を1〜2ヶ月継続し、価格・対象エリアを最終判断
-3. 購読者管理のマルチテナント化（現状は単一通知先のみ対応）
-4. Stripe決済導入（[docs_payment_setup.md](./docs_payment_setup.md)）
-5. LPでの集客開始・横浜市での検証が安定したら対象エリア拡大を検討
+3. 実配信の接続: 現状は収集Lambdaが単一の運営者宛にのみ通知しており、`zer0-nyusatsu-lp-waitlist`の`active`購読者への実配信ロジックは未実装（Fable推奨: エリア/業種のフィルタ軸が増えるまでマルチテナント化は不要、まず一律配信でよい）
+4. SES Configuration Set等によるバウンス・苦情の受け皿整備（実配信接続前に必須）
+5. Stripe決済導入（[docs_payment_setup.md](./docs_payment_setup.md)）
+6. LPでの集客開始・横浜市での検証が安定したら対象エリア拡大を検討
 
 ## 変更履歴
 
@@ -117,6 +131,6 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 | 日付       | バージョン | 内容                                                                                                                                                           |
 | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-08 | v0.6       | Fable検証レビュー(2巡目)反映。構成図の残存違反を修正、CHANGELOG文字数是正、誤字修正、LP側API IDハードコード解消、SES失敗時の警告ログ追加、S3バケット理由を明記 |
 | 2026-07-08 | v0.7       | SES本番アクセスをリクエストし承認・取得済み。送信上限200通/日→50,000通/日に拡大。任意の宛先へ送信可能に                                                        |
 | 2026-07-08 | v0.8       | Fable市場調査結果を反映。締切残日数表示・週次稼働サマリー・送信者表示/配信停止導線・LP差別化コピーを追加                                                       |
+| 2026-07-09 | v0.9       | 登録↔実通知未接続・確認メール皆無・配信停止非ワンクリックと判明。二重オプトイン・確認メール・ワンクリック配信停止・honeypot・プライバシーポリシー等を実装      |
