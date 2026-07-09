@@ -49,8 +49,9 @@ Parameters:
 # Resources
 # DynamoDB(事前登録メール, PAY_PER_REQUEST) + Lambda(登録・二重オプトイン確認・
 # 配信停止処理) + HTTP API(POST /register, GET /confirm, GET+POST /unsubscribe)
-# を定義する。008メインスタックの通知先/SES送信元/HMAC秘密鍵SSMパラメータを
-# 読み取り専用でそのまま再利用する。
+# を定義する。008メインスタックの通知先/SES送信元/HMAC秘密鍵SSMパラメータ・
+# マッチ履歴テーブル(zer0-nyusatsu-match-history)を読み取り専用でそのまま再利用する
+# (確認時のバックフィルウェルカムメール用、v0.11)。
 # -----------------------------------------------
 Resources:
   WaitlistTable:
@@ -123,6 +124,10 @@ Resources:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/hmac-secret
               - Effect: Allow
                 Action:
+                  - dynamodb:Scan
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/zer0-nyusatsu-match-history
+              - Effect: Allow
+                Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
                 Resource: "*"
@@ -144,6 +149,7 @@ Resources:
           SES_SENDER_PARAM_NAME: /zer0/008-nyusatsu/ses-sender
           HMAC_SECRET_PARAM_NAME: /zer0/008-nyusatsu/hmac-secret
           SES_CONFIGURATION_SET_NAME: zer0-nyusatsu-config-set
+          MATCH_HISTORY_TABLE_NAME: zer0-nyusatsu-match-history
           ALLOWED_ORIGIN: !Ref AllowedOrigin
       Code:
         ZipFile: |

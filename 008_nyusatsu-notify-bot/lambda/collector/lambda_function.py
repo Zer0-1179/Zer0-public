@@ -55,6 +55,22 @@ BID_PERIOD_RE = re.compile(r"入札期間.*?<td[^>]*>(.*?)</td>", re.DOTALL)
 ERA_DATE_RE = re.compile(r"令和\s*([0-9０-９]+)\s*年\s*([0-9０-９]+)\s*月\s*([0-9０-９]+)\s*日")
 _ZENKAKU_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 
+# 詳細ページの「入札参加資格」テーブル等、ラベル付き行(<th>ラベル</th><td>値</td>)から
+# 抽出する項目。通知メールに「受注判断に必要な情報」を追加するため(Fable指摘、v0.11)。
+DETAIL_FIELD_LABELS = [
+    ("種目", "category_detail"),
+    ("所在地区分・順位", "area_rank"),
+    ("企業規模", "company_size"),
+    ("納入／履行場所", "location"),
+    ("納入／履行期間等", "period"),
+    ("開札予定日時", "bid_opening"),
+]
+DETAIL_FIELD_RE = re.compile(
+    r'<th class="header pcak4000-header"[^>]*>\s*(?P<label>[^<]+?)\s*</th>\s*'
+    r'<td[^>]*>(?P<value>.*?)</td>',
+    re.DOTALL,
+)
+
 
 def fetch(url: str) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
@@ -111,34 +127,109 @@ def filter_by_keywords(cases: list[dict], keywords: list[str]) -> list[dict]:
     return [c for c in cases if any(kw in c["title"] for kw in keywords)]
 
 
-def fetch_deadline_display(case: dict) -> str | None:
-    """案件詳細ページの「入札期間」終了日を取得し、残り日数を含む表示文字列を返す。
-    取得・解析に失敗した場合はNoneを返し、通知自体は継続させる。"""
+def _clean_field_text(raw: str) -> str:
+    text = html.unescape(raw)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def extract_detail_fields(detail_html: str) -> dict:
+    """詳細ページのラベル付きテーブル行(<th>ラベル</th><td>値</td>)を全て抽出する。"""
+    fields = {}
+    for m in DETAIL_FIELD_RE.finditer(detail_html):
+        label = m.group("label").strip()
+        value = _clean_field_text(m.group("value"))
+        if value and value != "-":
+            fields[label] = value
+    return fields
+
+
+def fetch_case_detail(case: dict) -> dict:
+    """案件詳細ページを一度だけ取得し、締切表示・入札参加資格情報（種目・所在地区分・
+    企業規模・履行場所・履行期間・開札予定日時）をまとめて返す。取得・解析に失敗した
+    場合は空dict（または取得できた分のみ）を返し、通知自体は継続させる
+    （受注判断に必要な情報を追加、Fable指摘v0.11。既存の締切取得と同じ1回のPOSTで完結し、
+    追加リクエストは発生しない）。"""
     job = DETAIL_JOB_MAP.get(case["detail_fn"])
     if not job:
-        return None
+        return {}
     try:
         detail_html = post(
             BASE_URL,
             {"job": job, "page": "", "keiyakuBango": case["detail_no"]},
         )
-        period_match = BID_PERIOD_RE.search(detail_html)
-        if not period_match:
-            return None
-        dates = ERA_DATE_RE.findall(period_match.group(1))
-        if not dates:
-            return None
-        # 「開始日～終了日」の並びのため、最後にマッチした日付が締切
-        reiwa_year, month, day = dates[-1]
-        greg_year = int(reiwa_year.translate(_ZENKAKU_DIGITS)) + 2018
-        deadline = date(greg_year, int(month.translate(_ZENKAKU_DIGITS)), int(day.translate(_ZENKAKU_DIGITS)))
-        days_left = (deadline - datetime.now(JST).date()).days
-        if days_left >= 0:
-            return f"入札期間終了: {deadline.month}/{deadline.day}（あと{days_left}日）"
-        return f"入札期間終了: {deadline.month}/{deadline.day}（終了済）"
     except Exception:
-        logger.warning("deadline fetch/parse failed for detail_no=%s", case.get("detail_no"), exc_info=True)
-        return None
+        logger.warning("detail fetch failed for detail_no=%s", case.get("detail_no"), exc_info=True)
+        return {}
+
+    info: dict = {}
+    try:
+        period_match = BID_PERIOD_RE.search(detail_html)
+        if period_match:
+            dates = ERA_DATE_RE.findall(period_match.group(1))
+            if dates:
+                # 「開始日～終了日」の並びのため、最後にマッチした日付が締切
+                reiwa_year, month, day = dates[-1]
+                greg_year = int(reiwa_year.translate(_ZENKAKU_DIGITS)) + 2018
+                deadline = date(
+                    greg_year, int(month.translate(_ZENKAKU_DIGITS)), int(day.translate(_ZENKAKU_DIGITS))
+                )
+                days_left = (deadline - datetime.now(JST).date()).days
+                if days_left >= 0:
+                    info["deadline_display"] = f"入札期間終了: {deadline.month}/{deadline.day}（あと{days_left}日）"
+                else:
+                    info["deadline_display"] = f"入札期間終了: {deadline.month}/{deadline.day}（終了済）"
+    except Exception:
+        logger.warning("deadline parse failed for detail_no=%s", case.get("detail_no"), exc_info=True)
+
+    raw_fields = extract_detail_fields(detail_html)
+    for label, key in DETAIL_FIELD_LABELS:
+        if label in raw_fields:
+            info[key] = raw_fields[label]
+
+    return info
+
+
+def format_case_line(c: dict, detail: dict) -> str:
+    line = (
+        f"・{c['title']}\n"
+        f"  契約番号: {c['contract_no']} / 入札方式: {c['method']} / 担当: {c['dept']}\n"
+    )
+    if detail.get("category_detail"):
+        line += f"  種目: {detail['category_detail']}\n"
+    qualification = [p for p in (detail.get("area_rank"), detail.get("company_size")) if p]
+    if qualification:
+        line += f"  参加資格: {' / '.join(qualification)}\n"
+    if detail.get("location"):
+        line += f"  履行場所: {detail['location']}\n"
+    if detail.get("period"):
+        line += f"  履行期間: {detail['period']}\n"
+    if detail.get("deadline_display"):
+        line += f"  {detail['deadline_display']}\n"
+    if detail.get("bid_opening"):
+        line += f"  開札予定: {detail['bid_opening']}\n"
+    return line
+
+
+def record_match_history(kokoku_no: int, case: dict, detail: dict) -> None:
+    """マッチ案件を履歴テーブルに記録する。登録確認時のバックフィルウェルカムメール
+    (lp_waitlist Lambda)が直近のマッチ実績を参照するために使う。60日でTTL失効する。"""
+    table = dynamodb.Table(os.environ["MATCH_HISTORY_TABLE_NAME"])
+    now = datetime.now(timezone.utc)
+    item = {
+        "kokoku_no": kokoku_no,
+        "detail_no": case["detail_no"],
+        "title": case["title"],
+        "contract_no": case["contract_no"],
+        "method": case["method"],
+        "dept": case["dept"],
+        "matched_at": now.isoformat(),
+        "ttl": int((now + timedelta(days=60)).timestamp()),
+    }
+    for key in ("category_detail", "area_rank", "company_size", "location", "period", "deadline_display", "bid_opening"):
+        if detail.get(key):
+            item[key] = detail[key]
+    table.put_item(Item=item)
 
 
 def is_processed(kokoku_no: int) -> bool:
@@ -261,14 +352,12 @@ def send_notification(kokoku_no: int, matches: list[dict]) -> None:
     for idx, c in enumerate(matches):
         if idx > 0:
             time.sleep(REQUEST_INTERVAL_SEC)
-        deadline_display = fetch_deadline_display(c)
-        line = (
-            f"・{c['title']}\n"
-            f"  契約番号: {c['contract_no']} / 入札方式: {c['method']} / 担当: {c['dept']}\n"
-        )
-        if deadline_display:
-            line += f"  {deadline_display}\n"
-        lines.append(line)
+        detail = fetch_case_detail(c)
+        lines.append(format_case_line(c, detail))
+        try:
+            record_match_history(kokoku_no, c, detail)
+        except Exception:
+            logger.warning("match history record failed for detail_no=%s", c.get("detail_no"), exc_info=True)
     lines.append(f"\n詳細一覧: {detail_url}")
     body = "\n".join(lines)
     subject = f"【入札通知】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件"
@@ -282,21 +371,24 @@ def send_notification(kokoku_no: int, matches: list[dict]) -> None:
             logger.warning("notification email failed for %s, kokoku_no=%s", recipient, kokoku_no, exc_info=True)
 
 
-def update_weekly_stats(matches_today: int) -> tuple[int, int]:
-    """週次集計(シングルトン項目)に今回の実行結果を加算し、更新後の値を返す。"""
+def update_weekly_stats(matches_today: int, cases_today: int) -> tuple[int, int, int]:
+    """週次集計(シングルトン項目)に今回の実行結果を加算し、更新後の値を返す。
+    cases_today(委託案件の総チェック数)は「0件でも怠けていない」ことを購読者に
+    伝えるために追加した(v0.11、Fable指摘: チェックした母数を書くのがポイント)。"""
     table = dynamodb.Table(os.environ["WEEKLY_STATS_TABLE_NAME"])
     resp = table.update_item(
         Key={"stats_id": "current"},
-        UpdateExpression="ADD total_matches :m, days_run :d SET last_run_at = :t",
+        UpdateExpression="ADD total_matches :m, total_cases_checked :c, days_run :d SET last_run_at = :t",
         ExpressionAttributeValues={
             ":m": matches_today,
+            ":c": cases_today,
             ":d": 1,
             ":t": datetime.now(timezone.utc).isoformat(),
         },
         ReturnValues="UPDATED_NEW",
     )
     attrs = resp["Attributes"]
-    return int(attrs["total_matches"]), int(attrs["days_run"])
+    return int(attrs["total_matches"]), int(attrs.get("total_cases_checked", 0)), int(attrs["days_run"])
 
 
 def reset_weekly_stats() -> None:
@@ -305,22 +397,37 @@ def reset_weekly_stats() -> None:
         Item={
             "stats_id": "current",
             "total_matches": 0,
+            "total_cases_checked": 0,
             "days_run": 0,
             "last_run_at": datetime.now(timezone.utc).isoformat(),
         }
     )
 
 
-def send_weekly_digest(total_matches: int, days_run: int) -> None:
+def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: int) -> None:
     sender = get_param(os.environ["SES_SENDER_PARAM_NAME"])
-    recipient = get_param(os.environ["NOTIFY_EMAIL_PARAM_NAME"])
+    owner_email = get_param(os.environ["NOTIFY_EMAIL_PARAM_NAME"])
 
     if total_matches > 0:
-        body = f"先週は{days_run}回の巡回で、清掃関連案件を合計{total_matches}件通知しました。\nBotは正常に稼働しています。"
+        body = (
+            f"先週は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックし、"
+            f"清掃関連案件を合計{total_matches}件通知しました。\nBotは正常に稼働しています。"
+        )
     else:
-        body = f"先週は{days_run}回の巡回を行いましたが、該当する案件はありませんでした。\nBotは正常に稼働しています。"
+        body = (
+            f"先週は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックしましたが、"
+            f"該当する案件はありませんでした。\nBotは正常に稼働しています。"
+        )
 
-    send_email_with_unsubscribe(sender, recipient, "【入札情報通知Bot】週次稼働レポート", body)
+    # v0.11: 運用監視用のオーナーだけでなく、実際の購読者にも週次サマリーを届ける。
+    # 横浜市の入札公告は原則毎週火曜発行のため案件ゼロの週が実測で約半数あり、
+    # 「本当に動いているか」という不安を解消するハートビートとして重要(Fable指摘)。
+    owner_email_value = owner_email
+    for recipient in get_all_recipients(owner_email_value):
+        try:
+            send_email_with_unsubscribe(sender, recipient, "【入札情報通知Bot】週次稼働レポート", body)
+        except Exception:
+            logger.warning("weekly digest failed for %s", recipient, exc_info=True)
 
 
 def lambda_handler(event, context):
@@ -335,6 +442,7 @@ def lambda_handler(event, context):
     logger.info("kokoku_no total=%d new=%d bootstrap=%s", len(all_numbers), len(new_numbers), bootstrap)
 
     total_matches = 0
+    total_cases_checked = 0
     for idx, kokoku_no in enumerate(new_numbers):
         if not bootstrap:
             # 詳細ページPOST+3秒sleepが号ごとに累積するため、残り時間が不足したら
@@ -353,6 +461,7 @@ def lambda_handler(event, context):
 
             anken_html = fetch(f"{BASE_URL}?job=KokokuAnkenList&kokoku_no={kokoku_no}")
             cases = extract_itaku_cases(anken_html)
+            total_cases_checked += len(cases)
             matches = filter_by_keywords(cases, keywords)
             if matches:
                 send_notification(kokoku_no, matches)
@@ -361,9 +470,9 @@ def lambda_handler(event, context):
         mark_processed(kokoku_no)
 
     if not bootstrap:
-        weekly_total, weekly_days = update_weekly_stats(total_matches)
+        weekly_total, weekly_cases, weekly_days = update_weekly_stats(total_matches, total_cases_checked)
         if datetime.now(JST).weekday() == 0:
-            send_weekly_digest(weekly_total, weekly_days)
+            send_weekly_digest(weekly_total, weekly_cases, weekly_days)
             reset_weekly_stats()
 
     logger.info("done: new_numbers=%d total_matches=%d bootstrap=%s", len(new_numbers), total_matches, bootstrap)
