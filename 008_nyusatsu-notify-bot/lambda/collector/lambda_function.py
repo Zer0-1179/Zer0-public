@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 
 import boto3
+from boto3.dynamodb.conditions import Attr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -175,6 +176,32 @@ def build_unsubscribe_url(email: str) -> str:
     return f"{base_url}/unsubscribe?email={urllib.parse.quote(email)}&token={token}"
 
 
+def get_active_subscriber_emails() -> list[str]:
+    """zer0-nyusatsu-lp-waitlistからstatus=active(二重オプトイン確認済み)の
+    購読者メールアドレスを全件取得する。"""
+    table = dynamodb.Table(os.environ["WAITLIST_TABLE_NAME"])
+    emails: list[str] = []
+    scan_kwargs = {"FilterExpression": Attr("status").eq("active"), "ProjectionExpression": "email"}
+    while True:
+        resp = table.scan(**scan_kwargs)
+        emails.extend(item["email"] for item in resp.get("Items", []))
+        if "LastEvaluatedKey" not in resp:
+            break
+        scan_kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+    return emails
+
+
+def get_all_recipients(owner_email: str) -> list[str]:
+    """運用監視用のオーナー宛+実際にactiveな購読者宛を、重複なく返す。"""
+    recipients = [owner_email]
+    seen = {owner_email}
+    for email in get_active_subscriber_emails():
+        if email not in seen:
+            seen.add(email)
+            recipients.append(email)
+    return recipients
+
+
 def notification_footer_text(unsubscribe_url: str) -> str:
     """プレーンテキスト版フッター。URLをそのまま記載する
     (HTML非対応メーラー向けのフォールバック)。"""
@@ -206,7 +233,8 @@ def build_html_body(body: str, unsubscribe_url: str) -> str:
 def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body: str) -> None:
     """List-Unsubscribeヘッダー(RFC 8058のOne-Click Unsubscribe含む)を付与し、
     HTML版(「配信停止」をクリック可能なリンクとして埋め込む)+プレーンテキスト版
-    (URLそのまま、フォールバック)のmultipart/alternativeでSES送信する。"""
+    (URLそのまま、フォールバック)のmultipart/alternativeでSES送信する。
+    SES Configuration Set(バウンス・苦情をSNS経由で検知、B-3)を付与する。"""
     unsubscribe_url = build_unsubscribe_url(recipient)
     msg = EmailMessage()
     msg["From"] = sender
@@ -220,12 +248,13 @@ def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body:
         Source=sender,
         Destinations=[recipient],
         RawMessage={"Data": msg.as_bytes()},
+        ConfigurationSetName=os.environ["SES_CONFIGURATION_SET_NAME"],
     )
 
 
 def send_notification(kokoku_no: int, matches: list[dict]) -> None:
     sender = get_param(os.environ["SES_SENDER_PARAM_NAME"])
-    recipient = get_param(os.environ["NOTIFY_EMAIL_PARAM_NAME"])
+    owner_email = get_param(os.environ["NOTIFY_EMAIL_PARAM_NAME"])
     detail_url = f"{BASE_URL}?job=KokokuAnkenList&kokoku_no={kokoku_no}"
 
     lines = [f"横浜市 公告第{kokoku_no}号 で清掃関連案件が{len(matches)}件見つかりました。\n"]
@@ -242,10 +271,15 @@ def send_notification(kokoku_no: int, matches: list[dict]) -> None:
         lines.append(line)
     lines.append(f"\n詳細一覧: {detail_url}")
     body = "\n".join(lines)
+    subject = f"【入札通知】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件"
 
-    send_email_with_unsubscribe(
-        sender, recipient, f"【入札通知】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件", body
-    )
+    # 運用監視用のオーナー宛+実際にactiveな購読者宛の両方に個別送信する(B-1)。
+    # BCC一斉送信は使わない(宛先ごとに異なる配信停止トークンを埋め込む必要があるため)。
+    for recipient in get_all_recipients(owner_email):
+        try:
+            send_email_with_unsubscribe(sender, recipient, subject, body)
+        except Exception:
+            logger.warning("notification email failed for %s, kokoku_no=%s", recipient, kokoku_no, exc_info=True)
 
 
 def update_weekly_stats(matches_today: int) -> tuple[int, int]:

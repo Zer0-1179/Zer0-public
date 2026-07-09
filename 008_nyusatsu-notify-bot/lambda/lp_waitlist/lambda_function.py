@@ -24,6 +24,7 @@ TABLE_NAME = os.environ["WAITLIST_TABLE_NAME"]
 NOTIFY_EMAIL_PARAM_NAME = os.environ["NOTIFY_EMAIL_PARAM_NAME"]
 SES_SENDER_PARAM_NAME = os.environ["SES_SENDER_PARAM_NAME"]
 HMAC_SECRET_PARAM_NAME = os.environ["HMAC_SECRET_PARAM_NAME"]
+SES_CONFIGURATION_SET_NAME = os.environ["SES_CONFIGURATION_SET_NAME"]
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -141,6 +142,7 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
         Source=sender,
         Destinations=[email],
         RawMessage={"Data": msg.as_bytes()},
+        ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
     )
 
 
@@ -154,6 +156,7 @@ def notify_owner_confirmed(email: str) -> None:
             "Subject": {"Data": "[Nyusatsu LP] 事前登録が確認されました", "Charset": "UTF-8"},
             "Body": {"Text": {"Data": f"確認済みメールアドレス: {email}", "Charset": "UTF-8"}},
         },
+        ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
     )
 
 
