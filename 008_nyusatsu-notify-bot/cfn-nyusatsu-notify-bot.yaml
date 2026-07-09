@@ -103,6 +103,29 @@ Resources:
         - AttributeName: stats_id
           KeyType: HASH
 
+  # マッチした案件の履歴(v0.11)。lp_waitlist Lambdaが登録確認時のバックフィル
+  # ウェルカムメールで直近の実績を参照するために使う。60日でTTL失効させる
+  # (古いデータはウェルカムメール用途以外に使わないため無期限保持は不要)。
+  MatchHistoryTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      TableName: zer0-nyusatsu-match-history
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: kokoku_no
+          AttributeType: N
+        - AttributeName: detail_no
+          AttributeType: S
+      KeySchema:
+        - AttributeName: kokoku_no
+          KeyType: HASH
+        - AttributeName: detail_no
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
   NotifyEmailParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -336,6 +359,10 @@ Resources:
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/zer0-nyusatsu-lp-waitlist
               - Effect: Allow
                 Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt MatchHistoryTable.Arn
+              - Effect: Allow
+                Action:
                   - ssm:GetParameter
                 Resource:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NotifyEmailParameter}
@@ -376,6 +403,7 @@ Resources:
           UNSUBSCRIBE_BASE_URL_PARAM_NAME: /zer0/008-nyusatsu/unsubscribe-base-url
           WAITLIST_TABLE_NAME: zer0-nyusatsu-lp-waitlist
           SES_CONFIGURATION_SET_NAME: !Ref SesConfigurationSet
+          MATCH_HISTORY_TABLE_NAME: !Ref MatchHistoryTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -420,6 +448,9 @@ Outputs:
   WeeklyStatsTableName:
     Description: DynamoDB table name for weekly digest counter
     Value: !Ref WeeklyStatsTable
+  MatchHistoryTableName:
+    Description: DynamoDB table name for matched case history (used by lp_waitlist backfill welcome email)
+    Value: !Ref MatchHistoryTable
   SesConfigurationSetName:
     Description: SES Configuration Set name for bounce/complaint tracking
     Value: !Ref SesConfigurationSet

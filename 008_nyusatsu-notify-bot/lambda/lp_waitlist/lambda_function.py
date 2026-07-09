@@ -8,9 +8,11 @@ import os
 import re
 import time
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
 import boto3
+from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
@@ -25,6 +27,7 @@ NOTIFY_EMAIL_PARAM_NAME = os.environ["NOTIFY_EMAIL_PARAM_NAME"]
 SES_SENDER_PARAM_NAME = os.environ["SES_SENDER_PARAM_NAME"]
 HMAC_SECRET_PARAM_NAME = os.environ["HMAC_SECRET_PARAM_NAME"]
 SES_CONFIGURATION_SET_NAME = os.environ["SES_CONFIGURATION_SET_NAME"]
+MATCH_HISTORY_TABLE_NAME = os.environ["MATCH_HISTORY_TABLE_NAME"]
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -160,6 +163,83 @@ def notify_owner_confirmed(email: str) -> None:
     )
 
 
+def get_recent_matches(days: int = 30) -> list[dict]:
+    """直近days日以内にマッチした案件履歴を新しい順で取得する。
+    登録確認時のバックフィルウェルカムメールで「実際に届く案件のイメージ」を
+    示すために使う(Fable指摘: 最初の実メールまで数週間無音になりうる問題への対応、v0.11)。"""
+    table = dynamodb.Table(MATCH_HISTORY_TABLE_NAME)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    items: list[dict] = []
+    scan_kwargs = {"FilterExpression": Attr("matched_at").gte(cutoff)}
+    while True:
+        resp = table.scan(**scan_kwargs)
+        items.extend(resp.get("Items", []))
+        if "LastEvaluatedKey" not in resp:
+            break
+        scan_kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+    items.sort(key=lambda i: i.get("matched_at", ""), reverse=True)
+    return items
+
+
+def format_history_line(item: dict) -> str:
+    line = (
+        f"・{item.get('title', '')}\n"
+        f"  契約番号: {item.get('contract_no', '')} / 入札方式: {item.get('method', '')} / 担当: {item.get('dept', '')}\n"
+    )
+    if item.get("category_detail"):
+        line += f"  種目: {item['category_detail']}\n"
+    qualification = [p for p in (item.get("area_rank"), item.get("company_size")) if p]
+    if qualification:
+        line += f"  参加資格: {' / '.join(qualification)}\n"
+    if item.get("location"):
+        line += f"  履行場所: {item['location']}\n"
+    if item.get("period"):
+        line += f"  履行期間: {item['period']}\n"
+    return line
+
+
+def send_welcome_email(email: str, sender: str) -> None:
+    """登録確認完了時に、直近1ヶ月の該当案件（あれば）をまとめて送るバックフィル
+    ウェルカムメール。案件がない場合も「Botは正常に稼働している」ことを伝え、
+    登録後の沈黙による不安を解消する(Fable指摘、v0.11)。"""
+    recent = get_recent_matches(days=30)
+
+    if recent:
+        lines = [
+            f"ご登録ありがとうございます。過去1ヶ月に清掃関連の案件が{len(recent)}件ありました。"
+            "参考までにご案内します（すでに締切を過ぎている案件も含みます。今後は新着があり次第、随時お届けします）。\n"
+        ]
+        for item in recent[:10]:
+            lines.append(format_history_line(item))
+        body = "\n".join(lines)
+        subject = "【入札情報通知Bot】直近1ヶ月の該当案件（参考）"
+    else:
+        body = (
+            "ご登録ありがとうございます。\n\n"
+            "横浜市の入札公告は原則毎週火曜日に発行されます。過去1ヶ月は該当する清掃関連案件が"
+            "ありませんでしたが、Botは毎朝正常に稼働し、公告をチェックしています。\n\n"
+            "該当案件が見つかり次第、すぐにメールでお知らせします。"
+        )
+        subject = "【入札情報通知Bot】ご登録ありがとうございます"
+
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = email
+    msg["Subject"] = subject
+    msg.set_content(body)
+    msg.add_alternative(
+        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;line-height:1.7;color:#222\">"
+        f"<div>{html.escape(body).replace(chr(10), '<br>')}</div></body></html>",
+        subtype="html",
+    )
+    ses.send_raw_email(
+        Source=sender,
+        Destinations=[email],
+        RawMessage={"Data": msg.as_bytes()},
+        ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
+    )
+
+
 def handle_register(event):
     try:
         payload = json.loads(event.get("body") or "{}")
@@ -238,6 +318,11 @@ def handle_confirm(event):
             notify_owner_confirmed(email)
         except Exception:
             logger.warning("owner confirm notification failed for %s", email, exc_info=True)
+        try:
+            sender_email = _get_param(SES_SENDER_PARAM_NAME)
+            send_welcome_email(email, sender_email)
+        except Exception:
+            logger.warning("welcome email failed for %s", email, exc_info=True)
 
     return _html_response(
         200,

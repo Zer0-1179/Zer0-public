@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>入札情報通知Bot | 横浜市の入札公告を毎朝自動でメールに</title>
-<meta name="description" content="清掃・ビルメンテナンス業向け。横浜市の入札公告を毎朝自動収集し、対象業種の案件だけをメールで通知するサービス（パイロット版）。" />
+<title>入札情報通知Bot | 横浜市の入札公告を毎朝自動チェック</title>
+<meta name="description" content="清掃・ビルメンテナンス業向け。横浜市の入札公告を毎朝自動でチェックし、対象業種の案件があればメールで通知するサービス（パイロット版）。" />
 <style>
   :root {
     --bg: #fafaf8;
@@ -170,6 +170,45 @@
   .step h3 { margin: 0 0 8px; font-size: 19px; }
   .step p { margin: 0; color: var(--ink-soft); font-size: 15px; max-width: 560px; }
 
+  /* ── Mail sample mockup ─────────────────── */
+  .mail-mock {
+    margin-top: 48px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 40px -28px rgba(0,0,0,0.25);
+    overflow: hidden;
+    max-width: 640px;
+  }
+  .mail-mock-bar {
+    display: flex;
+    gap: 7px;
+    padding: 14px 18px;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--line);
+  }
+  .mail-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: inline-block; }
+  .mail-mock-header { padding: 20px 24px; border-bottom: 1px solid var(--line); }
+  .mail-mock-row { display: flex; gap: 10px; font-size: 14px; padding: 4px 0; }
+  .mail-mock-label {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 10px;
+    border-radius: 999px;
+    height: fit-content;
+  }
+  .mail-mock-body { padding: 24px; }
+  .mail-mock-case-title { font-weight: 700; font-size: 15px; margin: 0 0 12px; }
+  .mail-mock-list { list-style: none; margin: 0; padding: 0; font-size: 14px; color: var(--ink-soft); }
+  .mail-mock-list li { padding: 6px 0; border-top: 1px dashed var(--line); }
+  .mail-mock-list li:first-child { border-top: none; }
+  .mail-mock-list strong { color: var(--ink); font-weight: 600; margin-right: 6px; }
+  .mail-mock-more { margin: 16px 0 0; font-size: 13px; color: var(--ink-soft); }
+  .mail-mock-note { margin-top: 18px; font-size: 13px; color: var(--ink-soft); }
+
   /* ── Coverage / pricing ─────────────────── */
   .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
   @media (max-width: 860px) { .split, .card-grid { grid-template-columns: 1fr; } .step { grid-template-columns: 56px 1fr; } }
@@ -298,10 +337,10 @@
 
 <section class="hero">
   <div class="eyebrow reveal">パイロット版・横浜市対応</div>
-  <h1 class="reveal d1">横浜市の入札公告、<br class="br-pc" />毎朝<span class="hl">自動でメール</span>に届く。</h1>
+  <h1 class="reveal d1">横浜市の入札公告を<span class="hl">毎朝自動でチェック</span>。<br class="br-pc" />該当案件があれば、すぐ通知。</h1>
   <p class="lead reveal d2" style="margin-left:auto;margin-right:auto;">
     清掃・ビルメンテナンス業のための入札情報自動通知サービス。<br>
-    毎日の公告チェックはBotに任せて、対象業種の案件だけを受け取れます。
+    毎日の公告チェックはBotに任せて、対象業種の案件が出たときだけメールで受け取れます。
   </p>
   <div class="hero-actions reveal d3">
     <a class="btn-primary" href="#register">無料で事前登録する</a>
@@ -309,7 +348,7 @@
   </div>
   <div class="hero-visual reveal d3">
     <div class="stat-pill"><div class="num">毎朝6時</div><div class="label">自動収集</div></div>
-    <div class="stat-pill"><div class="num">4業種</div><div class="label">対象キーワード</div></div>
+    <div class="stat-pill"><div class="num">月8〜14件</div><div class="label">マッチ実績（2026年6月）</div></div>
     <div class="stat-pill"><div class="num">横浜市</div><div class="label">パイロット対応エリア</div></div>
   </div>
 </section>
@@ -357,6 +396,37 @@
   </div>
 </section>
 
+<section id="mail-sample">
+  <div class="eyebrow reveal">通知メールのイメージ</div>
+  <h2 class="reveal">実際に届くメールは、こんな内容です。</h2>
+  <p class="lead reveal">対象案件が見つかった日にだけ届く通知メールのサンプルです。案件ごとに詳細情報をまとめてお届けします。</p>
+  <div class="mail-mock reveal d1">
+    <div class="mail-mock-bar">
+      <span class="mail-dot"></span><span class="mail-dot"></span><span class="mail-dot"></span>
+    </div>
+    <div class="mail-mock-header">
+      <div class="mail-mock-row"><span class="mail-mock-label">件名</span><span>【入札通知】横浜市 第18104号 清掃関連案件7件</span></div>
+      <div class="mail-mock-row"><span class="mail-mock-label">差出人</span><span>入札情報通知Bot &lt;nyusatsu@zer0-infra.com&gt;</span></div>
+    </div>
+    <div class="mail-mock-body">
+      <p class="mail-mock-case-title">1. ○○地区 学校施設清掃業務委託（サンプル）</p>
+      <ul class="mail-mock-list">
+        <li><strong>契約番号</strong>18104-0001</li>
+        <li><strong>入札方式</strong>一般競争入札（電子入札）</li>
+        <li><strong>担当部局</strong>教育委員会事務局 施設課</li>
+        <li><strong>種目</strong>清掃業務</li>
+        <li><strong>参加資格</strong>市内業者／小規模企業者</li>
+        <li><strong>履行場所</strong>横浜市○○区○○</li>
+        <li><strong>履行期間</strong>2026年4月1日〜2027年3月31日</li>
+        <li><strong>締切残日数</strong>あと3日</li>
+        <li><strong>開札予定日時</strong>2026年7月28日 10:00</li>
+      </ul>
+      <p class="mail-mock-more">…以下、その日にマッチした案件が続きます（この例では計7件）</p>
+    </div>
+  </div>
+  <p class="mail-mock-note">※上記はイメージを伝えるためのサンプルです。実際にはこのような情報が毎回のメールに含まれます。</p>
+</section>
+
 <section id="coverage">
   <div class="split">
     <div class="info-box reveal">
@@ -385,6 +455,10 @@
     <div class="faq-item reveal">
       <button class="faq-q">対象エリアは横浜市だけですか？<span class="plus">+</span></button>
       <div class="faq-a"><p>現在は横浜市の案件のみを対象にパイロット運用中です。検証が安定次第、他エリアへの対応拡大を検討しています。</p></div>
+    </div>
+    <div class="faq-item reveal">
+      <button class="faq-q">どのくらいの頻度で届きますか？<span class="plus">+</span></button>
+      <div class="faq-a"><p>横浜市の入札公告は原則毎週火曜日に発行されます。毎朝の自動チェック自体は欠かしませんが、通知が届くのは対象キーワードに合う案件が実際にある時だけです。2026年6月の実績では月8〜14件が対象条件にマッチしましたが、該当案件がまったくない週もあります。「毎日届く」サービスではなく、「出た時に見逃さない」サービスとしてご利用ください。</p></div>
     </div>
     <div class="faq-item reveal">
       <button class="faq-q">今すぐ利用開始できますか？<span class="plus">+</span></button>
