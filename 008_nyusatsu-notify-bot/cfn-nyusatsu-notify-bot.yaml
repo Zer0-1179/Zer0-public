@@ -73,7 +73,8 @@ Parameters:
 # Resources
 # 収集Lambda・実行ロール・DynamoDB(処理済み号管理)・SSM(設定値)・
 # EventBridge(毎日起動)・DLQ(失敗時退避)・CloudWatch Logs・
-# DLQ滞留監視用CloudWatch Alarm・通知用SNSを定義する。
+# DLQ滞留監視用CloudWatch Alarm・通知用SNS・SES Configuration Set
+# (バウンス/苦情検知)・自動配信停止用Lambdaを定義する。
 # -----------------------------------------------
 Resources:
   ProcessedKokokuTable:
@@ -133,6 +134,117 @@ Resources:
       Type: String
       Value: !Ref HmacSecret
       Description: Nyusatsu Notify Bot HMAC secret for confirm/unsubscribe link signing
+
+  # SES Configuration Set(B-3). collector/lp_waitlist両Lambdaの送信メールに
+  # 付与し、バウンス・苦情の発生をSNS経由で検知できるようにする。
+  SesConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: zer0-nyusatsu-config-set
+
+  # SESバウンス・苦情通知用SNSトピック。オーナーへのEmail通知(運用把握用)+
+  # 自動配信停止Lambda(BounceHandlerFunction)の両方が購読する。
+  SesEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: zer0-nyusatsu-ses-events-topic
+
+  SesEventsTopicSubscription01:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SesEventsTopic
+      Protocol: email
+      Endpoint: !Ref NotifyEmail
+
+  # Configuration SetのBounce/ComplaintイベントをSNSトピックへ配信する設定。
+  SesConfigurationSetEventDestination01:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    Properties:
+      ConfigurationSetName: !Ref SesConfigurationSet
+      EventDestination:
+        Name: bounce-complaint-to-sns
+        Enabled: true
+        MatchingEventTypes:
+          - bounce
+          - complaint
+        SnsDestination:
+          TopicARN: !Ref SesEventsTopic
+
+  BounceHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/zer0-nyusatsu-bounce-handler
+      RetentionInDays: !Ref LogRetentionDays
+
+  # IAM Role for the SES bounce/complaint handler Lambda function.
+  # Description must stay ASCII-only per project convention.
+  BounceHandlerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zer0-nyusatsu-bounce-handler-role
+      Description: Execution role for Nyusatsu SES bounce/complaint handler Lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: zer0-nyusatsu-bounce-handler-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt BounceHandlerLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/zer0-nyusatsu-lp-waitlist
+
+  # 苦情(Complaint)は即配信停止、Permanentバウンスのみ配信停止する
+  # (Transientバウンスは一時的な不着のため対象外)。zer0-nyusatsu-lp-waitlist
+  # は別スタック(cfn-lp-backend.yaml)が所有するため、テーブル名は固定文字列で
+  # 参照する(このプロジェクトの既存のクロススタック参照方式に統一)。
+  BounceHandlerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zer0-nyusatsu-bounce-handler
+      Description: SESバウンス・苦情通知を受けて購読者を自動的に配信停止にする
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt BounceHandlerFunctionRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          WAITLIST_TABLE_NAME: zer0-nyusatsu-lp-waitlist
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              # Placeholder. Deployed via `aws lambda update-function-code`
+              # per CLAUDE.md rule (no SAM, no S3 build artifact).
+              return {"statusCode": 200, "body": "placeholder"}
+    DependsOn:
+      - BounceHandlerLogGroup
+
+  BounceHandlerSnsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BounceHandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref SesEventsTopic
+
+  SesEventsTopicSubscription02:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SesEventsTopic
+      Protocol: lambda
+      Endpoint: !GetAtt BounceHandlerFunction.Arn
 
   NotifyBotDLQ:
     Type: AWS::SQS::Queue
@@ -220,6 +332,10 @@ Resources:
                 Resource: !GetAtt WeeklyStatsTable.Arn
               - Effect: Allow
                 Action:
+                  - dynamodb:Scan
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/zer0-nyusatsu-lp-waitlist
+              - Effect: Allow
+                Action:
                   - ssm:GetParameter
                 Resource:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NotifyEmailParameter}
@@ -258,6 +374,8 @@ Resources:
           KEYWORDS_PARAM_NAME: !Ref KeywordsParameter
           HMAC_SECRET_PARAM_NAME: !Ref HmacSecretParameter
           UNSUBSCRIBE_BASE_URL_PARAM_NAME: /zer0/008-nyusatsu/unsubscribe-base-url
+          WAITLIST_TABLE_NAME: zer0-nyusatsu-lp-waitlist
+          SES_CONFIGURATION_SET_NAME: !Ref SesConfigurationSet
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -302,3 +420,6 @@ Outputs:
   WeeklyStatsTableName:
     Description: DynamoDB table name for weekly digest counter
     Value: !Ref WeeklyStatsTable
+  SesConfigurationSetName:
+    Description: SES Configuration Set name for bounce/complaint tracking
+    Value: !Ref SesConfigurationSet

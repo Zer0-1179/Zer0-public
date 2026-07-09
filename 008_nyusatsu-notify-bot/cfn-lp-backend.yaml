@@ -143,6 +143,7 @@ Resources:
           NOTIFY_EMAIL_PARAM_NAME: /zer0/008-nyusatsu/notify-email
           SES_SENDER_PARAM_NAME: /zer0/008-nyusatsu/ses-sender
           HMAC_SECRET_PARAM_NAME: /zer0/008-nyusatsu/hmac-secret
+          SES_CONFIGURATION_SET_NAME: zer0-nyusatsu-config-set
           ALLOWED_ORIGIN: !Ref AllowedOrigin
       Code:
         ZipFile: |
