@@ -25,6 +25,7 @@ os.environ.setdefault("SES_SENDER_PARAM_NAME", "/test/sender")
 os.environ.setdefault("HMAC_SECRET_PARAM_NAME", "/test/hmac-secret")
 os.environ.setdefault("UNSUBSCRIBE_BASE_URL_PARAM_NAME", "/test/unsubscribe-base-url")
 os.environ.setdefault("SES_CONFIGURATION_SET_NAME", "test-config-set")
+os.environ.setdefault("FORWARD_FROM_ADDRESS", "relay@example.com")
 
 
 def _load_module(name: str, path: str):
@@ -86,6 +87,9 @@ _lp_waitlist = _load_module(
 _bounce_handler = _load_module(
     "bounce_handler_lambda_function", os.path.join(ROOT, "lambda", "bounce_handler", "lambda_function.py")
 )
+_mail_forwarder = _load_module(
+    "mail_forwarder_lambda_function", os.path.join(ROOT, "lambda", "mail_forwarder", "lambda_function.py")
+)
 
 _TABLE_KEYS = {
     "test-waitlist": ["email"],
@@ -112,6 +116,11 @@ def lp_waitlist():
 @pytest.fixture
 def bounce_handler():
     return _bounce_handler
+
+
+@pytest.fixture
+def mail_forwarder():
+    return _mail_forwarder
 
 
 @pytest.fixture(autouse=True)

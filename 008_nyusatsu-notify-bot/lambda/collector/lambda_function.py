@@ -22,7 +22,7 @@ logger.setLevel(logging.INFO)
 BASE_URL = "https://keiyaku.city.yokohama.lg.jp/epco/servlet/p"
 USER_AGENT = "Zer0-NyusatsuNotifyBot/1.0 (+contact: nyusatsu@zer0-infra.com)"
 # 利用者向けメールの差出人表示名・件名プレフィックスに使うサービス名。
-# 「Bot」を含む旧名称は受信箱での印象が悪いため改称した(v0.13)。
+# 「Bot」を含む旧名称は受信箱での印象が悪いため改称した(v0.14)。
 SERVICE_NAME = "入札情報ウォッチ"
 REQUEST_INTERVAL_SEC = 3
 JST = timezone(timedelta(hours=9))
@@ -468,8 +468,7 @@ def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: i
     # v0.11: 運用監視用のオーナーだけでなく、実際の購読者にも週次サマリーを届ける。
     # 横浜市の入札公告は原則毎週火曜発行のため案件ゼロの週が実測で約半数あり、
     # 「本当に動いているか」という不安を解消するハートビートとして重要(Fable指摘)。
-    owner_email_value = owner_email
-    for recipient in get_all_recipients(owner_email_value):
+    for recipient in get_all_recipients(owner_email):
         try:
             send_email_with_unsubscribe(sender, recipient, f"【{SERVICE_NAME}】週次稼働レポート", body)
         except Exception:

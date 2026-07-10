@@ -1,10 +1,15 @@
 import email
+import logging
 import os
 from email import policy
 from email.message import EmailMessage
 from email.utils import parseaddr
 
 import boto3
+from botocore.exceptions import ClientError
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 s3 = boto3.client("s3")
 ses = boto3.client("ses")
@@ -21,7 +26,16 @@ def lambda_handler(event, context):
         bucket = record["s3"]["bucket"]["name"]
         key = record["s3"]["object"]["key"]
 
-        raw = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+        try:
+            raw = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchKey":
+                # S3イベントの重複配信(at-least-once)で同一オブジェクトに対し
+                # 複数回起動した場合、先に処理した側が既に削除済みのことがある。
+                # 転送は完了済みとみなしてこのレコードはスキップする。
+                logger.info("object already processed/deleted, skipping: %s/%s", bucket, key)
+                continue
+            raise
         # policy=default(モダンAPI)でパースすると、RFC 2047エンコード済みの
         # From/Subjectヘッダーが自動でデコードされた文字列として取得できる。
         # 従来のcompat32(デフォルト)だとエンコード済みの生文字列

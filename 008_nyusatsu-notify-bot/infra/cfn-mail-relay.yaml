@@ -131,6 +131,18 @@ Resources:
                 Resource: "arn:aws:s3:::zer0-nyusatsu-mail-s3/incoming/*"
               - Effect: Allow
                 Action:
+                  - s3:ListBucket
+                # S3イベントの重複配信(at-least-once)で同じオブジェクトに対し
+                # 複数回Lambdaが起動した場合、片方が削除済みのオブジェクトを
+                # 読もうとするとNoSuchKeyになるべきだが、ListBucket権限がないと
+                # S3はAccessDeniedを返し本物の権限不足と区別できない。
+                # ListBucketを付与しGetObjectの失敗理由を正しく判定できるようにする。
+                Resource: "arn:aws:s3:::zer0-nyusatsu-mail-s3"
+                Condition:
+                  StringLike:
+                    s3:prefix: "incoming/*"
+              - Effect: Allow
+                Action:
                   - ssm:GetParameter
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/notify-email
               - Effect: Allow
