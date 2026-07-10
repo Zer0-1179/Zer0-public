@@ -26,6 +26,10 @@ Parameters:
       - 14
       - 30
     Description: Lambda実行ログの保持日数
+  NotifyEmail:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /zer0/008-nyusatsu/notify-email
+    Description: 転送Lambda異常時のアラーム通知を受け取るメールアドレス(メインスタックが作成するSSMパラメータの値を参照)
 
 # -----------------------------------------------
 # Resources
@@ -182,6 +186,44 @@ Resources:
       Principal: s3.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
       SourceArn: !Sub "arn:aws:s3:::zer0-nyusatsu-mail-s3"
+
+  # SNS Topic for CloudWatch Alarm notifications (this stack's own, self-contained).
+  # ForwarderDLQ滞留アラームの通知先。
+  ForwarderAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: zer0-nyusatsu-mail-relay-alarm-topic
+
+  ForwarderAlarmTopicSubscription01:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref ForwarderAlarmTopic
+      Protocol: email
+      Endpoint: !Ref NotifyEmail
+
+  # CloudWatch Alarm for ForwarderDLQ message buildup.
+  # ForwarderDLQにメッセージが1件以上滞留したら発報する。CFnのZipFileプレースホルダー+
+  # 手動update-function-codeという2段階デプロイ方式のため、反映漏れで転送Lambdaが
+  # 機能しなくなっても本アラーム以外に検知手段がない(2026-07-10 Fableレビュー指摘、
+  # v0.9で実際に発生した障害の再発検知用)。
+  ForwarderDlqAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: zer0-nyusatsu-mail-forwarder-dlq-alarm-01
+      AlarmDescription: 問合せメール転送LambdaのDLQにメッセージが滞留しています
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ForwarderDLQ.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref ForwarderAlarmTopic
 
   NyusatsuReceiptRuleSet:
     Type: AWS::SES::ReceiptRuleSet

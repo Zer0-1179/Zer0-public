@@ -262,9 +262,13 @@ def make_unsubscribe_token(email: str) -> str:
 
 
 def build_unsubscribe_url(email: str) -> str:
+    # lp_waitlist側のverify_tokenはemailをstrip().lower()してから検証するため、
+    # ここで正規化しないと大文字を含むアドレス(SSMのオーナー通知先等)の
+    # 配信停止リンクが常に無効になる。
     base_url = get_param(os.environ["UNSUBSCRIBE_BASE_URL_PARAM_NAME"])
-    token = make_unsubscribe_token(email)
-    return f"{base_url}/unsubscribe?email={urllib.parse.quote(email)}&token={token}"
+    normalized_email = email.strip().lower()
+    token = make_unsubscribe_token(normalized_email)
+    return f"{base_url}/unsubscribe?email={urllib.parse.quote(normalized_email)}&token={token}"
 
 
 def get_active_subscriber_emails() -> list[str]:
@@ -331,7 +335,10 @@ def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body:
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
-    msg["List-Unsubscribe"] = f"<{unsubscribe_url}>, <mailto:{INQUIRY_EMAIL}>"
+    # mailto:を併記しない: mailto経由の停止依頼はmail_forwarderが個人メールへ転送する
+    # だけでDynamoDBのstatusを更新するコードがなく、メーラーがmailto側を選んで送信
+    # すると利用者は「停止済み」のつもりで実際は配信が継続してしまうため。
+    msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
     msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.set_content(body + notification_footer_text(unsubscribe_url))
     msg.add_alternative(build_html_body(body, unsubscribe_url), subtype="html")
@@ -343,7 +350,16 @@ def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body:
     )
 
 
-def send_notification(kokoku_no: int, matches: list[dict]) -> None:
+def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[bool, bool]:
+    """通知メールを組み立てて全宛先に送信する。
+
+    戻り値: (fully_sent, had_failure)
+      fully_sent: Falseなら時間切れ、または宛先の一部/全部への送信失敗で完了して
+        いない。呼び出し元はこの号をmark_processedせず、次回実行に持ち越す。
+      had_failure: Trueなら時間切れではなく実際の送信失敗(SESエラー等)が発生して
+        おり、呼び出し元はLambda呼び出し全体を失敗させてDLQ/アラームに繋げる必要
+        がある(時間切れによる持ち越しは正常な自己回復動作のため区別する)。
+    """
     sender = get_param(os.environ["SES_SENDER_PARAM_NAME"])
     owner_email = get_param(os.environ["NOTIFY_EMAIL_PARAM_NAME"])
     detail_url = f"{BASE_URL}?job=KokokuAnkenList&kokoku_no={kokoku_no}"
@@ -352,6 +368,14 @@ def send_notification(kokoku_no: int, matches: list[dict]) -> None:
     for idx, c in enumerate(matches):
         if idx > 0:
             time.sleep(REQUEST_INTERVAL_SEC)
+        # 号ループ先頭だけでなくここでもチェックする。マッチ件数が多い号は
+        # 詳細取得(sleep+POST)の累積時間だけでLambdaがタイムアウトしうるため。
+        if context.get_remaining_time_in_millis() < TIME_BUDGET_MARGIN_MS:
+            logger.warning(
+                "time budget exhausted while fetching case details for kokoku_no=%s (idx=%d/%d), deferring to next run",
+                kokoku_no, idx, len(matches),
+            )
+            return False, False
         detail = fetch_case_detail(c)
         lines.append(format_case_line(c, detail))
         try:
@@ -364,11 +388,25 @@ def send_notification(kokoku_no: int, matches: list[dict]) -> None:
 
     # 運用監視用のオーナー宛+実際にactiveな購読者宛の両方に個別送信する(B-1)。
     # BCC一斉送信は使わない(宛先ごとに異なる配信停止トークンを埋め込む必要があるため)。
+    had_failure = False
     for recipient in get_all_recipients(owner_email):
+        if context.get_remaining_time_in_millis() < TIME_BUDGET_MARGIN_MS:
+            logger.warning(
+                "time budget exhausted while sending kokoku_no=%s, remaining recipients deferred to next run",
+                kokoku_no,
+            )
+            return False, had_failure
         try:
             send_email_with_unsubscribe(sender, recipient, subject, body)
         except Exception:
-            logger.warning("notification email failed for %s, kokoku_no=%s", recipient, kokoku_no, exc_info=True)
+            # v0.8まではses.send_email失敗がLambda全体を失敗させDLQ/アラームに
+            # 繋がっていたが、v0.10の宛先ごとの個別送信でこの安全網が消失していた。
+            # ここでは握りつぶさずhad_failureを立て、呼び出し元でLambda呼び出し
+            # 自体を失敗させることでリトライ・DLQ・アラームに再度繋げる。
+            logger.error("notification email failed for %s, kokoku_no=%s", recipient, kokoku_no, exc_info=True)
+            had_failure = True
+
+    return not had_failure, had_failure
 
 
 def update_weekly_stats(matches_today: int, cases_today: int) -> tuple[int, int, int]:
@@ -443,17 +481,21 @@ def lambda_handler(event, context):
 
     total_matches = 0
     total_cases_checked = 0
+    deferred = False
+    had_send_failure = False
     for idx, kokoku_no in enumerate(new_numbers):
         if not bootstrap:
             # 詳細ページPOST+3秒sleepが号ごとに累積するため、残り時間が不足したら
             # ここで打ち切る。未処理のままなので翌日の実行が自動的に引き継ぐ
-            # (mark_processed前に抜けるため、送信済みメールの重複送信は起きない)。
+            # (mark_processed前に抜けるため、この号自体の重複送信は起きない。
+            # ただしここより細かい粒度のチェックはsend_notification内で行う)。
             if context.get_remaining_time_in_millis() < TIME_BUDGET_MARGIN_MS:
                 logger.warning(
                     "time budget exhausted at idx=%d, deferring remaining %d kokoku_no to next run",
                     idx,
                     len(new_numbers) - idx,
                 )
+                deferred = True
                 break
 
             if idx > 0:
@@ -464,7 +506,16 @@ def lambda_handler(event, context):
             total_cases_checked += len(cases)
             matches = filter_by_keywords(cases, keywords)
             if matches:
-                send_notification(kokoku_no, matches)
+                fully_sent, had_failure = send_notification(kokoku_no, matches, context)
+                if had_failure:
+                    had_send_failure = True
+                if not fully_sent:
+                    logger.warning(
+                        "kokoku_no=%d notification incomplete, not marking processed; will retry",
+                        kokoku_no,
+                    )
+                    deferred = True
+                    break
                 total_matches += len(matches)
 
         mark_processed(kokoku_no)
@@ -472,10 +523,27 @@ def lambda_handler(event, context):
     if not bootstrap:
         weekly_total, weekly_cases, weekly_days = update_weekly_stats(total_matches, total_cases_checked)
         if datetime.now(JST).weekday() == 0:
-            send_weekly_digest(weekly_total, weekly_cases, weekly_days)
-            reset_weekly_stats()
+            if deferred:
+                # 持ち越し号が残ったまま週次サマリーを送ると、その分の集計が
+                # 反映されないまま送信・リセットされ過少報告になる。持ち越しが
+                # 解消するまで送信・リセットを見送り、次回実行以降に完全な
+                # 集計で送る。
+                logger.warning("monday weekly digest deferred: carryover kokoku_no pending")
+            else:
+                send_weekly_digest(weekly_total, weekly_cases, weekly_days)
+                reset_weekly_stats()
 
     logger.info("done: new_numbers=%d total_matches=%d bootstrap=%s", len(new_numbers), total_matches, bootstrap)
+
+    if had_send_failure:
+        # 時間切れによる持ち越し(deferred)は正常な自己回復動作なので例外にしないが、
+        # 実際の送信失敗はLambda呼び出し自体を失敗させ、非同期呼び出しのリトライ→
+        # DLQ→アラームという既存の安全網に確実に繋げる。
+        raise RuntimeError(
+            f"one or more notification emails failed to send for kokoku_no processed in this run "
+            f"(new_numbers={len(new_numbers)}); invocation marked as failed to trigger retry/DLQ/alarm"
+        )
+
     return {
         "statusCode": 200,
         "body": json.dumps(
