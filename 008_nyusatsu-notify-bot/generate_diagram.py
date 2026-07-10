@@ -90,9 +90,12 @@ def draw():
         ('lambda',    'ssm',      '設定取得'),
         ('lambda',    'cw',       ''),
         ('lambda',    'dlq',      ''),
-        # ssm/cw列(x=9.5)とlambda_wl(x=13.5)を避けるため、上方の専用帯(y=12.8)→
-        # ses_out直上(x=20.5)経由の迂回ルートを取る(直線区間のみで構成)。
-        ('lambda',    'ses_out',  '', [(7.0, 12.8), (20.5, 12.8)]),
+        # ssm/cw列(x=9.5)とlambda_wl(x=13.5)を避けるため、GET収集線(y=12.0)の
+        # 下側・ssmアイコン上端(y=11.15)の上側の専用帯(y=11.6)を通り、
+        # ses_out直上(x=20.5)から下りる迂回ルートを取る(直線区間のみで構成)。
+        # 第1区間の終点x=8.6は、lambda→ssm斜め線(y=11.6上でx=7.0)との交差、および
+        # 「設定取得」エッジラベル(x≈7.5〜8.0, 上端y≈11.6)への重なりを回避するため。
+        ('lambda',    'ses_out',  '', [(8.6, 11.6), (20.5, 11.6)]),
 
         ('browser',   'cf',       'HTTPS'),
         ('cf',        's3lp',     ''),
@@ -159,7 +162,7 @@ def draw():
     ax.axis('off')
     fig.patch.set_facecolor('white')
     ax.set_facecolor('white')
-    ax.set_title('008 入札情報通知Bot（清掃業界向け・横浜市パイロット） — アーキテクチャ図',
+    ax.set_title('008 入札情報ウォッチ（清掃業界向け・横浜市パイロット） — アーキテクチャ図',
                  fontsize=13, fontweight='bold', pad=10, color='#232F3E')
 
     ICON_SZ = 0.45

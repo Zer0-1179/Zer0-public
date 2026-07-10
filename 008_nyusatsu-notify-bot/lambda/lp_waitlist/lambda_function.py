@@ -33,7 +33,7 @@ MATCH_HISTORY_TABLE_NAME = os.environ["MATCH_HISTORY_TABLE_NAME"]
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # 利用者向けメールの差出人表示名・件名プレフィックスに使うサービス名。
-# collector Lambda側のSERVICE_NAMEと合わせること(v0.13で「Bot」を含む旧名称から改称)。
+# collector Lambda側のSERVICE_NAMEと合わせること(v0.14で「Bot」を含む旧名称から改称)。
 SERVICE_NAME = "入札情報ウォッチ"
 
 

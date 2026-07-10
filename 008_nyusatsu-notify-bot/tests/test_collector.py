@@ -100,6 +100,7 @@ def test_lambda_handler_raises_on_send_failure_and_defers_kokoku_no(collector, m
     collector.mark_processed(9999)  # bootstrapを避けるため既存処理済みを1件用意
 
     with mock.patch.object(collector, "fetch", side_effect=fake_fetch), \
+         mock.patch.object(collector, "fetch_case_detail", return_value={}), \
          mock.patch.object(collector, "ses") as ses_mock, \
          mock.patch.object(collector, "get_all_recipients", return_value=["owner@example.com"]):
         ses_mock.send_raw_email.side_effect = Exception("SES down")
