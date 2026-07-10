@@ -31,6 +31,11 @@ MATCH_HISTORY_TABLE_NAME = os.environ["MATCH_HISTORY_TABLE_NAME"]
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# 確認メール(登録・再登録時)の再送は最短でもこの秒数を空ける。
+# 第三者が停止済み/未確認アドレスへ繰り返しPOSTして確認メールを送りつけさせる
+# (メール爆撃)ことの抑止。
+CONFIRMATION_RESEND_COOLDOWN_SEC = 300
+
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": os.environ.get("ALLOWED_ORIGIN", "*"),
     "Access-Control-Allow-Methods": "POST,OPTIONS",
@@ -258,13 +263,15 @@ def handle_register(event):
 
     source_ip = event.get("requestContext", {}).get("http", {}).get("sourceIp", "")
     table = dynamodb.Table(TABLE_NAME)
+    now_ts = int(time.time())
     try:
         table.put_item(
             Item={
                 "email": email,
-                "registered_at": int(time.time()),
+                "registered_at": now_ts,
                 "status": "pending",
                 "source_ip": source_ip,
+                "last_confirm_sent_at": now_ts,
             },
             ConditionExpression="attribute_not_exists(email)",
         )
@@ -272,16 +279,38 @@ def handle_register(event):
         if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         existing = table.get_item(Key={"email": email}).get("Item", {})
-        if existing.get("status") == "unsubscribed":
-            # 配信停止済みアドレスからの再登録: pendingに戻し確認メールを再送する
-            table.update_item(
-                Key={"email": email},
-                UpdateExpression="SET #s = :pending, registered_at = :t REMOVE unsubscribed_at",
-                ExpressionAttributeNames={"#s": "status"},
-                ExpressionAttributeValues={":pending": "pending", ":t": int(time.time())},
-            )
-        else:
+        status = existing.get("status")
+
+        if status == "active":
             return _json_response(200, {"status": "already_registered"})
+
+        if status == "unsubscribed" and existing.get("unsubscribed_reason") in ("bounce", "complaint"):
+            # バウンス・苦情による配信停止は送信健全性保護のための抑制なので、
+            # 本人以外でも叩けるこのエンドポイントでは再登録による復活を許さない。
+            logger.info(
+                "registration blocked for suppressed address %s (reason=%s)",
+                email, existing.get("unsubscribed_reason"),
+            )
+            return _json_response(200, {"status": "registered"})
+
+        # status は "pending"(確認メール未クリック) または "unsubscribed"(reason="user"
+        # ないし旧レコードでreason未設定)。どちらも再登録は許すが、確認メールの
+        # 連続再送はクールダウンで抑止する(第三者によるメール爆撃対策)。
+        last_sent = int(existing.get("last_confirm_sent_at", 0))
+        if now_ts - last_sent < CONFIRMATION_RESEND_COOLDOWN_SEC:
+            logger.info("confirmation resend suppressed for %s (cooldown)", email)
+            return _json_response(200, {"status": "registered"})
+
+        update_expr = "SET #s = :pending, last_confirm_sent_at = :t"
+        expr_values = {":pending": "pending", ":t": now_ts}
+        if status == "unsubscribed":
+            update_expr += ", registered_at = :t REMOVE unsubscribed_at, unsubscribed_reason"
+        table.update_item(
+            Key={"email": email},
+            UpdateExpression=update_expr,
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues=expr_values,
+        )
 
     # 登録(DynamoDB書き込み)は既に成功しているため、確認メール送信が失敗しても
     # 利用者にはエラーを返さない(再送すればよいだけで実害はない)。
@@ -307,7 +336,18 @@ def handle_confirm(event):
     if not item:
         return _html_response(404, _page("確認できませんでした", "登録情報が見つかりませんでした。"))
 
-    if item.get("status") != "active":
+    status = item.get("status")
+    if status == "unsubscribed":
+        # 確認トークンは無期限のステートレスHMACのため、配信停止済みアドレスに
+        # 対しては(本人が停止した後にメールボックスへ残る古いリンクを開いた
+        # 場合でも)無条件に復活させない。本人の停止意思を尊重するため、
+        # 受け取りたい場合は改めて登録し直してもらう。
+        return _html_response(
+            200,
+            _page("既に配信停止済みです", "このメールアドレスは配信停止済みです。再度受け取りたい場合は、お手数ですが改めてご登録ください。"),
+        )
+
+    if status != "active":
         table.update_item(
             Key={"email": email},
             UpdateExpression="SET #s = :active, confirmed_at = :t",
@@ -356,12 +396,21 @@ def handle_unsubscribe(event, method: str):
     # POST: 上記フォーム送信、またはメールクライアントによる
     # One-Click Unsubscribe(RFC 8058, List-Unsubscribe-Post)からの直接リクエスト。
     table = dynamodb.Table(TABLE_NAME)
-    table.update_item(
-        Key={"email": email},
-        UpdateExpression="SET #s = :u, unsubscribed_at = :t",
-        ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":u": "unsubscribed", ":t": int(time.time())},
-    )
+    try:
+        table.update_item(
+            Key={"email": email},
+            UpdateExpression="SET #s = :u, unsubscribed_at = :t, unsubscribed_reason = :r",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={":u": "unsubscribed", ":t": int(time.time()), ":r": "user"},
+            ConditionExpression="attribute_exists(email)",
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        # 未登録アドレス(トークンはHMAC検証済みだがwaitlistに存在しない)。
+        # update_itemはアップサートのため、条件なしだと不完全な幽霊レコードが
+        # 新規作成されてしまう。既に「登録なし」なので何もせず成功扱いにする。
+        logger.info("unsubscribe requested for unregistered address %s, ignoring", email)
     return _html_response(200, _page("配信を停止しました", "ご利用ありがとうございました。配信を停止しました。"))
 
 
