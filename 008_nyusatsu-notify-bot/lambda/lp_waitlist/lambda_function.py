@@ -9,6 +9,7 @@ import re
 import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from email.headerregistry import Address
 from email.message import EmailMessage
 
 import boto3
@@ -30,6 +31,18 @@ SES_CONFIGURATION_SET_NAME = os.environ["SES_CONFIGURATION_SET_NAME"]
 MATCH_HISTORY_TABLE_NAME = os.environ["MATCH_HISTORY_TABLE_NAME"]
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# 利用者向けメールの差出人表示名・件名プレフィックスに使うサービス名。
+# collector Lambda側のSERVICE_NAMEと合わせること(v0.13で「Bot」を含む旧名称から改称)。
+SERVICE_NAME = "入札情報ウォッチ"
+
+
+def _from_address(sender: str) -> Address:
+    """差出人に日本語のサービス名を表示名として付ける(Addressを使うことで
+    policy.defaultがRFC 2047エンコードを正しく行う)。SESのSource(エンベロープ)は
+    従来どおり素のアドレスのまま。"""
+    local_part, _, domain = sender.partition("@")
+    return Address(display_name=SERVICE_NAME, username=local_part, domain=domain)
 
 # 確認メール(登録・再登録時)の再送は最短でもこの秒数を空ける。
 # 第三者が停止済み/未確認アドレスへ繰り返しPOSTして確認メールを送りつけさせる
@@ -115,7 +128,7 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
     プレーンテキスト(URLそのまま、フォールバック)のmultipart/alternativeで送る。
     生URLをメール本文に長く表示しないための対応。"""
     text_body = (
-        "入札情報通知Bot（横浜市パイロット版）への事前登録を受け付けました。\n\n"
+        f"「{SERVICE_NAME}」（横浜市パイロット版）への事前登録を受け付けました。\n\n"
         f"登録メールアドレス: {email}\n\n"
         "以下のリンクをクリックして登録を確定してください。クリックするまで登録は完了せず、"
         "通知メールも配信されません。\n\n"
@@ -129,7 +142,7 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
     html_body = (
         "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
         "line-height:1.7;color:#222\">"
-        "<p>入札情報通知Bot（横浜市パイロット版）への事前登録を受け付けました。</p>"
+        f"<p>「{SERVICE_NAME}」（横浜市パイロット版）への事前登録を受け付けました。</p>"
         f"<p>登録メールアドレス: {html.escape(email)}</p>"
         f"<p><a href=\"{html.escape(confirm_url)}\">登録を確定する</a><br>"
         "クリックするまで登録は完了せず、通知メールも配信されません。</p>"
@@ -141,9 +154,9 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
         "その場合、登録情報は自動的に有効化されません。</p></body></html>"
     )
     msg = EmailMessage()
-    msg["From"] = sender
+    msg["From"] = _from_address(sender)
     msg["To"] = email
-    msg["Subject"] = "【入札情報通知Bot】登録確認のお願い"
+    msg["Subject"] = f"【{SERVICE_NAME}】登録確認のお願い"
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
     ses.send_raw_email(
@@ -205,7 +218,7 @@ def format_history_line(item: dict) -> str:
 
 def send_welcome_email(email: str, sender: str) -> None:
     """登録確認完了時に、直近1ヶ月の該当案件（あれば）をまとめて送るバックフィル
-    ウェルカムメール。案件がない場合も「Botは正常に稼働している」ことを伝え、
+    ウェルカムメール。案件がない場合も「システムは正常に稼働している」ことを伝え、
     登録後の沈黙による不安を解消する(Fable指摘、v0.11)。"""
     recent = get_recent_matches(days=30)
 
@@ -217,18 +230,18 @@ def send_welcome_email(email: str, sender: str) -> None:
         for item in recent[:10]:
             lines.append(format_history_line(item))
         body = "\n".join(lines)
-        subject = "【入札情報通知Bot】直近1ヶ月の該当案件（参考）"
+        subject = f"【{SERVICE_NAME}】直近1ヶ月の該当案件（参考）"
     else:
         body = (
             "ご登録ありがとうございます。\n\n"
             "横浜市の入札公告は原則毎週火曜日に発行されます。過去1ヶ月は該当する清掃関連案件が"
-            "ありませんでしたが、Botは毎朝正常に稼働し、公告をチェックしています。\n\n"
+            "ありませんでしたが、システムは毎朝正常に稼働し、公告をチェックしています。\n\n"
             "該当案件が見つかり次第、すぐにメールでお知らせします。"
         )
-        subject = "【入札情報通知Bot】ご登録ありがとうございます"
+        subject = f"【{SERVICE_NAME}】ご登録ありがとうございます"
 
     msg = EmailMessage()
-    msg["From"] = sender
+    msg["From"] = _from_address(sender)
     msg["To"] = email
     msg["Subject"] = subject
     msg.set_content(body)

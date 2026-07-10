@@ -30,6 +30,7 @@ ICONS = {
     'ses':         f'{_SVC}/Arch_Business-Applications/64/Arch_Amazon-Simple-Email-Service_64.png',
     's3':          f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
     'cloudfront':  f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64.png',
+    'acm':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Certificate-Manager_64.png',
     'api_gateway': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
     'dynamodb':    f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
     'region':      f'{_GRP}/Region_32.png',
@@ -67,6 +68,10 @@ def draw():
         {'id': 'apigw',   'icon': 'api_gateway', 'label': 'API Gateway\n事前登録API',             'x': 9.5,  'y': 6.5},
         {'id': 'lambda_wl','icon': 'lambda',     'label': 'Lambda\nlp-waitlist',                  'x': 13.5, 'y': 6.5},
         {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'DynamoDB\nlp-waitlist',                'x': 13.5, 'y': 3.8},
+        # CloudFront用ACM証明書はAWS仕様によりus-east-1リージョンで発行・管理
+        # (スタック: zer0-nyusatsu-lp-cert)。図はap-northeast-1枠内に置くため、
+        # 誤解を避けるようラベルにリージョンを明記する。
+        {'id': 'acm',     'icon': 'acm',         'label': 'ACM (us-east-1)\nSSL/TLS証明書',       'x': 8.8,  'y': 4.4},
 
         # --- レーン3: 問合せメール転送(新規)  y=1.0 ---
         {'id': 'inquirer','icon': 'user',        'label': '問合せ送信者\n(外部)',                 'x': 0.8,  'y': 1.0},
@@ -96,6 +101,9 @@ def draw():
         ('apigw',     'lambda_wl',''),
         ('lambda_wl', 'ddb_wl',   ''),
         ('lambda_wl', 'ses_out',  '登録通知'),
+        # ACM証明書をCloudFrontが利用。cfの上方はbrowser→apigw迂回帯(y=7.3)で
+        # 塞がっているため、交差ゼロで直線が引ける右下方向から接続する。
+        ('acm',       'cf',       '証明書'),
 
         ('inquirer',  'ses_in',   'メール送信'),
         ('ses_in',    's3mail',   ''),

@@ -38,9 +38,9 @@ def lambda_handler(event, context):
         forwarded["To"] = to_address
         if reply_to_address:
             forwarded["Reply-To"] = reply_to_address
-        forwarded["Subject"] = f"[入札Bot問合せ転送] {original_subject}"
+        forwarded["Subject"] = f"[入札情報ウォッチ問合せ転送] {original_subject}"
         forwarded.set_content(
-            f"入札情報通知Bot(nyusatsu@zer0-infra.com)宛に届いたメールです。\n"
+            f"入札情報ウォッチ(nyusatsu@zer0-infra.com)宛に届いたメールです。\n"
             f"差出人: {original_from}\n\n"
             f"---- 以下、元のメール(添付) ----\n"
         )

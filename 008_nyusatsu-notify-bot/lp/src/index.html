@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>入札情報通知Bot | 横浜市の入札公告を毎朝自動チェック</title>
-<meta name="description" content="清掃・ビルメンテナンス業向け。横浜市の入札公告を毎朝自動でチェックし、対象業種の案件があればメールで通知するサービス（パイロット版）。" />
+<title>入札情報ウォッチ | 横浜市の入札公告を毎朝自動チェック</title>
+<meta name="description" content="清掃・ビルメンテナンス業向けの入札情報自動通知サービス「入札情報ウォッチ」。横浜市の入札公告を毎朝自動でチェックし、対象業種の案件があればメールでお知らせします（パイロット版）。" />
 <style>
   :root {
     --bg: #fafaf8;
@@ -152,23 +152,91 @@
   .card h3 { font-size: 17px; margin: 0 0 10px; }
   .card p { font-size: 14.5px; color: var(--ink-soft); margin: 0; }
 
-  /* ── How it works ───────────────────────── */
-  .steps { margin-top: 56px; }
-  .step {
-    display: grid;
-    grid-template-columns: 72px 1fr;
-    gap: 28px;
-    padding: 34px 0;
-    border-top: 1px solid var(--line);
+  /* ── How it works (3ステップ図解) ────────── */
+  .how-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 56px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 44px 32px;
+    box-shadow: 0 20px 40px -28px rgba(0,0,0,0.2);
   }
-  .step:last-child { border-bottom: 1px solid var(--line); }
-  .step-num {
-    font-size: 26px;
+  .flow-item {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .flow-icon {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+  }
+  .flow-icon svg { width: 44px; height: 44px; stroke: var(--accent); }
+  .flow-step-label {
+    font-size: 12px;
     font-weight: 800;
+    letter-spacing: 0.12em;
     color: var(--accent);
+    margin-bottom: 6px;
   }
-  .step h3 { margin: 0 0 8px; font-size: 19px; }
-  .step p { margin: 0; color: var(--ink-soft); font-size: 15px; max-width: 560px; }
+  .flow-item h3 { margin: 0 0 8px; font-size: 17px; line-height: 1.5; }
+  .flow-item p { margin: 0; color: var(--ink-soft); font-size: 13.5px; max-width: 240px; }
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    padding-top: 26px;
+  }
+  .flow-arrow svg { width: 34px; height: 34px; stroke: var(--accent); opacity: 0.6; }
+  .how-note {
+    margin-top: 28px;
+    text-align: center;
+    font-size: 14.5px;
+    color: var(--ink-soft);
+  }
+  .how-note strong { color: var(--accent); }
+  @media (max-width: 720px) {
+    .how-flow { flex-direction: column; gap: 4px; padding: 36px 24px; }
+    .flow-arrow { padding-top: 0; }
+    .flow-arrow svg { transform: rotate(90deg); }
+  }
+
+  /* ── Market stats (相場感) ──────────────── */
+  .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px; }
+  @media (max-width: 720px) { .market-grid { grid-template-columns: 1fr; } }
+  .market-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 30px 28px;
+  }
+  .market-card .kicker { font-size: 13px; font-weight: 700; color: var(--ink-soft); margin: 0 0 2px; }
+  .market-card .cat-name { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
+  .market-card .cat-note { font-size: 12px; color: var(--ink-soft); margin: 0 0 18px; }
+  .market-card .big-label { font-size: 12.5px; color: var(--ink-soft); margin: 0; }
+  .market-card .big-num { font-size: 38px; font-weight: 700; color: var(--ink); line-height: 1.3; margin: 0 0 16px; }
+  .market-card .big-num small { font-size: 16px; font-weight: 600; color: var(--ink-soft); }
+  .market-sub { list-style: none; margin: 0; padding: 0; font-size: 13.5px; color: var(--ink-soft); }
+  .market-sub li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-top: 1px dashed var(--line);
+  }
+  .market-sub li span:last-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  .source-note { margin-top: 24px; font-size: 12.5px; color: var(--ink-soft); max-width: 720px; }
 
   /* ── Mail sample mockup ─────────────────── */
   .mail-mock {
@@ -312,6 +380,7 @@
     font-size: 15px;
   }
   .form-msg { margin-top: 16px; font-size: 13.5px; min-height: 20px; }
+  .cta-trust { margin-top: 22px; font-size: 12.5px; color: #9a9d99; }
   .form-msg.ok { color: #8fd6b8; }
   .form-msg.err { color: #f2a5a5; }
   /* honeypot: bot対策の非表示フィールド。display:noneはbotに無視されやすいため
@@ -331,7 +400,7 @@
 <body>
 
 <header class="site-header" id="siteHeader">
-  <div class="brand">入札情報通知<span>Bot</span></div>
+  <div class="brand">入札情報<span>ウォッチ</span></div>
   <a class="header-cta" href="#register">事前登録</a>
 </header>
 
@@ -340,7 +409,7 @@
   <h1 class="reveal d1">横浜市の入札公告を<span class="hl">毎朝自動でチェック</span>。<br class="br-pc" />該当案件があれば、すぐ通知。</h1>
   <p class="lead reveal d2" style="margin-left:auto;margin-right:auto;">
     清掃・ビルメンテナンス業のための入札情報自動通知サービス。<br>
-    毎日の公告チェックはBotに任せて、対象業種の案件が出たときだけメールで受け取れます。
+    面倒な毎日の公告チェックはすべておまかせ。対象業種の案件が出たときだけ、メールで受け取れます。
   </p>
   <div class="hero-actions reveal d3">
     <a class="btn-primary" href="#register">無料で事前登録する</a>
@@ -380,20 +449,61 @@
   <div class="eyebrow reveal">仕組み</div>
   <h2 class="reveal">やることは、メールを待つだけ。</h2>
   <p class="lead reveal">横浜市の公告確認から案件抽出まで、すべて自動で行います。</p>
-  <div class="steps">
-    <div class="step reveal">
-      <div class="step-num">01</div>
-      <div><h3>毎朝、自動で公告を収集</h3><p>横浜市の入札公告一覧を毎朝6時に自動でチェックします。</p></div>
+  <div class="how-flow reveal d1" role="img" aria-label="サービスの流れ。ステップ1、横浜市の入札公告ページを毎朝6時に自動チェック。ステップ2、清掃・美化・害虫防除・ねずみ防除など対象業種の案件だけを抽出。ステップ3、該当案件があった日だけメールでお知らせ。">
+    <div class="flow-item">
+      <div class="flow-icon">
+        <!-- 役所（横浜市サイト）アイコン -->
+        <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 18 L24 7 L42 18" />
+          <line x1="9" y1="18" x2="39" y2="18" />
+          <line x1="12" y1="22" x2="12" y2="36" />
+          <line x1="20" y1="22" x2="20" y2="36" />
+          <line x1="28" y1="22" x2="28" y2="36" />
+          <line x1="36" y1="22" x2="36" y2="36" />
+          <line x1="8" y1="40" x2="40" y2="40" />
+        </svg>
+      </div>
+      <div class="flow-step-label">STEP 1</div>
+      <h3>毎朝6時に自動チェック</h3>
+      <p>横浜市の入札公告ページを、毎朝欠かさず自動で確認します。</p>
     </div>
-    <div class="step reveal d1">
-      <div class="step-num">02</div>
-      <div><h3>対象業種の案件だけを抽出</h3><p>清掃・美化・害虫防除・ねずみ防除など、対象キーワードに合う案件だけを自動で絞り込みます。</p></div>
+    <div class="flow-arrow" aria-hidden="true">
+      <svg viewBox="0 0 34 34" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="5" y1="17" x2="27" y2="17" />
+        <path d="M20 10 L27 17 L20 24" />
+      </svg>
     </div>
-    <div class="step reveal d2">
-      <div class="step-num">03</div>
-      <div><h3>メールで通知</h3><p>該当する案件があった日だけ、内容をメールでお届けします。</p></div>
+    <div class="flow-item">
+      <div class="flow-icon">
+        <!-- 絞り込み（じょうご）アイコン -->
+        <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 9 L41 9 L28 25 L28 37 L20 41 L20 25 Z" />
+        </svg>
+      </div>
+      <div class="flow-step-label">STEP 2</div>
+      <h3>関係する案件だけを抽出</h3>
+      <p>清掃・美化・害虫防除・ねずみ防除など、対象業種の案件だけを自動で絞り込みます。</p>
+    </div>
+    <div class="flow-arrow" aria-hidden="true">
+      <svg viewBox="0 0 34 34" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="5" y1="17" x2="27" y2="17" />
+        <path d="M20 10 L27 17 L20 24" />
+      </svg>
+    </div>
+    <div class="flow-item">
+      <div class="flow-icon">
+        <!-- メール通知アイコン -->
+        <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="6" y="12" width="36" height="26" rx="3" />
+          <path d="M7 14 L24 27 L41 14" />
+        </svg>
+      </div>
+      <div class="flow-step-label">STEP 3</div>
+      <h3>メールでお知らせ</h3>
+      <p>該当案件があった日だけ、締切や参加資格などの詳細をメールでお届けします。</p>
     </div>
   </div>
+  <p class="how-note">あなたがやることは、<strong>届いたメールを開くだけ</strong>。面倒な設定や検索条件の登録は一切不要です。</p>
 </section>
 
 <section id="mail-sample">
@@ -405,8 +515,8 @@
       <span class="mail-dot"></span><span class="mail-dot"></span><span class="mail-dot"></span>
     </div>
     <div class="mail-mock-header">
-      <div class="mail-mock-row"><span class="mail-mock-label">件名</span><span>【入札通知】横浜市 第18104号 清掃関連案件7件</span></div>
-      <div class="mail-mock-row"><span class="mail-mock-label">差出人</span><span>入札情報通知Bot &lt;nyusatsu@zer0-infra.com&gt;</span></div>
+      <div class="mail-mock-row"><span class="mail-mock-label">件名</span><span>【入札情報ウォッチ】横浜市 第18104号 清掃関連案件7件</span></div>
+      <div class="mail-mock-row"><span class="mail-mock-label">差出人</span><span>入札情報ウォッチ &lt;notify@info.zer0-infra.com&gt;</span></div>
     </div>
     <div class="mail-mock-body">
       <p class="mail-mock-case-title">1. ○○地区 学校施設清掃業務委託（サンプル）</p>
@@ -425,6 +535,41 @@
     </div>
   </div>
   <p class="mail-mock-note">※上記はイメージを伝えるためのサンプルです。実際にはこのような情報が毎回のメールに含まれます。</p>
+</section>
+
+<section id="market">
+  <div class="eyebrow reveal">落札実績データ</div>
+  <h2 class="reveal">横浜市の関連案件、<br>実際の落札規模は？</h2>
+  <p class="lead reveal">横浜市が公開する入札・契約結果（令和7年度分）を集計しました。数十万円の小規模案件から数千万円の大型案件まで幅があり、会社の規模を問わず参入の機会があります。</p>
+  <div class="market-grid">
+    <div class="market-card reveal">
+      <p class="kicker">種目</p>
+      <p class="cat-name">建物管理</p>
+      <p class="cat-note">※清掃業務のほか設備保守等も含む区分です</p>
+      <p class="big-label">契約金額の中央値</p>
+      <p class="big-num">約277<small>万円</small></p>
+      <ul class="market-sub">
+        <li><span>平均</span><span>約449万円</span></li>
+        <li><span>金額の幅</span><span>約8.0万〜約2,501万円</span></li>
+        <li><span>集計件数</span><span>42件（全46件中）</span></li>
+      </ul>
+    </div>
+    <div class="market-card reveal d1">
+      <p class="kicker">種目</p>
+      <p class="cat-name">浄化槽・貯水槽等清掃</p>
+      <p class="cat-note">※浄化槽・貯水槽などの清掃業務の区分です</p>
+      <p class="big-label">契約金額の中央値</p>
+      <p class="big-num">約245<small>万円</small></p>
+      <ul class="market-sub">
+        <li><span>平均</span><span>約423万円</span></li>
+        <li><span>金額の幅</span><span>約16.1万〜約5,295万円</span></li>
+        <li><span>集計件数</span><span>31件（全33件中）</span></li>
+      </ul>
+    </div>
+  </div>
+  <p class="source-note reveal">
+    出典: 横浜市「入札・契約結果検索」より当サービスが集計（令和7年度分、2026年7月時点）。金額は公開されている契約金額（税込）に基づく統計値で、契約金額が公開されていない案件は集計から除いています。「建物管理」は清掃以外の業務も含む区分のため、清掃業務単体の相場とは異なる場合があります。個別の落札事業者名は掲載していません。
+  </p>
 </section>
 
 <section id="coverage">
@@ -480,6 +625,10 @@
       <button class="faq-q">登録すればすぐに入札に参加できますか？<span class="plus">+</span></button>
       <div class="faq-a"><p>本サービスは案件情報の収集・通知のみを行うものです。実際に入札に参加するには、別途横浜市への入札参加資格審査申請（随時受付）が必要です。まだ資格をお持ちでない場合は、先に横浜市の案内をご確認ください。</p></div>
     </div>
+    <div class="faq-item reveal">
+      <button class="faq-q">どこが運営しているサービスですか？<span class="plus">+</span></button>
+      <div class="faq-a"><p>「Zer0-Infra」の屋号で個人が運営しているサービスです。現在はパイロット版として無料で提供しており、ご利用者の声をもとに改善を続けています。詳細は<a href="privacy.html">プライバシーポリシー</a>をご確認ください。</p></div>
+    </div>
   </div>
 </section>
 
@@ -492,10 +641,11 @@
     <button type="submit">登録する</button>
   </form>
   <div class="form-msg" id="formMsg"></div>
+  <p class="cta-trust">登録・利用は無料（テスト運用期間中）。確認メールの承認後に配信が始まり、いつでもワンクリックで配信停止できます。</p>
 </section>
 
 <footer>
-  <p>清掃・ビルメンテナンス業向け 入札情報通知Bot（パイロット版）</p>
+  <p>清掃・ビルメンテナンス業向け 入札情報ウォッチ（パイロット版）</p>
   <p>お問い合わせ: <a href="mailto:nyusatsu@zer0-infra.com">nyusatsu@zer0-infra.com</a></p>
   <p><a href="privacy.html">プライバシーポリシー</a></p>
 </footer>
