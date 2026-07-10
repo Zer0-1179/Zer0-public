@@ -9,14 +9,14 @@
 # 4つ全てを1コマンドでまとめて反映することで、一部だけ反映し忘れるリスクを減らす。
 #
 # 使い方:
-#   cd 008_Nyusatsu_Notify_Bot && bash deploy_lambdas.sh
+#   cd 008_Nyusatsu_Notify_Bot && bash scripts/deploy_lambdas.sh
 #   (cfn-nyusatsu-notify-bot.yaml / cfn-lp-backend.yaml / cfn-mail-relay.yaml の
 #    aws cloudformation deploy 実行後、必ずこのスクリプトも続けて実行すること)
 
 set -e
 
 REGION="${AWS_DEFAULT_REGION:-ap-northeast-1}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
