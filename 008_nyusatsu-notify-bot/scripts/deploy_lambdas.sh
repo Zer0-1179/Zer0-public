@@ -10,7 +10,7 @@
 #
 # 使い方:
 #   cd 008_Nyusatsu_Notify_Bot && bash scripts/deploy_lambdas.sh
-#   (cfn-nyusatsu-notify-bot.yaml / cfn-lp-backend.yaml / cfn-mail-relay.yaml の
+#   (infra/cfn-nyusatsu-notify-bot.yaml / infra/cfn-lp-backend.yaml / infra/cfn-mail-relay.yaml の
 #    aws cloudformation deploy 実行後、必ずこのスクリプトも続けて実行すること)
 
 set -e

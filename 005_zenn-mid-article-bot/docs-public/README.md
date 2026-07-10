@@ -21,7 +21,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](images/005_architecture.png)
+![アーキテクチャ図](../images/005_architecture.png)
 
 ```text
 EventBridge（毎月1日・15日 21:00 JST）

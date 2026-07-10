@@ -21,7 +21,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](images/006_architecture.png)
+![アーキテクチャ図](../images/006_architecture.png)
 
 ```text
 EventBridge Scheduler（Analyzer: 4時間毎 / Executor: 30分毎）
@@ -178,7 +178,8 @@ Executor が実行するたびに証拠金維持率を確認：
 │   ├── setup_ssm.sh     # SSM パラメータ初期化
 │   ├── deploy.sh        # デプロイスクリプト
 │   └── test_invoke.sh   # テストシナリオ（10種）
-├── cfn-cryptobot.yaml
+├── infra/
+│   └── cfn-cryptobot.yaml
 └── images/
     └── 006_architecture.png
 ```
