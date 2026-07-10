@@ -26,7 +26,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](images/007_architecture.png)
+![アーキテクチャ図](../images/007_architecture.png)
 
 ```text
 [スマホ/PC ブラウザ]

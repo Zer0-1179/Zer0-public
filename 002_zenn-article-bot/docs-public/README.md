@@ -22,7 +22,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](images/002_architecture.png)
+![アーキテクチャ図](../images/002_architecture.png)
 
 ```text
 EventBridge Scheduler（第1・第3木曜 21:00 JST）

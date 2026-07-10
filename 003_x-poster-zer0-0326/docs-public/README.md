@@ -19,7 +19,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](images/003_architecture.png)
+![アーキテクチャ図](../images/003_architecture.png)
 
 ```text
 EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST・リトライ0回）

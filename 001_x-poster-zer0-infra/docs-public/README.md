@@ -20,7 +20,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](images/001_architecture.png)
+![アーキテクチャ図](../images/001_architecture.png)
 
 ```text
 EventBridge ルール（月・木 20:00 JST）

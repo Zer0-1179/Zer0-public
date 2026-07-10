@@ -21,7 +21,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](images/004_architecture.png)
+![アーキテクチャ図](../images/004_architecture.png)
 
 ```text
 [ブラウザ] HTTPS
