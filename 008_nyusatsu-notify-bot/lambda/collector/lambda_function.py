@@ -10,6 +10,7 @@ import time
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
+from email.headerregistry import Address
 from email.message import EmailMessage
 
 import boto3
@@ -20,6 +21,9 @@ logger.setLevel(logging.INFO)
 
 BASE_URL = "https://keiyaku.city.yokohama.lg.jp/epco/servlet/p"
 USER_AGENT = "Zer0-NyusatsuNotifyBot/1.0 (+contact: nyusatsu@zer0-infra.com)"
+# 利用者向けメールの差出人表示名・件名プレフィックスに使うサービス名。
+# 「Bot」を含む旧名称は受信箱での印象が悪いため改称した(v0.13)。
+SERVICE_NAME = "入札情報ウォッチ"
 REQUEST_INTERVAL_SEC = 3
 JST = timezone(timedelta(hours=9))
 INQUIRY_EMAIL = "nyusatsu@zer0-infra.com"
@@ -302,7 +306,7 @@ def notification_footer_text(unsubscribe_url: str) -> str:
     (HTML非対応メーラー向けのフォールバック)。"""
     return (
         "\n\n---\n"
-        "本メールは入札情報通知Bot（横浜市パイロット版）が自動送信しています。\n"
+        f"本メールは「{SERVICE_NAME}」（横浜市パイロット版）から自動配信しています。\n"
         f"配信停止はこちら: {unsubscribe_url}\n"
         f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
     )
@@ -318,7 +322,7 @@ def build_html_body(body: str, unsubscribe_url: str) -> str:
         f"<div>{escaped_body}</div>"
         "<hr style=\"margin:24px 0;border:none;border-top:1px solid #ddd\">"
         "<p style=\"font-size:13px;color:#666\">"
-        "本メールは入札情報通知Bot（横浜市パイロット版）が自動送信しています。<br>"
+        f"本メールは「{SERVICE_NAME}」（横浜市パイロット版）から自動配信しています。<br>"
         f"<a href=\"{html.escape(unsubscribe_url)}\">配信停止はこちら</a><br>"
         f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
         "</p></body></html>"
@@ -332,7 +336,11 @@ def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body:
     SES Configuration Set(バウンス・苦情をSNS経由で検知、B-3)を付与する。"""
     unsubscribe_url = build_unsubscribe_url(recipient)
     msg = EmailMessage()
-    msg["From"] = sender
+    # 差出人に日本語のサービス名を表示名として付ける(Addressを使うことで
+    # policy.defaultがRFC 2047エンコードを正しく行う)。SESのSource(エンベロープ)は
+    # 従来どおり素のアドレスのまま。
+    local_part, _, domain = sender.partition("@")
+    msg["From"] = Address(display_name=SERVICE_NAME, username=local_part, domain=domain)
     msg["To"] = recipient
     msg["Subject"] = subject
     # mailto:を併記しない: mailto経由の停止依頼はmail_forwarderが個人メールへ転送する
@@ -384,7 +392,7 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
             logger.warning("match history record failed for detail_no=%s", c.get("detail_no"), exc_info=True)
     lines.append(f"\n詳細一覧: {detail_url}")
     body = "\n".join(lines)
-    subject = f"【入札通知】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件"
+    subject = f"【{SERVICE_NAME}】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件"
 
     # 運用監視用のオーナー宛+実際にactiveな購読者宛の両方に個別送信する(B-1)。
     # BCC一斉送信は使わない(宛先ごとに異なる配信停止トークンを埋め込む必要があるため)。
@@ -449,12 +457,12 @@ def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: i
     if total_matches > 0:
         body = (
             f"先週は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックし、"
-            f"清掃関連案件を合計{total_matches}件通知しました。\nBotは正常に稼働しています。"
+            f"清掃関連案件を合計{total_matches}件通知しました。\nシステムは正常に稼働しています。"
         )
     else:
         body = (
             f"先週は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックしましたが、"
-            f"該当する案件はありませんでした。\nBotは正常に稼働しています。"
+            f"該当する案件はありませんでした。\nシステムは正常に稼働しています。"
         )
 
     # v0.11: 運用監視用のオーナーだけでなく、実際の購読者にも週次サマリーを届ける。
@@ -463,7 +471,7 @@ def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: i
     owner_email_value = owner_email
     for recipient in get_all_recipients(owner_email_value):
         try:
-            send_email_with_unsubscribe(sender, recipient, "【入札情報通知Bot】週次稼働レポート", body)
+            send_email_with_unsubscribe(sender, recipient, f"【{SERVICE_NAME}】週次稼働レポート", body)
         except Exception:
             logger.warning("weekly digest failed for %s", recipient, exc_info=True)
 
