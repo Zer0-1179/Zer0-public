@@ -1,6 +1,6 @@
 """collector Lambda のユニットテスト。
 ネットワークI/O(fetch/post)とSES/SSMはモックする。
-2026-07-10のFableレビュー修正(v0.13)の回帰テストを兼ねる。
+2026-07-10のFableレビュー修正(v0.13)、2026-07-11の品質レビュー修正の回帰テストを兼ねる。
 """
 import email as email_lib
 from unittest import mock
@@ -23,6 +23,74 @@ ANKEN_HTML_TEMPLATE = '''
 <td class="inputAreaG2">本庁<br></td>
 </tr>
 '''
+
+# 「委託」1セクションに複数行(建物管理案件+清掃案件+無関係案件)を含む実サイト形式のフィクスチャ。
+# extract_itaku_cases/filter_by_keywordsのパーサー回帰テストに使う。
+ANKEN_HTML_MULTI_ROW = '''
+<table border="0" align="center" width="93%"><tr><td>工事</td></tr></table>
+<tr>
+<td class="inputAreaG1">CN-9<br></td>
+<td class="inputAreaG2"><a href="javascript:detail('D9');">植栽剪定工事</a><br></td>
+<td class="inputAreaG1">造園<br></td>
+<td class="inputAreaG2">見積合わせ<br></td>
+<td class="inputAreaG1">公園緑地課<br></td>
+<td class="inputAreaG2">本庁<br></td>
+</tr>
+<table border="0" align="center" width="93%"><tr><td>委託</td></tr></table>
+<tr>
+<td class="inputAreaG1">CN-1<br></td>
+<td class="inputAreaG2"><a href="javascript:detail('D1');">○○庁舎管理業務委託</a><br></td>
+<td class="inputAreaG1">建物管理<br></td>
+<td class="inputAreaG2">一般競争入札<br></td>
+<td class="inputAreaG1">総務課<br></td>
+<td class="inputAreaG2">本庁<br></td>
+</tr>
+<tr>
+<td class="inputAreaG1">CN-2<br></td>
+<td class="inputAreaG2"><a href="javascript:detail2('D2');">庁舎警備業務委託</a><br></td>
+<td class="inputAreaG1">警備<br></td>
+<td class="inputAreaG2">一般競争入札<br></td>
+<td class="inputAreaG1">総務課<br></td>
+<td class="inputAreaG2">本庁<br></td>
+</tr>
+'''
+
+DETAIL_HTML_TEMPLATE = '''
+<td>入札期間</td><td>令和8年7月1日から{deadline}まで</td>
+<th class="header pcak4000-header">種目</th><td>建物管理</td>
+<th class="header pcak4000-header">所在地区分・順位</th><td>市内A</td>
+'''
+
+
+def test_extract_itaku_cases_only_returns_itaku_section(collector):
+    """委託セクション以外(工事セクションの造園案件)は除外し、委託セクション内の
+    複数行(category・fn種別違いを含む)を正しく抽出できること。"""
+    cases = collector.extract_itaku_cases(ANKEN_HTML_MULTI_ROW)
+    assert [c["title"] for c in cases] == ["○○庁舎管理業務委託", "庁舎警備業務委託"]
+    assert cases[0]["category"] == "建物管理"
+    assert cases[0]["detail_fn"] == "detail"
+    assert cases[1]["detail_fn"] == "detail2"
+
+
+def test_filter_by_keywords_matches_category_not_just_title(collector):
+    """案件名に「清掃」を含まなくても、category(工種等区分)が「建物管理」なら
+    マッチすること(取りこぼし対策、レビュー2026-07-11)。"""
+    cases = collector.extract_itaku_cases(ANKEN_HTML_MULTI_ROW)
+    matches = collector.filter_by_keywords(cases, ["建物管理"])
+    assert [c["title"] for c in matches] == ["○○庁舎管理業務委託"]
+
+
+def test_fetch_case_detail_parses_era_date_and_days_left(collector):
+    """令和表記の締切日を西暦に変換し、days_leftを含むinfoを返すこと。"""
+    detail_html = DETAIL_HTML_TEMPLATE.format(deadline="令和8年7月20日")
+    case = {"detail_fn": "detail", "detail_no": "d1"}
+    with mock.patch.object(collector, "post", return_value=detail_html), \
+         mock.patch.object(collector, "datetime") as dt_mock:
+        dt_mock.now.return_value.date.return_value = collector.date(2026, 7, 11)
+        info = collector.fetch_case_detail(case)
+    assert info["days_left"] == 9
+    assert info["deadline_display"] == "入札期間終了: 2026/7/20（あと9日）"
+    assert info["category_detail"] == "建物管理"
 
 
 def test_build_unsubscribe_url_normalizes_email_case(collector):
@@ -58,6 +126,31 @@ def test_send_notification_partial_failure_reports_had_failure(collector, make_c
     assert fully_sent is False
     assert had_failure is True
     assert m_send.call_count == 2
+
+
+def test_send_notification_sorts_by_deadline_ascending(collector, make_context):
+    """締切が近い案件を先頭に表示すること(days_leftが無い案件は末尾、レビュー2026-07-11)。"""
+    matches = [
+        {"title": "A(締切遠い)", "contract_no": "1", "method": "指名競争入札", "dept": "総務課",
+         "detail_fn": "detail", "detail_no": "dA"},
+        {"title": "B(締切近い)", "contract_no": "2", "method": "指名競争入札", "dept": "総務課",
+         "detail_fn": "detail", "detail_no": "dB"},
+        {"title": "C(締切不明)", "contract_no": "3", "method": "指名競争入札", "dept": "総務課",
+         "detail_fn": "detail", "detail_no": "dC"},
+    ]
+    details_by_no = {
+        "dA": {"days_left": 20},
+        "dB": {"days_left": 3},
+        "dC": {},
+    }
+    with mock.patch.object(collector, "fetch_case_detail", side_effect=lambda c: details_by_no[c["detail_no"]]), \
+         mock.patch.object(collector, "record_match_history"), \
+         mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+         mock.patch.object(collector, "send_email_with_unsubscribe") as m_send:
+        collector.send_notification(2001, matches, make_context(300000))
+
+    body = m_send.call_args.args[3]
+    assert body.index("B(締切近い)") < body.index("A(締切遠い)") < body.index("C(締切不明)")
 
 
 def test_send_notification_full_success(collector, make_context):
@@ -112,3 +205,27 @@ def test_lambda_handler_raises_on_send_failure_and_defers_kokoku_no(collector, m
 
     item = collector.dynamodb.Table("test-processed").get_item(Key={"kokoku_no": 5001}).get("Item")
     assert item is None
+
+
+def test_digest_pending_flag_roundtrip(collector):
+    """weekly-stats未作成時はFalse、set後はTrue、reset_weekly_statsで自動的に
+    Falseへ戻ること(月曜の持ち越し解消フロー、レビュー2026-07-11)。"""
+    assert collector.get_digest_pending() is False
+
+    collector.update_weekly_stats(matches_today=0, cases_today=1)  # itemを作成
+    collector.set_digest_pending(True)
+    assert collector.get_digest_pending() is True
+
+    collector.reset_weekly_stats()
+    assert collector.get_digest_pending() is False
+
+
+def test_send_weekly_digest_pending_uses_period_label(collector):
+    """digest_pending解消時に送るメールは「先週は」ではなく「直近の集計期間は」と
+    表記すること(月曜以外に送られるため、レビュー2026-07-11)。"""
+    with mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+         mock.patch.object(collector, "send_email_with_unsubscribe") as m_send:
+        collector.send_weekly_digest(3, 10, 2, pending=True)
+
+    body = m_send.call_args.args[3]
+    assert body.startswith("直近の集計期間は")

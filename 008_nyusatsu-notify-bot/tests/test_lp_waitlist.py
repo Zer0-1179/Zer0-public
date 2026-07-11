@@ -68,7 +68,9 @@ def test_register_when_active_does_not_resend(lp_waitlist):
     with mock.patch.object(lp_waitlist, "send_confirmation_email") as m_confirm:
         resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "user@example.com"}))
     import json
-    assert json.loads(resp["body"])["status"] == "already_registered"
+    # activeなアドレスへの再登録は、第三者によるメールアドレス列挙を防ぐため
+    # 他のケースと同じ"registered"を返す(確認メール自体は送らない、Fable指摘、レビュー2026-07-11)。
+    assert json.loads(resp["body"])["status"] == "registered"
     assert m_confirm.call_count == 0
 
 

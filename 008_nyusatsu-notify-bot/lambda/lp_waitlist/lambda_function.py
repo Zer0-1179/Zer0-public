@@ -35,6 +35,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # 利用者向けメールの差出人表示名・件名プレフィックスに使うサービス名。
 # collector Lambda側のSERVICE_NAMEと合わせること(v0.14で「Bot」を含む旧名称から改称)。
 SERVICE_NAME = "入札情報ウォッチ"
+INQUIRY_EMAIL = "nyusatsu@zer0-infra.com"
 
 
 def _from_address(sender: str) -> Address:
@@ -174,7 +175,7 @@ def notify_owner_confirmed(email: str) -> None:
         Source=sender_email,
         Destination={"ToAddresses": [notify_email]},
         Message={
-            "Subject": {"Data": "[Nyusatsu LP] 事前登録が確認されました", "Charset": "UTF-8"},
+            "Subject": {"Data": f"【{SERVICE_NAME}】事前登録が確認されました", "Charset": "UTF-8"},
             "Body": {"Text": {"Data": f"確認済みメールアドレス: {email}", "Charset": "UTF-8"}},
         },
         ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
@@ -216,15 +217,19 @@ def format_history_line(item: dict) -> str:
     return line
 
 
-def send_welcome_email(email: str, sender: str) -> None:
+def send_welcome_email(email: str, sender: str, unsubscribe_url: str) -> None:
     """登録確認完了時に、直近1ヶ月の該当案件（あれば）をまとめて送るバックフィル
     ウェルカムメール。案件がない場合も「システムは正常に稼働している」ことを伝え、
-    登録後の沈黙による不安を解消する(Fable指摘、v0.11)。"""
+    登録後の沈黙による不安を解消する(Fable指摘、v0.11)。
+
+    collector Lambdaの通知メールと同じくList-Unsubscribeヘッダー+本文フッターの
+    配信停止リンクを付ける(以前はこのメールだけ配信停止導線が無かった、
+    Fable指摘、レビュー2026-07-11)。"""
     recent = get_recent_matches(days=30)
 
     if recent:
         lines = [
-            f"ご登録ありがとうございます。過去1ヶ月に清掃関連の案件が{len(recent)}件ありました。"
+            f"ご登録ありがとうございます。過去1ヶ月に対象の案件が{len(recent)}件ありました。"
             "参考までにご案内します（すでに締切を過ぎている案件も含みます。今後は新着があり次第、随時お届けします）。\n"
         ]
         for item in recent[:10]:
@@ -234,22 +239,37 @@ def send_welcome_email(email: str, sender: str) -> None:
     else:
         body = (
             "ご登録ありがとうございます。\n\n"
-            "横浜市の入札公告は原則毎週火曜日に発行されます。過去1ヶ月は該当する清掃関連案件が"
+            "横浜市の入札公告は原則毎週火曜日に発行されます。過去1ヶ月は該当する案件が"
             "ありませんでしたが、システムは毎朝正常に稼働し、公告をチェックしています。\n\n"
             "該当案件が見つかり次第、すぐにメールでお知らせします。"
         )
         subject = f"【{SERVICE_NAME}】ご登録ありがとうございます"
 
+    footer_text = (
+        "\n\n---\n"
+        f"本メールは「{SERVICE_NAME}」（横浜市パイロット版）から自動配信しています。\n"
+        f"配信停止はこちら: {unsubscribe_url}\n"
+        f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
+    )
+    html_body = (
+        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;line-height:1.7;color:#222\">"
+        f"<div>{html.escape(body).replace(chr(10), '<br>')}</div>"
+        "<hr style=\"margin:24px 0;border:none;border-top:1px solid #ddd\">"
+        "<p style=\"font-size:13px;color:#666\">"
+        f"本メールは「{SERVICE_NAME}」（横浜市パイロット版）から自動配信しています。<br>"
+        f"<a href=\"{html.escape(unsubscribe_url)}\">配信停止はこちら</a><br>"
+        f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
+        "</p></body></html>"
+    )
+
     msg = EmailMessage()
     msg["From"] = _from_address(sender)
     msg["To"] = email
     msg["Subject"] = subject
-    msg.set_content(body)
-    msg.add_alternative(
-        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;line-height:1.7;color:#222\">"
-        f"<div>{html.escape(body).replace(chr(10), '<br>')}</div></body></html>",
-        subtype="html",
-    )
+    msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    msg.set_content(body + footer_text)
+    msg.add_alternative(html_body, subtype="html")
     ses.send_raw_email(
         Source=sender,
         Destinations=[email],
@@ -295,7 +315,10 @@ def handle_register(event):
         status = existing.get("status")
 
         if status == "active":
-            return _json_response(200, {"status": "already_registered"})
+            # 第三者が任意のメールアドレスの購読状態(activeか否か)を判別できて
+            # しまうため、他のケースと同じ"registered"を返す
+            # (Fable指摘、レビュー2026-07-11)。
+            return _json_response(200, {"status": "registered"})
 
         if status == "unsubscribed" and existing.get("unsubscribed_reason") in ("bounce", "complaint"):
             # バウンス・苦情による配信停止は送信健全性保護のための抑制なので、
@@ -373,13 +396,15 @@ def handle_confirm(event):
             logger.warning("owner confirm notification failed for %s", email, exc_info=True)
         try:
             sender_email = _get_param(SES_SENDER_PARAM_NAME)
-            send_welcome_email(email, sender_email)
+            unsubscribe_token = make_token(email, "unsubscribe")
+            unsubscribe_url = f"{_base_url(event)}/unsubscribe?email={urllib.parse.quote(email)}&token={unsubscribe_token}"
+            send_welcome_email(email, sender_email, unsubscribe_url)
         except Exception:
             logger.warning("welcome email failed for %s", email, exc_info=True)
 
     return _html_response(
         200,
-        _page("登録を確認しました", "ご登録ありがとうございます。清掃関連の入札情報が見つかり次第、メールでお知らせします。"),
+        _page("登録を確認しました", "ご登録ありがとうございます。対象の入札情報が見つかり次第、メールでお知らせします。"),
     )
 
 
