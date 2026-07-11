@@ -54,7 +54,7 @@ Parameters:
     Description: SESで検証済みの送信元メールアドレス
   Keywords:
     Type: String
-    Default: "清掃,美化,害虫防除,ねずみ防除,消防用設備点検,造園,緑地,街路樹,除草,設備保守点検"
+    Default: "清掃,美化,害虫防除,ねずみ防除,消防用設備点検,造園,緑地,街路樹,除草,設備保守点検,建物管理"
     Description: 案件名に含まれていれば通知対象とするキーワード（カンマ区切り）
   HmacSecret:
     Type: String

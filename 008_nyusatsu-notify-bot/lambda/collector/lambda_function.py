@@ -128,7 +128,10 @@ def extract_itaku_cases(anken_html: str) -> list[dict]:
 
 
 def filter_by_keywords(cases: list[dict], keywords: list[str]) -> list[dict]:
-    return [c for c in cases if any(kw in c["title"] for kw in keywords)]
+    """案件名(title)だけでなく工種等区分(category)にもキーワードを当てる。
+    案件名に「清掃」等を含まないが区分が「建物管理」等の案件を取りこぼさないため
+    (Fable指摘、レビュー2026-07-11)。"""
+    return [c for c in cases if any(kw in c["title"] or kw in c["category"] for kw in keywords)]
 
 
 def _clean_field_text(raw: str) -> str:
@@ -179,10 +182,13 @@ def fetch_case_detail(case: dict) -> dict:
                     greg_year, int(month.translate(_ZENKAKU_DIGITS)), int(day.translate(_ZENKAKU_DIGITS))
                 )
                 days_left = (deadline - datetime.now(JST).date()).days
+                info["days_left"] = days_left  # 通知メール内の締切昇順ソートに使う
                 if days_left >= 0:
-                    info["deadline_display"] = f"入札期間終了: {deadline.month}/{deadline.day}（あと{days_left}日）"
+                    info["deadline_display"] = (
+                        f"入札期間終了: {deadline.year}/{deadline.month}/{deadline.day}（あと{days_left}日）"
+                    )
                 else:
-                    info["deadline_display"] = f"入札期間終了: {deadline.month}/{deadline.day}（終了済）"
+                    info["deadline_display"] = f"入札期間終了: {deadline.year}/{deadline.month}/{deadline.day}（終了済）"
     except Exception:
         logger.warning("deadline parse failed for detail_no=%s", case.get("detail_no"), exc_info=True)
 
@@ -252,8 +258,16 @@ def mark_processed(kokoku_no: int) -> None:
     )
 
 
+_param_cache: dict[str, str] = {}
+
+
 def get_param(name: str) -> str:
-    return ssm.get_parameter(Name=name)["Parameter"]["Value"]
+    """1回のLambda実行内で同じパラメータを繰り返し取得しないようキャッシュする
+    (購読者数×号数に比例してSSM呼び出しが線形増加していたため、レビュー2026-07-11)。
+    lp_waitlist Lambdaの_param_cacheと同じ方式。"""
+    if name not in _param_cache:
+        _param_cache[name] = ssm.get_parameter(Name=name)["Parameter"]["Value"]
+    return _param_cache[name]
 
 
 def make_unsubscribe_token(email: str) -> str:
@@ -372,7 +386,7 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
     owner_email = get_param(os.environ["NOTIFY_EMAIL_PARAM_NAME"])
     detail_url = f"{BASE_URL}?job=KokokuAnkenList&kokoku_no={kokoku_no}"
 
-    lines = [f"横浜市 公告第{kokoku_no}号 で清掃関連案件が{len(matches)}件見つかりました。\n"]
+    case_details: list[tuple[dict, dict]] = []
     for idx, c in enumerate(matches):
         if idx > 0:
             time.sleep(REQUEST_INTERVAL_SEC)
@@ -385,14 +399,22 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
             )
             return False, False
         detail = fetch_case_detail(c)
-        lines.append(format_case_line(c, detail))
+        case_details.append((c, detail))
         try:
             record_match_history(kokoku_no, c, detail)
         except Exception:
             logger.warning("match history record failed for detail_no=%s", c.get("detail_no"), exc_info=True)
+
+    # 締切が近い案件を先頭に表示する(締切が取れない案件は末尾)。忙しい受信者が
+    # 「今すぐ動くべき案件」を最初に見られるようにするため(Fable指摘、レビュー2026-07-11)。
+    case_details.sort(key=lambda cd: cd[1].get("days_left", 10**9))
+
+    lines = [f"横浜市 公告第{kokoku_no}号 で対象案件が{len(matches)}件見つかりました。\n"]
+    for c, detail in case_details:
+        lines.append(format_case_line(c, detail))
     lines.append(f"\n詳細一覧: {detail_url}")
     body = "\n".join(lines)
-    subject = f"【{SERVICE_NAME}】横浜市 第{kokoku_no}号 清掃関連案件{len(matches)}件"
+    subject = f"【{SERVICE_NAME}】横浜市 第{kokoku_no}号 対象案件{len(matches)}件"
 
     # 運用監視用のオーナー宛+実際にactiveな購読者宛の両方に個別送信する(B-1)。
     # BCC一斉送信は使わない(宛先ごとに異なる配信停止トークンを埋め込む必要があるため)。
@@ -448,20 +470,40 @@ def reset_weekly_stats() -> None:
             "last_run_at": datetime.now(timezone.utc).isoformat(),
         }
     )
+    # put_itemによる全置換のため、digest_pendingフラグもここで自動的にクリアされる。
 
 
-def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: int) -> None:
+def get_digest_pending() -> bool:
+    table = dynamodb.Table(os.environ["WEEKLY_STATS_TABLE_NAME"])
+    resp = table.get_item(Key={"stats_id": "current"})
+    return bool(resp.get("Item", {}).get("digest_pending", False))
+
+
+def set_digest_pending(pending: bool) -> None:
+    table = dynamodb.Table(os.environ["WEEKLY_STATS_TABLE_NAME"])
+    table.update_item(
+        Key={"stats_id": "current"},
+        UpdateExpression="SET digest_pending = :p",
+        ExpressionAttributeValues={":p": pending},
+    )
+
+
+def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: int, pending: bool = False) -> None:
     sender = get_param(os.environ["SES_SENDER_PARAM_NAME"])
     owner_email = get_param(os.environ["NOTIFY_EMAIL_PARAM_NAME"])
 
+    # 月曜に持ち越しが発生し週次サマリーを見送った場合、解消後の実行でこの関数が
+    # pending=Trueで呼ばれる。「先週は」だと対象期間が不正確になるため文言を変える
+    # (Fable指摘、レビュー2026-07-11)。
+    period_label = "直近の集計期間" if pending else "先週"
     if total_matches > 0:
         body = (
-            f"先週は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックし、"
-            f"清掃関連案件を合計{total_matches}件通知しました。\nシステムは正常に稼働しています。"
+            f"{period_label}は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックし、"
+            f"対象案件を合計{total_matches}件通知しました。\nシステムは正常に稼働しています。"
         )
     else:
         body = (
-            f"先週は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックしましたが、"
+            f"{period_label}は{days_run}回の巡回で委託案件を{total_cases_checked}件チェックしましたが、"
             f"該当する案件はありませんでした。\nシステムは正常に稼働しています。"
         )
 
@@ -509,9 +551,24 @@ def lambda_handler(event, context):
                 time.sleep(REQUEST_INTERVAL_SEC)
 
             anken_html = fetch(f"{BASE_URL}?job=KokokuAnkenList&kokoku_no={kokoku_no}")
+            if not SECTION_RE.search(anken_html):
+                # 「工事/物品/委託」のセクション見出しが1つも見つからない場合、
+                # 横浜市サイトのHTML構造が変わり解析が壊れている可能性が高い。
+                # このケースはエラーにならず通知0件のまま進んでしまうため、
+                # サイレント故障を防ぐために明示的にログを残す(Fable指摘、レビュー2026-07-11)。
+                logger.error(
+                    "kokoku_no=%d: no section markers found in anken_html; "
+                    "Yokohama city site structure may have changed, parser needs review",
+                    kokoku_no,
+                )
             cases = extract_itaku_cases(anken_html)
             total_cases_checked += len(cases)
             matches = filter_by_keywords(cases, keywords)
+            unmatched = [c["title"] for c in cases if c not in matches]
+            if unmatched:
+                # マッチしなかった案件名を記録し、キーワードのチューニングを
+                # 実データ駆動で行えるようにする(Fable指摘、レビュー2026-07-11)。
+                logger.info("kokoku_no=%d unmatched titles: %s", kokoku_no, unmatched)
             if matches:
                 fully_sent, had_failure = send_notification(kokoku_no, matches, context)
                 if had_failure:
@@ -529,15 +586,20 @@ def lambda_handler(event, context):
 
     if not bootstrap:
         weekly_total, weekly_cases, weekly_days = update_weekly_stats(total_matches, total_cases_checked)
-        if datetime.now(JST).weekday() == 0:
+        pending = get_digest_pending()
+        if datetime.now(JST).weekday() == 0 or pending:
             if deferred:
                 # 持ち越し号が残ったまま週次サマリーを送ると、その分の集計が
                 # 反映されないまま送信・リセットされ過少報告になる。持ち越しが
-                # 解消するまで送信・リセットを見送り、次回実行以降に完全な
-                # 集計で送る。
-                logger.warning("monday weekly digest deferred: carryover kokoku_no pending")
+                # 解消するまで送信・リセットを見送り、digest_pendingフラグを立てて
+                # 持ち越し解消後の実行(月曜とは限らない)で必ず送る
+                # (Fable指摘、レビュー2026-07-11。以前はweekday()==0のときしか
+                # 再送されず、フラグが無いままだと持ち越しが長引くと欠落週が発生していた)。
+                if not pending:
+                    set_digest_pending(True)
+                logger.warning("weekly digest deferred: carryover kokoku_no pending")
             else:
-                send_weekly_digest(weekly_total, weekly_cases, weekly_days)
+                send_weekly_digest(weekly_total, weekly_cases, weekly_days, pending=pending)
                 reset_weekly_stats()
 
     logger.info("done: new_numbers=%d total_matches=%d bootstrap=%s", len(new_numbers), total_matches, bootstrap)

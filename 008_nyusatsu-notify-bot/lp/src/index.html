@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>入札情報ウォッチ | 横浜市の入札公告を毎朝自動チェック</title>
 <meta name="description" content="清掃・ビルメンテナンス業向けの入札情報自動通知サービス「入札情報ウォッチ」。横浜市の入札公告を毎朝自動でチェックし、対象業種の案件があればメールでお知らせします（パイロット版）。" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8B%3C/text%3E%3C/svg%3E" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="入札情報ウォッチ | 横浜市の入札公告を毎朝自動チェック" />
+<meta property="og:description" content="清掃・ビルメンテナンス業向けの入札情報自動通知サービス。横浜市の入札公告を毎朝自動でチェックし、対象業種の案件があればメールでお知らせします（パイロット版）。" />
+<meta property="og:url" content="https://nyusatsu.zer0-infra.com/" />
+<meta name="twitter:card" content="summary" />
 <style>
   :root {
     --bg: #fafaf8;
@@ -449,7 +455,7 @@
   <div class="eyebrow reveal">仕組み</div>
   <h2 class="reveal">やることは、メールを待つだけ。</h2>
   <p class="lead reveal">横浜市の公告確認から案件抽出まで、すべて自動で行います。</p>
-  <div class="how-flow reveal d1" role="img" aria-label="サービスの流れ。ステップ1、横浜市の入札公告ページを毎朝6時に自動チェック。ステップ2、清掃・美化・害虫防除・ねずみ防除など対象業種の案件だけを抽出。ステップ3、該当案件があった日だけメールでお知らせ。">
+  <div class="how-flow reveal d1" role="img" aria-label="サービスの流れ。ステップ1、横浜市の入札公告ページを毎朝6時に自動チェック。ステップ2、清掃・設備点検・造園・除草など対象業種の案件だけを抽出。ステップ3、該当案件があった日だけメールでお知らせ。">
     <div class="flow-item">
       <div class="flow-icon">
         <!-- 役所（横浜市サイト）アイコン -->
@@ -482,7 +488,7 @@
       </div>
       <div class="flow-step-label">STEP 2</div>
       <h3>関係する案件だけを抽出</h3>
-      <p>清掃・美化・害虫防除・ねずみ防除など、対象業種の案件だけを自動で絞り込みます。</p>
+      <p>清掃・設備点検・造園・除草など、対象業種の案件だけを自動で絞り込みます。</p>
     </div>
     <div class="flow-arrow" aria-hidden="true">
       <svg viewBox="0 0 34 34" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
@@ -615,7 +621,7 @@
     </div>
     <div class="faq-item reveal">
       <button class="faq-q">対象業種は追加されますか？<span class="plus">+</span></button>
-      <div class="faq-a"><p>現在は清掃・美化・害虫防除・ねずみ防除・消防用設備点検・造園/緑地/街路樹・除草・設備保守点検を対象にしています。ご要望があればお問い合わせください。</p></div>
+      <div class="faq-a"><p>現在は清掃・美化・害虫防除・ねずみ防除・消防用設備点検・造園/緑地/街路樹・除草・設備保守点検・建物管理を対象にしています。ご要望があればお問い合わせください。</p></div>
     </div>
     <div class="faq-item reveal">
       <button class="faq-q">個人事業主でも利用できますか？<span class="plus">+</span></button>
@@ -645,13 +651,13 @@
     <button type="submit">登録する</button>
   </form>
   <div class="form-msg" id="formMsg"></div>
-  <p class="cta-trust">登録・利用は無料（テスト運用期間中）。確認メールの承認後に配信が始まり、いつでもワンクリックで配信停止できます。</p>
+  <p class="cta-trust">登録・利用は無料（テスト運用期間中）。確認メールの承認後に配信が始まり、いつでもワンクリックで配信停止できます。<br>登録により<a href="privacy.html">プライバシーポリシー</a>および<a href="terms.html">利用規約</a>に同意したものとみなします。</p>
 </section>
 
 <footer>
   <p>清掃・ビルメンテナンス業向け 入札情報ウォッチ（パイロット版）</p>
   <p>お問い合わせ: <a href="mailto:nyusatsu@zer0-infra.com">nyusatsu@zer0-infra.com</a></p>
-  <p><a href="privacy.html">プライバシーポリシー</a></p>
+  <p><a href="privacy.html">プライバシーポリシー</a> ／ <a href="terms.html">利用規約</a> ／ <a href="tokushoho.html">特定商取引法に基づく表記</a></p>
 </footer>
 
 <script>
@@ -707,11 +713,9 @@
         body: JSON.stringify({ email, website }),
       });
       const data = await res.json();
-      if (res.ok && (data.status === 'registered' || data.status === 'already_registered')) {
+      if (res.ok && data.status === 'registered') {
         msg.classList.add('ok');
-        msg.textContent = data.status === 'registered'
-          ? '確認メールをお送りしました。メール内のリンクをクリックして登録を完了してください。'
-          : 'すでに登録済みのメールアドレスです。';
+        msg.textContent = '確認メールをお送りしました。メール内のリンクをクリックして登録を完了してください。';
         form.reset();
       } else {
         msg.classList.add('err');
