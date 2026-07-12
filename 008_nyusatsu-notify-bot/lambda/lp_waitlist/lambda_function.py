@@ -112,6 +112,7 @@ def _page(title: str, message: str) -> str:
     safe_message = html.escape(message)
     return (
         "<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
         f"<title>{safe_title}</title>"
         "<style>body{font-family:sans-serif;background:#f4f5f7;color:#222222;"
         "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}"
@@ -534,6 +535,7 @@ def handle_unsubscribe(event, method: str):
         action_url = f"?email={urllib.parse.quote(email)}&token={urllib.parse.quote(token)}"
         form_html = (
             "<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
             "<title>配信停止の確認</title>"
             "<style>body{font-family:sans-serif;background:#f4f5f7;color:#222222;"
             "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}"
