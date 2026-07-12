@@ -2,7 +2,7 @@
 
 > 横浜市が公開する入札（調達）公告を自動収集し、清掃・ビルメンテナンス業を営む中小企業・個人事業主向けに、清掃関連キーワードに合致する案件だけをメールで自動通知するサブスクリプションサービス。プロジェクト内部の識別子（AWSリソース名・ディレクトリ名等）は`nyusatsu`のまま変更していない。
 
-**現在のステータス: v0.20。パイロット実装・AWS上でテスト運用中（横浜市単体）。Stripe Webhookでの課金者⇔購読者突合に続き、全メール（登録確認・ウェルカム・日次通知・週次サマリー）をモバイル向けカード型HTMLに刷新。案件個別の詳細ページへの実URLも発見し全通知に追加済み**  
+**現在のステータス: v0.21。パイロット実装・AWS上でテスト運用中（横浜市単体）。全メールのモバイル向けカード型HTML刷新に続き、LP・法務ページの配色をメールと同じ青系に統一し料金表記・FAQ・フォームをブラッシュアップ。次はStripe Payment Links発行**  
 
 ## 概要
 
@@ -25,7 +25,7 @@ EventBridge（毎日6:00 JST）
         ├─ 横浜市入札サイトから公告一覧(KokokuList)を取得し、公告番号(kokoku_no)を抽出
         ├─ DynamoDB(zer0-nyusatsu-processed-kokoku) と照合し未処理の号のみ処理
         ├─ 各号の案件一覧(KokokuAnkenList)を取得し「委託」セクションのみ解析
-        ├─ 案件名がキーワード(清掃/美化/害虫防除/ねずみ防除)に合致すれば詳細ページから
+        ├─ 案件名または工種等区分がキーワード(清掃・美化・害虫防除ほか計10語)に合致すれば詳細ページから
         │    種目・参加資格・履行場所・履行期間・開札予定日時を取得(追加リクエストなし)
         ├─ マッチ案件をDynamoDB(zer0-nyusatsu-match-history)に記録(60日TTL)
         ├─ 運営者+DynamoDB(zer0-nyusatsu-lp-waitlist)のactive購読者へ個別SES送信
@@ -79,7 +79,7 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | DynamoDBテーブル        | `zer0-nyusatsu-processed-kokoku`                                                                  |
 | DynamoDBテーブル        | `zer0-nyusatsu-match-history`（マッチ案件履歴、60日TTL、バックフィルウェルカムメール用）           |
 | SQS(DLQ)                | `zer0-nyusatsu-notify-bot-dlq`                                                                    |
-| SSM Parameter           | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords`, `/zer0/008-nyusatsu/hmac-secret`, `/zer0/008-nyusatsu/unsubscribe-base-url` |
+| SSM Parameter           | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords`, `/zer0/008-nyusatsu/hmac-secret`, `/zer0/008-nyusatsu/unsubscribe-base-url`, `/zer0/008-nyusatsu/payment-required`, `/zer0/008-nyusatsu/stripe-webhook-secret` |
 | EventBridge Rule        | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST）                             |
 | SNS Topic               | `zer0-nyusatsu-alarm-topic`（DLQ滞留アラームの通知先、NotifyEmail宛）                             |
 | CloudWatch Alarm        | `zer0-nyusatsu-dlq-messages-alarm-01`                                                             |
@@ -91,7 +91,8 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | CloudFormationスタック  | `zer0-nyusatsu-lp-backend`（事前登録API）                                                         |
 | DynamoDBテーブル        | `zer0-nyusatsu-lp-waitlist`                                                                       |
 | Lambda関数              | `zer0-nyusatsu-lp-waitlist`（Python 3.13）                                                        |
-| API Gateway             | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register` / `GET /confirm` / `GET+POST /unsubscribe`）   |
+| API Gateway             | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register` / `GET /confirm` / `GET+POST /unsubscribe` / `POST /stripe/webhook`） |
+| Lambda関数              | `zer0-nyusatsu-stripe-webhook`（Python 3.13、Stripe決済イベントで購読者を突合・更新）             |
 | CloudFormationスタック  | `zer0-nyusatsu-mail-relay`（問合せメール受信転送）                                                |
 | S3バケット              | `zer0-nyusatsu-mail-s3`（受信メール一時保管）                                                     |
 | Lambda関数              | `zer0-nyusatsu-mail-forwarder`, `zer0-nyusatsu-activate-ruleset`（Python 3.13）                   |
@@ -101,7 +102,7 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 ## ランディングページ（LP）・事前登録
 
-集客用LP `https://nyusatsu.zer0-infra.com` を公開（S3 + CloudFront + ACM）。Apple風のスクロール連動アニメーションで、課題提起・仕組み・対象エリア/業種・料金・FAQを掲載し、メールアドレス入力の事前登録フォームを設置。フッターには問合せ用アドレス`nyusatsu@zer0-infra.com`とプライバシーポリシー（`privacy.html`）を記載し、問合せメールはSES受信ルール→S3→Lambda（`zer0-nyusatsu-mail-forwarder`）で個人メールへ自動転送する。
+集客用LP `https://nyusatsu.zer0-infra.com` を公開（S3 + CloudFront + ACM）。Apple風のスクロール連動アニメーションで、課題提起・仕組み・対象エリア/業種・料金・FAQを掲載し、メールアドレス入力の事前登録フォームを設置。フッターには問合せ用アドレス`nyusatsu@zer0-infra.com`とプライバシーポリシー（`privacy.html`）・利用規約（`terms.html`）・特定商取引法に基づく表記（`tokushoho.html`）を記載し、問合せメールはSES受信ルール→S3→Lambda（`zer0-nyusatsu-mail-forwarder`）で個人メールへ自動転送する。LP・法務ページの配色は通知メール・確認/配信停止ページと同じ白背景+青系アクセント（`#2b6cb0`）で統一している（v0.21）。
 
 **登録〜配信停止フロー（v0.9、二重オプトイン）**: フォーム送信は`zer0-nyusatsu-lp-api`（HTTP API）経由でLambda（`zer0-nyusatsu-lp-waitlist`）が`zer0-nyusatsu-lp-waitlist`（DynamoDB、`status: pending/active/unsubscribed`）に保存し、登録者本人へ確認メール（広告要素なしのトランザクショナルメール）を送信する。メール内の確認リンク（HMAC-SHA256署名付きトークン、`GET /confirm`）をクリックすると`active`になり運営者へ通知される。通知メール・週次サマリーメールには`List-Unsubscribe`/`List-Unsubscribe-Post`ヘッダー（RFC 8058 One-Click対応）と本文中のワンクリック解除リンク（`GET+POST /unsubscribe`）を付与。フォームには非表示のhoneypotフィールドでbot登録を弾く。確認完了時には、`zer0-nyusatsu-match-history`から直近1ヶ月のマッチ実績を参照したバックフィルウェルカムメールを送る（v0.11。実績がない場合も稼働状況を伝える文面）。
 
@@ -152,6 +153,6 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 | 日付       | バージョン | 内容                                                                                                                                                           |
 | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-11 | v0.18      | Fable品質レビューを反映。キーワード判定にcategory追加・通知メール締切昇順ソート・構造変化検知等を実装。特定商取引法に基づく表記・利用規約ページを新設 |
 | 2026-07-12 | v0.19      | Stripe Webhook受信Lambda(stripe_webhook)を新設し課金者⇔購読者を突合。決済完了で二重オプトイン省略・active化、LP未登録アドレスも自動登録。collectorに配信ゲート用SSMフラグを追加 |
 | 2026-07-12 | v0.20      | 全メールをモバイル向けカード型HTMLに刷新。案件個別の詳細ページへの実URL(GET直リンク)を発見し全通知に追加。ユーザーの「読みにくい」指摘を受けFableに依頼 |
+| 2026-07-12 | v0.21      | LP全体をブラッシュアップ(Fable)。LP・法務3ページの配色を通知メールと同じ青系(#2b6cb0)に統一、料金表記を特商法と整合(月額3,000円予定)し料金FAQ新設、フォーム改善・モバイル調整。仕様書8k節参照 |
