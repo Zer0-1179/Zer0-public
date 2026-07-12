@@ -12,14 +12,17 @@
 <meta property="og:url" content="https://nyusatsu.zer0-infra.com/" />
 <meta name="twitter:card" content="summary" />
 <style>
+  /* 配色はメール(collector/lp_waitlist Lambda)・確認/配信停止ページと同じ
+     白背景+青系アクセント(#2b6cb0)に統一(v0.21)。LPだけ緑系だと
+     「LPで登録→届くメールは青」の導線で別サービスに見えるため。 */
   :root {
-    --bg: #fafaf8;
-    --bg-alt: #f0efe9;
+    --bg: #f7f8fa;
+    --bg-alt: #eef1f5;
     --ink: #1c1e1f;
     --ink-soft: #55585c;
-    --accent: #1f5f4d;
-    --accent-soft: #e4efe9;
-    --line: #dedcd3;
+    --accent: #2b6cb0;
+    --accent-soft: #e3edf8;
+    --line: #dde3ea;
     --radius: 14px;
   }
   * { box-sizing: border-box; }
@@ -44,7 +47,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 6vw;
-    background: rgba(250, 250, 248, 0.72);
+    background: rgba(247, 248, 250, 0.72);
     backdrop-filter: saturate(180%) blur(14px);
     -webkit-backdrop-filter: saturate(180%) blur(14px);
     border-bottom: 1px solid transparent;
@@ -111,6 +114,8 @@
   }
   .hero h1 .hl { color: var(--accent); }
   .hero p.lead { margin: 0 auto 40px; }
+  /* PC向けの強制改行。狭い画面では自然な折り返しに任せる */
+  @media (max-width: 720px) { .br-pc { display: none; } }
   .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
   .btn-primary, .btn-secondary {
     display: inline-block;
@@ -123,8 +128,8 @@
     border: none;
     transition: transform 0.25s ease, box-shadow 0.25s ease;
   }
-  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 10px 24px -8px rgba(31,95,77,0.55); }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -10px rgba(31,95,77,0.6); }
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 10px 24px -8px rgba(43,108,176,0.5); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -10px rgba(43,108,176,0.55); }
   .btn-secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
   .btn-secondary:hover { border-color: var(--ink); }
 
@@ -275,6 +280,15 @@
     height: fit-content;
   }
   .mail-mock-body { padding: 24px; }
+  /* 実際の通知メール冒頭にあるサービス名見出し(青の下線バー)を再現する */
+  .mail-mock-brand {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
   .mail-mock-case-title { font-weight: 700; font-size: 15px; margin: 0 0 12px; }
   .mail-mock-list { list-style: none; margin: 0; padding: 0; font-size: 14px; color: var(--ink-soft); }
   .mail-mock-list li { padding: 6px 0; border-top: 1px dashed var(--line); }
@@ -285,7 +299,7 @@
 
   /* ── Coverage / pricing ─────────────────── */
   .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-  @media (max-width: 860px) { .split, .card-grid { grid-template-columns: 1fr; } .step { grid-template-columns: 56px 1fr; } }
+  @media (max-width: 860px) { .split, .card-grid { grid-template-columns: 1fr; } }
 
   .info-box {
     background: var(--bg-alt);
@@ -348,12 +362,11 @@
     background: var(--ink);
     color: #fff;
     border-radius: 28px;
-    margin: 0 6vw 120px;
+    /* 狭い画面で角丸ボックスが画面端に張り付かないよう左右余白を常に確保する */
+    width: min(1080px, 88vw);
+    margin: 0 auto 120px;
     padding: 80px 6vw;
     text-align: center;
-    max-width: 1080px;
-    margin-left: auto;
-    margin-right: auto;
   }
   .cta-section h2 { color: #fff; }
   .cta-section .lead { color: #c9cbc7; margin: 0 auto 36px; }
@@ -385,6 +398,7 @@
     cursor: pointer;
     font-size: 15px;
   }
+  .register-form button:disabled { opacity: 0.6; cursor: default; }
   .form-msg { margin-top: 16px; font-size: 13.5px; min-height: 20px; }
   .cta-trust { margin-top: 22px; font-size: 12.5px; color: #9a9d99; }
   .form-msg.ok { color: #8fd6b8; }
@@ -423,7 +437,7 @@
   </div>
   <div class="hero-visual reveal d3">
     <div class="stat-pill"><div class="num">毎朝6時</div><div class="label">自動収集</div></div>
-    <div class="stat-pill"><div class="num">月8〜14件</div><div class="label">マッチ実績（2026年6月）</div></div>
+    <div class="stat-pill"><div class="num">月8〜14件</div><div class="label">マッチ実績（直近の実測）</div></div>
     <div class="stat-pill"><div class="num">横浜市</div><div class="label">パイロット対応エリア</div></div>
   </div>
 </section>
@@ -525,6 +539,7 @@
       <div class="mail-mock-row"><span class="mail-mock-label">差出人</span><span>入札情報ウォッチ &lt;notify@info.zer0-infra.com&gt;</span></div>
     </div>
     <div class="mail-mock-body">
+      <div class="mail-mock-brand">入札情報ウォッチ（横浜市パイロット版）</div>
       <p class="mail-mock-case-title">1. ○○地区 学校施設清掃業務委託（サンプル）</p>
       <ul class="mail-mock-list">
         <li><strong>契約番号</strong>18104-0001</li>
@@ -574,7 +589,7 @@
     </div>
   </div>
   <p class="source-note reveal">
-    出典: 横浜市「入札・契約結果検索」より当サービスが集計（令和7年度分、2026年7月時点）。金額は公開されている契約金額（税込）に基づく統計値で、契約金額が公開されていない案件は集計から除いています。「建物管理」は清掃以外の業務も含む区分のため、清掃業務単体の相場とは異なる場合があります。個別の落札事業者名は掲載していません。
+    出典: 横浜市「入札・契約結果検索」より当サービスが集計（令和7年度分、2026年7月時点）。金額は公開されている契約金額（税込）に基づく統計値で、契約金額が公開されていない案件は集計から除いています。「建物管理」は清掃以外の業務も含む区分のため、清掃業務単体の相場とは異なる場合があります。個別の落札事業者名は掲載していません。本データは年度替わり（毎年4月頃）を目安に更新予定です。
   </p>
 </section>
 
@@ -598,7 +613,7 @@
     <div class="price-card reveal d1">
       <div class="eyebrow" style="justify-content:center;">料金</div>
       <div class="price">無料<small>（テスト運用期間中）</small></div>
-      <p class="note">正式版は月額数千円のセルフサーブ価格帯を想定しています。<br>価格・提供時期は検証状況により変更となる場合があります。</p>
+      <p class="note">正式版は月額3,000円（予定）です。<br>価格・提供時期は検証状況により変更となる場合があります。詳細は<a href="tokushoho.html" style="color:var(--accent);font-weight:600;">特定商取引法に基づく表記</a>をご覧ください。</p>
     </div>
   </div>
 </section>
@@ -613,11 +628,15 @@
     </div>
     <div class="faq-item reveal">
       <button class="faq-q">どのくらいの頻度で届きますか？<span class="plus">+</span></button>
-      <div class="faq-a"><p>横浜市の入札公告は原則毎週火曜日に発行されます。毎朝の自動チェック自体は欠かしませんが、通知が届くのは対象キーワードに合う案件が実際にある時だけです。2026年6月の実績では月8〜14件が対象条件にマッチしましたが、該当案件がまったくない週もあります。「毎日届く」サービスではなく、「出た時に見逃さない」サービスとしてご利用ください。</p></div>
+      <div class="faq-a"><p>横浜市の入札公告は原則毎週火曜日に発行されます。毎朝の自動チェック自体は欠かしませんが、通知が届くのは対象キーワードに合う案件が実際にある時だけです。直近の実測では月あたり8〜14件が対象条件にマッチしていますが、該当案件がまったくない週もあります。「毎日届く」サービスではなく、「出た時に見逃さない」サービスとしてご利用ください。</p></div>
     </div>
     <div class="faq-item reveal">
       <button class="faq-q">今すぐ利用開始できますか？<span class="plus">+</span></button>
       <div class="faq-a"><p>現在は無料のテスト運用期間中です。事前登録いただいた方から順次ご案内します。</p></div>
+    </div>
+    <div class="faq-item reveal">
+      <button class="faq-q">料金はいつから発生しますか？<span class="plus">+</span></button>
+      <div class="faq-a"><p>テスト運用期間中は無料です。正式版（月額3,000円を予定）への移行時には、事前に本サイトと登録メールアドレス宛にご案内します。事前登録しただけで自動的に課金が始まることはありません。詳細は<a href="tokushoho.html">特定商取引法に基づく表記</a>をご確認ください。</p></div>
     </div>
     <div class="faq-item reveal">
       <button class="faq-q">対象業種は追加されますか？<span class="plus">+</span></button>
@@ -646,17 +665,17 @@
   <h2>入札情報を、見逃さない。</h2>
   <p class="lead">事前登録いただいた方から、テスト運用のご案内をお送りします。</p>
   <form class="register-form" id="registerForm">
-    <input type="email" id="emailInput" placeholder="メールアドレス" required />
+    <input type="email" id="emailInput" name="email" placeholder="メールアドレス" aria-label="メールアドレス" autocomplete="email" required />
     <input type="text" id="websiteInput" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
-    <button type="submit">登録する</button>
+    <button type="submit" id="submitBtn">登録する</button>
   </form>
-  <div class="form-msg" id="formMsg"></div>
+  <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
   <p class="cta-trust">登録・利用は無料（テスト運用期間中）。確認メールの承認後に配信が始まり、いつでもワンクリックで配信停止できます。<br>登録により<a href="privacy.html">プライバシーポリシー</a>および<a href="terms.html">利用規約</a>に同意したものとみなします。</p>
 </section>
 
 <footer>
   <p>清掃・ビルメンテナンス業向け 入札情報ウォッチ（パイロット版）</p>
-  <p>お問い合わせ: <a href="mailto:nyusatsu@zer0-infra.com">nyusatsu@zer0-infra.com</a></p>
+  <p>運営: Zer0-Infra ／ お問い合わせ: <a href="mailto:nyusatsu@zer0-infra.com">nyusatsu@zer0-infra.com</a></p>
   <p><a href="privacy.html">プライバシーポリシー</a> ／ <a href="terms.html">利用規約</a> ／ <a href="tokushoho.html">特定商取引法に基づく表記</a></p>
 </footer>
 
@@ -700,10 +719,13 @@
   const API_ENDPOINT = '__API_ENDPOINT__';
   const form = document.getElementById('registerForm');
   const msg = document.getElementById('formMsg');
+  const submitBtn = document.getElementById('submitBtn');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (submitBtn.disabled) return; // 送信中の二重サブミット防止
     const email = document.getElementById('emailInput').value.trim();
     const website = document.getElementById('websiteInput').value.trim();
+    submitBtn.disabled = true;
     msg.className = 'form-msg';
     msg.textContent = '送信中...';
     try {
@@ -724,6 +746,8 @@
     } catch (err) {
       msg.classList.add('err');
       msg.textContent = '通信エラーが発生しました。時間をおいて再度お試しください。';
+    } finally {
+      submitBtn.disabled = false;
     }
   });
 </script>
