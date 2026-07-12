@@ -1,12 +1,12 @@
 #!/bin/bash
-# deploy_lambdas.sh - 4つのバックエンドLambda(collector/lp_waitlist/bounce_handler/
-# mail_forwarder)の実コードを一括でaws lambda update-function-codeで反映する。
+# deploy_lambdas.sh - 5つのバックエンドLambda(collector/lp_waitlist/bounce_handler/
+# mail_forwarder/stripe_webhook)の実コードを一括でaws lambda update-function-codeで反映する。
 #
 # 背景: これらのLambdaはCFnテンプレート上ZipFileのプレースホルダーとしてデプロイされ、
 # 実コードは別途update-function-codeで反映する運用(プロジェクト共通ルール、SAM不使用)。
 # v0.9で「mail_forwarderへのこの反映コマンドの実行を忘れる」障害が実際に発生した
 # (プレースホルダーのままRuntime.ImportModuleErrorで機能停止)。このスクリプトは
-# 4つ全てを1コマンドでまとめて反映することで、一部だけ反映し忘れるリスクを減らす。
+# 5つ全てを1コマンドでまとめて反映することで、一部だけ反映し忘れるリスクを減らす。
 #
 # 使い方:
 #   cd 008_Nyusatsu_Notify_Bot && bash scripts/deploy_lambdas.sh
@@ -39,5 +39,6 @@ deploy_one collector zer0-nyusatsu-collector
 deploy_one lp_waitlist zer0-nyusatsu-lp-waitlist
 deploy_one bounce_handler zer0-nyusatsu-bounce-handler
 deploy_one mail_forwarder zer0-nyusatsu-mail-forwarder
+deploy_one stripe_webhook zer0-nyusatsu-stripe-webhook
 
-echo "[deploy] 4Lambdaすべての反映が完了しました。"
+echo "[deploy] 5Lambdaすべての反映が完了しました。"

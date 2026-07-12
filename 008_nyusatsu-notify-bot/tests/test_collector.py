@@ -229,3 +229,39 @@ def test_send_weekly_digest_pending_uses_period_label(collector):
 
     body = m_send.call_args.args[3]
     assert body.startswith("直近の集計期間は")
+
+
+def test_get_active_subscriber_emails_ignores_payment_status_by_default(collector):
+    """PAYMENT_REQUIRED_PARAM_NAMEが"false"(デフォルト)の間は、payment_statusに
+    関わらずstatus=activeなら通知対象に含める(既存の無料テスト購読者への配信を
+    変えないための後方互換、v0.19)。"""
+    table = collector.dynamodb.Table("test-waitlist")
+    table.put_item(Item={"email": "free@example.com", "status": "active", "registered_at": 1})
+    table.put_item(
+        Item={"email": "paid@example.com", "status": "active", "payment_status": "paid", "registered_at": 1}
+    )
+
+    emails = collector.get_active_subscriber_emails()
+
+    assert set(emails) == {"free@example.com", "paid@example.com"}
+
+
+def test_get_active_subscriber_emails_requires_paid_when_payment_required(collector):
+    """PAYMENT_REQUIRED_PARAM_NAMEを"true"に切り替えると、status=activeでも
+    payment_status=paidでない購読者は通知対象から除外される(課金必須化、v0.19)。"""
+    ssm = __import__("boto3").client("ssm", region_name="ap-northeast-1")
+    ssm.put_parameter(Name="/test/payment-required", Value="true", Type="String", Overwrite=True)
+    collector._param_cache.pop("/test/payment-required", None)
+    try:
+        table = collector.dynamodb.Table("test-waitlist")
+        table.put_item(Item={"email": "free@example.com", "status": "active", "registered_at": 1})
+        table.put_item(
+            Item={"email": "paid@example.com", "status": "active", "payment_status": "paid", "registered_at": 1}
+        )
+
+        emails = collector.get_active_subscriber_emails()
+
+        assert emails == ["paid@example.com"]
+    finally:
+        ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String", Overwrite=True)
+        collector._param_cache.pop("/test/payment-required", None)

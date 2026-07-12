@@ -506,27 +506,6 @@ Resources:
       AlarmActions:
         - !Ref TouringAlarmTopic
 
-  # ── CloudWatch Alarm: Lambda 実行時間が30秒Timeoutに近づいている ─
-  TouringLambdaDurationAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: HasAlarmEmail
-    Properties:
-      AlarmName: Zer0-touring-lambda-duration-p95
-      AlarmDescription: zer0-touring-suggest の実行時間p95が25秒を超過（30秒Timeoutに接近）
-      Namespace: AWS/Lambda
-      MetricName: Duration
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref TouringLambdaFunction
-      ExtendedStatistic: p95
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 25000
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref TouringAlarmTopic
-
   # ── CloudWatch Alarm: API Gateway 5xx エラー ──────────────────
   TouringApiGw5xxAlarm:
     Type: AWS::CloudWatch::Alarm

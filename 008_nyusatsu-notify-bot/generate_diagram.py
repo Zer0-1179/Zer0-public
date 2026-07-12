@@ -82,6 +82,12 @@ def draw():
         # --- 共有: SES送信・通知先(右端の専用縦帯) ---
         {'id': 'ses_out', 'icon': 'ses',         'label': 'SES 送信\ninfo.zer0-infra.com',        'x': 20.5, 'y': 6.5},
         {'id': 'recv',    'icon': 'user',        'label': '通知先/転送先\nメール',                'x': 24.5, 'y': 6.5},
+
+        # --- Stripe Webhook突合(v0.19、新規)。既存のapigw/ddb_wl(レーン2)を共有し、
+        # stripe自体は左側の外部クラスターにbrowser/inquirerと並べて配置、
+        # lambda_swは collector レーンと LP レーンの間の空きスペース(x=17.5)に置く ---
+        {'id': 'stripe',    'icon': 'user',   'label': 'Stripe\n(決済)',         'x': 0.8,  'y': 3.75},
+        {'id': 'lambda_sw', 'icon': 'lambda', 'label': 'Lambda\nstripe-webhook', 'x': 17.5, 'y': 9.2},
     ]
 
     edges = [
@@ -114,6 +120,16 @@ def draw():
         ('lambda_fw', 'ses_out',  '転送'),
 
         ('ses_out',   'recv',     ''),
+
+        # Stripe Webhook突合(v0.19)。stripe→apigwは左側外部クラスター内(x=-0.3)を
+        # 通ってcf/cw等のアイコン・ラベルを避けてから右上のapigwへ合流する。
+        ('stripe',    'apigw',    '', [(-0.3, 3.75), (-0.3, 7.2), (9.5, 7.2)]),
+        ('apigw',     'lambda_sw',''),
+        # lambda_sw→ddb_wlはlambda_wl→ses_out(y=6.5)の水平線を避けるため、
+        # 一度y=5.3まで下りてから左へ移動する。最終区間はlambda_wl→ddb_wlの
+        # 既存の垂直線(x=13.5)と完全に重ならないよう、x=14.3から斜めに合流させる。
+        ('lambda_sw', 'ddb_wl',   '', [(17.5, 5.3), (14.3, 5.3)]),
+        ('lambda_sw', 'ses_out',  ''),
     ]
 
     clusters = [

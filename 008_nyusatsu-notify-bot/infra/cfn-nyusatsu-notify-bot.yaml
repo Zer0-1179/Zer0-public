@@ -158,6 +158,20 @@ Resources:
       Value: !Ref HmacSecret
       Description: Nyusatsu Notify Bot HMAC secret for confirm/unsubscribe link signing
 
+  # 課金必須化の手動切替フラグ(v0.19)。値はリテラル("false")で固定し、CFn
+  # Parameter経由にはしない。ユーザーがStripe Payment Links公開後、既存の無料
+  # テスト購読者への案内を終えたタイミングで`aws ssm put-parameter --overwrite`
+  # により直接"true"へ切り替える運用のため。このテンプレートで本行を将来
+  # 変更しない限り、この資源に対する再デプロイの差分は発生せず、CLIで切り替えた
+  # 値がCFn再デプロイで"false"に巻き戻されることはない。
+  PaymentRequiredParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/payment-required
+      Type: String
+      Value: "false"
+      Description: Whether collector requires Stripe payment_status=paid to send notifications
+
   # SES Configuration Set(B-3). collector/lp_waitlist両Lambdaの送信メールに
   # 付与し、バウンス・苦情の発生をSNS経由で検知できるようにする。
   SesConfigurationSet:
@@ -393,6 +407,7 @@ Resources:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${KeywordsParameter}
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacSecretParameter}
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/unsubscribe-base-url
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PaymentRequiredParameter}
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -427,6 +442,7 @@ Resources:
           WAITLIST_TABLE_NAME: zer0-nyusatsu-lp-waitlist
           SES_CONFIGURATION_SET_NAME: !Ref SesConfigurationSet
           MATCH_HISTORY_TABLE_NAME: !Ref MatchHistoryTable
+          PAYMENT_REQUIRED_PARAM_NAME: !Ref PaymentRequiredParameter
       Code:
         ZipFile: |
           def lambda_handler(event, context):

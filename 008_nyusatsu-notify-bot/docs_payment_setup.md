@@ -42,6 +42,25 @@ PAY.JP・Square・KOMOJU・PayPal・fincode byGMO・UnivaPay・GMOペイメン�
 - ランディングページ（申込みページ）の作成
 - 通知メール配信対象を「購読者テーブルに存在するメールアドレスのみ」にする拡張
 
+## 課金者⇔購読者の突合フロー（v0.19で実装済み）
+
+Stripe Webhookを受信するLambda（`zer0-nyusatsu-stripe-webhook`）を実装済み。決済完了(`checkout.session.completed`)を検知すると、LP登録メールアドレスと突合して自動でactive化（二重オプトイン省略）し、LP未登録アドレスからの支払いも自動で購読者登録する。解約(`customer.subscription.deleted`)・支払い失敗(`invoice.payment_failed`、リトライ尽きた場合のみ)も追跡する。詳細はシステム仕様書.md 8i節参照。
+
+### ユーザー側の残り作業（Claudeでは代行不可）
+
+1. Stripeダッシュボードで商品作成＋Payment Links発行（上記「Claude側で対応可能な作業」より前のセクション参照）
+2. Stripeダッシュボードで **Webhookエンドポイント** を作成する
+   - エンドポイントURL: `aws cloudformation describe-stacks --stack-name zer0-nyusatsu-lp-backend --query "Stacks[0].Outputs[?OutputKey=='StripeWebhookEndpoint'].OutputValue" --output text` で取得できる値
+   - 購読するイベント: `checkout.session.completed` / `customer.subscription.deleted` / `invoice.payment_failed`
+3. Webhook作成時に発行される**署名シークレット**（`whsec_...`）をClaudeに伝える。以下のコマンドでSSMパラメータに反映する（プレースホルダー`REPLACE_AFTER_STRIPE_WEBHOOK_SETUP`から実際の値へ上書き）:
+   ```
+   aws ssm put-parameter --name /zer0/008-nyusatsu/stripe-webhook-secret --type String --overwrite --value "whsec_実際の値"
+   ```
+4. 既存の無料テスト購読者への案内メール送付タイミングを決め、準備ができたら以下で課金必須化する（デフォルトは`"false"`で現状の無料配信を維持）:
+   ```
+   aws ssm put-parameter --name /zer0/008-nyusatsu/payment-required --type String --overwrite --value "true"
+   ```
+
 ## 現状（MVP段階）
 
-現時点ではまだ有料課金を開始しておらず、収集・通知パイプラインの動作検証が優先。Stripe連携は「実際に顧客に販売する」フェーズになってから着手する。
+Stripe本番アカウント開設・特定商取引法に基づく表記整備・課金者⇔購読者の突合フローまで実装済み（未着手はPayment Links発行のみ）。収集・通知パイプラインの動作検証と並行して進めている。
