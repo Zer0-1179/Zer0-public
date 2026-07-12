@@ -291,10 +291,17 @@ def build_unsubscribe_url(email: str) -> str:
 
 def get_active_subscriber_emails() -> list[str]:
     """zer0-nyusatsu-lp-waitlistからstatus=active(二重オプトイン確認済み)の
-    購読者メールアドレスを全件取得する。"""
+    購読者メールアドレスを全件取得する。SSMパラメータPAYMENT_REQUIRED_PARAM_NAMEが
+    "true"の場合のみ、payment_status=paid(Stripe決済済み)も条件に加える。デフォルトの
+    "false"では従来通りstatus=activeのみで配信し、既存の無料テスト購読者への配信は
+    変えない(課金必須化はユーザーがこのSSM値を切り替えたタイミングで発効する)。"""
+    payment_required = get_param(os.environ["PAYMENT_REQUIRED_PARAM_NAME"]).strip().lower() == "true"
     table = dynamodb.Table(os.environ["WAITLIST_TABLE_NAME"])
     emails: list[str] = []
-    scan_kwargs = {"FilterExpression": Attr("status").eq("active"), "ProjectionExpression": "email"}
+    filter_expr = Attr("status").eq("active")
+    if payment_required:
+        filter_expr &= Attr("payment_status").eq("paid")
+    scan_kwargs = {"FilterExpression": filter_expr, "ProjectionExpression": "email"}
     while True:
         resp = table.scan(**scan_kwargs)
         emails.extend(item["email"] for item in resp.get("Items", []))

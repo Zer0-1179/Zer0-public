@@ -84,6 +84,21 @@ Resources:
       Value: !Sub "https://${WaitlistApi}.execute-api.${AWS::Region}.amazonaws.com"
       Description: Nyusatsu Notify Bot waitlist API base URL (for List-Unsubscribe links)
 
+  # Stripe Webhook署名シークレット(v0.19)。値はリテラルのプレースホルダーで固定し、
+  # CFn Parameter経由にはしない。Stripeダッシュボードでwebhook作成後(本テンプレート
+  # デプロイでAPIエンドポイントが確定してから)に発行される値のため、デプロイ前には
+  # 実際の値を持ちえない(鶏と卵)。デプロイ後にユーザーから値を受け取り
+  # `aws ssm put-parameter --overwrite`で直接更新する。このテンプレートで本行の
+  # リテラル値を将来変更しない限りこの資源は再デプロイの差分対象にならないため、
+  # CLIで設定した実際の値がCFn再デプロイで巻き戻されることはない。
+  StripeWebhookSecretParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/stripe-webhook-secret
+      Type: String
+      Value: "REPLACE_AFTER_STRIPE_WEBHOOK_SETUP"
+      Description: Stripe webhook signing secret (whsec_...) for signature verification
+
   WaitlistLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -237,6 +252,131 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WaitlistApi}/*/*"
 
+  StripeWebhookLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/zer0-nyusatsu-stripe-webhook
+      RetentionInDays: !Ref LogRetentionDays
+
+  # IAM Role for the Stripe webhook receiver Lambda function.
+  # Description must stay ASCII-only per project convention.
+  StripeWebhookFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zer0-nyusatsu-stripe-webhook-role
+      Description: Execution role for Nyusatsu Stripe webhook receiver Lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: zer0-nyusatsu-stripe-webhook-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt StripeWebhookLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Scan
+                Resource: !GetAtt WaitlistTable.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${StripeWebhookSecretParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/notify-email
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/ses-sender
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                Resource: "*"
+
+  StripeWebhookFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zer0-nyusatsu-stripe-webhook
+      Description: Stripe Webhookを受信し課金者⇔購読者を突合してDynamoDBを更新する
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt StripeWebhookFunctionRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          WAITLIST_TABLE_NAME: !Ref WaitlistTable
+          STRIPE_WEBHOOK_SECRET_PARAM_NAME: !Ref StripeWebhookSecretParameter
+          NOTIFY_EMAIL_PARAM_NAME: /zer0/008-nyusatsu/notify-email
+          SES_SENDER_PARAM_NAME: /zer0/008-nyusatsu/ses-sender
+          SES_CONFIGURATION_SET_NAME: zer0-nyusatsu-config-set
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              # Placeholder (Handler does not match this file, so this
+              # never actually executes). Real code is deployed via
+              # `aws lambda update-function-code` per CLAUDE.md rule
+              # (no SAM, no S3 build artifact) before this function is
+              # invoked by any real trigger.
+              return {"statusCode": 200, "body": "placeholder"}
+    DependsOn:
+      - StripeWebhookLogGroup
+
+  StripeWebhookIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WaitlistApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt StripeWebhookFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  StripeWebhookRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WaitlistApi
+      RouteKey: "POST /stripe/webhook"
+      Target: !Sub "integrations/${StripeWebhookIntegration}"
+
+  StripeWebhookApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StripeWebhookFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WaitlistApi}/*/*"
+
+  # CloudWatch Alarm for stripe_webhook Lambda errors.
+  # 決済が関わるLambdaのため、失敗を早期検知する(2026-07-11時点で無料枠10個中10個
+  # のため、007のZer0-touring-lambda-duration-p95を削除して枠を確保した上で追加)。
+  StripeWebhookErrorsAlarm01:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: zer0-nyusatsu-stripe-webhook-errors-alarm-01
+      AlarmDescription: Stripe Webhook受信Lambdaでエラーが発生しています
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StripeWebhookFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        # NotifyBotAlarmTopicは別スタック(cfn-nyusatsu-notify-bot.yaml)が所有するため、
+        # このプロジェクトの既存クロススタック参照方式(リテラル名でARNを組み立てる)に統一する。
+        - !Sub arn:aws:sns:${AWS::Region}:${AWS::AccountId}:zer0-nyusatsu-alarm-topic
+
 # -----------------------------------------------
 # Outputs
 # LPのJSからfetchするAPIエンドポイントURLを出力する。
@@ -251,3 +391,6 @@ Outputs:
   WaitlistTableName:
     Description: DynamoDB table name for waitlist emails
     Value: !Ref WaitlistTable
+  StripeWebhookEndpoint:
+    Description: Stripe webhook endpoint URL to register in the Stripe dashboard (POST /stripe/webhook)
+    Value: !Sub "https://${WaitlistApi}.execute-api.${AWS::Region}.amazonaws.com/stripe/webhook"

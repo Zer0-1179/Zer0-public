@@ -26,6 +26,8 @@ os.environ.setdefault("HMAC_SECRET_PARAM_NAME", "/test/hmac-secret")
 os.environ.setdefault("UNSUBSCRIBE_BASE_URL_PARAM_NAME", "/test/unsubscribe-base-url")
 os.environ.setdefault("SES_CONFIGURATION_SET_NAME", "test-config-set")
 os.environ.setdefault("FORWARD_FROM_ADDRESS", "relay@example.com")
+os.environ.setdefault("STRIPE_WEBHOOK_SECRET_PARAM_NAME", "/test/stripe-webhook-secret")
+os.environ.setdefault("PAYMENT_REQUIRED_PARAM_NAME", "/test/payment-required")
 
 
 def _load_module(name: str, path: str):
@@ -77,6 +79,8 @@ _ssm.put_parameter(Name="/test/sender", Value="sender@example.com", Type="String
 _ssm.put_parameter(Name="/test/notify-email", Value="owner@example.com", Type="String")
 _ssm.put_parameter(Name="/test/unsubscribe-base-url", Value="https://example.com", Type="String")
 _ssm.put_parameter(Name="/test/keywords", Value="清掃,美化", Type="String")
+_ssm.put_parameter(Name="/test/stripe-webhook-secret", Value="whsec_test_secret", Type="String")
+_ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String")
 
 _collector = _load_module(
     "collector_lambda_function", os.path.join(ROOT, "lambda", "collector", "lambda_function.py")
@@ -89,6 +93,9 @@ _bounce_handler = _load_module(
 )
 _mail_forwarder = _load_module(
     "mail_forwarder_lambda_function", os.path.join(ROOT, "lambda", "mail_forwarder", "lambda_function.py")
+)
+_stripe_webhook = _load_module(
+    "stripe_webhook_lambda_function", os.path.join(ROOT, "lambda", "stripe_webhook", "lambda_function.py")
 )
 
 _TABLE_KEYS = {
@@ -121,6 +128,11 @@ def bounce_handler():
 @pytest.fixture
 def mail_forwarder():
     return _mail_forwarder
+
+
+@pytest.fixture
+def stripe_webhook():
+    return _stripe_webhook
 
 
 @pytest.fixture(autouse=True)
