@@ -698,18 +698,14 @@
   }, { threshold: 0.15 });
   revealTargets.forEach((el) => io.observe(el));
 
-  // FAQアコーディオン
+  // FAQアコーディオン(独立開閉。他の項目を閉じない。ユーザーが複数の回答を
+  // 見比べたい時に、開いたはずの項目が勝手に閉じる体験を避けるため、v0.22で
+  // 排他式から変更した)
   document.querySelectorAll('.faq-item').forEach((item) => {
     const q = item.querySelector('.faq-q');
     const a = item.querySelector('.faq-a');
     q.addEventListener('click', () => {
       const isOpen = item.classList.contains('open');
-      document.querySelectorAll('.faq-item.open').forEach((other) => {
-        if (other !== item) {
-          other.classList.remove('open');
-          other.querySelector('.faq-a').style.maxHeight = null;
-        }
-      });
       item.classList.toggle('open', !isOpen);
       a.style.maxHeight = !isOpen ? a.scrollHeight + 'px' : null;
     });
