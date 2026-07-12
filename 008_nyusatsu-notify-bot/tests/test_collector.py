@@ -93,6 +93,35 @@ def test_fetch_case_detail_parses_era_date_and_days_left(collector):
     assert info["category_detail"] == "建物管理"
 
 
+def test_case_detail_url_maps_fn_to_get_url(collector):
+    """一覧ページのjavascript:detail()/detail2()と同じ詳細ページを開けるGET URLを
+    組み立てること(GETで同一内容が返ることは実サイトで確認済み、2026-07-12)。"""
+    assert collector.case_detail_url({"detail_fn": "detail", "detail_no": "D1"}) == (
+        "https://keiyaku.city.yokohama.lg.jp/epco/servlet/p"
+        "?job=HacchuJohoKojiDetail&page=&keiyakuBango=D1"
+    )
+    assert collector.case_detail_url({"detail_fn": "detail2", "detail_no": "D2"}).endswith(
+        "?job=HacchuJohoBuppinDetail&page=&keiyakuBango=D2"
+    )
+    assert collector.case_detail_url({"detail_fn": "unknown", "detail_no": "D3"}) is None
+
+
+def test_send_notification_includes_per_case_detail_url(collector, make_context):
+    """通知メールに案件ごとの詳細ページURL(テキスト版)とリンクボタン(HTML版)が
+    含まれること(モバイル向けメール改善、2026-07-12)。"""
+    with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
+         mock.patch.object(collector, "record_match_history"), \
+         mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+         mock.patch.object(collector, "send_email_with_unsubscribe") as m_send:
+        collector.send_notification(1004, MATCHES, make_context(300000))
+
+    body = m_send.call_args.args[3]
+    html_content = m_send.call_args.kwargs["html_content"]
+    assert "案件詳細: https://keiyaku.city.yokohama.lg.jp/epco/servlet/p?job=HacchuJohoKojiDetail&page=&keiyakuBango=d1" in body
+    assert "案件詳細を開く" in html_content
+    assert "keiyakuBango=d1" in html_content
+
+
 def test_build_unsubscribe_url_normalizes_email_case(collector):
     """#7の修正確認: HMACトークン生成前にメールアドレスを正規化し、
     lp_waitlist側のlower()検証と一致させる。"""

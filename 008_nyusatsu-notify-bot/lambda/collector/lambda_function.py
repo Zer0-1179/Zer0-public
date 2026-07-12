@@ -200,6 +200,17 @@ def fetch_case_detail(case: dict) -> dict:
     return info
 
 
+def case_detail_url(case: dict) -> str | None:
+    """個別案件の詳細ページを直接開けるGET URL。サイト上はjavascript:detail()による
+    POST遷移だが、同じパラメータのGETでも同一の詳細ページが返ることを実測確認済み
+    (工事・物品/委託とも、2026-07-12)。メール本文から案件へ直接飛べるようにする。"""
+    job = DETAIL_JOB_MAP.get(case.get("detail_fn", ""))
+    detail_no = case.get("detail_no")
+    if not job or not detail_no:
+        return None
+    return f"{BASE_URL}?job={job}&page=&keiyakuBango={urllib.parse.quote(detail_no)}"
+
+
 def format_case_line(c: dict, detail: dict) -> str:
     line = (
         f"・{c['title']}\n"
@@ -218,7 +229,64 @@ def format_case_line(c: dict, detail: dict) -> str:
         line += f"  {detail['deadline_display']}\n"
     if detail.get("bid_opening"):
         line += f"  開札予定: {detail['bid_opening']}\n"
+    url = case_detail_url(c)
+    if url:
+        line += f"  案件詳細: {url}\n"
     return line
+
+
+def case_card_html(info: dict, url: str | None) -> str:
+    """1案件をカード状(枠+ラベル/値の2列テーブル+詳細ページへのリンクボタン)の
+    HTMLにする。スマホのメールクライアントでも「テキストの壁」にならないよう、
+    メールで安定して効くテーブルレイアウト+インラインスタイルのみを使う。"""
+    rows = [
+        ("契約番号", info.get("contract_no", "")),
+        ("入札方式", info.get("method", "")),
+        ("担当", info.get("dept", "")),
+    ]
+    if info.get("category_detail"):
+        rows.append(("種目", info["category_detail"]))
+    qualification = [p for p in (info.get("area_rank"), info.get("company_size")) if p]
+    if qualification:
+        rows.append(("参加資格", " / ".join(qualification)))
+    if info.get("location"):
+        rows.append(("履行場所", info["location"]))
+    if info.get("period"):
+        rows.append(("履行期間", info["period"]))
+    if info.get("bid_opening"):
+        rows.append(("開札予定", info["bid_opening"]))
+    rows_html = "".join(
+        "<tr>"
+        f"<td style=\"padding:2px 10px 2px 0;font-size:12px;color:#888888;"
+        f"white-space:nowrap;vertical-align:top;\">{html.escape(label)}</td>"
+        f"<td style=\"padding:2px 0;font-size:13px;color:#333333;\">{html.escape(value)}</td>"
+        "</tr>"
+        for label, value in rows
+    )
+    deadline_html = ""
+    if info.get("deadline_display"):
+        deadline_html = (
+            "<div style=\"margin-top:8px;font-size:13px;font-weight:bold;color:#b7472a;\">"
+            f"{html.escape(info['deadline_display'])}</div>"
+        )
+    link_html = ""
+    if url:
+        link_html = (
+            "<div style=\"margin-top:10px;\">"
+            f"<a href=\"{html.escape(url)}\" style=\"display:inline-block;padding:8px 16px;"
+            "background-color:#2b6cb0;color:#ffffff;font-size:13px;text-decoration:none;"
+            "border-radius:4px;\">案件詳細を開く</a></div>"
+        )
+    return (
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"margin:0 0 12px;border:1px solid #dde3ea;border-radius:6px;background-color:#fbfcfd;\">"
+        "<tr><td style=\"padding:12px 14px;\">"
+        f"<div style=\"font-size:15px;font-weight:bold;color:#1a3550;line-height:1.5;\">{html.escape(info.get('title', ''))}</div>"
+        "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"margin-top:8px;line-height:1.6;\">{rows_html}</table>"
+        f"{deadline_html}{link_html}"
+        "</td></tr></table>"
+    )
 
 
 def record_match_history(kokoku_no: int, case: dict, detail: dict) -> None:
@@ -239,6 +307,11 @@ def record_match_history(kokoku_no: int, case: dict, detail: dict) -> None:
     for key in ("category_detail", "area_rank", "company_size", "location", "period", "deadline_display", "bid_opening"):
         if detail.get(key):
             item[key] = detail[key]
+    # バックフィルウェルカムメール(lp_waitlist)が案件詳細ページへ直接リンクできる
+    # よう、GETで開ける詳細URLも保存する。
+    url = case_detail_url(case)
+    if url:
+        item["detail_url"] = url
     table.put_item(Item=item)
 
 
@@ -333,29 +406,47 @@ def notification_footer_text(unsubscribe_url: str) -> str:
     )
 
 
-def build_html_body(body: str, unsubscribe_url: str) -> str:
-    """「配信停止」の文字にリンクを埋め込んだHTML版本文を組み立てる。
-    生URLをメール本文にそのまま表示すると長く読みにくいための対応。"""
-    escaped_body = html.escape(body).replace("\n", "<br>")
+def build_html_body(content_html: str, unsubscribe_url: str) -> str:
+    """本文HTMLを、スマホでも読みやすい共通レイアウト(白背景カード+サービス名見出し+
+    配信停止リンク付きフッター)で包む。メールクライアントはCSSサポートが限定的なため、
+    テーブルレイアウト+インラインスタイルのみを使う(Flexbox/Grid等は使わない)。"""
     return (
-        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
-        "line-height:1.7;color:#222\">"
-        f"<div>{escaped_body}</div>"
-        "<hr style=\"margin:24px 0;border:none;border-top:1px solid #ddd\">"
-        "<p style=\"font-size:13px;color:#666\">"
+        "<!doctype html><html lang=\"ja\"><body style=\"margin:0;padding:0;background-color:#f4f5f7;\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"background-color:#f4f5f7;\">"
+        "<tr><td align=\"center\" style=\"padding:16px 8px;\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"max-width:600px;background-color:#ffffff;border-radius:8px;\">"
+        "<tr><td style=\"padding:20px 16px;font-family:sans-serif;font-size:14px;"
+        "color:#222222;line-height:1.7;\">"
+        "<div style=\"font-size:13px;font-weight:bold;color:#2b6cb0;"
+        "border-bottom:2px solid #2b6cb0;padding-bottom:8px;margin-bottom:16px;\">"
+        f"{SERVICE_NAME}（横浜市パイロット版）</div>"
+        f"{content_html}"
+        "</td></tr></table>"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"max-width:600px;\">"
+        "<tr><td style=\"padding:14px 16px;font-family:sans-serif;font-size:12px;"
+        "color:#888888;line-height:1.8;\">"
         f"本メールは「{SERVICE_NAME}」（横浜市パイロット版）から自動配信しています。<br>"
-        f"<a href=\"{html.escape(unsubscribe_url)}\">配信停止はこちら</a><br>"
+        f"<a href=\"{html.escape(unsubscribe_url)}\" style=\"color:#2b6cb0;\">配信停止はこちら</a><br>"
         f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
-        "</p></body></html>"
+        "</td></tr></table>"
+        "</td></tr></table></body></html>"
     )
 
 
-def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body: str) -> None:
+def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body: str, html_content: str | None = None) -> None:
     """List-Unsubscribeヘッダー(RFC 8058のOne-Click Unsubscribe含む)を付与し、
     HTML版(「配信停止」をクリック可能なリンクとして埋め込む)+プレーンテキスト版
     (URLそのまま、フォールバック)のmultipart/alternativeでSES送信する。
-    SES Configuration Set(バウンス・苦情をSNS経由で検知、B-3)を付与する。"""
+    SES Configuration Set(バウンス・苦情をSNS経由で検知、B-3)を付与する。
+
+    html_contentに構造化済みの本文HTML(案件カード等)を渡すとそれを使い、
+    省略時(週次サマリー等)はプレーンテキストを改行変換して使う。"""
     unsubscribe_url = build_unsubscribe_url(recipient)
+    if html_content is None:
+        html_content = html.escape(body).replace("\n", "<br>")
     msg = EmailMessage()
     # 差出人に日本語のサービス名を表示名として付ける(Addressを使うことで
     # policy.defaultがRFC 2047エンコードを正しく行う)。SESのSource(エンベロープ)は
@@ -370,7 +461,7 @@ def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body:
     msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
     msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.set_content(body + notification_footer_text(unsubscribe_url))
-    msg.add_alternative(build_html_body(body, unsubscribe_url), subtype="html")
+    msg.add_alternative(build_html_body(html_content, unsubscribe_url), subtype="html")
     ses.send_raw_email(
         Source=sender,
         Destinations=[recipient],
@@ -416,11 +507,21 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
     # 「今すぐ動くべき案件」を最初に見られるようにするため(Fable指摘、レビュー2026-07-11)。
     case_details.sort(key=lambda cd: cd[1].get("days_left", 10**9))
 
-    lines = [f"横浜市 公告第{kokoku_no}号 で対象案件が{len(matches)}件見つかりました。\n"]
+    intro = f"横浜市 公告第{kokoku_no}号 で対象案件が{len(matches)}件見つかりました。"
+    lines = [intro + "\n"]
+    card_htmls = []
     for c, detail in case_details:
         lines.append(format_case_line(c, detail))
-    lines.append(f"\n詳細一覧: {detail_url}")
+        card_htmls.append(case_card_html({**c, **detail}, case_detail_url(c)))
+    lines.append(f"\n公告の全案件一覧: {detail_url}")
     body = "\n".join(lines)
+    html_content = (
+        f"<p style=\"margin:0 0 16px;\">{html.escape(intro)}</p>"
+        + "".join(card_htmls)
+        + "<p style=\"margin:16px 0 0;font-size:13px;\">"
+        f"<a href=\"{html.escape(detail_url)}\" style=\"color:#2b6cb0;\">"
+        f"公告第{kokoku_no}号の全案件一覧を見る</a></p>"
+    )
     subject = f"【{SERVICE_NAME}】横浜市 第{kokoku_no}号 対象案件{len(matches)}件"
 
     # 運用監視用のオーナー宛+実際にactiveな購読者宛の両方に個別送信する(B-1)。
@@ -434,7 +535,7 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
             )
             return False, had_failure
         try:
-            send_email_with_unsubscribe(sender, recipient, subject, body)
+            send_email_with_unsubscribe(sender, recipient, subject, body, html_content=html_content)
         except Exception:
             # v0.8まではses.send_email失敗がLambda全体を失敗させDLQ/アラームに
             # 繋がっていたが、v0.10の宛先ごとの個別送信でこの安全網が消失していた。
