@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -69,12 +70,21 @@ def _notify_owner(subject: str, body: str) -> None:
     try:
         notify_email = _get_param(NOTIFY_EMAIL_PARAM_NAME)
         sender_email = _get_param(SES_SENDER_PARAM_NAME)
+        # オーナー宛の内部通知。スマホでの視認性のため最小限のHTML版も付ける。
+        body_html = (
+            "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
+            "font-size:14px;line-height:1.7;color:#222222;\">"
+            f"<div>{html.escape(body).replace(chr(10), '<br>')}</div></body></html>"
+        )
         ses.send_email(
             Source=sender_email,
             Destination={"ToAddresses": [notify_email]},
             Message={
                 "Subject": {"Data": f"【{SERVICE_NAME}】{subject}", "Charset": "UTF-8"},
-                "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                "Body": {
+                    "Text": {"Data": body, "Charset": "UTF-8"},
+                    "Html": {"Data": body_html, "Charset": "UTF-8"},
+                },
             },
             ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
         )

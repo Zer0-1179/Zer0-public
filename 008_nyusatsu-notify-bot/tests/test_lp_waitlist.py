@@ -120,6 +120,18 @@ def test_unsubscribe_unregistered_address_creates_no_ghost_record(lp_waitlist):
     assert item is None
 
 
+def test_history_detail_url_prefers_stored_url_and_falls_back(lp_waitlist):
+    """ウェルカムメールの案件リンクは、collectorが保存したdetail_url(個別詳細ページ)を
+    優先し、detail_urlを持たない旧レコードは公告一覧ページへフォールバックすること
+    (モバイル向けメール改善、2026-07-12)。"""
+    assert lp_waitlist.history_detail_url(
+        {"detail_url": "https://example.com/detail", "kokoku_no": 1}
+    ) == "https://example.com/detail"
+    assert lp_waitlist.history_detail_url({"kokoku_no": 18145}) == (
+        "https://keiyaku.city.yokohama.lg.jp/epco/servlet/p?job=KokokuAnkenList&kokoku_no=18145"
+    )
+
+
 def test_register_blocked_for_bounce_suppressed_address(lp_waitlist, bounce_handler):
     """#3の修正確認: バウンス起因で停止されたアドレスは再登録で復活・再送されない。"""
     with mock.patch.object(lp_waitlist, "send_confirmation_email"):

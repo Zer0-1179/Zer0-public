@@ -37,6 +37,10 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SERVICE_NAME = "入札情報ウォッチ"
 INQUIRY_EMAIL = "nyusatsu@zer0-infra.com"
 
+# 横浜市電子調達システムのURL(collector LambdaのBASE_URLと同じ値)。バックフィル
+# ウェルカムメールで案件ページへのリンクを組み立てるために使う。
+YOKOHAMA_BASE_URL = "https://keiyaku.city.yokohama.lg.jp/epco/servlet/p"
+
 
 def _from_address(sender: str) -> Address:
     """差出人に日本語のサービス名を表示名として付ける(Addressを使うことで
@@ -124,8 +128,36 @@ def _base_url(event) -> str:
     return f"https://{domain}"
 
 
+def _wrap_html_email(content_html: str, footer_html: str) -> str:
+    """本文HTMLを、スマホでも読みやすい共通レイアウト(白背景カード+サービス名見出し+
+    フッター)で包む。メールクライアントはCSSサポートが限定的なため、テーブルレイアウト+
+    インラインスタイルのみを使う(collector Lambdaのbuild_html_bodyと同じデザイン)。"""
+    return (
+        "<!doctype html><html lang=\"ja\"><body style=\"margin:0;padding:0;background-color:#f4f5f7;\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"background-color:#f4f5f7;\">"
+        "<tr><td align=\"center\" style=\"padding:16px 8px;\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"max-width:600px;background-color:#ffffff;border-radius:8px;\">"
+        "<tr><td style=\"padding:20px 16px;font-family:sans-serif;font-size:14px;"
+        "color:#222222;line-height:1.7;\">"
+        "<div style=\"font-size:13px;font-weight:bold;color:#2b6cb0;"
+        "border-bottom:2px solid #2b6cb0;padding-bottom:8px;margin-bottom:16px;\">"
+        f"{SERVICE_NAME}（横浜市パイロット版）</div>"
+        f"{content_html}"
+        "</td></tr></table>"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"max-width:600px;\">"
+        "<tr><td style=\"padding:14px 16px;font-family:sans-serif;font-size:12px;"
+        "color:#888888;line-height:1.8;\">"
+        f"{footer_html}"
+        "</td></tr></table>"
+        "</td></tr></table></body></html>"
+    )
+
+
 def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
-    """確認メールをHTML(「登録を確定する」をクリック可能なリンクとして埋め込む)+
+    """確認メールをHTML(「登録を確定する」をクリック可能なボタンとして埋め込む)+
     プレーンテキスト(URLそのまま、フォールバック)のmultipart/alternativeで送る。
     生URLをメール本文に長く表示しないための対応。"""
     text_body = (
@@ -140,20 +172,24 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
         "心当たりのない場合は、上記リンクをクリックせずこのメールを破棄してください。"
         "その場合、登録情報は自動的に有効化されません。"
     )
-    html_body = (
-        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
-        "line-height:1.7;color:#222\">"
-        f"<p>「{SERVICE_NAME}」（横浜市パイロット版）への事前登録を受け付けました。</p>"
-        f"<p>登録メールアドレス: {html.escape(email)}</p>"
-        f"<p><a href=\"{html.escape(confirm_url)}\">登録を確定する</a><br>"
-        "クリックするまで登録は完了せず、通知メールも配信されません。</p>"
-        "<hr style=\"margin:24px 0;border:none;border-top:1px solid #ddd\">"
-        "<p style=\"font-size:13px;color:#666\">"
+    content_html = (
+        f"<p style=\"margin:0 0 16px;\">「{SERVICE_NAME}」（横浜市パイロット版）への"
+        "事前登録を受け付けました。</p>"
+        f"<p style=\"margin:0 0 20px;\">登録メールアドレス: {html.escape(email)}</p>"
+        "<div style=\"margin:0 0 12px;\">"
+        f"<a href=\"{html.escape(confirm_url)}\" style=\"display:inline-block;"
+        "padding:12px 28px;background-color:#2b6cb0;color:#ffffff;font-size:15px;"
+        "font-weight:bold;text-decoration:none;border-radius:6px;\">登録を確定する</a></div>"
+        "<p style=\"margin:0;font-size:13px;color:#666666;\">"
+        "上のボタンをクリックするまで登録は完了せず、通知メールも配信されません。</p>"
+    )
+    footer_html = (
         "本サービスは、横浜市が公開する入札公告のうち清掃・ビルメンテナンス関連案件を"
         "毎朝自動収集し、メールでお知らせするサービスです（現在無料テスト運用中）。<br><br>"
-        "心当たりのない場合は、上記リンクをクリックせずこのメールを破棄してください。"
-        "その場合、登録情報は自動的に有効化されません。</p></body></html>"
+        "心当たりのない場合は、上記ボタンをクリックせずこのメールを破棄してください。"
+        "その場合、登録情報は自動的に有効化されません。"
     )
+    html_body = _wrap_html_email(content_html, footer_html)
     msg = EmailMessage()
     msg["From"] = _from_address(sender)
     msg["To"] = email
@@ -171,12 +207,22 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
 def notify_owner_confirmed(email: str) -> None:
     notify_email = _get_param(NOTIFY_EMAIL_PARAM_NAME)
     sender_email = _get_param(SES_SENDER_PARAM_NAME)
+    body_text = f"確認済みメールアドレス: {email}"
+    # オーナー宛の内部通知。スマホでの視認性のため最小限のHTML版も付ける。
+    body_html = (
+        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
+        "font-size:14px;line-height:1.7;color:#222222;\">"
+        f"<div>{html.escape(body_text)}</div></body></html>"
+    )
     ses.send_email(
         Source=sender_email,
         Destination={"ToAddresses": [notify_email]},
         Message={
             "Subject": {"Data": f"【{SERVICE_NAME}】事前登録が確認されました", "Charset": "UTF-8"},
-            "Body": {"Text": {"Data": f"確認済みメールアドレス: {email}", "Charset": "UTF-8"}},
+            "Body": {
+                "Text": {"Data": body_text, "Charset": "UTF-8"},
+                "Html": {"Data": body_html, "Charset": "UTF-8"},
+            },
         },
         ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
     )
@@ -200,6 +246,15 @@ def get_recent_matches(days: int = 30) -> list[dict]:
     return items
 
 
+def history_detail_url(item: dict) -> str:
+    """履歴itemから案件ページのURLを返す。collector側が保存したdetail_url(個別案件の
+    詳細ページ、GETで直接開けることを実測確認済み)を優先し、detail_urlを持たない
+    旧レコードは公告の案件一覧ページにフォールバックする。"""
+    if item.get("detail_url"):
+        return item["detail_url"]
+    return f"{YOKOHAMA_BASE_URL}?job=KokokuAnkenList&kokoku_no={int(item['kokoku_no'])}"
+
+
 def format_history_line(item: dict) -> str:
     line = (
         f"・{item.get('title', '')}\n"
@@ -214,7 +269,56 @@ def format_history_line(item: dict) -> str:
         line += f"  履行場所: {item['location']}\n"
     if item.get("period"):
         line += f"  履行期間: {item['period']}\n"
+    line += f"  案件詳細: {history_detail_url(item)}\n"
     return line
+
+
+def case_card_html(info: dict, url: str | None) -> str:
+    """1案件をカード状(枠+ラベル/値の2列テーブル+詳細ページへのリンクボタン)の
+    HTMLにする。collector Lambdaの同名関数と同じデザイン(スマホのメールクライアント
+    でも崩れないテーブルレイアウト+インラインスタイルのみ)。"""
+    rows = [
+        ("契約番号", info.get("contract_no", "")),
+        ("入札方式", info.get("method", "")),
+        ("担当", info.get("dept", "")),
+    ]
+    if info.get("category_detail"):
+        rows.append(("種目", info["category_detail"]))
+    qualification = [p for p in (info.get("area_rank"), info.get("company_size")) if p]
+    if qualification:
+        rows.append(("参加資格", " / ".join(qualification)))
+    if info.get("location"):
+        rows.append(("履行場所", info["location"]))
+    if info.get("period"):
+        rows.append(("履行期間", info["period"]))
+    if info.get("bid_opening"):
+        rows.append(("開札予定", info["bid_opening"]))
+    rows_html = "".join(
+        "<tr>"
+        f"<td style=\"padding:2px 10px 2px 0;font-size:12px;color:#888888;"
+        f"white-space:nowrap;vertical-align:top;\">{html.escape(label)}</td>"
+        f"<td style=\"padding:2px 0;font-size:13px;color:#333333;\">{html.escape(value)}</td>"
+        "</tr>"
+        for label, value in rows
+    )
+    link_html = ""
+    if url:
+        link_html = (
+            "<div style=\"margin-top:10px;\">"
+            f"<a href=\"{html.escape(url)}\" style=\"display:inline-block;padding:8px 16px;"
+            "background-color:#2b6cb0;color:#ffffff;font-size:13px;text-decoration:none;"
+            "border-radius:4px;\">案件詳細を開く</a></div>"
+        )
+    return (
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"margin:0 0 12px;border:1px solid #dde3ea;border-radius:6px;background-color:#fbfcfd;\">"
+        "<tr><td style=\"padding:12px 14px;\">"
+        f"<div style=\"font-size:15px;font-weight:bold;color:#1a3550;line-height:1.5;\">{html.escape(info.get('title', ''))}</div>"
+        "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"margin-top:8px;line-height:1.6;\">{rows_html}</table>"
+        f"{link_html}"
+        "</td></tr></table>"
+    )
 
 
 def send_welcome_email(email: str, sender: str, unsubscribe_url: str) -> None:
@@ -228,13 +332,17 @@ def send_welcome_email(email: str, sender: str, unsubscribe_url: str) -> None:
     recent = get_recent_matches(days=30)
 
     if recent:
-        lines = [
+        intro = (
             f"ご登録ありがとうございます。過去1ヶ月に対象の案件が{len(recent)}件ありました。"
-            "参考までにご案内します（すでに締切を過ぎている案件も含みます。今後は新着があり次第、随時お届けします）。\n"
-        ]
+            "参考までにご案内します（すでに締切を過ぎている案件も含みます。今後は新着があり次第、随時お届けします）。"
+        )
+        lines = [intro + "\n"]
+        card_htmls = []
         for item in recent[:10]:
             lines.append(format_history_line(item))
+            card_htmls.append(case_card_html(item, history_detail_url(item)))
         body = "\n".join(lines)
+        content_html = f"<p style=\"margin:0 0 16px;\">{html.escape(intro)}</p>" + "".join(card_htmls)
         subject = f"【{SERVICE_NAME}】直近1ヶ月の該当案件（参考）"
     else:
         body = (
@@ -242,6 +350,13 @@ def send_welcome_email(email: str, sender: str, unsubscribe_url: str) -> None:
             "横浜市の入札公告は原則毎週火曜日に発行されます。過去1ヶ月は該当する案件が"
             "ありませんでしたが、システムは毎朝正常に稼働し、公告をチェックしています。\n\n"
             "該当案件が見つかり次第、すぐにメールでお知らせします。"
+        )
+        content_html = (
+            "<p style=\"margin:0 0 16px;\">ご登録ありがとうございます。</p>"
+            "<p style=\"margin:0 0 16px;\">横浜市の入札公告は原則毎週火曜日に発行されます。"
+            "過去1ヶ月は該当する案件がありませんでしたが、システムは毎朝正常に稼働し、"
+            "公告をチェックしています。</p>"
+            "<p style=\"margin:0;\">該当案件が見つかり次第、すぐにメールでお知らせします。</p>"
         )
         subject = f"【{SERVICE_NAME}】ご登録ありがとうございます"
 
@@ -251,16 +366,12 @@ def send_welcome_email(email: str, sender: str, unsubscribe_url: str) -> None:
         f"配信停止はこちら: {unsubscribe_url}\n"
         f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
     )
-    html_body = (
-        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;line-height:1.7;color:#222\">"
-        f"<div>{html.escape(body).replace(chr(10), '<br>')}</div>"
-        "<hr style=\"margin:24px 0;border:none;border-top:1px solid #ddd\">"
-        "<p style=\"font-size:13px;color:#666\">"
+    footer_html = (
         f"本メールは「{SERVICE_NAME}」（横浜市パイロット版）から自動配信しています。<br>"
-        f"<a href=\"{html.escape(unsubscribe_url)}\">配信停止はこちら</a><br>"
+        f"<a href=\"{html.escape(unsubscribe_url)}\" style=\"color:#2b6cb0;\">配信停止はこちら</a><br>"
         f"お問い合わせは {INQUIRY_EMAIL} までご連絡ください。"
-        "</p></body></html>"
     )
+    html_body = _wrap_html_email(content_html, footer_html)
 
     msg = EmailMessage()
     msg["From"] = _from_address(sender)
