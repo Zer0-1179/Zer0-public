@@ -105,15 +105,20 @@ def _html_response(status_code, body_html):
 
 
 def _page(title: str, message: str) -> str:
+    """確認・配信停止結果ページの共通レイアウト。LP・メールと同じ白背景+青系アクセント
+    (#2b6cb0)のトーンに統一する(v0.20でメールをカード型に刷新した際、このページだけ
+    旧来のダーク基調が残っていたためユーザー指摘で統一)。"""
     safe_title = html.escape(title)
     safe_message = html.escape(message)
     return (
         "<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
         f"<title>{safe_title}</title>"
-        "<style>body{font-family:sans-serif;background:#14181a;color:#e8e8e8;"
+        "<style>body{font-family:sans-serif;background:#f4f5f7;color:#222222;"
         "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}"
-        ".box{max-width:480px;padding:2rem;text-align:center}"
-        "a{color:#7ec9a1}</style>"
+        ".box{max-width:480px;padding:2rem;text-align:center;background:#ffffff;"
+        "border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}"
+        "h1{font-size:1.25rem;color:#1a3550}"
+        "a{color:#2b6cb0}</style>"
         f"</head><body><div class=\"box\"><h1>{safe_title}</h1><p>{safe_message}</p>"
         "</div></body></html>"
     )
@@ -530,10 +535,12 @@ def handle_unsubscribe(event, method: str):
         form_html = (
             "<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
             "<title>配信停止の確認</title>"
-            "<style>body{font-family:sans-serif;background:#14181a;color:#e8e8e8;"
+            "<style>body{font-family:sans-serif;background:#f4f5f7;color:#222222;"
             "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}"
-            ".box{max-width:480px;padding:2rem;text-align:center}"
-            "button{background:#e08a8a;color:#14181a;border:none;padding:0.75rem 1.5rem;"
+            ".box{max-width:480px;padding:2rem;text-align:center;background:#ffffff;"
+            "border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}"
+            "h1{font-size:1.25rem;color:#1a3550}"
+            "button{background:#2b6cb0;color:#ffffff;border:none;padding:0.75rem 1.5rem;"
             "border-radius:6px;font-size:1rem;cursor:pointer}</style></head><body>"
             "<div class=\"box\"><h1>配信を停止しますか？</h1>"
             f"<p>{html.escape(email)} 宛の通知メール配信を停止します。</p>"
