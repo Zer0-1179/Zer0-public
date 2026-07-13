@@ -104,10 +104,15 @@ def _html_response(status_code, body_html):
     }
 
 
-def _page(title: str, message: str) -> str:
+LP_TOP_URL = "https://nyusatsu.zer0-infra.com/"
+
+
+def _page(title: str, message: str, link_html: str = "") -> str:
     """確認・配信停止結果ページの共通レイアウト。LP・メールと同じ白背景+青系アクセント
     (#2b6cb0)のトーンに統一する(v0.20でメールをカード型に刷新した際、このページだけ
-    旧来のダーク基調が残っていたためユーザー指摘で統一)。"""
+    旧来のダーク基調が残っていたためユーザー指摘で統一)。link_htmlは次のアクションへの
+    導線(次に進むリンク等)を任意で追加する場合に使う(Fable指摘、2026-07-13。以前は
+    確認完了ページに次の導線が一切無かった)。"""
     safe_title = html.escape(title)
     safe_message = html.escape(message)
     return (
@@ -121,6 +126,7 @@ def _page(title: str, message: str) -> str:
         "h1{font-size:1.25rem;color:#1a3550}"
         "a{color:#2b6cb0}</style>"
         f"</head><body><div class=\"box\"><h1>{safe_title}</h1><p>{safe_message}</p>"
+        f"{link_html}"
         "</div></body></html>"
     )
 
@@ -521,7 +527,14 @@ def handle_confirm(event):
 
     return _html_response(
         200,
-        _page("登録を確認しました", "ご登録ありがとうございます。対象の入札情報が見つかり次第、メールでお知らせします。"),
+        _page(
+            "登録を確認しました",
+            "ご登録ありがとうございます。対象の入札情報が見つかり次第、メールでお知らせします。",
+            link_html=(
+                "<p style=\"margin-top:1.5rem;font-size:0.9rem;\">"
+                f"<a href=\"{html.escape(LP_TOP_URL)}\">サービストップに戻る</a></p>"
+            ),
+        ),
     )
 
 

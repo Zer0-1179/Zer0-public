@@ -140,6 +140,18 @@ Resources:
             - GET
             - HEAD
           Compress: true
+        # S3(OACはバケット非公開のため存在しないキーへのアクセスも403を返す)の
+        # 403/404を生のXMLエラーのまま出さず、ブランド化した404.htmlに差し替える
+        # (Fable指摘、2026-07-13)
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
       Tags:
         - Key: Project
           Value: Zer0-nyusatsu-lp

@@ -100,6 +100,11 @@
   .reveal.d1 { transition-delay: 0.08s; }
   .reveal.d2 { transition-delay: 0.16s; }
   .reveal.d3 { transition-delay: 0.24s; }
+  /* アニメーション設定を有効にしているユーザーには、フェード演出自体を無効化し
+     常時フル表示にする(Fable指摘、2026-07-13) */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
 
   /* ── Hero ───────────────────────────────── */
   .hero {
@@ -224,6 +229,16 @@
     color: var(--ink-soft);
   }
   .how-note strong { color: var(--accent); }
+  /* ── 中間CTA(フォームが最下部のみだった導線を補強、Fable指摘2026-07-13) ── */
+  .mid-cta {
+    margin-top: 40px;
+    padding: 28px 32px;
+    background: var(--accent-soft);
+    border-radius: var(--radius);
+    text-align: center;
+  }
+  .mid-cta p { margin: 0 0 16px; font-size: 15px; font-weight: 600; color: var(--ink); }
+  @media (max-width: 480px) { .mid-cta { padding: 24px 20px; } }
   @media (max-width: 720px) {
     .how-flow { flex-direction: column; gap: 4px; padding: 36px 24px; }
     .flow-arrow { padding-top: 0; }
@@ -334,6 +349,27 @@
   .price-card .price { font-size: 40px; font-weight: 800; margin: 8px 0; }
   .price-card .price small { font-size: 15px; font-weight: 500; color: var(--ink-soft); }
   .price-card .note { font-size: 13px; color: var(--ink-soft); }
+
+  /* ── 他サービスとの比較表 ───────────────── */
+  .compare-wrap {
+    margin-top: 40px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+  }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 560px; }
+  .compare-table th, .compare-table td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .compare-table thead th { background: var(--bg-alt); font-size: 12.5px; color: var(--ink-soft); font-weight: 700; }
+  .compare-table tbody tr:last-child td { border-bottom: none; }
+  .compare-table tbody tr.self-row { background: var(--accent-soft); }
+  .compare-table tbody tr.self-row td:first-child { font-weight: 700; color: var(--accent); }
+  .compare-note { padding: 14px 16px; font-size: 12px; color: var(--ink-soft); border-top: 1px solid var(--line); }
 
   /* ── FAQ ────────────────────────────────── */
   .faq-item { border-top: 1px solid var(--line); }
@@ -476,7 +512,7 @@
   <div class="eyebrow reveal">仕組み</div>
   <h2 class="reveal">やることは、メールを待つだけ。</h2>
   <p class="lead reveal">横浜市の公告確認から案件抽出まで、すべて自動で行います。</p>
-  <div class="how-flow reveal d1" role="img" aria-label="サービスの流れ。ステップ1、横浜市の入札公告ページを毎朝6時に自動チェック。ステップ2、清掃・設備点検・造園・除草など対象業種の案件だけを抽出。ステップ3、該当案件があった日だけメールでお知らせ。">
+  <div class="how-flow reveal d1">
     <div class="flow-item">
       <div class="flow-icon">
         <!-- 役所（横浜市サイト）アイコン -->
@@ -531,6 +567,10 @@
     </div>
   </div>
   <p class="how-note">あなたがやることは、<strong>届いたメールを開くだけ</strong>。面倒な設定や検索条件の登録は一切不要です。</p>
+  <div class="mid-cta reveal">
+    <p>「対象案件を見逃したくない」方は、今すぐ無料で事前登録できます。</p>
+    <a class="btn-primary" href="#register">無料で事前登録する</a>
+  </div>
 </section>
 
 <section id="mail-sample">
@@ -622,6 +662,45 @@
       <div class="price">無料<small>（テスト運用期間中）</small></div>
       <p class="note">正式版は月額3,000円（予定）です。<br>価格・提供時期は検証状況により変更となる場合があります。詳細は<a href="tokushoho.html" style="color:var(--accent);font-weight:600;">特定商取引法に基づく表記</a>をご覧ください。</p>
     </div>
+  </div>
+  <div class="compare-wrap reveal d2">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>サービス</th>
+          <th>対象範囲</th>
+          <th>料金目安</th>
+          <th>特徴</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>官公需情報ポータルサイト</td>
+          <td>全国</td>
+          <td>無料</td>
+          <td>公的サイト。キーワード条件は自分で設定し、RSSリーダー等で確認する必要がある</td>
+        </tr>
+        <tr>
+          <td>NJSS</td>
+          <td>全国</td>
+          <td>初期30万円+年77万円〜</td>
+          <td>検索軸が豊富な有償データベース。個人・小規模事業者には導入コストが高い</td>
+        </tr>
+        <tr>
+          <td>入札王 等</td>
+          <td>都道府県単位</td>
+          <td>月7,920〜8,709円〜</td>
+          <td>広域カバーの有償サービス。横浜市単体を使う場合は割高になりやすい</td>
+        </tr>
+        <tr class="self-row">
+          <td>入札情報ウォッチ</td>
+          <td>横浜市（パイロット版）</td>
+          <td>月額3,000円（予定）</td>
+          <td>設定不要。対象業種の案件だけを毎朝自動チェックしメールで届ける</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="compare-note">他社の料金は公開情報をもとにした目安です（2026-07時点）。詳細は各サービスの公式サイトをご確認ください。</p>
   </div>
 </section>
 

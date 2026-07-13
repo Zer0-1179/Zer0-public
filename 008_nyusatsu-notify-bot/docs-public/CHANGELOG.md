@@ -28,3 +28,4 @@
 | 2026-07-12 | v0.23      | FAQアコーディオンを排他式(1つ開くと他が閉じる)から独立式(それぞれ個別に開閉)に変更。ユーザー指摘で仕様を確認しUX観点で推奨案を採用 |
 | 2026-07-12 | v0.24      | 独自ブランドのfavicon(虫眼鏡アイコン)・OGP画像(1200x630)を新規作成し全ページに設定。README/仕様書の料金表記齟齬(3,000〜5,000円→3,000円)・docs_payment_setup.mdの価格指示のズレも修正 |
 | 2026-07-13 | v0.25      | Fable追加指摘の高優先度3件を修正。FAQアコーディオンにARIA属性(aria-expanded/aria-controls/aria-hidden)を追加、単一だったJSを機能ごとに4分割しtry/catchで囲んで登録フォームへの巻き込みリスクを解消、lp_waitlist Lambdaの確認/配信停止ページにviewportメタタグを追加 |
+| 2026-07-13 | v0.26      | Fable追加指摘の中優先度7件を修正。.how-flowのrole="img"誤用解消、prefers-reduced-motion対応、CloudFrontにブランド化404.html+CustomErrorResponses追加、HTML/画像のCache-Control明示、他社比較表・中間CTA追加、確認完了ページに戻る導線を追加 |
