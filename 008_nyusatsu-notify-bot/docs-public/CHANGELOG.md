@@ -30,4 +30,5 @@
 | 2026-07-13 | v0.25      | Fable追加指摘の高優先度3件を修正。FAQアコーディオンにARIA属性(aria-expanded/aria-controls/aria-hidden)を追加、単一だったJSを機能ごとに4分割しtry/catchで囲んで登録フォームへの巻き込みリスクを解消、lp_waitlist Lambdaの確認/配信停止ページにviewportメタタグを追加 |
 | 2026-07-13 | v0.26      | Fable追加指摘の中優先度7件を修正。.how-flowのrole="img"誤用解消、prefers-reduced-motion対応、CloudFrontにブランド化404.html+CustomErrorResponses追加、HTML/画像のCache-Control明示、他社比較表・中間CTA追加、確認完了ページに戻る導線を追加 |
 | 2026-07-13 | v0.27      | Fable追加指摘の低優先度6件を修正。robots.txt/sitemap.xml新設、og:site_name追加、法務3ページfavicon-16追加、CSP script-srcをハッシュ化(deploy.shで自動再計算)、execute-apiのfavicon.icoルート追加、FAQに解約方法/迷惑メール対策を追加 |
-| 2026-07-13 | v0.28      | LINE通知をメールと並列の選択肢として追加。LIFFで友だち追加とアカウント連携を1画面完結、collector LambdaがLINE Messaging APIでもプッシュ送信、ブロック時は自動配信停止。認証情報はユーザー側でLINE公式アカウント開設後に反映(docs_line_setup.md) |
+| 2026-07-13 | v0.28      | LINE通知をメールと並列の選択肢として追加。LIFFで友だち追加とアカウント連携を1画面完結、collector LambdaがLINE Messaging APIでもプッシュ送信、ブロック時は自動配信停止。認証情報はユーザー側でLINE公式アカウント開設後に反映(docs/docs_line_setup.md) |
+| 2026-07-14 | v0.29      | LINE連携の実機テストで発覚したバグを修正。既にメールでactive/バウンス抑制済みのアドレスがchannel=lineで登録すると、チャネル分岐より前の早期リターンでliff_urlが発行されず何も起きなかった問題を解消 |

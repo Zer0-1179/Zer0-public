@@ -84,7 +84,7 @@
     var messageEl = document.getElementById('message');
     var spinnerEl = document.getElementById('spinner');
 
-    function showResult(icon, title, message) {
+    function showResult(icon, title, message, showBackLink) {
       spinnerEl.remove();
       var box = document.getElementById('box');
       var iconEl = document.createElement('div');
@@ -93,19 +93,39 @@
       box.insertBefore(iconEl, titleEl);
       titleEl.textContent = title;
       messageEl.textContent = message;
+      if (showBackLink) {
+        var link = document.createElement('a');
+        link.className = 'btn';
+        link.href = 'https://nyusatsu.zer0-infra.com/';
+        link.textContent = 'LPに戻る';
+        link.style.marginTop = '12px';
+        link.style.display = 'inline-block';
+        box.appendChild(link);
+      }
     }
 
     function showError(message) {
-      showResult('⚠️', '連携できませんでした', message);
+      showResult('⚠️', '連携できませんでした', message, true);
     }
 
-    function getParam(name) {
-      return new URLSearchParams(window.location.search).get(name) || '';
+    function getParams() {
+      var params = new URLSearchParams(window.location.search);
+      if (params.has('liff.state')) {
+        // LIFFがログイン画面を経由すると、元のクエリ文字列(token/email)が
+        // liff.stateパラメータの中に丸ごと(先頭"?"付きで)格納された状態で
+        // このページへ戻ってくる。ここから改めてパースし直す必要がある
+        // (v0.28実機テストで発覚した不具合、liff.stateを考慮していなかった)。
+        var state = params.get('liff.state');
+        var inner = state.charAt(0) === '?' ? state.slice(1) : state;
+        return new URLSearchParams(inner);
+      }
+      return params;
     }
 
     async function main() {
-      var token = getParam('token');
-      var email = getParam('email');
+      var params = getParams();
+      var token = params.get('token') || '';
+      var email = params.get('email') || '';
       if (!token || !email) {
         showError('連携用のリンクが正しくありません。LPから登録し直してください。');
         return;
@@ -142,7 +162,7 @@
         if (res.ok && data.status === 'linked') {
           showResult('✅', '連携が完了しました', 'このLINEアカウントに、対象の入札情報をお届けします。このページは閉じて構いません。');
         } else if (res.ok && data.status === 'unsubscribed') {
-          showResult('ℹ️', '既に配信停止済みです', '再度受け取りたい場合は、お手数ですがLPから改めてご登録ください。');
+          showResult('ℹ️', '既に配信停止済みです', '再度受け取りたい場合は、お手数ですがLPから改めてご登録ください。', true);
         } else {
           showError('リンクの有効期限が切れているか、無効です。LPから登録し直してください。');
         }
