@@ -148,15 +148,15 @@ def test_notify_trail_updated_does_not_send_email(executor):
 
 # ── 公開統計JSON（004ポートフォリオ非公開ダッシュボード用） ────────────────
 
-def test_update_public_stats_skips_silently_when_bucket_unset(executor, monkeypatch):
+def test_update_stats_json_skips_silently_when_bucket_unset(executor, monkeypatch):
     monkeypatch.setattr(executor, "STATS_BUCKET", "")
     mock_put = MagicMock()
     monkeypatch.setattr(executor._s3, "put_object", mock_put)
-    executor.update_public_stats()
+    executor.update_stats_json()
     assert not mock_put.called
 
 
-def test_update_public_stats_builds_cumulative_equity_curve(executor, monkeypatch):
+def test_update_stats_json_builds_cumulative_equity_curve(executor, monkeypatch):
     monkeypatch.setattr(executor, "STATS_BUCKET", "zer0-cryptobot-stats-s3")
     trades = [
         {"ts": "2026-06-24T22:45:18+09:00", "pair": "btc_jpy", "direction": "short", "reason": "TP1部分利確", "pnl_jpy": 35.8},
@@ -167,7 +167,7 @@ def test_update_public_stats_builds_cumulative_equity_curve(executor, monkeypatc
     mock_put = MagicMock()
     monkeypatch.setattr(executor._s3, "put_object", mock_put)
 
-    executor.update_public_stats()
+    executor.update_stats_json()
 
     assert mock_put.called
     kwargs = mock_put.call_args.kwargs
@@ -183,10 +183,10 @@ def test_update_public_stats_builds_cumulative_equity_curve(executor, monkeypatc
     assert payload["points"][-1]["cumulative_pnl_jpy"] == 254.1
 
 
-def test_record_trade_calls_update_public_stats_on_success(executor, monkeypatch):
+def test_record_trade_calls_update_stats_json_on_success(executor, monkeypatch):
     monkeypatch.setattr(executor._s3, "put_object", MagicMock())
     mock_update = MagicMock()
-    monkeypatch.setattr(executor, "update_public_stats", mock_update)
+    monkeypatch.setattr(executor, "update_stats_json", mock_update)
     executor.record_trade("btc_jpy", "long", "トレーリングSL", 100.0, 110.0, 0.01, "pos-1")
     assert mock_update.called
 
@@ -194,7 +194,7 @@ def test_record_trade_calls_update_public_stats_on_success(executor, monkeypatch
 def test_record_trade_skips_stats_update_when_s3_write_fails(executor, monkeypatch):
     monkeypatch.setattr(executor._s3, "put_object", MagicMock(side_effect=Exception("s3 down")))
     mock_update = MagicMock()
-    monkeypatch.setattr(executor, "update_public_stats", mock_update)
+    monkeypatch.setattr(executor, "update_stats_json", mock_update)
     executor.record_trade("btc_jpy", "long", "トレーリングSL", 100.0, 110.0, 0.01, "pos-1")
     assert not mock_update.called
 
@@ -202,5 +202,5 @@ def test_record_trade_skips_stats_update_when_s3_write_fails(executor, monkeypat
 def test_record_trade_does_not_raise_when_stats_update_fails(executor, monkeypatch):
     """stats.json更新に失敗しても取引処理全体（呼び出し元）が落ちないこと。"""
     monkeypatch.setattr(executor._s3, "put_object", MagicMock())
-    monkeypatch.setattr(executor, "update_public_stats", MagicMock(side_effect=Exception("stats write failed")))
+    monkeypatch.setattr(executor, "update_stats_json", MagicMock(side_effect=Exception("stats write failed")))
     executor.record_trade("btc_jpy", "long", "トレーリングSL", 100.0, 110.0, 0.01, "pos-1")  # 例外が伝播しないこと
