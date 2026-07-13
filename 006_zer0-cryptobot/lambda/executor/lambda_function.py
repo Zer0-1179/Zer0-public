@@ -1307,12 +1307,11 @@ def lambda_handler(event, context):
         state = load_state()
         log(f"現在のポジション: {list(state['positions'].keys())}")
 
-        log("state⇄実建玉リコンサイル確認")
-        reconcile_positions(bb, state)
-
         log("証拠金維持率チェック")
         if not check_margin_health(bb, state):
             save_state(state)
+            log("state⇄実建玉リコンサイル確認")
+            reconcile_positions(bb, state)
             log("緊急決済完了 → Phase A/B をスキップ")
             return {"statusCode": 200, "body": json.dumps({"emergency_close": True})}
 
@@ -1329,6 +1328,13 @@ def lambda_handler(event, context):
             # Analyzer が失敗してシグナルなしで invoke した場合。
             # いずれも Phase A（既存ポジション管理）は継続し、新規建てのみスキップする。
             log("Phase B: シグナルなし → スキップ")
+
+        # リコンサイルはPhase A/B(state更新)の後に実行する。取引所側で先に約定した
+        # 決済(トレーリングSL等)はPhase Aがこのサイクルで検知・state更新するため、
+        # Phase Aより前に実行すると「stateにあるが実建玉なし」という誤検知が
+        # 毎回発生していた(2026-07-13、ユーザー報告により発覚)。
+        log("state⇄実建玉リコンサイル確認")
+        reconcile_positions(bb, state)
 
         save_state(state)
         log("状態保存完了")
