@@ -1,4 +1,4 @@
-"""001_x-poster_zer0-infra アーキテクチャ図生成スクリプト"""
+"""002_Zenn_Auto_Article_Bot アーキテクチャ図生成スクリプト"""
 import os
 import matplotlib
 matplotlib.use('Agg')
@@ -16,7 +16,7 @@ for _fp in [
         matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
         break
 
-_BASE     = os.path.dirname(os.path.abspath(__file__))
+_BASE     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _ICON_DIR = os.path.join(_BASE, '..', 'images', 'AWS-icon')
 _SVC = 'Architecture-Service-Icons_07312025'
 _GRP = 'Architecture-Group-Icons_07312025'
@@ -27,10 +27,12 @@ ICONS = {
     'bedrock':     f'{_SVC}/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock_64.png',
     'ssm':         f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Systems-Manager_64.png',
     'cloudwatch':  f'{_SVC}/Arch_Management-Governance/64/Arch_Amazon-CloudWatch_64.png',
+    's3':          f'{_SVC}/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64.png',
+    'ses':         f'{_SVC}/Arch_Business-Applications/64/Arch_Amazon-Simple-Email-Service_64.png',
     'region':      f'{_GRP}/Region_32.png',
 }
 
-_USER_PNG = os.path.join(_BASE, '..', '002_Zenn_Auto_Article_Bot', 'src', 'aws_icons', 'user.png')
+_USER_PNG = os.path.join(_BASE, 'src', 'aws_icons', 'user.png')
 
 
 def _load(key):
@@ -42,42 +44,47 @@ def _load(key):
 
 def draw():
     # ── レイアウト ──
-    # xlim=15, ylim=8  figsize=(15,8)
+    # xlim=13, ylim=8  figsize=(13,8)
     # ap-northeast-1:
-    #   EventBridge(2,4)  Lambda(5.5,4)  Bedrock(9.5,6)
-    #                                    SSM(9.5,4)
-    #                                    CW(9.5,2)
-    # 投稿先:
-    #   X API(13,2)  ← Lambda→X API は y=3.2 を通り SSM(bottom=3.45) の下を通過 ✓
+    #   EventBridge(2,4)  Lambda(5.5,4)  Bedrock(9.5,4)
+    #   SSM(5.5,6)        S3(9.5,6)
+    #   CW(5.5,2)         SES(9.5,2)
+    # 外部:
+    #   受信者(12,2)
+
     HALF = 0.55
 
     nodes = [
-        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n月・木 20:00 JST',     'x': 2.0,  'y': 4.0},
-        {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\nx-poster-zer0-infra',       'x': 5.5,  'y': 4.0},
-        {'id': 'bedrock', 'icon': 'bedrock',     'label': 'Bedrock\nClaude Haiku',             'x': 9.5,  'y': 6.0},
-        {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\nAPI認証+履歴',                 'x': 9.5,  'y': 4.0},
-        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                  'x': 9.5,  'y': 2.0},
-        {'id': 'xapi',    'icon': 'user',        'label': 'X API\n(@Zer0_Infra)',              'x': 13.0, 'y': 2.0},
+        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n(毎月1日・15日)', 'x': 2.0,  'y': 4.0},
+        {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\nzenn-article-bot',     'x': 5.5,  'y': 4.0},
+        {'id': 'bedrock', 'icon': 'bedrock',     'label': 'Bedrock\nClaude Haiku',        'x': 9.5,  'y': 4.0},
+        {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\nトピック管理',            'x': 5.5,  'y': 6.0},
+        {'id': 's3',      'icon': 's3',          'label': 'S3\nPNG保存',                 'x': 9.5,  'y': 6.0},
+        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',             'x': 5.5,  'y': 2.0},
+        {'id': 'ses',     'icon': 'ses',         'label': 'SES\nメール送信',              'x': 9.5,  'y': 2.0},
+        {'id': 'user',    'icon': 'user',        'label': '通知先\nメール',               'x': 13.0, 'y': 2.0},
     ]
 
     edges = [
         ('eb',     'lambda',  ''),
-        ('lambda', 'bedrock', ''),
+        ('lambda', 'bedrock', '記事＋図生成'),
         ('lambda', 'ssm',     ''),
+        ('lambda', 's3',      ''),
         ('lambda', 'cw',      ''),
-        ('lambda', 'xapi',    'X投稿'),
+        ('lambda', 'ses',     ''),
+        ('ses',    'user',    ''),
     ]
 
     clusters = [
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 0.4, 'y': 0.4, 'w': 10.1, 'h': 7.0,
+            'x': 0.4, 'y': 0.2, 'w': 10.5, 'h': 7.2,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
-            'label': '投稿先', 'icon': None,
-            'x': 11.3, 'y': 0.4, 'w': 2.8, 'h': 2.9,
+            'label': '通知先', 'icon': None,
+            'x': 11.8, 'y': 0.8, 'w': 2.4, 'h': 2.8,
             'color': '#F5F5F5', 'edgecolor': '#AAAAAA',
             'linestyle': '-', 'linewidth': 1.5,
         },
@@ -102,6 +109,30 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
+    # ── クラスター間重複解消 ──
+    _MIN_GAP = 0.7
+    for _ in range(20):
+        moved = False
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                ca, cb = clusters[i], clusters[j]
+                if ca['y'] < cb['y'] + cb['h'] and cb['y'] < ca['y'] + ca['h']:
+                    if ca['x'] + ca['w'] + _MIN_GAP > cb['x'] and ca['x'] < cb['x']:
+                        push = ca['x'] + ca['w'] + _MIN_GAP - cb['x']
+                        cb['x'] += push; moved = True
+                    elif cb['x'] + cb['w'] + _MIN_GAP > ca['x'] and cb['x'] < ca['x']:
+                        push = cb['x'] + cb['w'] + _MIN_GAP - ca['x']
+                        ca['x'] += push; moved = True
+                if ca['x'] < cb['x'] + cb['w'] and cb['x'] < ca['x'] + ca['w']:
+                    if ca['y'] + ca['h'] + _MIN_GAP > cb['y'] and ca['y'] < cb['y']:
+                        push = ca['y'] + ca['h'] + _MIN_GAP - cb['y']
+                        cb['y'] += push; moved = True
+                    elif cb['y'] + cb['h'] + _MIN_GAP > ca['y'] and cb['y'] < ca['y']:
+                        push = cb['y'] + cb['h'] + _MIN_GAP - ca['y']
+                        ca['y'] += push; moved = True
+        if not moved:
+            break
+
     fig, ax = plt.subplots(figsize=(15, 8), dpi=150)
     ax.set_xlim(0, 15)
     ax.set_ylim(0, 8)
@@ -109,7 +140,7 @@ def draw():
     ax.axis('off')
     fig.patch.set_facecolor('white')
     ax.set_facecolor('white')
-    ax.set_title('001 X Poster Bot (@Zer0_Infra) — アーキテクチャ図',
+    ax.set_title('002 Zenn Auto Article Bot — アーキテクチャ図',
                  fontsize=13, fontweight='bold', pad=10, color='#232F3E')
 
     ICON_SZ = 0.45
@@ -175,7 +206,7 @@ def draw():
                 ha='center', va='top', fontsize=7.5,
                 color='#232F3E', fontweight='bold', zorder=5)
 
-    out = os.path.join(_BASE, 'images', '001_architecture.png')
+    out = os.path.join(_BASE, 'images', '002_architecture.png')
     plt.tight_layout()
     plt.savefig(out, dpi=150, bbox_inches='tight', facecolor='white', format='png')
     plt.close(fig)

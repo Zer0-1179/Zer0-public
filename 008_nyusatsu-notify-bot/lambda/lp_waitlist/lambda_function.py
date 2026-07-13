@@ -442,6 +442,17 @@ def send_welcome_email(email: str, sender: str, unsubscribe_url: str) -> None:
     )
 
 
+def _line_pending_response(email: str) -> dict:
+    """channel="line"登録に対して返すLIFF連携URL付きレスポンスを組み立てる。
+    新規登録・既にactive/pending/unsubscribed(user)ないずれの状態からでも同じ形の
+    レスポンスを返すことで、第三者が既存の登録状況を推測できないようにする
+    (handle_registerの複数の分岐から呼ばれる、v0.28で発覚したバグの修正)。"""
+    token = make_token(email, "line_link")
+    liff_id = _get_param(LINE_LIFF_ID_PARAM_NAME)
+    liff_url = f"https://liff.line.me/{liff_id}?token={urllib.parse.quote(token)}&email={urllib.parse.quote(email)}"
+    return _json_response(200, {"status": "line_pending", "liff_url": liff_url})
+
+
 def handle_register(event):
     try:
         payload = json.loads(event.get("body") or "{}")
@@ -488,16 +499,28 @@ def handle_register(event):
         if status == "active":
             # 第三者が任意のメールアドレスの購読状態(activeか否か)を判別できて
             # しまうため、他のケースと同じ"registered"を返す
-            # (Fable指摘、レビュー2026-07-11)。
+            # (Fable指摘、レビュー2026-07-11)。channel="line"の場合も、新規登録時と
+            # 同じ形のline_pending+liff_urlを返すことで判別不能性を維持しつつ、
+            # 既にメールでactive済みの利用者がLINEへ切り替えられるようにする
+            # (v0.28で発覚したバグの修正: 以前はここで一律"registered"を返して
+            # おり、既存購読者がLINEへの切替をリクエストしてもliff_urlが発行
+            # されず何も起きなかった)。
+            if channel == "line":
+                return _line_pending_response(email)
             return _json_response(200, {"status": "registered"})
 
         if status == "unsubscribed" and existing.get("unsubscribed_reason") in ("bounce", "complaint"):
             # バウンス・苦情による配信停止は送信健全性保護のための抑制なので、
             # 本人以外でも叩けるこのエンドポイントでは再登録による復活を許さない。
+            # channel="line"でも同じ形のレスポンスを返し判別不能性を保つ
+            # (handle_line_link側でunsubscribed状態は理由を問わず復活させない
+            # ガードが既にあるため、liff_urlを発行しても実害はない、v0.28)。
             logger.info(
                 "registration blocked for suppressed address %s (reason=%s)",
                 email, existing.get("unsubscribed_reason"),
             )
+            if channel == "line":
+                return _line_pending_response(email)
             return _json_response(200, {"status": "registered"})
 
         # status は "pending"(確認メール未クリック) または "unsubscribed"(reason="user"
@@ -524,10 +547,7 @@ def handle_register(event):
         # LINEは友だち追加(LIFF連携)そのものが本人確認になるため、メールでの
         # 二重オプトインは行わずLIFF連携URLを返す。実際の紐付けはhandle_line_linkで
         # 行う(v0.28)。
-        token = make_token(email, "line_link")
-        liff_id = _get_param(LINE_LIFF_ID_PARAM_NAME)
-        liff_url = f"https://liff.line.me/{liff_id}?token={urllib.parse.quote(token)}&email={urllib.parse.quote(email)}"
-        return _json_response(200, {"status": "line_pending", "liff_url": liff_url})
+        return _line_pending_response(email)
 
     # 登録(DynamoDB書き込み)は既に成功しているため、確認メール送信が失敗しても
     # 利用者にはエラーを返さない(再送すればよいだけで実害はない)。

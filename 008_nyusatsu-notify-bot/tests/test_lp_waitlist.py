@@ -263,3 +263,41 @@ def test_line_webhook_unfollow_unsubscribes_matching_user(lp_waitlist):
     item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "line-user@example.com"}).get("Item")
     assert item["status"] == "unsubscribed"
     assert item["unsubscribed_reason"] == "line_block"
+
+
+def test_register_line_channel_for_already_active_email_returns_liff_url(lp_waitlist):
+    """バグ修正確認(2026-07-13発覚): 既にstatus=activeなメールアドレスがchannel=line
+    で再登録した場合も、新規登録時と同じline_pending+liff_urlを返すこと。
+    以前はactive早期リターンがchannelを見ずに一律"registered"を返しており、
+    既存のメール購読者がLINEへ切り替えられなかった。"""
+    with mock.patch.object(lp_waitlist, "send_confirmation_email"):
+        lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "existing@example.com"}))
+    token = lp_waitlist.make_token("existing@example.com", "confirm")
+    with mock.patch.object(lp_waitlist, "send_welcome_email"), mock.patch.object(lp_waitlist, "notify_owner_confirmed"):
+        lp_waitlist.handle_confirm(fake_event("/confirm", "GET", query={"email": "existing@example.com", "token": token}))
+
+    resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "existing@example.com", "channel": "line"}))
+    assert resp["statusCode"] == 200
+    body = json.loads(resp["body"])
+    assert body["status"] == "line_pending"
+    assert "liff.line.me" in body["liff_url"]
+
+
+def test_register_line_channel_for_bounce_suppressed_email_returns_liff_url_but_blocked_at_link(lp_waitlist, bounce_handler):
+    """バウンス抑制済みアドレスでもchannel=lineは同じ形のレスポンスを返す
+    (判別不能性の維持)が、実際のLIFF連携(handle_line_link)では復活しない。"""
+    with mock.patch.object(lp_waitlist, "send_confirmation_email"):
+        lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "suppressed@example.com"}))
+    bounce_handler.mark_unsubscribed("suppressed@example.com", reason="bounce")
+
+    resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "suppressed@example.com", "channel": "line"}))
+    body = json.loads(resp["body"])
+    assert body["status"] == "line_pending"
+
+    token = lp_waitlist.make_token("suppressed@example.com", "line_link")
+    link_resp = lp_waitlist.handle_line_link(fake_event("/line/link", "POST", {
+        "email": "suppressed@example.com", "token": token, "line_user_id": "U999",
+    }))
+    assert json.loads(link_resp["body"])["status"] == "unsubscribed"
+    item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "suppressed@example.com"}).get("Item")
+    assert item["status"] == "unsubscribed"
