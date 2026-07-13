@@ -97,7 +97,7 @@
         var link = document.createElement('a');
         link.className = 'btn';
         link.href = 'https://nyusatsu.zer0-infra.com/';
-        link.textContent = 'LPに戻る';
+        link.textContent = '登録ページに戻る';
         link.style.marginTop = '12px';
         link.style.display = 'inline-block';
         box.appendChild(link);
@@ -127,14 +127,14 @@
       var token = params.get('token') || '';
       var email = params.get('email') || '';
       if (!token || !email) {
-        showError('連携用のリンクが正しくありません。LPから登録し直してください。');
+        showError('連携用のリンクを確認できませんでした。お手数ですが、登録ページからもう一度お手続きをお願いします。');
         return;
       }
 
       try {
         await liff.init({ liffId: LIFF_ID });
       } catch (err) {
-        showError('LINEアプリの初期化に失敗しました。時間をおいて再度お試しください。');
+        showError('LINEとの接続を開始できませんでした。恐れ入りますが、少し時間をおいてもう一度お試しください。');
         return;
       }
 
@@ -148,7 +148,7 @@
       try {
         profile = await liff.getProfile();
       } catch (err) {
-        showError('LINEプロフィールの取得に失敗しました。友だち追加が完了しているかご確認ください。');
+        showError('LINEのアカウント情報を確認できませんでした。友だち追加がお済みかご確認のうえ、もう一度お試しください。');
         return;
       }
 
@@ -160,14 +160,14 @@
         });
         var data = await res.json();
         if (res.ok && data.status === 'linked') {
-          showResult('✅', '連携が完了しました', 'このLINEアカウントに、対象の入札情報をお届けします。このページは閉じて構いません。');
+          showResult('✅', '連携が完了しました', 'ご登録ありがとうございます。このLINEアカウントに、対象の入札情報をお届けします。このページは閉じていただいて大丈夫です。');
         } else if (res.ok && data.status === 'unsubscribed') {
-          showResult('ℹ️', '既に配信停止済みです', '再度受け取りたい場合は、お手数ですがLPから改めてご登録ください。', true);
+          showResult('ℹ️', '配信停止のお手続きが完了しています', 'もう一度受け取りをご希望の場合は、お手数ですが登録ページから改めてご登録ください。', true);
         } else {
-          showError('リンクの有効期限が切れているか、無効です。LPから登録し直してください。');
+          showError('このリンクは有効期限切れか、すでに使用済みの可能性があります。お手数ですが、登録ページから改めてご登録ください。');
         }
       } catch (err) {
-        showError('通信エラーが発生しました。時間をおいて再度お試しください。');
+        showError('通信中に問題が発生しました。恐れ入りますが、時間をおいて再度お試しください。');
       }
     }
 
