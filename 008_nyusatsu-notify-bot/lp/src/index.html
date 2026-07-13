@@ -416,6 +416,23 @@
   }
   .cta-section h2 { color: #fff; }
   .cta-section .lead { color: #c9cbc7; margin: 0 auto 36px; }
+  /* ── 通知チャネル選択(v0.28: メール/LINE) ────── */
+  .channel-toggle {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 0 0 20px;
+  }
+  .channel-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    color: #d8dad6;
+    cursor: pointer;
+  }
+  .channel-option input { accent-color: var(--accent); width: 16px; height: 16px; }
   .register-form {
     display: flex;
     gap: 10px;
@@ -761,13 +778,21 @@
 <section class="cta-section reveal" id="register">
   <h2>入札情報を、見逃さない。</h2>
   <p class="lead">事前登録いただいた方から、テスト運用のご案内をお送りします。</p>
+  <div class="channel-toggle" role="radiogroup" aria-label="通知の受け取り方法">
+    <label class="channel-option">
+      <input type="radio" name="channel" value="email" id="channelEmail" checked /> メールで受け取る
+    </label>
+    <label class="channel-option">
+      <input type="radio" name="channel" value="line" id="channelLine" /> LINEで受け取る
+    </label>
+  </div>
   <form class="register-form" id="registerForm">
     <input type="email" id="emailInput" name="email" placeholder="メールアドレス" aria-label="メールアドレス" autocomplete="email" required />
     <input type="text" id="websiteInput" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
     <button type="submit" id="submitBtn">登録する</button>
   </form>
   <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
-  <p class="cta-trust">登録・利用は無料（テスト運用期間中）。確認メールの承認後に配信が始まり、いつでもワンクリックで配信停止できます。<br>登録により<a href="privacy.html">プライバシーポリシー</a>および<a href="terms.html">利用規約</a>に同意したものとみなします。</p>
+  <p class="cta-trust">登録・利用は無料（テスト運用期間中）。承認後に配信が始まり、いつでも配信停止できます。LINEを選ぶと登録後に友だち追加画面へ進みます。<br>登録により<a href="privacy.html">プライバシーポリシー</a>および<a href="terms.html">利用規約</a>に同意したものとみなします。</p>
 </section>
 
 <footer>
@@ -842,6 +867,7 @@
       if (submitBtn.disabled) return; // 送信中の二重サブミット防止
       const email = document.getElementById('emailInput').value.trim();
       const website = document.getElementById('websiteInput').value.trim();
+      const channel = document.querySelector('input[name="channel"]:checked').value;
       submitBtn.disabled = true;
       msg.className = 'form-msg';
       msg.textContent = '送信中...';
@@ -849,10 +875,14 @@
         const res = await fetch(API_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, website }),
+          body: JSON.stringify({ email, website, channel }),
         });
         const data = await res.json();
-        if (res.ok && data.status === 'registered') {
+        if (res.ok && data.status === 'line_pending' && data.liff_url) {
+          msg.classList.add('ok');
+          msg.textContent = 'LINEの友だち追加画面に移動します...';
+          window.location.href = data.liff_url;
+        } else if (res.ok && data.status === 'registered') {
           msg.classList.add('ok');
           msg.textContent = '確認メールをお送りしました。メール内のリンクをクリックして登録を完了してください。';
           form.reset();

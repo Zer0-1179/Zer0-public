@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LINE連携 | 入札情報ウォッチ</title>
+<meta name="robots" content="noindex" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --ink: #1c1e1f;
+    --ink-soft: #55585c;
+    --accent: #2b6cb0;
+    --line: #dde3ea;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .box {
+    max-width: 420px;
+    margin: 24px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+  .brand { font-weight: 700; font-size: 14px; color: var(--accent); margin-bottom: 18px; }
+  h1 { font-size: 1.2rem; margin: 0 0 12px; }
+  p { color: var(--ink-soft); font-size: 14.5px; margin: 0 0 16px; }
+  .spinner {
+    width: 32px;
+    height: 32px;
+    margin: 0 auto 20px;
+    border: 3px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .icon-ok { font-size: 40px; margin-bottom: 12px; }
+  a.btn {
+    display: inline-block;
+    padding: 12px 26px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <div class="box" id="box">
+    <div class="brand">入札情報ウォッチ</div>
+    <div class="spinner" id="spinner"></div>
+    <h1 id="title">LINE連携を確認しています…</h1>
+    <p id="message">少々お待ちください。</p>
+  </div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  (function () {
+    var LIFF_ID = '__LINE_LIFF_ID__';
+    var API_ENDPOINT = '__API_ENDPOINT__';
+    var API_BASE = API_ENDPOINT.replace(/\/register$/, '');
+
+    var titleEl = document.getElementById('title');
+    var messageEl = document.getElementById('message');
+    var spinnerEl = document.getElementById('spinner');
+
+    function showResult(icon, title, message) {
+      spinnerEl.remove();
+      var box = document.getElementById('box');
+      var iconEl = document.createElement('div');
+      iconEl.className = 'icon-ok';
+      iconEl.textContent = icon;
+      box.insertBefore(iconEl, titleEl);
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+    }
+
+    function showError(message) {
+      showResult('⚠️', '連携できませんでした', message);
+    }
+
+    function getParam(name) {
+      return new URLSearchParams(window.location.search).get(name) || '';
+    }
+
+    async function main() {
+      var token = getParam('token');
+      var email = getParam('email');
+      if (!token || !email) {
+        showError('連携用のリンクが正しくありません。LPから登録し直してください。');
+        return;
+      }
+
+      try {
+        await liff.init({ liffId: LIFF_ID });
+      } catch (err) {
+        showError('LINEアプリの初期化に失敗しました。時間をおいて再度お試しください。');
+        return;
+      }
+
+      if (!liff.isLoggedIn()) {
+        // ログイン後にこのページへ戻ってくる(クエリparamは維持される)。
+        liff.login({ redirectUri: window.location.href });
+        return;
+      }
+
+      var profile;
+      try {
+        profile = await liff.getProfile();
+      } catch (err) {
+        showError('LINEプロフィールの取得に失敗しました。友だち追加が完了しているかご確認ください。');
+        return;
+      }
+
+      try {
+        var res = await fetch(API_BASE + '/line/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, token: token, line_user_id: profile.userId }),
+        });
+        var data = await res.json();
+        if (res.ok && data.status === 'linked') {
+          showResult('✅', '連携が完了しました', 'このLINEアカウントに、対象の入札情報をお届けします。このページは閉じて構いません。');
+        } else if (res.ok && data.status === 'unsubscribed') {
+          showResult('ℹ️', '既に配信停止済みです', '再度受け取りたい場合は、お手数ですがLPから改めてご登録ください。');
+        } else {
+          showError('リンクの有効期限が切れているか、無効です。LPから登録し直してください。');
+        }
+      } catch (err) {
+        showError('通信エラーが発生しました。時間をおいて再度お試しください。');
+      }
+    }
+
+    main();
+  })();
+</script>
+</body>
+</html>

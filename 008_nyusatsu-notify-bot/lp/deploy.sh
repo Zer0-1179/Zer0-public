@@ -32,10 +32,19 @@ API_ENDPOINT=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text)
 
+# LIFF ID(v0.28)も同様にSSMから都度注入する(ユーザーがLINE Developersコンソールで
+# チャネル作成後にCLIで値を設定するまでは"REPLACE_AFTER_LINE_SETUP"のまま)。
+LINE_LIFF_ID=$(aws ssm get-parameter \
+  --name /zer0/008-nyusatsu/line-liff-id \
+  --region "$REGION" \
+  --query "Parameter.Value" \
+  --output text)
+
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 cp -r "${SCRIPT_DIR}/src/." "$BUILD_DIR/"
-sed -i "s|__API_ENDPOINT__|${API_ENDPOINT}|g" "${BUILD_DIR}/index.html"
+sed -i "s|__API_ENDPOINT__|${API_ENDPOINT}|g" "${BUILD_DIR}/index.html" "${BUILD_DIR}/line-link.html"
+sed -i "s|__LINE_LIFF_ID__|${LINE_LIFF_ID}|g" "${BUILD_DIR}/line-link.html"
 
 echo "[1/3] S3へ同期中 (s3://$BUCKET_NAME)..."
 # HTML以外(画像・アイコン等)は適度な期間キャッシュし、HTMLはno-cacheにする。
@@ -48,19 +57,21 @@ aws s3 sync "${BUILD_DIR}/" "s3://${BUCKET_NAME}/" --delete --region "$REGION" \
   --exclude "*" --include "*.html" \
   --cache-control "no-cache, must-revalidate"
 
-# index.html内の(API_ENDPOINT埋め込み後の)4つのinline <script>ブロックから
-# CSP用のsha256ハッシュを算出し、CloudFrontのscript-srcに反映する。
+# index.html・line-link.html内の(プレースホルダ埋め込み後の)inline <script>ブロック
+# 全てからCSP用のsha256ハッシュを算出し、CloudFrontのscript-srcに反映する。
 # 'unsafe-inline'は使わず、コンテンツ変更のたびにこのデプロイで自動的に
 # ハッシュを再計算するため、手動更新忘れによるCSPブロックを防ぐ(Fable指摘、2026-07-13)。
 echo "[2/3] CSPスクリプトハッシュを更新中..."
-SCRIPT_HASHES=$(python3 - "${BUILD_DIR}/index.html" <<'PYEOF'
+SCRIPT_HASHES=$(python3 - "${BUILD_DIR}/index.html" "${BUILD_DIR}/line-link.html" <<'PYEOF'
 import re, hashlib, base64, sys
-html = open(sys.argv[1], encoding="utf-8").read()
-scripts = re.findall(r'<script>(.*?)</script>', html, re.DOTALL)
 hashes = []
-for s in scripts:
-    digest = hashlib.sha256(s.encode("utf-8")).digest()
-    hashes.append("'sha256-" + base64.b64encode(digest).decode() + "'")
+for path in sys.argv[1:]:
+    html = open(path, encoding="utf-8").read()
+    # 属性なしの<script>(=同一オリジンのインラインスクリプト)のみ対象。
+    # <script src="...">のような外部読み込みタグはハッシュ不要(ホスト許可で対応)。
+    for s in re.findall(r'<script>(.*?)</script>', html, re.DOTALL):
+        digest = hashlib.sha256(s.encode("utf-8")).digest()
+        hashes.append("'sha256-" + base64.b64encode(digest).decode() + "'")
 print(" ".join(hashes))
 PYEOF
 )

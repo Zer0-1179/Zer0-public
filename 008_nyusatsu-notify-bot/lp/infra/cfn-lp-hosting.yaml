@@ -102,7 +102,10 @@ Resources:
             ReferrerPolicy: strict-origin-when-cross-origin
             Override: true
           ContentSecurityPolicy:
-            ContentSecurityPolicy: !Sub "default-src 'self'; connect-src 'self' ${ApiOrigin}; style-src 'self' 'unsafe-inline'; script-src 'self' ${ScriptHashes}; img-src 'self' data:; object-src 'none'; base-uri 'self'"
+            # connect-src/script-srcのliff.line.me・api.line.me・static.line-scdn.netは
+            # LINE LIFF連携ページ(line-link.html)がLIFF SDKの初期化・ログイン・
+            # プロフィール取得で必要とするLINE公式ドメイン(v0.28)。
+            ContentSecurityPolicy: !Sub "default-src 'self'; connect-src 'self' ${ApiOrigin} https://api.line.me https://liff.line.me; style-src 'self' 'unsafe-inline'; script-src 'self' https://static.line-scdn.net ${ScriptHashes}; img-src 'self' data: https://static.line-scdn.net; frame-src https://liff.line.me; object-src 'none'; base-uri 'self'"
             Override: true
         CustomHeadersConfig:
           Items:
