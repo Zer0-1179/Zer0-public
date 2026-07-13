@@ -592,6 +592,10 @@ def lambda_handler(event, context):
 
     if method == "OPTIONS":
         return _json_response(200, {})
+    if path == "/favicon.ico" and method == "GET":
+        # execute-apiドメインへ直接アクセスした場合にブラウザが自動要求する
+        # favicon.icoが生の404になるのを防ぐ(Fable指摘、低優先度)。
+        return {"statusCode": 204, "headers": {}, "body": ""}
     if path == "/register" and method == "POST":
         return handle_register(event)
     if path == "/confirm" and method == "GET":
