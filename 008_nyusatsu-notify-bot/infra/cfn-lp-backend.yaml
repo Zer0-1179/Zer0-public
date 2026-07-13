@@ -234,6 +234,13 @@ Resources:
       RouteKey: "POST /unsubscribe"
       Target: !Sub "integrations/${WaitlistIntegration}"
 
+  FaviconRoute01:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WaitlistApi
+      RouteKey: "GET /favicon.ico"
+      Target: !Sub "integrations/${WaitlistIntegration}"
+
   WaitlistStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
