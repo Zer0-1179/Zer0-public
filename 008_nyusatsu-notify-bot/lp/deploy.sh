@@ -38,7 +38,15 @@ cp -r "${SCRIPT_DIR}/src/." "$BUILD_DIR/"
 sed -i "s|__API_ENDPOINT__|${API_ENDPOINT}|g" "${BUILD_DIR}/index.html"
 
 echo "[1/2] S3へ同期中 (s3://$BUCKET_NAME)..."
-aws s3 sync "${BUILD_DIR}/" "s3://${BUCKET_NAME}/" --delete --region "$REGION"
+# HTML以外(画像・アイコン等)は適度な期間キャッシュし、HTMLはno-cacheにする。
+# CloudFront invalidationはエッジキャッシュのみクリアしブラウザの手元キャッシュには
+# 効かないため、Cache-Controlを明示しないと更新が反映されにくい(Fable指摘、2026-07-13)。
+aws s3 sync "${BUILD_DIR}/" "s3://${BUCKET_NAME}/" --delete --region "$REGION" \
+  --exclude "*.html" \
+  --cache-control "public, max-age=300, must-revalidate"
+aws s3 sync "${BUILD_DIR}/" "s3://${BUCKET_NAME}/" --delete --region "$REGION" \
+  --exclude "*" --include "*.html" \
+  --cache-control "no-cache, must-revalidate"
 
 echo "[2/2] CloudFrontキャッシュを無効化中 (Distribution: $DIST_ID)..."
 aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" >/dev/null
