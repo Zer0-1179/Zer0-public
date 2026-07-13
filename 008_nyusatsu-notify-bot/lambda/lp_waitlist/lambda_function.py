@@ -8,6 +8,7 @@ import os
 import re
 import time
 import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from email.headerregistry import Address
 from email.message import EmailMessage
@@ -29,6 +30,13 @@ SES_SENDER_PARAM_NAME = os.environ["SES_SENDER_PARAM_NAME"]
 HMAC_SECRET_PARAM_NAME = os.environ["HMAC_SECRET_PARAM_NAME"]
 SES_CONFIGURATION_SET_NAME = os.environ["SES_CONFIGURATION_SET_NAME"]
 MATCH_HISTORY_TABLE_NAME = os.environ["MATCH_HISTORY_TABLE_NAME"]
+# LINE通知(v0.28)。チャネルアクセストークン/シークレットはSSM SecureString相当の
+# リテラルプレースホルダー(cfn-lp-backend.yaml参照、ユーザーがLINE Developers
+# コンソールでチャネル作成後にCLIで上書きするまでは未設定状態)。
+LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME = os.environ["LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME"]
+LINE_CHANNEL_SECRET_PARAM_NAME = os.environ["LINE_CHANNEL_SECRET_PARAM_NAME"]
+LINE_LIFF_ID_PARAM_NAME = os.environ["LINE_LIFF_ID_PARAM_NAME"]
+LINE_PUSH_API_URL = "https://api.line.me/v2/bot/message/push"
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -86,6 +94,39 @@ def make_token(email: str, purpose: str) -> str:
 
 def verify_token(email: str, purpose: str, token: str) -> bool:
     return hmac.compare_digest(make_token(email, purpose), token or "")
+
+
+def verify_line_signature(body: str, signature: str, secret: str) -> bool:
+    """LINE Messaging APIのWebhook署名(X-Line-Signature)を検証する。
+    LINEの仕様はStripeと異なりHMAC-SHA256のbase64エンコードそのものを1個だけ
+    比較する(Stripeのようなタイムスタンプ付きの複数署名リストではない)。"""
+    digest = hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()
+    expected = base64.b64encode(digest).decode()
+    return hmac.compare_digest(expected, signature or "")
+
+
+def send_line_push(line_user_id: str, text: str) -> None:
+    """LINE Messaging APIでプッシュメッセージを1件送信する(v0.28)。
+    メール送信(SES)と違いLambda標準ライブラリのみで完結させるため、requestsは
+    使わずurllib.requestで直接HTTP POSTする(プロジェクト共通方針)。"""
+    token = _get_param(LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME, decrypt=True)
+    payload = json.dumps({
+        "to": line_user_id,
+        # LINEのテキストメッセージは1通5000文字までのため安全側で切り詰める。
+        "messages": [{"type": "text", "text": text[:4900]}],
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        LINE_PUSH_API_URL,
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        if resp.status >= 300:
+            raise RuntimeError(f"LINE push failed: status={resp.status}")
 
 
 def _json_response(status_code, body):
@@ -417,6 +458,12 @@ def handle_register(event):
     if not EMAIL_RE.match(email):
         return _json_response(400, {"error": "invalid_email"})
 
+    # 通知チャネル(v0.28)。"line"以外は全て"email"扱い(後方互換: 旧フロントエンドは
+    # channelを送らないため、そのまま従来通りメール確認フローに乗る)。
+    channel = str(payload.get("channel", "email")).strip().lower()
+    if channel != "line":
+        channel = "email"
+
     source_ip = event.get("requestContext", {}).get("http", {}).get("sourceIp", "")
     table = dynamodb.Table(TABLE_NAME)
     now_ts = int(time.time())
@@ -426,6 +473,7 @@ def handle_register(event):
                 "email": email,
                 "registered_at": now_ts,
                 "status": "pending",
+                "channel": channel,
                 "source_ip": source_ip,
                 "last_confirm_sent_at": now_ts,
             },
@@ -454,14 +502,15 @@ def handle_register(event):
 
         # status は "pending"(確認メール未クリック) または "unsubscribed"(reason="user"
         # ないし旧レコードでreason未設定)。どちらも再登録は許すが、確認メールの
-        # 連続再送はクールダウンで抑止する(第三者によるメール爆撃対策)。
+        # 連続再送はクールダウンで抑止する(第三者によるメール爆撃対策)。LINE切替の
+        # 再登録はメール送信を伴わないためクールダウン対象外(下のchannel分岐後に処理)。
         last_sent = int(existing.get("last_confirm_sent_at", 0))
-        if now_ts - last_sent < CONFIRMATION_RESEND_COOLDOWN_SEC:
+        if channel == "email" and now_ts - last_sent < CONFIRMATION_RESEND_COOLDOWN_SEC:
             logger.info("confirmation resend suppressed for %s (cooldown)", email)
             return _json_response(200, {"status": "registered"})
 
-        update_expr = "SET #s = :pending, last_confirm_sent_at = :t"
-        expr_values = {":pending": "pending", ":t": now_ts}
+        update_expr = "SET #s = :pending, last_confirm_sent_at = :t, channel = :channel"
+        expr_values = {":pending": "pending", ":t": now_ts, ":channel": channel}
         if status == "unsubscribed":
             update_expr += ", registered_at = :t REMOVE unsubscribed_at, unsubscribed_reason"
         table.update_item(
@@ -470,6 +519,15 @@ def handle_register(event):
             ExpressionAttributeNames={"#s": "status"},
             ExpressionAttributeValues=expr_values,
         )
+
+    if channel == "line":
+        # LINEは友だち追加(LIFF連携)そのものが本人確認になるため、メールでの
+        # 二重オプトインは行わずLIFF連携URLを返す。実際の紐付けはhandle_line_linkで
+        # 行う(v0.28)。
+        token = make_token(email, "line_link")
+        liff_id = _get_param(LINE_LIFF_ID_PARAM_NAME)
+        liff_url = f"https://liff.line.me/{liff_id}?token={urllib.parse.quote(token)}&email={urllib.parse.quote(email)}"
+        return _json_response(200, {"status": "line_pending", "liff_url": liff_url})
 
     # 登録(DynamoDB書き込み)は既に成功しているため、確認メール送信が失敗しても
     # 利用者にはエラーを返さない(再送すればよいだけで実害はない)。
@@ -482,6 +540,101 @@ def handle_register(event):
         logger.warning("confirmation email failed for %s", email, exc_info=True)
 
     return _json_response(200, {"status": "registered"})
+
+
+def handle_line_link(event):
+    """LIFFページ(line-link.html)からのPOSTを受け、line_link用トークンを検証した上で
+    line_user_idを紐付けactive化する(v0.28)。メールの二重オプトイン(handle_confirm)に
+    相当するLINE版のエンドポイント。"""
+    try:
+        payload = json.loads(event.get("body") or "{}")
+    except json.JSONDecodeError:
+        return _json_response(400, {"error": "invalid_json"})
+
+    email = str(payload.get("email", "")).strip().lower()
+    token = str(payload.get("token", ""))
+    line_user_id = str(payload.get("line_user_id", "")).strip()
+    if not email or not verify_token(email, "line_link", token) or not line_user_id:
+        return _json_response(400, {"error": "invalid_token"})
+
+    table = dynamodb.Table(TABLE_NAME)
+    item = table.get_item(Key={"email": email}).get("Item")
+    if not item:
+        return _json_response(404, {"error": "not_found"})
+
+    status = item.get("status")
+    if status == "unsubscribed":
+        # handle_confirmと同じ方針: 配信停止済みアドレスへのトークンは無期限の
+        # ステートレスHMACのため、本人の停止意思を尊重し無条件には復活させない。
+        return _json_response(200, {"status": "unsubscribed"})
+
+    if status != "active" or item.get("line_user_id") != line_user_id:
+        table.update_item(
+            Key={"email": email},
+            UpdateExpression="SET #s = :active, channel = :line, line_user_id = :uid, confirmed_at = :t",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={
+                ":active": "active", ":line": "line", ":uid": line_user_id, ":t": int(time.time()),
+            },
+        )
+        try:
+            notify_owner_confirmed(email)
+        except Exception:
+            logger.warning("owner confirm notification failed for %s (line)", email, exc_info=True)
+        try:
+            send_line_push(
+                line_user_id,
+                f"「{SERVICE_NAME}」のご登録が完了しました。\n"
+                "横浜市の入札公告に対象案件があれば、このアカウントからお知らせします。\n"
+                f"配信停止はこのアカウントをブロックするか、{INQUIRY_EMAIL} までご連絡ください。",
+            )
+        except Exception:
+            logger.warning("line welcome push failed for %s", email, exc_info=True)
+
+    return _json_response(200, {"status": "linked"})
+
+
+def handle_line_webhook(event):
+    """LINE Messaging APIからのWebhookイベント(follow/unfollow)を受信する(v0.28)。
+    自動修復はせず、unfollow(ブロック)されたユーザーをunsubscribed化するのみ。
+    紐付け自体はLIFF経由のhandle_line_linkで完結しており、followイベント単体では
+    登録メールアドレスとの対応が取れないため何もしない。"""
+    signature = (event.get("headers") or {}).get("x-line-signature", "")
+    body = event.get("body") or ""
+    secret = _get_param(LINE_CHANNEL_SECRET_PARAM_NAME, decrypt=True)
+    if not verify_line_signature(body, signature, secret):
+        return _json_response(400, {"error": "invalid_signature"})
+
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return _json_response(400, {"error": "invalid_json"})
+
+    unfollowed_ids = [
+        e.get("source", {}).get("userId")
+        for e in payload.get("events", [])
+        if e.get("type") == "unfollow" and e.get("source", {}).get("userId")
+    ]
+    if unfollowed_ids:
+        table = dynamodb.Table(TABLE_NAME)
+        # line_user_idはハッシュキーではないため、テーブル規模が小さいことを前提に
+        # Scanで逆引きする(stripe_customer_idの逆引きと同じ方式)。
+        scan_kwargs = {"FilterExpression": Attr("line_user_id").is_in(unfollowed_ids)}
+        while True:
+            resp = table.scan(**scan_kwargs)
+            for item in resp.get("Items", []):
+                table.update_item(
+                    Key={"email": item["email"]},
+                    UpdateExpression="SET #s = :u, unsubscribed_at = :t, unsubscribed_reason = :r",
+                    ExpressionAttributeNames={"#s": "status"},
+                    ExpressionAttributeValues={":u": "unsubscribed", ":t": int(time.time()), ":r": "line_block"},
+                )
+                logger.info("unsubscribed %s due to LINE unfollow", item["email"])
+            if "LastEvaluatedKey" not in resp:
+                break
+            scan_kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+
+    return _json_response(200, {})
 
 
 def handle_confirm(event):
@@ -602,5 +755,9 @@ def lambda_handler(event, context):
         return handle_confirm(event)
     if path == "/unsubscribe" and method in ("GET", "POST"):
         return handle_unsubscribe(event, method)
+    if path == "/line/link" and method == "POST":
+        return handle_line_link(event)
+    if path == "/line/webhook" and method == "POST":
+        return handle_line_webhook(event)
 
     return _json_response(404, {"error": "not_found"})

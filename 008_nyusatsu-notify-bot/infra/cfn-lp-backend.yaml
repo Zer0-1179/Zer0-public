@@ -99,6 +99,35 @@ Resources:
       Value: "REPLACE_AFTER_STRIPE_WEBHOOK_SETUP"
       Description: Stripe webhook signing secret (whsec_...) for signature verification
 
+  # LINE Messaging API認証情報(v0.28)。Stripe webhook secretと同じくリテラルの
+  # プレースホルダーで固定し、ユーザーがLINE Developersコンソールでチャネルを
+  # 作成した後にCLIで`--overwrite`更新する(鶏と卵の関係、値は再デプロイで
+  # 巻き戻らない)。チャネルアクセストークン・シークレットはSecureString、
+  # LIFF IDは秘匿情報ではない(LP側JSに埋め込むため)ためStringのまま。
+  LineChannelAccessTokenParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/line-channel-access-token
+      Type: String
+      Value: "REPLACE_AFTER_LINE_SETUP"
+      Description: LINE Messaging API channel access token for push messages
+
+  LineChannelSecretParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/line-channel-secret
+      Type: String
+      Value: "REPLACE_AFTER_LINE_SETUP"
+      Description: LINE Messaging API channel secret for webhook signature verification
+
+  LineLiffIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /zer0/008-nyusatsu/line-liff-id
+      Type: String
+      Value: "REPLACE_AFTER_LINE_SETUP"
+      Description: LINE LIFF app ID used to build the friend-add/link URL on the LP
+
   WaitlistLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -142,10 +171,15 @@ Resources:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/notify-email
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/ses-sender
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/hmac-secret
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${LineChannelAccessTokenParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${LineChannelSecretParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${LineLiffIdParameter}
               - Effect: Allow
                 Action:
                   - dynamodb:Scan
-                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/zer0-nyusatsu-match-history
+                Resource:
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/zer0-nyusatsu-match-history
+                  - !GetAtt WaitlistTable.Arn
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -171,6 +205,9 @@ Resources:
           SES_CONFIGURATION_SET_NAME: zer0-nyusatsu-config-set
           MATCH_HISTORY_TABLE_NAME: zer0-nyusatsu-match-history
           ALLOWED_ORIGIN: !Ref AllowedOrigin
+          LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME: !Ref LineChannelAccessTokenParameter
+          LINE_CHANNEL_SECRET_PARAM_NAME: !Ref LineChannelSecretParameter
+          LINE_LIFF_ID_PARAM_NAME: !Ref LineLiffIdParameter
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -239,6 +276,20 @@ Resources:
     Properties:
       ApiId: !Ref WaitlistApi
       RouteKey: "GET /favicon.ico"
+      Target: !Sub "integrations/${WaitlistIntegration}"
+
+  LineLinkRoute01:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WaitlistApi
+      RouteKey: "POST /line/link"
+      Target: !Sub "integrations/${WaitlistIntegration}"
+
+  LineWebhookRoute01:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WaitlistApi
+      RouteKey: "POST /line/webhook"
       Target: !Sub "integrations/${WaitlistIntegration}"
 
   WaitlistStage:

@@ -111,7 +111,7 @@ def test_send_notification_includes_per_case_detail_url(collector, make_context)
     含まれること(モバイル向けメール改善、2026-07-12)。"""
     with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
          mock.patch.object(collector, "record_match_history"), \
-         mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[{"email": "a@example.com", "channel": "email", "line_user_id": None}]), \
          mock.patch.object(collector, "send_email_with_unsubscribe") as m_send:
         collector.send_notification(1004, MATCHES, make_context(300000))
 
@@ -148,7 +148,10 @@ def test_send_notification_partial_failure_reports_had_failure(collector, make_c
     (v0.8まではLambda全体を失敗させリトライ/DLQ/アラームに繋がっていた安全網の復元)。"""
     with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
          mock.patch.object(collector, "record_match_history"), \
-         mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com", "b@example.com"]), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[
+             {"email": "a@example.com", "channel": "email", "line_user_id": None},
+             {"email": "b@example.com", "channel": "email", "line_user_id": None},
+         ]), \
          mock.patch.object(collector, "send_email_with_unsubscribe", side_effect=[None, Exception("SES throttled")]) as m_send:
         fully_sent, had_failure = collector.send_notification(1001, MATCHES, make_context(300000))
 
@@ -174,7 +177,7 @@ def test_send_notification_sorts_by_deadline_ascending(collector, make_context):
     }
     with mock.patch.object(collector, "fetch_case_detail", side_effect=lambda c: details_by_no[c["detail_no"]]), \
          mock.patch.object(collector, "record_match_history"), \
-         mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[{"email": "a@example.com", "channel": "email", "line_user_id": None}]), \
          mock.patch.object(collector, "send_email_with_unsubscribe") as m_send:
         collector.send_notification(2001, matches, make_context(300000))
 
@@ -185,7 +188,7 @@ def test_send_notification_sorts_by_deadline_ascending(collector, make_context):
 def test_send_notification_full_success(collector, make_context):
     with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
          mock.patch.object(collector, "record_match_history"), \
-         mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[{"email": "a@example.com", "channel": "email", "line_user_id": None}]), \
          mock.patch.object(collector, "send_email_with_unsubscribe", return_value=None):
         fully_sent, had_failure = collector.send_notification(1002, MATCHES, make_context(300000))
 
@@ -198,7 +201,7 @@ def test_send_notification_time_budget_exhausted_is_not_treated_as_failure(colle
     (自己回復動作であり、SES送信失敗とは区別する)。"""
     with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
          mock.patch.object(collector, "record_match_history"), \
-         mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[{"email": "a@example.com", "channel": "email", "line_user_id": None}]), \
          mock.patch.object(collector, "send_email_with_unsubscribe") as m_send:
         # 詳細取得チェック通過(300000)、送信ループ1件目チェックで時間切れ(margin未満)
         fully_sent, had_failure = collector.send_notification(1003, MATCHES, make_context([300000, 10000]))
@@ -224,7 +227,9 @@ def test_lambda_handler_raises_on_send_failure_and_defers_kokoku_no(collector, m
     with mock.patch.object(collector, "fetch", side_effect=fake_fetch), \
          mock.patch.object(collector, "fetch_case_detail", return_value={}), \
          mock.patch.object(collector, "ses") as ses_mock, \
-         mock.patch.object(collector, "get_all_recipients", return_value=["owner@example.com"]):
+         mock.patch.object(collector, "get_all_recipients", return_value=[
+             {"email": "owner@example.com", "channel": "email", "line_user_id": None},
+         ]):
         ses_mock.send_raw_email.side_effect = Exception("SES down")
         try:
             collector.lambda_handler({}, make_context(300000))
@@ -252,7 +257,7 @@ def test_digest_pending_flag_roundtrip(collector):
 def test_send_weekly_digest_pending_uses_period_label(collector):
     """digest_pending解消時に送るメールは「先週は」ではなく「直近の集計期間は」と
     表記すること(月曜以外に送られるため、レビュー2026-07-11)。"""
-    with mock.patch.object(collector, "get_all_recipients", return_value=["a@example.com"]), \
+    with mock.patch.object(collector, "get_all_recipients", return_value=[{"email": "a@example.com", "channel": "email", "line_user_id": None}]), \
          mock.patch.object(collector, "send_email_with_unsubscribe") as m_send:
         collector.send_weekly_digest(3, 10, 2, pending=True)
 
@@ -260,7 +265,7 @@ def test_send_weekly_digest_pending_uses_period_label(collector):
     assert body.startswith("直近の集計期間は")
 
 
-def test_get_active_subscriber_emails_ignores_payment_status_by_default(collector):
+def test_get_active_subscribers_ignores_payment_status_by_default(collector):
     """PAYMENT_REQUIRED_PARAM_NAMEが"false"(デフォルト)の間は、payment_statusに
     関わらずstatus=activeなら通知対象に含める(既存の無料テスト購読者への配信を
     変えないための後方互換、v0.19)。"""
@@ -270,12 +275,12 @@ def test_get_active_subscriber_emails_ignores_payment_status_by_default(collecto
         Item={"email": "paid@example.com", "status": "active", "payment_status": "paid", "registered_at": 1}
     )
 
-    emails = collector.get_active_subscriber_emails()
+    emails = {s["email"] for s in collector.get_active_subscribers()}
 
-    assert set(emails) == {"free@example.com", "paid@example.com"}
+    assert emails == {"free@example.com", "paid@example.com"}
 
 
-def test_get_active_subscriber_emails_requires_paid_when_payment_required(collector):
+def test_get_active_subscribers_requires_paid_when_payment_required(collector):
     """PAYMENT_REQUIRED_PARAM_NAMEを"true"に切り替えると、status=activeでも
     payment_status=paidでない購読者は通知対象から除外される(課金必須化、v0.19)。"""
     ssm = __import__("boto3").client("ssm", region_name="ap-northeast-1")
@@ -288,9 +293,44 @@ def test_get_active_subscriber_emails_requires_paid_when_payment_required(collec
             Item={"email": "paid@example.com", "status": "active", "payment_status": "paid", "registered_at": 1}
         )
 
-        emails = collector.get_active_subscriber_emails()
+        subscribers = collector.get_active_subscribers()
 
-        assert emails == ["paid@example.com"]
+        assert [s["email"] for s in subscribers] == ["paid@example.com"]
     finally:
         ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String", Overwrite=True)
         collector._param_cache.pop("/test/payment-required", None)
+
+
+def test_get_active_subscribers_includes_line_channel_fields(collector):
+    """channel="line"の購読者はline_user_idを含めて返される(v0.28)。
+    channel未設定の旧レコードは後方互換で"email"扱いになること。"""
+    table = collector.dynamodb.Table("test-waitlist")
+    table.put_item(Item={"email": "legacy@example.com", "status": "active", "registered_at": 1})
+    table.put_item(Item={
+        "email": "line-user@example.com", "status": "active", "registered_at": 1,
+        "channel": "line", "line_user_id": "U999",
+    })
+
+    subscribers = {s["email"]: s for s in collector.get_active_subscribers()}
+
+    assert subscribers["legacy@example.com"]["channel"] == "email"
+    assert subscribers["line-user@example.com"]["channel"] == "line"
+    assert subscribers["line-user@example.com"]["line_user_id"] == "U999"
+
+
+def test_send_notification_pushes_line_channel_via_line_api(collector, make_context):
+    """channel="line"の宛先にはSESではなくsend_line_pushで送られる(v0.28)。"""
+    with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
+         mock.patch.object(collector, "record_match_history"), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[
+             {"email": "line-user@example.com", "channel": "line", "line_user_id": "U999"},
+         ]), \
+         mock.patch.object(collector, "send_email_with_unsubscribe") as m_email, \
+         mock.patch.object(collector, "send_line_push") as m_line:
+        fully_sent, had_failure = collector.send_notification(1005, MATCHES, make_context(300000))
+
+    assert fully_sent is True
+    assert had_failure is False
+    assert m_email.call_count == 0
+    assert m_line.call_count == 1
+    assert m_line.call_args.args[0] == "U999"

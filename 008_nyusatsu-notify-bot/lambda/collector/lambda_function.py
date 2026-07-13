@@ -362,36 +362,44 @@ def build_unsubscribe_url(email: str) -> str:
     return f"{base_url}/unsubscribe?email={urllib.parse.quote(normalized_email)}&token={token}"
 
 
-def get_active_subscriber_emails() -> list[str]:
-    """zer0-nyusatsu-lp-waitlistからstatus=active(二重オプトイン確認済み)の
-    購読者メールアドレスを全件取得する。SSMパラメータPAYMENT_REQUIRED_PARAM_NAMEが
-    "true"の場合のみ、payment_status=paid(Stripe決済済み)も条件に加える。デフォルトの
-    "false"では従来通りstatus=activeのみで配信し、既存の無料テスト購読者への配信は
-    変えない(課金必須化はユーザーがこのSSM値を切り替えたタイミングで発効する)。"""
+def get_active_subscribers() -> list[dict]:
+    """zer0-nyusatsu-lp-waitlistからstatus=active(二重オプトイン/LINE連携確認済み)の
+    購読者を全件取得する。SSMパラメータPAYMENT_REQUIRED_PARAM_NAMEが"true"の場合のみ、
+    payment_status=paid(Stripe決済済み)も条件に加える。デフォルトの"false"では従来通り
+    status=activeのみで配信し、既存の無料テスト購読者への配信は変えない(課金必須化は
+    ユーザーがこのSSM値を切り替えたタイミングで発効する)。
+    戻り値は{"email":..., "channel":"email"|"line", "line_user_id":...(channel=lineのみ)}
+    のリスト(v0.28、LINE通知対応でメールアドレスのみのリストから拡張)。"""
     payment_required = get_param(os.environ["PAYMENT_REQUIRED_PARAM_NAME"]).strip().lower() == "true"
     table = dynamodb.Table(os.environ["WAITLIST_TABLE_NAME"])
-    emails: list[str] = []
+    subscribers: list[dict] = []
     filter_expr = Attr("status").eq("active")
     if payment_required:
         filter_expr &= Attr("payment_status").eq("paid")
-    scan_kwargs = {"FilterExpression": filter_expr, "ProjectionExpression": "email"}
+    scan_kwargs = {"FilterExpression": filter_expr, "ProjectionExpression": "email, channel, line_user_id"}
     while True:
         resp = table.scan(**scan_kwargs)
-        emails.extend(item["email"] for item in resp.get("Items", []))
+        for item in resp.get("Items", []):
+            # channel未設定の旧レコードは全て"email"扱い(後方互換)。
+            subscribers.append({
+                "email": item["email"],
+                "channel": item.get("channel", "email"),
+                "line_user_id": item.get("line_user_id"),
+            })
         if "LastEvaluatedKey" not in resp:
             break
         scan_kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
-    return emails
+    return subscribers
 
 
-def get_all_recipients(owner_email: str) -> list[str]:
-    """運用監視用のオーナー宛+実際にactiveな購読者宛を、重複なく返す。"""
-    recipients = [owner_email]
+def get_all_recipients(owner_email: str) -> list[dict]:
+    """運用監視用のオーナー宛(常にメール)+実際にactiveな購読者宛を、重複なく返す。"""
+    recipients = [{"email": owner_email, "channel": "email", "line_user_id": None}]
     seen = {owner_email}
-    for email in get_active_subscriber_emails():
-        if email not in seen:
-            seen.add(email)
-            recipients.append(email)
+    for sub in get_active_subscribers():
+        if sub["email"] not in seen:
+            seen.add(sub["email"])
+            recipients.append(sub)
     return recipients
 
 
@@ -470,6 +478,44 @@ def send_email_with_unsubscribe(sender: str, recipient: str, subject: str, body:
     )
 
 
+LINE_PUSH_API_URL = "https://api.line.me/v2/bot/message/push"
+
+
+def send_line_push(line_user_id: str, text: str) -> None:
+    """LINE Messaging APIでプッシュメッセージを1件送信する(v0.28)。
+    lp_waitlist Lambdaの同名関数と同じ実装(Lambdaごとに独立デプロイのため複製、
+    共有Layerは導入していない現行方針に合わせる)。"""
+    token = get_param(os.environ["LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME"])
+    payload = json.dumps({
+        "to": line_user_id,
+        "messages": [{"type": "text", "text": text[:4900]}],
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        LINE_PUSH_API_URL,
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        if resp.status >= 300:
+            raise RuntimeError(f"LINE push failed: status={resp.status}")
+
+
+def build_line_notification_text(kokoku_no: int, case_details: list[tuple[dict, dict]], detail_url: str) -> str:
+    """LINE通知用のプレーンテキストを組み立てる。LINEはHTML非対応・文字数制約が
+    あるため、メールのカード型HTMLとは別に簡潔な箇条書き形式にする(v0.28)。"""
+    lines = [f"【{SERVICE_NAME}】横浜市 第{kokoku_no}号 対象案件{len(case_details)}件\n"]
+    for c, detail in case_details:
+        days_left = detail.get("days_left")
+        deadline = f"あと{days_left}日" if isinstance(days_left, int) else "締切不明"
+        lines.append(f"・{c.get('title', '')}(締切{deadline})")
+    lines.append(f"\n全案件一覧: {detail_url}")
+    return "\n".join(lines)
+
+
 def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[bool, bool]:
     """通知メールを組み立てて全宛先に送信する。
 
@@ -523,9 +569,11 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
         f"公告第{kokoku_no}号の全案件一覧を見る</a></p>"
     )
     subject = f"【{SERVICE_NAME}】横浜市 第{kokoku_no}号 対象案件{len(matches)}件"
+    line_text = build_line_notification_text(kokoku_no, case_details, detail_url)
 
     # 運用監視用のオーナー宛+実際にactiveな購読者宛の両方に個別送信する(B-1)。
     # BCC一斉送信は使わない(宛先ごとに異なる配信停止トークンを埋め込む必要があるため)。
+    # v0.28: channel="line"の購読者にはSESではなくLINE Messaging APIでプッシュする。
     had_failure = False
     for recipient in get_all_recipients(owner_email):
         if context.get_remaining_time_in_millis() < TIME_BUDGET_MARGIN_MS:
@@ -535,13 +583,16 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
             )
             return False, had_failure
         try:
-            send_email_with_unsubscribe(sender, recipient, subject, body, html_content=html_content)
+            if recipient["channel"] == "line" and recipient.get("line_user_id"):
+                send_line_push(recipient["line_user_id"], line_text)
+            else:
+                send_email_with_unsubscribe(sender, recipient["email"], subject, body, html_content=html_content)
         except Exception:
             # v0.8まではses.send_email失敗がLambda全体を失敗させDLQ/アラームに
             # 繋がっていたが、v0.10の宛先ごとの個別送信でこの安全網が消失していた。
             # ここでは握りつぶさずhad_failureを立て、呼び出し元でLambda呼び出し
             # 自体を失敗させることでリトライ・DLQ・アラームに再度繋げる。
-            logger.error("notification email failed for %s, kokoku_no=%s", recipient, kokoku_no, exc_info=True)
+            logger.error("notification failed for %s, kokoku_no=%s", recipient["email"], kokoku_no, exc_info=True)
             had_failure = True
 
     return not had_failure, had_failure
@@ -618,11 +669,15 @@ def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: i
     # v0.11: 運用監視用のオーナーだけでなく、実際の購読者にも週次サマリーを届ける。
     # 横浜市の入札公告は原則毎週火曜発行のため案件ゼロの週が実測で約半数あり、
     # 「本当に動いているか」という不安を解消するハートビートとして重要(Fable指摘)。
+    # v0.28: channel="line"の購読者にはLINEでも同じハートビートを届ける。
     for recipient in get_all_recipients(owner_email):
         try:
-            send_email_with_unsubscribe(sender, recipient, f"【{SERVICE_NAME}】週次稼働レポート", body)
+            if recipient["channel"] == "line" and recipient.get("line_user_id"):
+                send_line_push(recipient["line_user_id"], f"【{SERVICE_NAME}】週次稼働レポート\n\n{body}")
+            else:
+                send_email_with_unsubscribe(sender, recipient["email"], f"【{SERVICE_NAME}】週次稼働レポート", body)
         except Exception:
-            logger.warning("weekly digest failed for %s", recipient, exc_info=True)
+            logger.warning("weekly digest failed for %s", recipient["email"], exc_info=True)
 
 
 def lambda_handler(event, context):

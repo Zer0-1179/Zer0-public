@@ -2,6 +2,10 @@
 DynamoDBはmoto、SES送信はモックする(実メールは送らない)。
 2026-07-10のFableレビュー修正(v0.13)の回帰テストを兼ねる。
 """
+import base64
+import hashlib
+import hmac
+import json
 from unittest import mock
 
 from conftest import fake_event
@@ -145,3 +149,117 @@ def test_register_blocked_for_bounce_suppressed_address(lp_waitlist, bounce_hand
     assert m_confirm.call_count == 0
     item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "victim@example.com"}).get("Item")
     assert item["status"] == "unsubscribed"
+
+
+# ── LINE通知(v0.28) ─────────────────────────────────────────────
+
+def test_register_line_channel_returns_liff_url_without_email(lp_waitlist):
+    """channel=lineの登録は確認メールを送らず、line-link用トークン付きLIFF URLを返す。"""
+    with mock.patch.object(lp_waitlist, "send_confirmation_email") as m_confirm:
+        resp = lp_waitlist.handle_register(
+            fake_event("/register", "POST", {"email": "line-user@example.com", "channel": "line"})
+        )
+    assert resp["statusCode"] == 200
+    assert m_confirm.call_count == 0
+    body = json.loads(resp["body"])
+    assert body["status"] == "line_pending"
+    assert "liff.line.me" in body["liff_url"]
+    assert "email=line-user%40example.com" in body["liff_url"]
+    item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "line-user@example.com"}).get("Item")
+    assert item["status"] == "pending"
+    assert item["channel"] == "line"
+
+
+def test_line_link_activates_and_sends_welcome_push(lp_waitlist):
+    """LIFFページからの正しいトークンでline_user_idが紐付きactive化され、
+    ウェルカムプッシュとオーナー通知が送られる。"""
+    with mock.patch.object(lp_waitlist, "send_confirmation_email"):
+        lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "line-user@example.com", "channel": "line"}))
+    token = lp_waitlist.make_token("line-user@example.com", "line_link")
+
+    with mock.patch.object(lp_waitlist, "send_line_push") as m_push, \
+         mock.patch.object(lp_waitlist, "notify_owner_confirmed") as m_owner:
+        resp = lp_waitlist.handle_line_link(fake_event("/line/link", "POST", {
+            "email": "line-user@example.com", "token": token, "line_user_id": "U1234567890",
+        }))
+
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["status"] == "linked"
+    item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "line-user@example.com"}).get("Item")
+    assert item["status"] == "active"
+    assert item["channel"] == "line"
+    assert item["line_user_id"] == "U1234567890"
+    assert m_push.call_count == 1
+    assert m_owner.call_count == 1
+
+
+def test_line_link_rejects_invalid_token(lp_waitlist):
+    with mock.patch.object(lp_waitlist, "send_confirmation_email"):
+        lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "line-user@example.com", "channel": "line"}))
+
+    resp = lp_waitlist.handle_line_link(fake_event("/line/link", "POST", {
+        "email": "line-user@example.com", "token": "invalid-token", "line_user_id": "U1234567890",
+    }))
+    assert resp["statusCode"] == 400
+    item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "line-user@example.com"}).get("Item")
+    assert item["status"] == "pending"
+
+
+def test_line_link_does_not_reactivate_unsubscribed(lp_waitlist):
+    """handle_confirmと同じ方針: 配信停止済みアドレスはLIFF連携でも復活しない。"""
+    with mock.patch.object(lp_waitlist, "send_confirmation_email"):
+        lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "line-user@example.com", "channel": "line"}))
+    token = lp_waitlist.make_token("line-user@example.com", "line_link")
+    lp_waitlist.dynamodb.Table("test-waitlist").update_item(
+        Key={"email": "line-user@example.com"},
+        UpdateExpression="SET #s = :u",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={":u": "unsubscribed"},
+    )
+
+    with mock.patch.object(lp_waitlist, "send_line_push") as m_push:
+        resp = lp_waitlist.handle_line_link(fake_event("/line/link", "POST", {
+            "email": "line-user@example.com", "token": token, "line_user_id": "U1234567890",
+        }))
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["status"] == "unsubscribed"
+    assert m_push.call_count == 0
+
+
+def test_line_webhook_verifies_signature(lp_waitlist):
+    body = json.dumps({"events": []})
+    bad_resp = lp_waitlist.handle_line_webhook(fake_event(
+        "/line/webhook", "POST", headers={"x-line-signature": "wrong"}, raw_body=body,
+    ))
+    assert bad_resp["statusCode"] == 400
+
+    good_sig = base64.b64encode(
+        hmac.new(b"test-line-channel-secret", body.encode(), hashlib.sha256).digest()
+    ).decode()
+    good_resp = lp_waitlist.handle_line_webhook(fake_event(
+        "/line/webhook", "POST", headers={"x-line-signature": good_sig}, raw_body=body,
+    ))
+    assert good_resp["statusCode"] == 200
+
+
+def test_line_webhook_unfollow_unsubscribes_matching_user(lp_waitlist):
+    """unfollowイベントを受けたline_user_idの購読者がunsubscribed化される。"""
+    with mock.patch.object(lp_waitlist, "send_confirmation_email"):
+        lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "line-user@example.com", "channel": "line"}))
+    token = lp_waitlist.make_token("line-user@example.com", "line_link")
+    with mock.patch.object(lp_waitlist, "send_line_push"), mock.patch.object(lp_waitlist, "notify_owner_confirmed"):
+        lp_waitlist.handle_line_link(fake_event("/line/link", "POST", {
+            "email": "line-user@example.com", "token": token, "line_user_id": "U1234567890",
+        }))
+
+    body = json.dumps({"events": [{"type": "unfollow", "source": {"userId": "U1234567890"}}]})
+    sig = base64.b64encode(
+        hmac.new(b"test-line-channel-secret", body.encode(), hashlib.sha256).digest()
+    ).decode()
+    resp = lp_waitlist.handle_line_webhook(fake_event(
+        "/line/webhook", "POST", headers={"x-line-signature": sig}, raw_body=body,
+    ))
+    assert resp["statusCode"] == 200
+    item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "line-user@example.com"}).get("Item")
+    assert item["status"] == "unsubscribed"
+    assert item["unsubscribed_reason"] == "line_block"

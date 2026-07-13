@@ -28,6 +28,9 @@ os.environ.setdefault("SES_CONFIGURATION_SET_NAME", "test-config-set")
 os.environ.setdefault("FORWARD_FROM_ADDRESS", "relay@example.com")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET_PARAM_NAME", "/test/stripe-webhook-secret")
 os.environ.setdefault("PAYMENT_REQUIRED_PARAM_NAME", "/test/payment-required")
+os.environ.setdefault("LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME", "/test/line-channel-access-token")
+os.environ.setdefault("LINE_CHANNEL_SECRET_PARAM_NAME", "/test/line-channel-secret")
+os.environ.setdefault("LINE_LIFF_ID_PARAM_NAME", "/test/line-liff-id")
 
 
 def _load_module(name: str, path: str):
@@ -81,6 +84,9 @@ _ssm.put_parameter(Name="/test/unsubscribe-base-url", Value="https://example.com
 _ssm.put_parameter(Name="/test/keywords", Value="清掃,美化", Type="String")
 _ssm.put_parameter(Name="/test/stripe-webhook-secret", Value="whsec_test_secret", Type="String")
 _ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String")
+_ssm.put_parameter(Name="/test/line-channel-access-token", Value="test-line-access-token", Type="SecureString")
+_ssm.put_parameter(Name="/test/line-channel-secret", Value="test-line-channel-secret", Type="SecureString")
+_ssm.put_parameter(Name="/test/line-liff-id", Value="1234567890-abcdefgh", Type="String")
 
 _collector = _load_module(
     "collector_lambda_function", os.path.join(ROOT, "lambda", "collector", "lambda_function.py")
@@ -168,9 +174,15 @@ def make_context():
     return _make
 
 
-def fake_event(path, method, body=None, query=None):
-    """API Gateway(HTTP API v2)形式の疑似イベントを組み立てるヘルパー。"""
+def fake_event(path, method, body=None, query=None, headers=None, raw_body=None):
+    """API Gateway(HTTP API v2)形式の疑似イベントを組み立てるヘルパー。
+    raw_bodyを渡すとbody(dict)のJSON化より優先する(LINE Webhook署名検証のように
+    生のリクエストボディ文字列がそのまま必要なテスト向け)。"""
     import json as _json
+    if raw_body is not None:
+        body_str = raw_body
+    else:
+        body_str = _json.dumps(body) if body is not None else None
     return {
         "requestContext": {
             "http": {"method": method, "sourceIp": "1.2.3.4", "path": path},
@@ -178,5 +190,6 @@ def fake_event(path, method, body=None, query=None):
         },
         "rawPath": path,
         "queryStringParameters": query or {},
-        "body": _json.dumps(body) if body is not None else None,
+        "headers": headers or {},
+        "body": body_str,
     }

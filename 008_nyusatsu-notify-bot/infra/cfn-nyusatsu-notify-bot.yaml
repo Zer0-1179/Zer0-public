@@ -408,6 +408,7 @@ Resources:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacSecretParameter}
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/unsubscribe-base-url
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PaymentRequiredParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/line-channel-access-token
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -443,6 +444,7 @@ Resources:
           SES_CONFIGURATION_SET_NAME: !Ref SesConfigurationSet
           MATCH_HISTORY_TABLE_NAME: !Ref MatchHistoryTable
           PAYMENT_REQUIRED_PARAM_NAME: !Ref PaymentRequiredParameter
+          LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME: /zer0/008-nyusatsu/line-channel-access-token
       Code:
         ZipFile: |
           def lambda_handler(event, context):
