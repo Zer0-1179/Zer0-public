@@ -265,34 +265,43 @@ def test_line_webhook_unfollow_unsubscribes_matching_user(lp_waitlist):
     assert item["unsubscribed_reason"] == "line_block"
 
 
-def test_register_line_channel_for_already_active_email_returns_liff_url(lp_waitlist):
-    """バグ修正確認(2026-07-13発覚): 既にstatus=activeなメールアドレスがchannel=line
-    で再登録した場合も、新規登録時と同じline_pending+liff_urlを返すこと。
-    以前はactive早期リターンがchannelを見ずに一律"registered"を返しており、
-    既存のメール購読者がLINEへ切り替えられなかった。"""
+def test_register_line_channel_for_already_active_email_sends_link_via_email(lp_waitlist):
+    """乗っ取り脆弱性の修正確認(2026-07-14発覚): 既にstatus=activeなメールアドレスが
+    channel=lineで再登録した場合、liff_urlはAPIレスポンスに含めず登録済みメール
+    アドレス宛にのみ送る。第三者がメールアドレスを知っているだけでLINEチャネルへ
+    無断で切り替えられないようにするため(以前はレスポンスでliff_urlを直接返して
+    おり、対象アドレスのメールを読めない第三者でも連携を完了できてしまっていた)。"""
     with mock.patch.object(lp_waitlist, "send_confirmation_email"):
         lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "existing@example.com"}))
     token = lp_waitlist.make_token("existing@example.com", "confirm")
     with mock.patch.object(lp_waitlist, "send_welcome_email"), mock.patch.object(lp_waitlist, "notify_owner_confirmed"):
         lp_waitlist.handle_confirm(fake_event("/confirm", "GET", query={"email": "existing@example.com", "token": token}))
 
-    resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "existing@example.com", "channel": "line"}))
+    with mock.patch.object(lp_waitlist, "send_line_link_email") as m_email:
+        resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "existing@example.com", "channel": "line"}))
     assert resp["statusCode"] == 200
     body = json.loads(resp["body"])
     assert body["status"] == "line_pending"
-    assert "liff.line.me" in body["liff_url"]
+    assert "liff_url" not in body
+    assert m_email.call_count == 1
+    assert m_email.call_args.args[0] == "existing@example.com"
+    assert "liff.line.me" in m_email.call_args.args[1]
 
 
-def test_register_line_channel_for_bounce_suppressed_email_returns_liff_url_but_blocked_at_link(lp_waitlist, bounce_handler):
+def test_register_line_channel_for_bounce_suppressed_email_sends_link_via_email_but_blocked_at_link(lp_waitlist, bounce_handler):
     """バウンス抑制済みアドレスでもchannel=lineは同じ形のレスポンスを返す
-    (判別不能性の維持)が、実際のLIFF連携(handle_line_link)では復活しない。"""
+    (判別不能性の維持)が、liff_urlはメール経由でのみ届き、実際のLIFF連携
+    (handle_line_link)では復活しない。"""
     with mock.patch.object(lp_waitlist, "send_confirmation_email"):
         lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "suppressed@example.com"}))
     bounce_handler.mark_unsubscribed("suppressed@example.com", reason="bounce")
 
-    resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "suppressed@example.com", "channel": "line"}))
+    with mock.patch.object(lp_waitlist, "send_line_link_email") as m_email:
+        resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "suppressed@example.com", "channel": "line"}))
     body = json.loads(resp["body"])
     assert body["status"] == "line_pending"
+    assert "liff_url" not in body
+    assert m_email.call_count == 1
 
     token = lp_waitlist.make_token("suppressed@example.com", "line_link")
     link_resp = lp_waitlist.handle_line_link(fake_event("/line/link", "POST", {
@@ -301,3 +310,20 @@ def test_register_line_channel_for_bounce_suppressed_email_returns_liff_url_but_
     assert json.loads(link_resp["body"])["status"] == "unsubscribed"
     item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "suppressed@example.com"}).get("Item")
     assert item["status"] == "unsubscribed"
+
+
+def test_register_line_channel_for_pending_email_sends_link_via_email(lp_waitlist):
+    """乗っ取り脆弱性の修正確認: メールで登録済み(未確認=pending)のアドレスが
+    channel=lineで再登録された場合も、liff_urlはメール経由でのみ届く(直接
+    レスポンスには含めない)。真に新規のメールアドレス(record_existed=False)との
+    分岐を確認する回帰テスト。"""
+    with mock.patch.object(lp_waitlist, "send_confirmation_email"):
+        lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "pending-user@example.com"}))
+
+    with mock.patch.object(lp_waitlist, "send_line_link_email") as m_email:
+        resp = lp_waitlist.handle_register(fake_event("/register", "POST", {"email": "pending-user@example.com", "channel": "line"}))
+    body = json.loads(resp["body"])
+    assert body["status"] == "line_pending"
+    assert "liff_url" not in body
+    assert m_email.call_count == 1
+    assert m_email.call_args.args[0] == "pending-user@example.com"

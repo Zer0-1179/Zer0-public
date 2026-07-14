@@ -882,6 +882,10 @@
           msg.classList.add('ok');
           msg.textContent = 'LINEの友だち追加画面に移動します...';
           window.location.href = data.liff_url;
+        } else if (res.ok && data.status === 'line_pending') {
+          msg.classList.add('ok');
+          msg.textContent = 'ご案内をメールでお送りしました。メール内のリンクをLINEアプリで開いて連携を完了してください。';
+          form.reset();
         } else if (res.ok && data.status === 'registered') {
           msg.classList.add('ok');
           msg.textContent = '確認メールをお送りしました。メール内のリンクをクリックして登録を完了してください。';
