@@ -510,8 +510,8 @@ def build_line_notification_text(kokoku_no: int, case_details: list[tuple[dict, 
     lines = [f"【{SERVICE_NAME}】横浜市 第{kokoku_no}号 対象案件{len(case_details)}件\n"]
     for c, detail in case_details:
         days_left = detail.get("days_left")
-        deadline = f"あと{days_left}日" if isinstance(days_left, int) else "締切不明"
-        lines.append(f"・{c.get('title', '')}(締切{deadline})")
+        deadline = f"締切あと{days_left}日" if isinstance(days_left, int) else "締切不明"
+        lines.append(f"・{c.get('title', '')}({deadline})")
     lines.append(f"\n全案件一覧: {detail_url}")
     return "\n".join(lines)
 

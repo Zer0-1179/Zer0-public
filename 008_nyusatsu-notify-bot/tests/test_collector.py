@@ -334,3 +334,16 @@ def test_send_notification_pushes_line_channel_via_line_api(collector, make_cont
     assert m_email.call_count == 0
     assert m_line.call_count == 1
     assert m_line.call_args.args[0] == "U999"
+
+
+def test_build_line_notification_text_deadline_unknown_not_duplicated(collector):
+    """days_leftが取れない案件で「締切締切不明」のような重複表示にならないこと
+    (2026-07-14 実機テストで発覚したバグの再発防止)。"""
+    text = collector.build_line_notification_text(
+        kokoku_no=1,
+        case_details=[({"title": "A"}, {"days_left": 3}), ({"title": "B"}, {"days_left": None})],
+        detail_url="https://example.com",
+    )
+    assert "A(締切あと3日)" in text
+    assert "B(締切不明)" in text
+    assert "締切締切" not in text
