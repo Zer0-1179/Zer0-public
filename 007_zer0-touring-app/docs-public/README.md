@@ -9,20 +9,20 @@
 
 ## 概要
 
-| 項目         | 内容                                                                                                                                    |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| URL          | `https://touring.zer0-infra.com`                                                                                                        |
-| 出発地取得   | 現在地（ブラウザ Geolocation API）または手動入力（Nominatim ジオコーディング）                                                          |
-| 天気取得     | Open-Meteo API（現在地・目的地の両方／無料・APIキー不要）                                                                               |
-| AI提案       | Amazon Bedrock Claude Haiku（好みタグ反映・片道/往復時間・帰路・特徴タグ含む詳細コース生成）                                            |
-| コース内容   | 近距離・中距離・長距離 + タグ・立ち寄りスポット（経路順）・帰路提案                                                                     |
-| 距離・時間   | **Google Maps Directions API（優先）** / OSRM（フォールバック）による実道路距離・走行時間                                               |
-| 天気比較     | 詳細画面に現在地 🏍️→ 目的地の天気比較ウィジェット（バイク走行アニメーション付き）                                                       |
-| 週間天気     | 現在地・目的地の7日間天気予報ストリップ（狙い目日ハイライト）                                                                           |
-| シェア       | Xシェア・URL短縮コピー（`POST /api/share` → `https://touring.zer0-infra.com/s/abc123`。OGP対応でSNS展開時にコース情報プレビューを表示） |
-| ナビ         | Googleマップ連携（立ち寄りスポット含む / 全デバイス統一 Google Maps URL）                                                               |
-| ホスティング | CloudFront + S3（PWA / Service Worker 対応）                                                                                            |
-| 月額コスト   | ~$0.40（100回利用想定）/ 1回 ~$0.005（約0.7円）                                                                                         |
+| 項目 | 内容 |
+| --- | --- |
+| URL | `https://touring.zer0-infra.com` |
+| 出発地取得 | 現在地（ブラウザ Geolocation API）または手動入力（Nominatim ジオコーディング） |
+| 天気取得 | Open-Meteo API（現在地・目的地の両方／無料・APIキー不要） |
+| AI提案 | Amazon Bedrock Claude Haiku（好みタグ反映・片道/往復時間・帰路・特徴タグ含む詳細コース生成） |
+| コース内容 | 近距離・中距離・長距離 + タグ・立ち寄りスポット（経路順）・帰路提案 |
+| 距離・時間 | **Google Maps Directions API（優先）** / OSRM（フォールバック）による実道路距離・走行時間 |
+| 天気比較 | 詳細画面に現在地 🏍️→ 目的地の天気比較ウィジェット（バイク走行アニメーション付き） |
+| 週間天気 | 現在地・目的地の7日間天気予報ストリップ（狙い目日ハイライト） |
+| シェア | Xシェア・URL短縮コピー（`POST /api/share` → `https://touring.zer0-infra.com/s/abc123`。OGP対応でSNS展開時にコース情報プレビューを表示） |
+| ナビ | Googleマップ連携（立ち寄りスポット含む / 全デバイス統一 Google Maps URL） |
+| ホスティング | CloudFront + S3（PWA / Service Worker 対応） |
+| 月額コスト | ~$0.40（100回利用想定）/ 1回 ~$0.005（約0.7円） |
 
 ## アーキテクチャ
 
@@ -44,21 +44,21 @@
 
 ## 技術スタック
 
-| レイヤー       | 技術                                                                                                            |
-| -------------- | --------------------------------------------------------------------------------------------------------------- |
-| フロントエンド | Astro（`output: 'static'`）+ PWA（Web Manifest + Service Worker）                                               |
-| 現在地取得     | ブラウザ Geolocation API                                                                                        |
-| 天気取得       | Open-Meteo API（現在地・目的地・7日間予報 / 無料・APIキー不要）                                                 |
-| AI提案         | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048）        |
+| レイヤー | 技術 |
+| --- | --- |
+| フロントエンド | Astro（`output: 'static'`）+ PWA（Web Manifest + Service Worker） |
+| 現在地取得 | ブラウザ Geolocation API |
+| 天気取得 | Open-Meteo API（現在地・目的地・7日間予報 / 無料・APIキー不要） |
+| AI提案 | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048） |
 | 距離・走行時間 | **Google Maps Directions API**（優先・月10,000件無料） + Nominatim（OSM ジオコーディング）→ OSRM フォールバック |
-| API            | AWS Lambda（Python 3.14）+ API Gateway HTTP API                                                                 |
-| 使用数管理     | Amazon DynamoDB（`zer0-touring-ratelimit` / `gmaps#{YYYY-MM}` キーで月間 Google Maps 使用数をアトミック管理）   |
-| レートリミット | Amazon DynamoDB（`zer0-touring-ratelimit`：IP 別・日別 3回制限 / TTL で翌々日自動削除）                         |
-| URL短縮・OGP   | Amazon DynamoDB（`zer0-touring-share`：6文字ID・30日 TTL / Lambda が OGP HTML + リダイレクトを返す）            |
-| 使用回数UI     | GET /api/status でトップ画面にドット形式の残回数バッジを表示（管理者モード対応）                                |
-| ホスティング   | Amazon CloudFront + S3（OAC 署名付きアクセス）                                                                  |
-| 写真（詳細）   | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）/ 失敗時はグラデーション+🏍️                             |
-| IaC            | CloudFormation（2スタック: メイン + ACM 証明書）                                                                |
+| API | AWS Lambda（Python 3.14）+ API Gateway HTTP API |
+| 使用数管理 | Amazon DynamoDB（`zer0-touring-ratelimit` / `gmaps#{YYYY-MM}` キーで月間 Google Maps 使用数をアトミック管理） |
+| レートリミット | Amazon DynamoDB（`zer0-touring-ratelimit`：IP 別・日別 3回制限 / TTL で翌々日自動削除） |
+| URL短縮・OGP | Amazon DynamoDB（`zer0-touring-share`：6文字ID・30日 TTL / Lambda が OGP HTML + リダイレクトを返す） |
+| 使用回数UI | GET /api/status でトップ画面にドット形式の残回数バッジを表示（管理者モード対応） |
+| ホスティング | Amazon CloudFront + S3（OAC 署名付きアクセス） |
+| 写真（詳細） | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）/ 失敗時はグラデーション+🏍️ |
+| IaC | CloudFormation（2スタック: メイン + ACM 証明書） |
 
 ## UI フロー
 
@@ -370,15 +370,27 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 ## トラブルシューティング
 
-| 症状                             | 原因                             | 対処                                                                 |
-| -------------------------------- | -------------------------------- | -------------------------------------------------------------------- |
-| コース提案が返らない             | Bedrock モデルアクセス未承認     | AWS Console → Bedrock → モデルアクセスで Claude Haiku 4.5 を有効化   |
-| Google Maps の時間が表示されない | API キー未設定 or 枠超過         | Lambda 環境変数 `GOOGLE_MAPS_API_KEY` を確認。超過時は翌月自動復帰   |
-| 1日3回制限に引っかかる（開発中） | IP レートリミット                | `X-Admin-Token` ヘッダーを付けてリクエスト                           |
-| GPS が取得できない（モバイル）   | HTTP 環境 or 権限拒否            | HTTPS（touring.zer0-infra.com）でアクセス。ブラウザの位置情報を許可  |
-| シェアURLが機能しない            | DynamoDB TTL 30日超過            | 再度コース提案 → シェアボタンから新しいURLを生成                     |
-| CloudFront のキャッシュが古い    | デプロイ後のキャッシュ残留       | `aws cloudfront create-invalidation ... --paths "/*"` で手動クリア   |
-| 立ち寄りスポットの座標がずれる   | Nominatim ジオコーディング誤認識 | CloudWatch Logs でスポット名と座標を確認。日本語正式名称に変更       |
+- **コース提案が返らない**
+  - 原因: Bedrock モデルアクセス未承認
+  - 対処: AWS Console → Bedrock → モデルアクセスで Claude Haiku 4.5 を有効化
+- **Google Maps の時間が表示されない**
+  - 原因: API キー未設定 or 枠超過
+  - 対処: Lambda 環境変数 `GOOGLE_MAPS_API_KEY` を確認。超過時は翌月自動復帰
+- **1日3回制限に引っかかる（開発中）**
+  - 原因: IP レートリミット
+  - 対処: `X-Admin-Token` ヘッダーを付けてリクエスト
+- **GPS が取得できない（モバイル）**
+  - 原因: HTTP 環境 or 権限拒否
+  - 対処: HTTPS（touring.zer0-infra.com）でアクセス。ブラウザの位置情報を許可
+- **シェアURLが機能しない**
+  - 原因: DynamoDB TTL 30日超過
+  - 対処: 再度コース提案 → シェアボタンから新しいURLを生成
+- **CloudFront のキャッシュが古い**
+  - 原因: デプロイ後のキャッシュ残留
+  - 対処: `aws cloudfront create-invalidation ... --paths "/*"` で手動クリア
+- **立ち寄りスポットの座標がずれる**
+  - 原因: Nominatim ジオコーディング誤認識
+  - 対処: CloudWatch Logs でスポット名と座標を確認。日本語正式名称に変更
 
 ## コスト内訳
 
