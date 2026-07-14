@@ -442,14 +442,69 @@ def send_welcome_email(email: str, sender: str, unsubscribe_url: str) -> None:
     )
 
 
-def _line_pending_response(email: str) -> dict:
-    """channel="line"登録に対して返すLIFF連携URL付きレスポンスを組み立てる。
-    新規登録・既にactive/pending/unsubscribed(user)ないずれの状態からでも同じ形の
-    レスポンスを返すことで、第三者が既存の登録状況を推測できないようにする
-    (handle_registerの複数の分岐から呼ばれる、v0.28で発覚したバグの修正)。"""
+def send_line_link_email(email: str, liff_url: str, sender: str) -> None:
+    """既存の登録済みメールアドレスへ、LINE連携用のLIFF URLをメールで送る。
+    第三者が対象アドレスを知っているだけでLINEチャネルへ勝手に切り替えられない
+    よう、URLをAPIレスポンスで直接返さずメール本文でのみ届ける(メール所有の
+    確認を挟む。実機レビューで発覚した乗っ取り脆弱性の修正、2026-07-14)。"""
+    text_body = (
+        f"「{SERVICE_NAME}」のLINE通知への切り替えリクエストを受け付けました。\n\n"
+        f"対象メールアドレス: {email}\n\n"
+        "以下のリンクをLINEアプリで開くと連携が完了します。開くまで切り替えは反映されず、"
+        "現在の通知方法のまま届きます。\n\n"
+        f"{liff_url}\n\n"
+        "----\n"
+        "心当たりのない場合は、このメールを破棄してください。リンクを開かない限り、"
+        "通知方法は変更されません。"
+    )
+    content_html = (
+        f"<p style=\"margin:0 0 16px;\">「{SERVICE_NAME}」のLINE通知への切り替え"
+        "リクエストを受け付けました。</p>"
+        f"<p style=\"margin:0 0 20px;\">対象メールアドレス: {html.escape(email)}</p>"
+        "<div style=\"margin:0 0 12px;\">"
+        f"<a href=\"{html.escape(liff_url)}\" style=\"display:inline-block;"
+        "padding:12px 28px;background-color:#06c755;color:#ffffff;font-size:15px;"
+        "font-weight:bold;text-decoration:none;border-radius:6px;\">LINEで連携する</a></div>"
+        "<p style=\"margin:0;font-size:13px;color:#666666;\">"
+        "リンクを開くまで通知方法は変更されません。心当たりのない場合は破棄してください。</p>"
+    )
+    footer_html = (
+        "心当たりのない場合は、このメールを破棄してください。リンクを開かない限り、"
+        "通知方法は変更されません。"
+    )
+    html_body = _wrap_html_email(content_html, footer_html)
+    msg = EmailMessage()
+    msg["From"] = _from_address(sender)
+    msg["To"] = email
+    msg["Subject"] = f"【{SERVICE_NAME}】LINE通知への切り替えについて"
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+    ses.send_raw_email(
+        Source=sender,
+        Destinations=[email],
+        RawMessage={"Data": msg.as_bytes()},
+        ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
+    )
+
+
+def _line_pending_response(email: str, via_email: bool = False) -> dict:
+    """channel="line"登録に対して返すレスポンスを組み立てる。
+    新規登録(via_email=False)はLIFF連携URLをレスポンスに含めて即座に案内する
+    (メール所有の検証は不要、乗っ取れる既存の購読が存在しないため)。
+    既存アドレス(via_email=True、active/pending/unsubscribed)へのチャネル切替は
+    URLをレスポンスに含めず登録済みメールアドレス宛に送る。第三者が対象アドレスを
+    知っているだけで無断でLINEチャネルに切り替えられる乗っ取りを防ぐため
+    (handle_registerの複数の分岐から呼ばれる、2026-07-14修正)。"""
     token = make_token(email, "line_link")
     liff_id = _get_param(LINE_LIFF_ID_PARAM_NAME)
     liff_url = f"https://liff.line.me/{liff_id}?token={urllib.parse.quote(token)}&email={urllib.parse.quote(email)}"
+    if via_email:
+        try:
+            sender_email = _get_param(SES_SENDER_PARAM_NAME)
+            send_line_link_email(email, liff_url, sender_email)
+        except Exception:
+            logger.warning("line link email failed for %s", email, exc_info=True)
+        return _json_response(200, {"status": "line_pending"})
     return _json_response(200, {"status": "line_pending", "liff_url": liff_url})
 
 
@@ -478,6 +533,10 @@ def handle_register(event):
     source_ip = event.get("requestContext", {}).get("http", {}).get("sourceIp", "")
     table = dynamodb.Table(TABLE_NAME)
     now_ts = int(time.time())
+    # 既存レコードが見つかった(=真に新規登録ではない)かどうか。channel="line"の
+    # レスポンス方式(URLを直接返すか、メール経由にするか)の判断に使う
+    # (乗っ取り脆弱性の修正、2026-07-14)。
+    record_existed = False
     try:
         table.put_item(
             Item={
@@ -493,6 +552,7 @@ def handle_register(event):
     except ClientError as e:
         if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
+        record_existed = True
         existing = table.get_item(Key={"email": email}).get("Item", {})
         status = existing.get("status")
 
@@ -506,7 +566,7 @@ def handle_register(event):
             # おり、既存購読者がLINEへの切替をリクエストしてもliff_urlが発行
             # されず何も起きなかった)。
             if channel == "line":
-                return _line_pending_response(email)
+                return _line_pending_response(email, via_email=True)
             return _json_response(200, {"status": "registered"})
 
         if status == "unsubscribed" and existing.get("unsubscribed_reason") in ("bounce", "complaint"):
@@ -520,7 +580,7 @@ def handle_register(event):
                 email, existing.get("unsubscribed_reason"),
             )
             if channel == "line":
-                return _line_pending_response(email)
+                return _line_pending_response(email, via_email=True)
             return _json_response(200, {"status": "registered"})
 
         # status は "pending"(確認メール未クリック) または "unsubscribed"(reason="user"
@@ -544,10 +604,12 @@ def handle_register(event):
         )
 
     if channel == "line":
-        # LINEは友だち追加(LIFF連携)そのものが本人確認になるため、メールでの
-        # 二重オプトインは行わずLIFF連携URLを返す。実際の紐付けはhandle_line_linkで
-        # 行う(v0.28)。
-        return _line_pending_response(email)
+        # LINEは友だち追加(LIFF連携)そのものが本人確認になるため、真に新規の
+        # アドレス(record_existed=False)はメールでの二重オプトインを行わずLIFF連携
+        # URLを直接返す。既存レコード(pending/unsubscribed(user)からの再登録)は
+        # 第三者が対象アドレスを知っているだけで乗っ取れないよう、メール経由に
+        # する(2026-07-14修正)。実際の紐付けはhandle_line_linkで行う(v0.28)。
+        return _line_pending_response(email, via_email=record_existed)
 
     # 登録(DynamoDB書き込み)は既に成功しているため、確認メール送信が失敗しても
     # 利用者にはエラーを返さない(再送すればよいだけで実害はない)。
