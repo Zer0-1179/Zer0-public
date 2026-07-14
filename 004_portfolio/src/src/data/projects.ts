@@ -224,6 +224,36 @@ export const projects: Project[] = [
     featured: true,
     monthlyCost: '~$0.40',
   },
+  {
+    slug: 'bid-watch',
+    number: '008',
+    nameJa: '入札情報ウォッチ',
+    nameEn: 'Bid Info Watch',
+    descJa: '横浜市の入札公告を自動収集し、清掃・ビルメンテナンス業向けにメール/LINEで通知するサブスクサービス。二重オプトイン・バウンス対応・Stripe決済連携まで実装したテスト運用中のサービス。',
+    descEn: 'Auto-collects Yokohama city bid announcements and notifies cleaning/building-maintenance businesses via email/LINE. Subscription service with double opt-in, bounce handling, and Stripe billing, currently in pilot operation.',
+    longDescJa: '横浜市の入札サイトを日次巡回し、清掃・ビルメンテナンス関連キーワード(11語)にマッチした案件を対象業種の購読者へメールまたはLINEで通知。二重オプトイン・ワンクリック配信停止・SESバウンス/苦情の自動配信停止・honeypotでメール到達性と法令対応を確保。LINE通知はLIFF連携で友だち追加とアカウント連携を1画面完結させ、ブロック時はWebhookで自動配信停止。Stripe Webhookで決済状態と購読者情報を突合し、特定商取引法に基づく表記・利用規約ページも整備。個人運営のパイロットサービスとして横浜市単体で実証実験中。',
+    longDescEn: 'Daily crawler scans Yokohama city bid announcements, matches 11 cleaning/building-maintenance keywords, and notifies subscribers via email or LINE. Double opt-in, one-click unsubscribe, automatic unsubscribe on SES bounce/complaint, and a honeypot field ensure deliverability and compliance. LINE notifications use a LIFF flow that combines friend-add and account linking in one screen, with webhook-driven auto-unsubscribe on block. Stripe webhooks reconcile payment status with subscriber records, and the site includes required Japanese commercial-transaction-law disclosures. Solo-run pilot service currently validating demand in Yokohama city alone.',
+    pointsJa: [
+      '二重オプトイン・ワンクリック配信停止・SESバウンス/苦情の自動配信停止で法令対応と到達性を両立',
+      'LINE通知をメールと並列の選択肢として追加。LIFFで友だち追加とアカウント連携を1画面完結、ブロック時はWebhookで自動配信停止',
+      'Stripe Webhookで決済完了/解約イベントを自前HMAC署名検証し、課金者と購読者情報を自動突合',
+      'Fableによる複数回のコードレビュー(高中低16件)・市場調査を踏まえ、特定商取引法の表記や配信停止導線などの法令対応を実装',
+    ],
+    pointsEn: [
+      'Double opt-in, one-click unsubscribe, and automatic unsubscribe on SES bounce/complaint balance compliance and deliverability',
+      'Added LINE as a parallel notification channel; a LIFF flow combines friend-add and account linking in one screen, with webhook-driven auto-unsubscribe on block',
+      'Stripe webhooks with self-verified HMAC signatures reconcile checkout/cancellation events against subscriber records automatically',
+      'Multiple rounds of AI-assisted code review and market research informed legal compliance (commercial transaction disclosures, unsubscribe flows)',
+    ],
+    architecture: '/images/008_architecture.png',
+    githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/008_nyusatsu-notify-bot',
+    siteUrl: 'https://nyusatsu.zer0-infra.com',
+    tags: ['Subscription', 'LINE API', 'Stripe', 'SES'],
+    services: ['Lambda', 'API Gateway', 'DynamoDB', 'SES', 'CloudFront', 'S3', 'CloudFormation'],
+    emoji: '📋',
+    featured: false,
+    monthlyCost: '~$0.5',
+  },
 ];
 
 export function getProjectBySlug(slug: string) {
