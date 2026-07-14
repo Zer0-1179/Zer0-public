@@ -57,6 +57,13 @@ def payment_failed_event(customer="cus_123", next_payment_attempt=None, **kwargs
     )
 
 
+def invoice_paid_event(customer="cus_123", **kwargs):
+    return make_event(
+        {"type": "invoice.paid", "data": {"object": {"customer": customer}}},
+        **kwargs,
+    )
+
+
 def test_invalid_signature_rejected(stripe_webhook):
     event = checkout_completed_event("user@example.com", secret="wrong_secret")
     resp = stripe_webhook.lambda_handler(event, None)
@@ -191,6 +198,29 @@ def test_payment_failed_marks_past_due_when_retries_exhausted(stripe_webhook):
     assert resp["statusCode"] == 200
     item = table.get_item(Key={"email": "user@example.com"}).get("Item")
     assert item["payment_status"] == "past_due"
+
+
+def test_invoice_paid_recovers_from_past_due(stripe_webhook):
+    """past_dueだった購読者のカード再決済が成功(invoice.paid)したら、
+    payment_statusをpaidへ自動復帰させる(Fable指摘、2026-07-14: 以前は復帰経路が
+    なく、payment-requiredフラグ運用開始後に支払済みの顧客へ配信されない
+    事故になりうる問題があった)。"""
+    table = stripe_webhook.dynamodb.Table("test-waitlist")
+    table.put_item(
+        Item={
+            "email": "user@example.com",
+            "status": "active",
+            "payment_status": "past_due",
+            "stripe_customer_id": "cus_123",
+            "registered_at": 1,
+        }
+    )
+
+    resp = stripe_webhook.lambda_handler(invoice_paid_event(customer="cus_123"), None)
+
+    assert resp["statusCode"] == 200
+    item = table.get_item(Key={"email": "user@example.com"}).get("Item")
+    assert item["payment_status"] == "paid"
 
 
 def test_unhandled_event_type_returns_200(stripe_webhook):

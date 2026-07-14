@@ -30,9 +30,10 @@ SES_SENDER_PARAM_NAME = os.environ["SES_SENDER_PARAM_NAME"]
 HMAC_SECRET_PARAM_NAME = os.environ["HMAC_SECRET_PARAM_NAME"]
 SES_CONFIGURATION_SET_NAME = os.environ["SES_CONFIGURATION_SET_NAME"]
 MATCH_HISTORY_TABLE_NAME = os.environ["MATCH_HISTORY_TABLE_NAME"]
-# LINE通知(v0.28)。チャネルアクセストークン/シークレットはSSM SecureString相当の
-# リテラルプレースホルダー(cfn-lp-backend.yaml参照、ユーザーがLINE Developers
-# コンソールでチャネル作成後にCLIで上書きするまでは未設定状態)。
+# LINE通知(v0.28)。チャネルアクセストークン/シークレットは実際にはType: String
+# (AWS::SSM::ParameterはネイティブでSecureStringをサポートしないため、
+# cfn-lp-backend.yaml参照)のリテラルプレースホルダー。ユーザーがLINE Developers
+# コンソールでチャネル作成後にCLIで上書きするまでは未設定状態。
 LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME = os.environ["LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME"]
 LINE_CHANNEL_SECRET_PARAM_NAME = os.environ["LINE_CHANNEL_SECRET_PARAM_NAME"]
 LINE_LIFF_ID_PARAM_NAME = os.environ["LINE_LIFF_ID_PARAM_NAME"]

@@ -185,6 +185,38 @@ def test_send_notification_sorts_by_deadline_ascending(collector, make_context):
     assert body.index("B(締切近い)") < body.index("A(締切遠い)") < body.index("C(締切不明)")
 
 
+def test_send_notification_retry_does_not_resend_to_already_notified_recipient(collector, make_context):
+    """中優先度の修正確認(2026-07-14): 一部宛先の送信失敗で号が持ち越された後、
+    同じkokoku_noでsend_notificationが再実行されても、既に成功した宛先へは
+    再送しない(以前は宛先粒度の送信済み記録がなく、持ち越しのたびに成功済みの
+    全宛先へ同じ通知が再送されていた)。"""
+    with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
+         mock.patch.object(collector, "record_match_history"), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[
+             {"email": "a@example.com", "channel": "email", "line_user_id": None},
+             {"email": "b@example.com", "channel": "email", "line_user_id": None},
+         ]), \
+         mock.patch.object(collector, "send_email_with_unsubscribe", side_effect=[None, Exception("SES throttled")]) as m_send:
+        fully_sent, had_failure = collector.send_notification(3001, MATCHES, make_context(300000))
+    assert fully_sent is False
+    assert had_failure is True
+    assert m_send.call_count == 2
+
+    # 号は持ち越されmark_processedされていない状態を再現し、同じkokoku_noで再実行する
+    with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
+         mock.patch.object(collector, "record_match_history"), \
+         mock.patch.object(collector, "get_all_recipients", return_value=[
+             {"email": "a@example.com", "channel": "email", "line_user_id": None},
+             {"email": "b@example.com", "channel": "email", "line_user_id": None},
+         ]), \
+         mock.patch.object(collector, "send_email_with_unsubscribe", return_value=None) as m_send_retry:
+        fully_sent, had_failure = collector.send_notification(3001, MATCHES, make_context(300000))
+    assert fully_sent is True
+    assert had_failure is False
+    assert m_send_retry.call_count == 1
+    assert m_send_retry.call_args.args[1] == "b@example.com"
+
+
 def test_send_notification_full_success(collector, make_context):
     with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
          mock.patch.object(collector, "record_match_history"), \
