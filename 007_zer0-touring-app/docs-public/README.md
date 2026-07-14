@@ -393,10 +393,13 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 ## 変更履歴
 
-| 日付       | 内容                                                                                                                                                                                    |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-03 | v3.1: **テスト整備**: バックエンドに`backend/tests/`（pytest、boto3モック、17件）を追加しedge-secret検証・XFF末尾信頼・キャッシュ・履歴・二段階分離を回帰テスト化。フロントは`fmtHours`等を`src/scripts/course-utils.ts`に切り出しVitestで12件のユニットテストを追加 |
-| 2026-07-13 | v3.2: OGP画像を専用の1200x630画像に変更（従来は正方形アイコンを流用しSNS共有時に不自然に切れていた） |
-| 2026-07-13 | v3.3: 既存のicon-512.pngから favicon-16/32.png・apple-touch-icon.png・favicon.icoを生成し追加。以前は`<link rel="icon">`が未設定だった |
+### 2026-07-03
+
+- **v3.1**: **テスト整備**: バックエンドに`backend/tests/`（pytest、boto3モック、17件）を追加しedge-secret検証・XFF末尾信頼・キャッシュ・履歴・二段階分離を回帰テスト化。フロントは`fmtHours`等を`src/scripts/course-utils.ts`に切り出しVitestで12件のユニットテストを追加
+
+### 2026-07-13
+
+- **v3.2**: OGP画像を専用の1200x630画像に変更（従来は正方形アイコンを流用しSNS共有時に不自然に切れていた）
+- **v3.3**: 既存のicon-512.pngから favicon-16/32.png・apple-touch-icon.png・favicon.icoを生成し追加。以前は`<link rel="icon">`が未設定だった
 
 全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照してください。
