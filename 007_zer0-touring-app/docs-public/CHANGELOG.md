@@ -26,3 +26,5 @@
 | 2026-07-03 | v3.1       | **テスト整備**: バックエンドに`backend/tests/`（pytest、boto3モック、17件）を追加しedge-secret検証・XFF末尾信頼・キャッシュ・履歴・二段階分離を回帰テスト化。フロントは`fmtHours`等を`src/scripts/course-utils.ts`に切り出しVitestで12件のユニットテストを追加                                                                                 |
 | 2026-07-13 | v3.2       | OGP画像を正方形アイコン(icon-512.png)流用から専用の1200x630画像に変更。SNS共有時に不自然に切れる問題を解消(自己調査で発見)                                                                                                                                                                                                                    |
 | 2026-07-13 | v3.3       | 独自ブランドfavicon一式(favicon-16/32.png・apple-touch-icon.png・favicon.ico)を既存icon-512.pngから生成し追加。`<link rel="icon">`が未設定だった点も是正                                                                                                                                                                                       |
+
+以降、バージョン番号の付与は廃止（詳細な変更履歴はGitで追跡可能なため）。

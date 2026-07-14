@@ -399,4 +399,6 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | 2026-07-13 | v3.2       | OGP画像を専用の1200x630画像に変更（従来は正方形アイコンを流用しSNS共有時に不自然に切れていた）                                                                                                                                                                                                                                                |
 | 2026-07-13 | v3.3       | 既存のicon-512.pngから favicon-16/32.png・apple-touch-icon.png・favicon.icoを生成し追加。以前は`<link rel="icon">`が未設定だった                                                                                                                                                                                                              |
 
+以降、バージョン番号の付与は廃止（詳細な変更履歴はGitで追跡可能なため）。
+
 全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照してください。
