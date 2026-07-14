@@ -393,13 +393,89 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 ## 変更履歴
 
+直近3日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
+
+### 2026-06-27
+
+#### セキュリティ修正（v1.9）
+
+- ADMIN_TOKEN を `secrets.compare_digest` で定数時間比較に変更
+- 共有リンク数値フィールドを `Number()` 正規化して HTML 注入防止。`?admin=off` 解除ロジックバグ修正
+
+#### S3ライフサイクル設定（v2.0）
+
+- `zer0-touring-s3` に未完了マルチパート 7 日後中断ルールを CFn で追加
+
 ### 2026-07-03
 
-- **v3.1**: **テスト整備**: バックエンドに`backend/tests/`（pytest、boto3モック、17件）を追加しedge-secret検証・XFF末尾信頼・キャッシュ・履歴・二段階分離を回帰テスト化。フロントは`fmtHours`等を`src/scripts/course-utils.ts`に切り出しVitestで12件のユニットテストを追加
+#### 第2巡Fableレビュー HIGH2件修正（v2.1）
+
+- X-Forwarded-Forを末尾信頼に変更しレートリミット回避を防止
+- `/api/share`の自動POSTをフロント側で解消し、バックエンドにレートリミット・サイズ上限を追加
+- MEDIUM: レート消費順序修正・Bedrock timeout短縮・/s/*・/api/*にセキュリティヘッダー適用
+
+#### execute-api直接アクセスの完全遮断（v2.2）
+
+- CloudFront→API Gateway間に`X-Origin-Verify`共有シークレット（SSM SecureString管理）を追加し、Lambda側で検証・不一致は403
+- CloudFrontを経由しないbot/スクリプトのレートリミット回避を遮断
+
+#### 緊急障害対応: コース生成504を修正（v2.3）
+
+- Open-Meteo API劣化による外部API遅延の累積でLambda Timeout(30秒)を超過していたため、残り時間チェックを追加し時間不足時は外部APIをスキップしAI推定値で必ず応答
+- フロントの天気系fetch 3箇所にも5秒タイムアウトを追加しUIハングを解消
+
+#### 安全バッファ拡大（v2.4）
+
+- `MIN_TIME_BUFFER_MS`を4秒→6秒に拡大し、応答をより確実に返せるよう調整
+- 判明した制約: API Gateway HTTP APIのLambda統合タイムアウトは30秒固定でAWS仕様上引き上げ不可のため、Lambda関数自体のTimeoutを30秒より延長しても効果がない
+- エラー回避には残り時間バッファの拡大で対応する方針とした
+
+#### CloudWatchアラーム整備（v2.5）
+
+- Lambda Errors・Duration p95(25秒超)・API Gateway 5xxの3アラームをSNSメール通知付きでCFnに追加
+- 障害発生時にユーザー報告より先に気づけるようにした（`AlarmEmail`パラメータ、`deploy-infra.sh`は`ALARM_EMAIL`環境変数で指定）
+
+#### ジオコーディングDynamoDBキャッシュ（v2.6）
+
+- `nominatim_geocode`の結果を`zer0-touring-ratelimit`テーブルに`geocode#{originバケット}#{地名}`キーでキャッシュ（TTL 90日）し、Nominatimの1req/秒直列呼び出しを削減
+- 本番で書き込み確認済み
+
+#### コース履歴保存機能（v2.7）
+
+- 生成結果を新規`zer0-touring-history`テーブル（端末ID+時刻の複合キー、TTL180日）に自動保存
+- 端末IDはlocalStorageに保存し`X-Device-Id`ヘッダーで送信
+- `GET/POST /api/history`ルートと履歴一覧画面を追加。本番検証済み
+
+#### 狙い目日選択機能（v2.8）
+
+- 週間予報の各日をタップすると、その日の予報（最高気温・天気）でコースを再生成できるようにした（GPSは再取得せず既存の位置情報を再利用）
+- プロンプト自体は変更せず、temperature/weather_conditionを対象日の値に差し替えるだけで実現
+- ビルド成功・HTML構造の本番反映は確認済みだが、タップ操作自体のブラウザ実機確認は未実施
+
+#### ルートマップ機能（v2.9）
+
+- 詳細画面にLeaflet+OpenStreetMapで現在地・目的地・スポットのマーカーとOSRM実道路ルートを表示
+- leafletをnpm依存に追加しViteでバンドル
+- CSPに`router.project-osrm.org`・`*.tile.openstreetmap.org`を追加。本番でCSP・配信・OSRM疎通確認済み
+
+#### 二段階レスポンス化（v3.0）
+
+- `/api/suggest`から外部API取得（Nominatim/OSRM/Google Maps/Open-Meteo）を分離し、Bedrock生成結果をAI推定値のまま即返却（28秒→9.8秒、本番実測）
+- 精密データは新設`POST /api/enrich`で詳細画面表示時に取得し自動再描画。DAILY_LIMITは生成のみ対象
+
+#### テスト整備（v3.1）
+
+- バックエンドに`backend/tests/`（pytest、boto3モック、17件）を追加しedge-secret検証・XFF末尾信頼・キャッシュ・履歴・二段階分離を回帰テスト化
+- フロントは`fmtHours`等を`src/scripts/course-utils.ts`に切り出しVitestで12件のユニットテストを追加
 
 ### 2026-07-13
 
-- **v3.2**: OGP画像を専用の1200x630画像に変更（従来は正方形アイコンを流用しSNS共有時に不自然に切れていた）
-- **v3.3**: 既存のicon-512.pngから favicon-16/32.png・apple-touch-icon.png・favicon.icoを生成し追加。以前は`<link rel="icon">`が未設定だった
+#### OGP画像の刷新（v3.2）
 
-全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照してください。
+- OGP画像を正方形アイコン(icon-512.png)流用から専用の1200x630画像に変更。SNS共有時に不自然に切れる問題を解消
+- 008プロジェクトのブランドアセット作業の際、ユーザー指示による自己調査で発見・修正
+
+#### ブランドfavicon一式追加（v3.3）
+
+- 独自ブランドfavicon一式(favicon-16/32.png・apple-touch-icon.png・favicon.ico)を既存のicon-512.pngから生成し追加
+- 以前は`<link rel="icon">`が未設定でブラウザタブのアイコン表示が保証されていなかった点も是正
