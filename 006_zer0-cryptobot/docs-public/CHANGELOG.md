@@ -30,3 +30,5 @@
 | 2026-07-03 | v4.4       | **pytestテスト整備**: `tests/`にpytest 27件を新設（純関数・リコンサイル・セーフモード・Binanceフォールバック・analyze_coin）。backtest.py（pandas）とanalyzer（純Python）のATR/Supertrend一致を検証するパリティテストを追加し、二重実装のドリフトを検知可能に                                                    |
 | 2026-07-04 | v4.5       | **stats.json用語整理**: update_public_stats→update_stats_json改名。バケットは完全非公開のため「public-read」という古い記述をコメント・ログから削除。閲覧経路は004 SSR Lambdaのs3:GetObjectのみに統一（004側でBasic認証ページ実装・本番検証済み）                                          |
 | 2026-07-13 | v4.6       | **リコンサイル誤検知バグ修正**: reconcile_positionsがPhase A(決済検知)より前に実行されていたため、トレーリングSL約定等の正常なクローズも「孤児state」と誤検知しメール送信していた。Phase A/Bの後に実行するよう順序変更。テスト側の未改名(update_public_stats)5件も修正 |
+
+以降、バージョン番号の付与は廃止（詳細な変更履歴はGitで追跡可能なため）。

@@ -230,4 +230,6 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 | 2026-07-04 | v4.5       | **stats.json用語整理**: update_public_stats→update_stats_json改名。バケットは完全非公開のため「public-read」という古い記述をコメント・ログから削除。閲覧経路は004 SSR Lambdaのs3:GetObjectのみに統一（004側でBasic認証ページ実装・本番検証済み）                                          |
 | 2026-07-13 | v4.6       | **リコンサイル誤検知バグ修正**: 決済検知(Phase A)より前にリコンサイルを実行していたため、正常なトレーリングSL決済も「孤児state」と誤検知しメール送信していた不具合を修正                                                                                                          |
 
+以降、バージョン番号の付与は廃止（詳細な変更履歴はGitで追跡可能なため）。
+
 全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照してください。
