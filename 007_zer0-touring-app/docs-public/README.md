@@ -212,7 +212,8 @@ SNS にシェア → /s/abc123 → Lambda が OGP HTML 返却 → SNS クロー�
 │   ├── cfn-certificate.yaml  # ACM（us-east-1）
 │   ├── cfn-touring.yaml      # メインリソース
 │   └── deploy-infra.sh                  # フルデプロイ
-├── generate_diagram.py          # アーキテクチャ図生成
+├── scripts/
+│   └── generate_diagram.py      # アーキテクチャ図生成
 └── images/
     └── 007_architecture.png
 ```
