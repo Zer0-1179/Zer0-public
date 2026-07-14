@@ -8,14 +8,14 @@
 
 ## 概要
 
-| 項目       | 内容                                                                                                            |
-| ---------- | --------------------------------------------------------------------------------------------------------------- |
-| 投稿頻度   | 週3回実行（月・木20:00 JST + 日曜10:00 JST）。**1回の実行での投稿数は1〜3件**（下記「投稿カテゴリ」の注記参照） |
-| カテゴリ数 | 6カテゴリ（recipe/jissoku/hikaku/shippai/fukugyo/question）+ 固定2スロット（url_reaction/trend）                |
-| 重複防止   | 直近4投稿で同カテゴリが連続しないようSSMで履歴管理                                                              |
-| 曜日別制御 | 月曜: url_reaction 50% / ローテーション 50% ・木曜: question固定 ・日曜: trend                                  |
-| 生成AI     | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95）         |
-| 月額コスト | ~$0.38（約57円）                                                                                                |
+| 項目 | 内容 |
+| --- | --- |
+| 投稿頻度 | 週3回実行（月・木20:00 JST + 日曜10:00 JST）。**1回の実行での投稿数は1〜3件**（下記「投稿カテゴリ」の注記参照） |
+| カテゴリ数 | 6カテゴリ（recipe/jissoku/hikaku/shippai/fukugyo/question）+ 固定2スロット（url_reaction/trend） |
+| 重複防止 | 直近4投稿で同カテゴリが連続しないようSSMで履歴管理 |
+| 曜日別制御 | 月曜: url_reaction 50% / ローテーション 50% ・木曜: question固定 ・日曜: trend |
+| 生成AI | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
+| 月額コスト | ~$0.38（約57円） |
 
 ## アーキテクチャ
 
@@ -37,16 +37,16 @@ EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST・リトライ0�
 
 ## 投稿カテゴリ
 
-| カテゴリ       | 内容                                                               | 曜日                                |
-| -------------- | ------------------------------------------------------------------ | ----------------------------------- |
-| `recipe`       | コピペで使える言い回し・テンプレのレシピ（12お題をローテーション） | 月曜ローテーション枠（50%）         |
-| `jissoku`      | 仕事・生活のbefore/after実録（数字必須・盛らない）                 | 月曜ローテーション枠（50%）         |
-| `hikaku`       | 働き方・お金・生活の比較とどっち派（断定・返信誘発）               | 月曜ローテーション枠（50%）         |
-| `shippai`      | 仕事・お金・人間関係の失敗談＋回避法（共感×実用）                  | 月曜ローテーション枠（50%）         |
-| `fukugyo`      | 副業の現実（数字・やり方入り）                                     | 月曜ローテーション枠（50%）         |
-| `question`     | 問いかけ・議論系                                                   | **木曜固定** + 月曜ローテーション枠 |
-| `url_reaction` | Yahoo!ニュース記事への率直な反応（URLはリプライへ）                | 月曜固定枠（50%）                   |
-| `trend`        | Google Trends トレンド連動（話題を問わず何にでも反応）             | 日曜固定                            |
+| カテゴリ | 内容 | 曜日 |
+| --- | --- | --- |
+| `recipe` | コピペで使える言い回し・テンプレのレシピ（12お題をローテーション） | 月曜ローテーション枠（50%） |
+| `jissoku` | 仕事・生活のbefore/after実録（数字必須・盛らない） | 月曜ローテーション枠（50%） |
+| `hikaku` | 働き方・お金・生活の比較とどっち派（断定・返信誘発） | 月曜ローテーション枠（50%） |
+| `shippai` | 仕事・お金・人間関係の失敗談＋回避法（共感×実用） | 月曜ローテーション枠（50%） |
+| `fukugyo` | 副業の現実（数字・やり方入り） | 月曜ローテーション枠（50%） |
+| `question` | 問いかけ・議論系 | **木曜固定** + 月曜ローテーション枠 |
+| `url_reaction` | Yahoo!ニュース記事への率直な反応（URLはリプライへ） | 月曜固定枠（50%） |
+| `trend` | Google Trends トレンド連動（話題を問わず何にでも反応） | 日曜固定 |
 
 > **注: 「1回の実行＝1投稿」ではない。** `url_reaction`は本文＋URLリプライで**2件**、それ以外のカテゴリは本文のみで**1件**。さらに全カテゴリ共通で、実装のこだわり12「リプライ営業」が**必ず+1件**上乗せされる。そのため実際の投稿数は `url_reaction`実行時=3件、それ以外=2件。
 
@@ -122,15 +122,15 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 
 ## 技術スタック
 
-| レイヤー         | 技術                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------- |
-| 実行基盤         | AWS Lambda（Python 3.14）                                                                               |
-| スケジューリング | Amazon EventBridge Scheduler（JST対応・2スロット）                                                      |
-| 生成AI           | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
-| 状態管理         | SSM Parameter Store（10パラメータで履歴管理）                                                           |
-| 外部データ       | Yahoo!ニュース RSS / Google Trends RSS                                                                  |
-| 投稿先           | X API v2                                                                                                |
-| IaC              | CloudFormation                                                                                          |
+| レイヤー | 技術 |
+| --- | --- |
+| 実行基盤 | AWS Lambda（Python 3.14） |
+| スケジューリング | Amazon EventBridge Scheduler（JST対応・2スロット） |
+| 生成AI | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / temperature=0.95） |
+| 状態管理 | SSM Parameter Store（10パラメータで履歴管理） |
+| 外部データ | Yahoo!ニュース RSS / Google Trends RSS |
+| 投稿先 | X API v2 |
+| IaC | CloudFormation |
 
 ## ディレクトリ構成
 
@@ -187,42 +187,42 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 ## SSMパラメータ
 
-| パラメータ名                          | 種別         | 管理                                                                                                                                    |
-| ------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `/ai_bot/twitter_api_key`             | SecureString | setup_ssm.sh                                                                                                                            |
-| `/ai_bot/twitter_api_secret`          | SecureString | setup_ssm.sh                                                                                                                            |
-| `/ai_bot/twitter_access_token`        | SecureString | setup_ssm.sh                                                                                                                            |
-| `/ai_bot/twitter_access_token_secret` | SecureString | setup_ssm.sh                                                                                                                            |
-| `/ai_bot/history/used_categories`     | String       | Lambda自動更新                                                                                                                          |
-| `/ai_bot/history/{category}`          | String       | Lambda自動更新                                                                                                                          |
-| `/ai_bot/history/url_reaction_urls`   | String       | Lambda自動更新                                                                                                                          |
-| `/ai_bot/history/recipe_tasks`        | String       | Lambda自動更新（2026-07-05追加）                                                                                                        |
-| `/ai_bot/history/question_themes`     | String       | Lambda自動更新（2026-07-05追加）                                                                                                        |
-| `/ai_bot/history/reply_targets`       | String       | Lambda自動更新（2026-07-05追加、リプ営業のローテーション）                                                                              |
-| `/ai_bot/reply_target_accounts`       | String       | **手動更新可**（2026-07-05追加）。リプ先アカウント一覧本体。`aws ssm put-parameter --overwrite`でコード変更・再デプロイなしに更新できる |
-| `/ai_bot/history/replied_tweets`      | String       | Lambda自動更新（2026-07-05追加、返信済みツイートID）                                                                                    |
+| パラメータ名 | 種別 | 管理 |
+| --- | --- | --- |
+| `/ai_bot/twitter_api_key` | SecureString | setup_ssm.sh |
+| `/ai_bot/twitter_api_secret` | SecureString | setup_ssm.sh |
+| `/ai_bot/twitter_access_token` | SecureString | setup_ssm.sh |
+| `/ai_bot/twitter_access_token_secret` | SecureString | setup_ssm.sh |
+| `/ai_bot/history/used_categories` | String | Lambda自動更新 |
+| `/ai_bot/history/{category}` | String | Lambda自動更新 |
+| `/ai_bot/history/url_reaction_urls` | String | Lambda自動更新 |
+| `/ai_bot/history/recipe_tasks` | String | Lambda自動更新（2026-07-05追加） |
+| `/ai_bot/history/question_themes` | String | Lambda自動更新（2026-07-05追加） |
+| `/ai_bot/history/reply_targets` | String | Lambda自動更新（2026-07-05追加、リプ営業のローテーション） |
+| `/ai_bot/reply_target_accounts` | String | **手動更新可**（2026-07-05追加）。リプ先アカウント一覧本体。`aws ssm put-parameter --overwrite`でコード変更・再デプロイなしに更新できる |
+| `/ai_bot/history/replied_tweets` | String | Lambda自動更新（2026-07-05追加、返信済みツイートID） |
 
 ## トラブルシューティング
 
-| 症状                   | 原因                              | 対処                                                                    |
-| ---------------------- | --------------------------------- | ----------------------------------------------------------------------- |
-| 投稿されない           | 環境変数 `DRY_RUN=true` のまま    | Lambda 環境変数 `DRY_RUN` を `false` に更新                             |
-| 同カテゴリが連続投稿   | SSM履歴破損                       | `/ai_bot/history/used_categories` を削除してリセット                    |
-| X API 403 Forbidden    | APIクレジット不足                 | developer.x.com でクレジット残高確認・チャージ                          |
-| X API 401 Unauthorized | アクセストークン期限切れ          | `bash src/setup_ssm.sh` で4キーを再登録                                 |
-| Bedrock エラー         | モデルアクセス未承認              | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化             |
-| url_reaction 記事が0件 | Yahoo!ニュースRSSフィード取得失敗 | CloudWatch Logs で HTTP ステータス確認                                  |
-| 実行失敗に気づかない   | 通知メール未設定                  | CFn `RecipientEmail` パラメータを設定してスタック更新（2026-07-05追加） |
+| 症状 | 原因 | 対処 |
+| --- | --- | --- |
+| 投稿されない | 環境変数 `DRY_RUN=true` のまま | Lambda 環境変数 `DRY_RUN` を `false` に更新 |
+| 同カテゴリが連続投稿 | SSM履歴破損 | `/ai_bot/history/used_categories` を削除してリセット |
+| X API 403 Forbidden | APIクレジット不足 | developer.x.com でクレジット残高確認・チャージ |
+| X API 401 Unauthorized | アクセストークン期限切れ | `bash src/setup_ssm.sh` で4キーを再登録 |
+| Bedrock エラー | モデルアクセス未承認 | AWS Console → Bedrock → モデルアクセスで Haiku 4.5 を有効化 |
+| url_reaction 記事が0件 | Yahoo!ニュースRSSフィード取得失敗 | CloudWatch Logs で HTTP ステータス確認 |
+| 実行失敗に気づかない | 通知メール未設定 | CFn `RecipientEmail` パラメータを設定してスタック更新（2026-07-05追加） |
 
 ## コスト内訳
 
-| サービス                               | 月額                 |
-| -------------------------------------- | -------------------- |
-| Lambda 実行（~35回/月）                | ~$0.001              |
-| Bedrock Claude Haiku（~400 tokens/回） | ~$0.04               |
-| X API（$0.01/件 × 34件/月）            | ~$0.34               |
-| EventBridge・SSM                       | ~$0                  |
-| **合計**                               | **~$0.38（約57円）** |
+| サービス | 月額 |
+| --- | --- |
+| Lambda 実行（~35回/月） | ~$0.001 |
+| Bedrock Claude Haiku（~400 tokens/回） | ~$0.04 |
+| X API（$0.01/件 × 34件/月） | ~$0.34 |
+| EventBridge・SSM | ~$0 |
+| **合計** | **~$0.38（約57円）** |
 
 ## 変更履歴
 
