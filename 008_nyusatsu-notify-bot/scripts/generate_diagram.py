@@ -16,7 +16,7 @@ for _fp in [
         matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
         break
 
-_BASE     = os.path.dirname(os.path.abspath(__file__))
+_BASE     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _ICON_DIR = os.path.join(_BASE, '..', 'images', 'AWS-icon')
 _SVC = 'Architecture-Service-Icons_07312025'
 _GRP = 'Architecture-Group-Icons_07312025'
