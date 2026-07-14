@@ -102,8 +102,14 @@ Resources:
   # LINE Messaging API認証情報(v0.28)。Stripe webhook secretと同じくリテラルの
   # プレースホルダーで固定し、ユーザーがLINE Developersコンソールでチャネルを
   # 作成した後にCLIで`--overwrite`更新する(鶏と卵の関係、値は再デプロイで
-  # 巻き戻らない)。チャネルアクセストークン・シークレットはSecureString、
-  # LIFF IDは秘匿情報ではない(LP側JSに埋め込むため)ためStringのまま。
+  # 巻き戻らない)。チャネルアクセストークン・シークレットも含め全てType: String
+  # (AWS::SSM::Parameterはネイティブでは SecureString をサポートしないため。
+  # SecureString化するには AWS::SecretsManager::Secret かカスタムリソースが
+  # 必要で、個人運営の小規模プロジェクトでは運用コストに見合わないと判断し
+  # Stripe webhook secretと同じくStringのまま運用している。Lambda側の
+  # get_param(decrypt=True)は将来手動でSecureStringへ切り替えても壊れないよう
+  # 用意済み、Fable指摘2026-07-14)。LIFF IDはそもそも秘匿情報ではない
+  # (LP側JSに埋め込むため公開前提)。
   LineChannelAccessTokenParameter:
     Type: AWS::SSM::Parameter
     Properties:

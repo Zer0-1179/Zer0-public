@@ -316,9 +316,13 @@ def record_match_history(kokoku_no: int, case: dict, detail: dict) -> None:
 
 
 def is_processed(kokoku_no: int) -> bool:
+    """processed_atが付いた項目のみ「完了」とみなす。get_notified_emails/
+    mark_notifiedが持ち越し中に同じ項目へ部分的な送信済み記録(notified_emails)を
+    書き込むため、単純な項目の存在チェックだと持ち越し中の号を誤って処理済み扱い
+    してしまう(2026-07-14修正)。"""
     table = dynamodb.Table(os.environ["PROCESSED_TABLE_NAME"])
     resp = table.get_item(Key={"kokoku_no": kokoku_no})
-    return "Item" in resp
+    return "processed_at" in resp.get("Item", {})
 
 
 def mark_processed(kokoku_no: int) -> None:
@@ -331,15 +335,38 @@ def mark_processed(kokoku_no: int) -> None:
     )
 
 
+def get_notified_emails(kokoku_no: int) -> set[str]:
+    table = dynamodb.Table(os.environ["PROCESSED_TABLE_NAME"])
+    resp = table.get_item(Key={"kokoku_no": kokoku_no})
+    return set(resp.get("Item", {}).get("notified_emails", []))
+
+
+def mark_notified(kokoku_no: int, email: str) -> None:
+    """この号(kokoku_no)でこの宛先への送信が完了したことを即座に記録する。時間切れ
+    や一部宛先の送信失敗で号の処理が翌回・リトライに持ち越された際、既に成功した
+    宛先への重複送信を防ぐ(Fable指摘、2026-07-14: 以前は宛先粒度の送信済み記録が
+    なく、持ち越しのたびに成功済みの全宛先へ同じ通知が再送されていた)。
+    mark_processedが最終的にこの項目をprocessed_atのみでput_item上書きするため、
+    完了後は自動的にクリーンアップされる。"""
+    table = dynamodb.Table(os.environ["PROCESSED_TABLE_NAME"])
+    table.update_item(
+        Key={"kokoku_no": kokoku_no},
+        UpdateExpression="ADD notified_emails :e",
+        ExpressionAttributeValues={":e": {email}},
+    )
+
+
 _param_cache: dict[str, str] = {}
 
 
-def get_param(name: str) -> str:
+def get_param(name: str, decrypt: bool = False) -> str:
     """1回のLambda実行内で同じパラメータを繰り返し取得しないようキャッシュする
     (購読者数×号数に比例してSSM呼び出しが線形増加していたため、レビュー2026-07-11)。
-    lp_waitlist Lambdaの_param_cacheと同じ方式。"""
+    lp_waitlist Lambdaの_param_cacheと同じ方式。decrypt引数はlp_waitlist側と
+    シグネチャを揃えるため用意(現状は全パラメータがString型のため未使用だが、
+    将来手動でSecureStringへ切り替えられても壊れないようにする、Fable指摘2026-07-14)。"""
     if name not in _param_cache:
-        _param_cache[name] = ssm.get_parameter(Name=name)["Parameter"]["Value"]
+        _param_cache[name] = ssm.get_parameter(Name=name, WithDecryption=decrypt)["Parameter"]["Value"]
     return _param_cache[name]
 
 
@@ -485,7 +512,7 @@ def send_line_push(line_user_id: str, text: str) -> None:
     """LINE Messaging APIでプッシュメッセージを1件送信する(v0.28)。
     lp_waitlist Lambdaの同名関数と同じ実装(Lambdaごとに独立デプロイのため複製、
     共有Layerは導入していない現行方針に合わせる)。"""
-    token = get_param(os.environ["LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME"])
+    token = get_param(os.environ["LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME"], decrypt=True)
     payload = json.dumps({
         "to": line_user_id,
         "messages": [{"type": "text", "text": text[:4900]}],
@@ -574,8 +601,13 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
     # 運用監視用のオーナー宛+実際にactiveな購読者宛の両方に個別送信する(B-1)。
     # BCC一斉送信は使わない(宛先ごとに異なる配信停止トークンを埋め込む必要があるため)。
     # v0.28: channel="line"の購読者にはSESではなくLINE Messaging APIでプッシュする。
+    already_notified = get_notified_emails(kokoku_no)
     had_failure = False
     for recipient in get_all_recipients(owner_email):
+        if recipient["email"] in already_notified:
+            # 前回の実行(時間切れ持ち越しや一部宛先の送信失敗による再試行)で
+            # 既に送信済みの宛先には再送しない(2026-07-14修正)。
+            continue
         if context.get_remaining_time_in_millis() < TIME_BUDGET_MARGIN_MS:
             logger.warning(
                 "time budget exhausted while sending kokoku_no=%s, remaining recipients deferred to next run",
@@ -587,6 +619,7 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
                 send_line_push(recipient["line_user_id"], line_text)
             else:
                 send_email_with_unsubscribe(sender, recipient["email"], subject, body, html_content=html_content)
+            mark_notified(kokoku_no, recipient["email"])
         except Exception:
             # v0.8まではses.send_email失敗がLambda全体を失敗させDLQ/アラームに
             # 繋がっていたが、v0.10の宛先ごとの個別送信でこの安全網が消失していた。

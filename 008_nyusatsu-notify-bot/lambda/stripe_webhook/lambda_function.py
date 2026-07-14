@@ -212,6 +212,19 @@ def handle_payment_failed(invoice_obj: dict) -> None:
     logger.info("payment failed (retries exhausted) for %s", email)
 
 
+def handle_invoice_paid(invoice_obj: dict) -> None:
+    """定期支払い(更新分含む)の成功を検知しpayment_status="paid"に戻す。
+    invoice.payment_failedでpast_dueにした後、顧客がカード更新して支払いが
+    成功しても復帰させる経路がなく、payment-requiredフラグ運用開始後は支払済み
+    顧客に配信されない事故になりうる問題を解消(Fable指摘、2026-07-14)。"""
+    email = _find_email_by_customer_id(invoice_obj.get("customer") or "")
+    if not email:
+        logger.warning("invoice.paid for unknown customer %s", invoice_obj.get("customer"))
+        return
+    _set_payment_status(email, "paid")
+    logger.info("payment recovered/confirmed for %s", email)
+
+
 def lambda_handler(event, context):
     headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
     sig_header = headers.get("stripe-signature", "")
@@ -238,6 +251,8 @@ def lambda_handler(event, context):
         handle_subscription_deleted(data_object)
     elif event_type == "invoice.payment_failed":
         handle_payment_failed(data_object)
+    elif event_type == "invoice.paid":
+        handle_invoice_paid(data_object)
     else:
         logger.info("ignoring unhandled event type %s", event_type)
 
