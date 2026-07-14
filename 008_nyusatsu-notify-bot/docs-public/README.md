@@ -72,33 +72,33 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 ## AWSリソース（デプロイ済み）
 
-| リソース                | 名称                                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------- |
-| CloudFormationスタック  | `zer0-nyusatsu-notify-bot`                                                                        |
-| Lambda関数              | `zer0-nyusatsu-collector`（Python 3.13）                                                          |
-| DynamoDBテーブル        | `zer0-nyusatsu-processed-kokoku`                                                                  |
-| DynamoDBテーブル        | `zer0-nyusatsu-match-history`（マッチ案件履歴、60日TTL、バックフィルウェルカムメール用）           |
-| SQS(DLQ)                | `zer0-nyusatsu-notify-bot-dlq`                                                                    |
+| リソース                | 名称                                                                                                                                                                                                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CloudFormationスタック  | `zer0-nyusatsu-notify-bot`                                                                                                                                                                                                                                        |
+| Lambda関数              | `zer0-nyusatsu-collector`（Python 3.13）                                                                                                                                                                                                                          |
+| DynamoDBテーブル        | `zer0-nyusatsu-processed-kokoku`                                                                                                                                                                                                                                  |
+| DynamoDBテーブル        | `zer0-nyusatsu-match-history`（マッチ案件履歴、60日TTL、バックフィルウェルカムメール用）                                                                                                                                                                          |
+| SQS(DLQ)                | `zer0-nyusatsu-notify-bot-dlq`                                                                                                                                                                                                                                    |
 | SSM Parameter           | `/zer0/008-nyusatsu/notify-email`, `/zer0/008-nyusatsu/ses-sender`, `/zer0/008-nyusatsu/keywords`, `/zer0/008-nyusatsu/hmac-secret`, `/zer0/008-nyusatsu/unsubscribe-base-url`, `/zer0/008-nyusatsu/payment-required`, `/zer0/008-nyusatsu/stripe-webhook-secret` |
-| EventBridge Rule        | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST）                             |
-| SNS Topic               | `zer0-nyusatsu-alarm-topic`（DLQ滞留アラームの通知先、NotifyEmail宛）                             |
-| CloudWatch Alarm        | `zer0-nyusatsu-dlq-messages-alarm-01`                                                             |
-| SES Configuration Set   | `zer0-nyusatsu-config-set`（バウンス・苦情検知用）                                                |
-| SNS Topic               | `zer0-nyusatsu-ses-events-topic`（バウンス・苦情通知、NotifyEmail宛+Lambda購読）                  |
-| Lambda関数              | `zer0-nyusatsu-bounce-handler`（Python 3.13、バウンス・苦情受信で自動配信停止）                   |
-| CloudFormationスタック  | `zer0-nyusatsu-ses-domain`                                                                        |
-| SES ドメインID          | `info.zer0-infra.com`（Easy DKIM、検証済み。送信元 `notify@info.zer0-infra.com`）                 |
-| CloudFormationスタック  | `zer0-nyusatsu-lp-backend`（事前登録API）                                                         |
-| DynamoDBテーブル        | `zer0-nyusatsu-lp-waitlist`                                                                       |
-| Lambda関数              | `zer0-nyusatsu-lp-waitlist`（Python 3.13）                                                        |
-| API Gateway             | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register` / `GET /confirm` / `GET+POST /unsubscribe` / `POST /stripe/webhook`） |
-| Lambda関数              | `zer0-nyusatsu-stripe-webhook`（Python 3.13、Stripe決済イベントで購読者を突合・更新）             |
-| CloudFormationスタック  | `zer0-nyusatsu-mail-relay`（問合せメール受信転送）                                                |
-| S3バケット              | `zer0-nyusatsu-mail-s3`（受信メール一時保管）                                                     |
-| Lambda関数              | `zer0-nyusatsu-mail-forwarder`, `zer0-nyusatsu-activate-ruleset`（Python 3.13）                   |
-| SES 受信ルールセット    | `zer0-nyusatsu-rules`（`nyusatsu@zer0-infra.com`宛を受信）                                        |
-| CloudFormationスタック  | `zer0-nyusatsu-lp-cert`（us-east-1）, `zer0-nyusatsu-lp-hosting`（LP配信）                        |
-| S3バケット / CloudFront | `zer0-nyusatsu-lp-s3` / `nyusatsu.zer0-infra.com`                                                 |
+| EventBridge Rule        | `zer0-nyusatsu-daily-schedule`（`cron(0 21 * * ? *)` = 毎日6:00 JST）                                                                                                                                                                                             |
+| SNS Topic               | `zer0-nyusatsu-alarm-topic`（DLQ滞留アラームの通知先、NotifyEmail宛）                                                                                                                                                                                             |
+| CloudWatch Alarm        | `zer0-nyusatsu-dlq-messages-alarm-01`                                                                                                                                                                                                                             |
+| SES Configuration Set   | `zer0-nyusatsu-config-set`（バウンス・苦情検知用）                                                                                                                                                                                                                |
+| SNS Topic               | `zer0-nyusatsu-ses-events-topic`（バウンス・苦情通知、NotifyEmail宛+Lambda購読）                                                                                                                                                                                  |
+| Lambda関数              | `zer0-nyusatsu-bounce-handler`（Python 3.13、バウンス・苦情受信で自動配信停止）                                                                                                                                                                                   |
+| CloudFormationスタック  | `zer0-nyusatsu-ses-domain`                                                                                                                                                                                                                                        |
+| SES ドメインID          | `info.zer0-infra.com`（Easy DKIM、検証済み。送信元 `notify@info.zer0-infra.com`）                                                                                                                                                                                 |
+| CloudFormationスタック  | `zer0-nyusatsu-lp-backend`（事前登録API）                                                                                                                                                                                                                         |
+| DynamoDBテーブル        | `zer0-nyusatsu-lp-waitlist`                                                                                                                                                                                                                                       |
+| Lambda関数              | `zer0-nyusatsu-lp-waitlist`（Python 3.13）                                                                                                                                                                                                                        |
+| API Gateway             | `zer0-nyusatsu-lp-api`（HTTP API、`POST /register` / `GET /confirm` / `GET+POST /unsubscribe` / `POST /stripe/webhook`）                                                                                                                                          |
+| Lambda関数              | `zer0-nyusatsu-stripe-webhook`（Python 3.13、Stripe決済イベントで購読者を突合・更新）                                                                                                                                                                             |
+| CloudFormationスタック  | `zer0-nyusatsu-mail-relay`（問合せメール受信転送）                                                                                                                                                                                                                |
+| S3バケット              | `zer0-nyusatsu-mail-s3`（受信メール一時保管）                                                                                                                                                                                                                     |
+| Lambda関数              | `zer0-nyusatsu-mail-forwarder`, `zer0-nyusatsu-activate-ruleset`（Python 3.13）                                                                                                                                                                                   |
+| SES 受信ルールセット    | `zer0-nyusatsu-rules`（`nyusatsu@zer0-infra.com`宛を受信）                                                                                                                                                                                                        |
+| CloudFormationスタック  | `zer0-nyusatsu-lp-cert`（us-east-1）, `zer0-nyusatsu-lp-hosting`（LP配信）                                                                                                                                                                                        |
+| S3バケット / CloudFront | `zer0-nyusatsu-lp-s3` / `nyusatsu.zer0-infra.com`                                                                                                                                                                                                                 |
 
 ## ランディングページ（LP）・事前登録
 
@@ -150,8 +150,6 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 ## 変更履歴
 
 直近3件のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
-
-以降、バージョン番号の付与は廃止（詳細な変更履歴はGitで追跡可能なため）。全履歴は[CHANGELOG.md](./CHANGELOG.md)参照。
 
 | 日付       | 内容                                                                                                          |
 | ---------- | -------------------------------------------------------------------------------------------------------------- |
