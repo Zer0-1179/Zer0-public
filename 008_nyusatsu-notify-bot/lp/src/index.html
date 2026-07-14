@@ -23,17 +23,23 @@
 <link rel="canonical" href="https://nyusatsu.zer0-infra.com/" />
 <style>
   /* 配色はメール(collector/lp_waitlist Lambda)・確認/配信停止ページと同じ
-     白背景+青系アクセント(#2b6cb0)に統一(v0.21)。LPだけ緑系だと
-     「LPで登録→届くメールは青」の導線で別サービスに見えるため。 */
+     白背景+青系アクセント(#2b6cb0)に統一。LPだけ別系統だと
+     「LPで登録→届くメールは青」の導線で別サービスに見えるため。
+     v0.30: 大手サービス(NJSS/入札王)・大手企業サイトを参考に全面リデザイン。
+     白基調+濃紺(--navy)のコントラストで企業サイト水準の信頼感を出す。 */
   :root {
-    --bg: #f7f8fa;
-    --bg-alt: #eef1f5;
-    --ink: #1c1e1f;
-    --ink-soft: #55585c;
+    --bg: #ffffff;
+    --bg-alt: #f3f6fa;
+    --navy: #0e2a47;
+    --navy-soft: #17395e;
+    --ink: #1b2430;
+    --ink-soft: #5a6675;
     --accent: #2b6cb0;
-    --accent-soft: #e3edf8;
-    --line: #dde3ea;
-    --radius: 14px;
+    --accent-deep: #1f578f;
+    --accent-soft: #e8f0f9;
+    --line: #dce4ee;
+    --radius: 16px;
+    --shadow-card: 0 1px 2px rgba(14,42,71,0.06), 0 16px 40px -20px rgba(14,42,71,0.25);
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -42,7 +48,7 @@
     font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg);
     color: var(--ink);
-    line-height: 1.75;
+    line-height: 1.8;
     -webkit-font-smoothing: antialiased;
   }
   a { color: inherit; }
@@ -56,43 +62,71 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 6vw;
-    background: rgba(247, 248, 250, 0.72);
+    gap: 20px;
+    padding: 14px 5vw;
+    background: rgba(255, 255, 255, 0.82);
     backdrop-filter: saturate(180%) blur(14px);
     -webkit-backdrop-filter: saturate(180%) blur(14px);
     border-bottom: 1px solid transparent;
     transition: border-color 0.3s ease;
   }
   header.site-header.scrolled { border-bottom-color: var(--line); }
-  .brand { font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
+  .brand { font-weight: 800; font-size: 16px; letter-spacing: 0.02em; white-space: nowrap; }
   .brand span { color: var(--accent); }
+  .brand .brand-sub {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    letter-spacing: 0.06em;
+    line-height: 1.4;
+  }
+  .header-nav { display: flex; gap: 26px; font-size: 13.5px; font-weight: 600; }
+  .header-nav a { text-decoration: none; color: var(--ink-soft); transition: color 0.2s ease; }
+  .header-nav a:hover { color: var(--accent); }
+  @media (max-width: 860px) { .header-nav { display: none; } }
   .header-cta {
     font-size: 13px;
-    font-weight: 600;
-    padding: 9px 18px;
+    font-weight: 700;
+    padding: 10px 20px;
     border-radius: 999px;
-    background: var(--ink);
+    background: var(--accent);
     color: #fff;
     text-decoration: none;
     white-space: nowrap;
+    box-shadow: 0 6px 16px -6px rgba(43,108,176,0.5);
+    transition: background 0.2s ease;
   }
+  .header-cta:hover { background: var(--accent-deep); }
 
   /* ── Sections common ────────────────────── */
-  section { padding: 120px 6vw; max-width: 1080px; margin: 0 auto; }
+  section { padding: 110px 0; }
+  .container { max-width: 1120px; margin: 0 auto; padding: 0 5vw; }
+  .band-alt { background: var(--bg-alt); }
   .eyebrow {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
     font-size: 13px;
     font-weight: 700;
+    color: var(--ink-soft);
+    margin: 0 0 14px;
+  }
+  .eyebrow .en {
+    font-size: 12px;
+    font-weight: 800;
     color: var(--accent);
-    letter-spacing: 0.08em;
-    margin-bottom: 14px;
+    letter-spacing: 0.22em;
   }
   h2 {
     font-size: clamp(26px, 4vw, 40px);
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1.4;
     margin: 0 0 20px;
+    font-feature-settings: "palt";
   }
-  .lead { font-size: 17px; color: var(--ink-soft); max-width: 640px; }
+  .lead { font-size: 16.5px; color: var(--ink-soft); max-width: 680px; margin: 0; }
 
   .reveal {
     opacity: 0;
@@ -103,79 +137,199 @@
   .reveal.d1 { transition-delay: 0.08s; }
   .reveal.d2 { transition-delay: 0.16s; }
   .reveal.d3 { transition-delay: 0.24s; }
-  /* アニメーション設定を有効にしているユーザーには、フェード演出自体を無効化し
-     常時フル表示にする(Fable指摘、2026-07-13) */
+  /* アニメーション削減設定のユーザーにはフェード演出を無効化し常時フル表示にする */
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1; transform: none; transition: none; }
   }
 
   /* ── Hero ───────────────────────────────── */
   .hero {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding-top: 160px;
-    padding-bottom: 80px;
-    text-align: center;
+    position: relative;
+    padding: 170px 0 90px;
+    background:
+      radial-gradient(ellipse 900px 520px at 88% -10%, rgba(43,108,176,0.10), transparent 62%),
+      linear-gradient(180deg, #f6f9fc 0%, #ffffff 78%);
+    overflow: hidden;
   }
-  .hero .eyebrow { align-self: center; }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    gap: 56px;
+    align-items: center;
+  }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent-deep);
+    background: var(--accent-soft);
+    border: 1px solid rgba(43,108,176,0.25);
+    padding: 7px 16px;
+    border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  .hero-badge::before {
+    content: "";
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
   .hero h1 {
-    font-size: clamp(34px, 6.4vw, 68px);
+    font-size: clamp(32px, 5.2vw, 56px);
     font-weight: 800;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-    margin: 0 0 24px;
+    letter-spacing: 0.01em;
+    line-height: 1.35;
+    margin: 0 0 22px;
+    font-feature-settings: "palt";
   }
   .hero h1 .hl { color: var(--accent); }
-  .hero p.lead { margin: 0 auto 40px; }
+  .hero p.lead { margin: 0 0 32px; font-size: 16px; }
   /* PC向けの強制改行。狭い画面では自然な折り返しに任せる */
   @media (max-width: 720px) { .br-pc { display: none; } }
-  .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
   .btn-primary, .btn-secondary {
     display: inline-block;
-    padding: 15px 30px;
+    padding: 16px 34px;
     border-radius: 999px;
     font-weight: 700;
-    font-size: 15px;
+    font-size: 15.5px;
     text-decoration: none;
     cursor: pointer;
     border: none;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
   }
-  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 10px 24px -8px rgba(43,108,176,0.5); }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -10px rgba(43,108,176,0.55); }
-  .btn-secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-  .btn-secondary:hover { border-color: var(--ink); }
-
-  .hero-visual {
-    margin-top: 72px;
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 12px 26px -10px rgba(43,108,176,0.6); }
+  .btn-primary:hover { transform: translateY(-2px); background: var(--accent-deep); box-shadow: 0 18px 32px -12px rgba(43,108,176,0.65); }
+  .btn-secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .hero-trust {
     display: flex;
-    justify-content: center;
-    gap: 16px;
     flex-wrap: wrap;
+    gap: 6px 22px;
+    margin: 26px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
   }
-  .stat-pill {
+  .hero-trust li { display: flex; align-items: center; gap: 6px; }
+  .hero-trust li::before {
+    content: "";
+    width: 15px; height: 15px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--accent);
+    -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="none" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M3 8.5 L6.5 12 L13 4.5"/></svg>') center / contain no-repeat;
+    mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="none" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M3 8.5 L6.5 12 L13 4.5"/></svg>') center / contain no-repeat;
+  }
+
+  /* ヒーロー右側: 通知メールのプレビューカード(製品ビジュアル) */
+  .hero-visual { position: relative; padding: 12px 0 30px; }
+  .notify-card {
     background: #fff;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 20px 28px;
-    min-width: 150px;
-    box-shadow: 0 20px 40px -28px rgba(0,0,0,0.25);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
   }
-  .stat-pill .num { font-size: 30px; font-weight: 800; color: var(--accent); }
-  .stat-pill .label { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+  .notify-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--navy);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .notify-head .dot { width: 9px; height: 9px; border-radius: 50%; background: #6fd3a4; flex: 0 0 auto; }
+  .notify-head .time { margin-left: auto; font-size: 12px; font-weight: 500; color: #9db3cb; }
+  .notify-subject {
+    padding: 16px 20px;
+    font-size: 14px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--line);
+  }
+  .notify-case { padding: 15px 20px; border-bottom: 1px solid var(--line); }
+  .notify-case:last-child { border-bottom: none; }
+  .notify-case-title { margin: 0 0 8px; font-size: 13.5px; font-weight: 700; }
+  .notify-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+  .notify-meta span {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: var(--bg-alt);
+    border: 1px solid var(--line);
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+  .notify-meta span.deadline {
+    color: #b4530a;
+    background: #fdf1e4;
+    border-color: #f3d9bc;
+  }
+  .float-chip {
+    position: absolute;
+    right: -8px;
+    bottom: 4px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    box-shadow: var(--shadow-card);
+    padding: 10px 18px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent-deep);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .float-chip svg { width: 16px; height: 16px; stroke: var(--accent); flex: 0 0 auto; }
+  .hero-visual-note {
+    margin: 14px 4px 0;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    text-align: right;
+  }
+  @media (max-width: 900px) {
+    .hero { padding-top: 130px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 44px; }
+    .hero-visual { max-width: 480px; }
+    .float-chip { right: 4px; }
+  }
+
+  /* ── Stat band(正直な実測数値のみ) ───────── */
+  .stat-band { background: var(--navy); color: #fff; padding: 40px 0; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; }
+  .stat-item { text-align: center; padding: 6px 8px; }
+  .stat-item .num { font-size: clamp(24px, 2.8vw, 32px); font-weight: 800; letter-spacing: 0.01em; }
+  .stat-item .num small { font-size: 14px; font-weight: 600; }
+  .stat-item .label { font-size: 12px; color: #9db3cb; margin-top: 4px; font-weight: 600; }
+  @media (max-width: 720px) { .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 22px 12px; } }
 
   /* ── Problem cards ──────────────────────── */
-  .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+  .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 52px; }
   .card {
     background: #fff;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 32px 26px;
+    padding: 34px 28px;
+    box-shadow: 0 1px 2px rgba(14,42,71,0.04);
   }
-  .card .icon { font-size: 26px; margin-bottom: 16px; }
-  .card h3 { font-size: 17px; margin: 0 0 10px; }
+  .card .icon {
+    width: 54px; height: 54px;
+    border-radius: 14px;
+    background: var(--accent-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .card .icon svg { width: 28px; height: 28px; stroke: var(--accent); }
+  .card h3 { font-size: 17px; margin: 0 0 10px; font-weight: 700; }
   .card p { font-size: 14.5px; color: var(--ink-soft); margin: 0; }
 
   /* ── How it works (3ステップ図解) ────────── */
@@ -187,8 +341,8 @@
     background: #fff;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 44px 32px;
-    box-shadow: 0 20px 40px -28px rgba(0,0,0,0.2);
+    padding: 48px 36px;
+    box-shadow: var(--shadow-card);
   }
   .flow-item {
     flex: 1 1 0;
@@ -211,11 +365,11 @@
   .flow-step-label {
     font-size: 12px;
     font-weight: 800;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.14em;
     color: var(--accent);
     margin-bottom: 6px;
   }
-  .flow-item h3 { margin: 0 0 8px; font-size: 17px; line-height: 1.5; }
+  .flow-item h3 { margin: 0 0 8px; font-size: 17px; line-height: 1.5; font-weight: 700; }
   .flow-item p { margin: 0; color: var(--ink-soft); font-size: 13.5px; max-width: 240px; }
   .flow-arrow {
     display: flex;
@@ -226,63 +380,96 @@
   }
   .flow-arrow svg { width: 34px; height: 34px; stroke: var(--accent); opacity: 0.6; }
   .how-note {
-    margin-top: 28px;
+    margin-top: 30px;
     text-align: center;
-    font-size: 14.5px;
+    font-size: 15px;
     color: var(--ink-soft);
   }
   .how-note strong { color: var(--accent); }
-  /* ── 中間CTA(フォームが最下部のみだった導線を補強、Fable指摘2026-07-13) ── */
+  /* ── 中間CTA(フォームが最下部のみだった導線を補強) ── */
   .mid-cta {
-    margin-top: 40px;
-    padding: 28px 32px;
+    margin-top: 44px;
+    padding: 32px 36px;
     background: var(--accent-soft);
     border-radius: var(--radius);
     text-align: center;
   }
-  .mid-cta p { margin: 0 0 16px; font-size: 15px; font-weight: 600; color: var(--ink); }
-  @media (max-width: 480px) { .mid-cta { padding: 24px 20px; } }
+  .mid-cta p { margin: 0 0 18px; font-size: 15px; font-weight: 700; color: var(--ink); }
+  @media (max-width: 480px) { .mid-cta { padding: 26px 20px; } }
   @media (max-width: 720px) {
     .how-flow { flex-direction: column; gap: 4px; padding: 36px 24px; }
     .flow-arrow { padding-top: 0; }
     .flow-arrow svg { transform: rotate(90deg); }
   }
 
+  /* ── 特長(選ばれる理由の型を正直に翻案) ──── */
+  .reason-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 52px; }
+  @media (max-width: 720px) { .reason-grid { grid-template-columns: 1fr; } }
+  .reason-card {
+    position: relative;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 34px 30px 30px;
+    box-shadow: 0 1px 2px rgba(14,42,71,0.04);
+  }
+  .reason-num {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 12px;
+  }
+  .reason-num::after {
+    content: "";
+    display: block;
+    width: 28px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    margin-top: 8px;
+  }
+  .reason-card h3 { margin: 0 0 10px; font-size: 19px; font-weight: 700; }
+  .reason-card p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .reason-card p strong { color: var(--ink); }
+
   /* ── Market stats (相場感) ──────────────── */
-  .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px; }
+  .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 52px; }
   @media (max-width: 720px) { .market-grid { grid-template-columns: 1fr; } }
   .market-card {
     background: #fff;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 30px 28px;
+    padding: 32px 30px;
+    box-shadow: 0 1px 2px rgba(14,42,71,0.04);
   }
-  .market-card .kicker { font-size: 13px; font-weight: 700; color: var(--ink-soft); margin: 0 0 2px; }
-  .market-card .cat-name { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
-  .market-card .cat-note { font-size: 12px; color: var(--ink-soft); margin: 0 0 18px; }
+  .market-card .kicker { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; color: var(--accent); margin: 0 0 2px; }
+  .market-card .cat-name { font-size: 19px; font-weight: 700; margin: 0 0 4px; }
+  .market-card .cat-note { font-size: 12px; color: var(--ink-soft); margin: 0 0 20px; }
   .market-card .big-label { font-size: 12.5px; color: var(--ink-soft); margin: 0; }
-  .market-card .big-num { font-size: 38px; font-weight: 700; color: var(--ink); line-height: 1.3; margin: 0 0 16px; }
+  .market-card .big-num { font-size: 42px; font-weight: 800; color: var(--ink); line-height: 1.3; margin: 0 0 16px; letter-spacing: 0.01em; }
   .market-card .big-num small { font-size: 16px; font-weight: 600; color: var(--ink-soft); }
   .market-sub { list-style: none; margin: 0; padding: 0; font-size: 13.5px; color: var(--ink-soft); }
   .market-sub li {
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    padding: 7px 0;
+    padding: 8px 0;
     border-top: 1px dashed var(--line);
   }
   .market-sub li span:last-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
-  .source-note { margin-top: 24px; font-size: 12.5px; color: var(--ink-soft); max-width: 720px; }
+  .source-note { margin-top: 26px; font-size: 12.5px; color: var(--ink-soft); max-width: 760px; }
 
   /* ── Mail sample mockup ─────────────────── */
   .mail-mock {
-    margin-top: 48px;
+    margin-top: 52px;
     background: #fff;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    box-shadow: 0 20px 40px -28px rgba(0,0,0,0.25);
+    box-shadow: var(--shadow-card);
     overflow: hidden;
-    max-width: 640px;
+    max-width: 660px;
   }
   .mail-mock-bar {
     display: flex;
@@ -323,58 +510,112 @@
   .mail-mock-note { margin-top: 18px; font-size: 13px; color: var(--ink-soft); }
 
   /* ── Coverage / pricing ─────────────────── */
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 52px; }
   @media (max-width: 860px) { .split, .card-grid { grid-template-columns: 1fr; } }
 
   .info-box {
-    background: var(--bg-alt);
+    background: #fff;
+    border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 30px 32px;
+    padding: 32px 32px;
+    box-shadow: 0 1px 2px rgba(14,42,71,0.04);
   }
-  .info-box h3 { margin: 0 0 14px; font-size: 17px; }
-  .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .info-box h3 { margin: 0 0 14px; font-size: 17px; font-weight: 700; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   .tag {
     font-size: 13px;
     background: var(--accent-soft);
-    color: var(--accent);
+    color: var(--accent-deep);
     padding: 6px 14px;
     border-radius: 999px;
     font-weight: 600;
   }
 
   .price-card {
-    border: 1px solid var(--line);
+    border: 2px solid var(--accent);
     border-radius: var(--radius);
-    padding: 32px;
+    padding: 34px 32px;
     background: #fff;
     text-align: center;
+    box-shadow: var(--shadow-card);
   }
-  .price-card .price { font-size: 40px; font-weight: 800; margin: 8px 0; }
-  .price-card .price small { font-size: 15px; font-weight: 500; color: var(--ink-soft); }
-  .price-card .note { font-size: 13px; color: var(--ink-soft); }
+  .price-card .price-kicker {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: #fff;
+    background: var(--accent);
+    padding: 5px 16px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+  .price-card .price { font-size: 46px; font-weight: 800; margin: 4px 0 2px; letter-spacing: 0.01em; }
+  .price-card .price small { font-size: 15px; font-weight: 600; color: var(--ink-soft); }
+  .price-card .price-next { font-size: 14px; font-weight: 700; color: var(--accent-deep); margin: 0 0 14px; }
+  .price-card .note { font-size: 13px; color: var(--ink-soft); margin: 0; }
 
   /* ── 他サービスとの比較表 ───────────────── */
   .compare-wrap {
-    margin-top: 40px;
+    margin-top: 56px;
     overflow-x: auto;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: #fff;
+    box-shadow: 0 1px 2px rgba(14,42,71,0.04);
   }
-  .compare-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 560px; }
+  .compare-title { margin: 56px 0 0; font-size: 20px; font-weight: 700; }
+  .compare-title + .compare-wrap { margin-top: 20px; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 600px; }
   .compare-table th, .compare-table td {
-    padding: 14px 16px;
+    padding: 16px 18px;
     text-align: left;
     border-bottom: 1px solid var(--line);
     vertical-align: top;
   }
-  .compare-table thead th { background: var(--bg-alt); font-size: 12.5px; color: var(--ink-soft); font-weight: 700; }
+  .compare-table thead th {
+    background: var(--navy);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
   .compare-table tbody tr:last-child td { border-bottom: none; }
+  .compare-table td:first-child { font-weight: 700; white-space: nowrap; }
+  .compare-table .price-cell { font-weight: 700; white-space: nowrap; }
   .compare-table tbody tr.self-row { background: var(--accent-soft); }
-  .compare-table tbody tr.self-row td:first-child { font-weight: 700; color: var(--accent); }
-  .compare-note { padding: 14px 16px; font-size: 12px; color: var(--ink-soft); border-top: 1px solid var(--line); }
+  .compare-table tbody tr.self-row td { border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+  .compare-table tbody tr.self-row td:first-child { color: var(--accent-deep); }
+  .self-badge {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #fff;
+    background: var(--accent);
+    border-radius: 999px;
+    padding: 2px 10px;
+    margin-left: 8px;
+    vertical-align: 2px;
+    letter-spacing: 0.06em;
+  }
+  .compare-note { padding: 14px 18px; font-size: 12px; color: var(--ink-soft); border-top: 1px solid var(--line); }
+
+  /* ── 運営について(実績の代わりに透明性で信頼を作る) ── */
+  .trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 52px; }
+  @media (max-width: 860px) { .trust-grid { grid-template-columns: 1fr; } }
+  .trust-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 30px 26px;
+    box-shadow: 0 1px 2px rgba(14,42,71,0.04);
+  }
+  .trust-card h3 { margin: 0 0 10px; font-size: 16.5px; font-weight: 700; }
+  .trust-card p { margin: 0; font-size: 14px; color: var(--ink-soft); }
 
   /* ── FAQ ────────────────────────────────── */
+  .faq-list { margin-top: 44px; }
   .faq-item { border-top: 1px solid var(--line); }
   .faq-item:last-child { border-bottom: 1px solid var(--line); }
   .faq-q {
@@ -383,16 +624,17 @@
     background: none;
     border: none;
     font: inherit;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 16px;
     padding: 22px 0;
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
     color: var(--ink);
   }
-  .faq-q .plus { font-size: 20px; color: var(--accent); transition: transform 0.3s ease; }
+  .faq-q .plus { font-size: 20px; color: var(--accent); transition: transform 0.3s ease; flex: 0 0 auto; }
   .faq-item.open .plus { transform: rotate(45deg); }
   .faq-a {
     max-height: 0;
@@ -401,22 +643,25 @@
     color: var(--ink-soft);
     font-size: 14.5px;
   }
-  .faq-a p { margin: 0 0 20px; }
+  .faq-a p { margin: 0 0 22px; }
+  .faq-a a { color: var(--accent); font-weight: 600; }
 
   /* ── Final CTA / form ───────────────────── */
+  .cta-outer { padding: 0 5vw 120px; }
   .cta-section {
-    background: var(--ink);
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
     color: #fff;
     border-radius: 28px;
-    /* 狭い画面で角丸ボックスが画面端に張り付かないよう左右余白を常に確保する */
-    width: min(1080px, 88vw);
-    margin: 0 auto 120px;
-    padding: 80px 6vw;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 84px 6vw;
     text-align: center;
   }
+  .cta-section .eyebrow { justify-content: center; color: #9db3cb; }
+  .cta-section .eyebrow .en { color: #8fc1f5; }
   .cta-section h2 { color: #fff; }
-  .cta-section .lead { color: #c9cbc7; margin: 0 auto 36px; }
-  /* ── 通知チャネル選択(v0.28: メール/LINE) ────── */
+  .cta-section .lead { color: #b9c8da; margin: 0 auto 36px; }
+  /* ── 通知チャネル選択(メール/LINE) ────── */
   .channel-toggle {
     display: flex;
     gap: 20px;
@@ -429,7 +674,7 @@
     align-items: center;
     gap: 7px;
     font-size: 14px;
-    color: #d8dad6;
+    color: #d5dfeb;
     cursor: pointer;
   }
   .channel-option input { accent-color: var(--accent); width: 16px; height: 16px; }
@@ -438,21 +683,21 @@
     gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
-    max-width: 460px;
+    max-width: 480px;
     margin: 0 auto;
   }
   .register-form input {
     flex: 1 1 260px;
-    padding: 15px 18px;
+    padding: 16px 20px;
     border-radius: 999px;
-    border: 1px solid #454745;
-    background: #26282a;
-    color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: #fff;
+    color: var(--ink);
     font-size: 15px;
   }
-  .register-form input::placeholder { color: #8b8e8b; }
+  .register-form input::placeholder { color: #8a94a3; }
   .register-form button {
-    padding: 15px 26px;
+    padding: 16px 30px;
     border-radius: 999px;
     border: none;
     background: var(--accent);
@@ -460,10 +705,13 @@
     font-weight: 700;
     cursor: pointer;
     font-size: 15px;
+    transition: background 0.2s ease;
   }
+  .register-form button:hover { background: var(--accent-deep); }
   .register-form button:disabled { opacity: 0.6; cursor: default; }
   .form-msg { margin-top: 16px; font-size: 13.5px; min-height: 20px; }
-  .cta-trust { margin-top: 22px; font-size: 12.5px; color: #9a9d99; }
+  .cta-trust { margin-top: 24px; font-size: 12.5px; color: #93a6bc; }
+  .cta-trust a { color: #b9d3ef; }
   .form-msg.ok { color: #8fd6b8; }
   .form-msg.err { color: #f2a5a5; }
   /* honeypot: bot対策の非表示フィールド。display:noneはbotに無視されやすいため
@@ -472,10 +720,11 @@
 
   /* ── Footer ─────────────────────────────── */
   footer {
-    padding: 48px 6vw 60px;
+    padding: 48px 5vw 60px;
     text-align: center;
     font-size: 13px;
     color: var(--ink-soft);
+    border-top: 1px solid var(--line);
   }
   footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
 </style>
@@ -483,317 +732,433 @@
 <body>
 
 <header class="site-header" id="siteHeader">
-  <div class="brand">入札情報<span>ウォッチ</span></div>
-  <a class="header-cta" href="#register">事前登録</a>
+  <div class="brand">入札情報<span>ウォッチ</span><span class="brand-sub">横浜市 入札情報自動通知サービス</span></div>
+  <nav class="header-nav" aria-label="ページ内メニュー">
+    <a href="#how">仕組み</a>
+    <a href="#mail-sample">通知メール例</a>
+    <a href="#market">落札データ</a>
+    <a href="#price">料金・比較</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <a class="header-cta" href="#register">無料で事前登録</a>
 </header>
 
 <section class="hero">
-  <div class="eyebrow reveal">パイロット版・横浜市対応</div>
-  <h1 class="reveal d1">横浜市の入札公告を<span class="hl">毎朝<span style="white-space:nowrap">自動</span>でチェック</span>。<br class="br-pc" />該当案件があれば、すぐ通知。</h1>
-  <p class="lead reveal d2" style="margin-left:auto;margin-right:auto;">
-    清掃・ビルメンテナンス業のための入札情報自動通知サービス。<br>
-    面倒な毎日の公告チェックはすべておまかせ。対象業種の案件が出たときだけ、メールで受け取れます。
-  </p>
-  <div class="hero-actions reveal d3">
-    <a class="btn-primary" href="#register">無料で事前登録する</a>
-    <a class="btn-secondary" href="#how">仕組みを見る</a>
-  </div>
-  <div class="hero-visual reveal d3">
-    <div class="stat-pill"><div class="num">毎朝6時</div><div class="label">自動収集</div></div>
-    <div class="stat-pill"><div class="num">月8〜14件</div><div class="label">マッチ実績（直近の実測）</div></div>
-    <div class="stat-pill"><div class="num">横浜市</div><div class="label">パイロット対応エリア</div></div>
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <div class="hero-badge reveal">パイロット版・テスト運用中は無料</div>
+      <h1 class="reveal d1">入札情報ウォッチなら、<br class="br-pc" />横浜市の案件を<span class="hl">見逃さない</span>。</h1>
+      <p class="lead reveal d2">
+        清掃・ビルメンテナンス業のための入札情報自動通知サービス。毎朝6時に横浜市の入札公告を自動でチェックし、対象業種の案件が出た日だけ、メールでお届けします。面倒な検索条件の設定は一切不要です。
+      </p>
+      <div class="hero-actions reveal d3">
+        <a class="btn-primary" href="#register">無料で事前登録する</a>
+        <a class="btn-secondary" href="#how">仕組みを見る</a>
+      </div>
+      <ul class="hero-trust reveal d3">
+        <li>登録はメールアドレスだけ</li>
+        <li>テスト期間中は無料</li>
+        <li>自動課金なし・いつでも配信停止</li>
+      </ul>
+    </div>
+    <div class="hero-visual reveal d2">
+      <div class="notify-card" aria-hidden="true">
+        <div class="notify-head"><span class="dot"></span>入札情報ウォッチ<span class="time">今朝 6:00 受信</span></div>
+        <div class="notify-subject">【入札情報ウォッチ】横浜市 清掃関連案件 7件</div>
+        <div class="notify-case">
+          <p class="notify-case-title">1. ○○地区 学校施設清掃業務委託</p>
+          <div class="notify-meta"><span>一般競争入札</span><span>市内業者</span><span class="deadline">締切まであと3日</span></div>
+        </div>
+        <div class="notify-case">
+          <p class="notify-case-title">2. △△公園 除草業務委託</p>
+          <div class="notify-meta"><span>一般競争入札</span><span>小規模企業者</span><span class="deadline">締切まであと5日</span></div>
+        </div>
+      </div>
+      <div class="float-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7 L12 12 L15.5 14" /></svg>
+        毎朝6:00に自動チェック
+      </div>
+      <p class="hero-visual-note">※画面は通知イメージです（サンプル案件）</p>
+    </div>
   </div>
 </section>
+
+<div class="stat-band">
+  <div class="container stat-grid">
+    <div class="stat-item reveal"><div class="num">毎朝6<small>時</small></div><div class="label">横浜市の公告を自動チェック</div></div>
+    <div class="stat-item reveal d1"><div class="num">月8〜14<small>件</small></div><div class="label">通知実績（直近の実測）</div></div>
+    <div class="stat-item reveal d2"><div class="num">9<small>業種</small></div><div class="label">清掃・設備点検・除草など</div></div>
+    <div class="stat-item reveal d3"><div class="num">0<small>円</small></div><div class="label">テスト運用期間中の利用料</div></div>
+  </div>
+</div>
 
 <section id="problem">
-  <div class="eyebrow reveal">こんな悩みありませんか</div>
-  <h2 class="reveal">入札公告のチェック、<br>実は毎日けっこう大変。</h2>
-  <p class="lead reveal">忙しい現場業務の合間に、自治体サイトを毎日開いて確認するのは負担です。</p>
-  <div class="card-grid">
-    <div class="card reveal">
-      <div class="icon">🕒</div>
-      <h3>毎日の確認が負担</h3>
-      <p>自治体の公告一覧を毎日チェックするだけで時間を取られてしまう。</p>
-    </div>
-    <div class="card reveal d1">
-      <div class="icon">📉</div>
-      <h3>見落としで機会損失</h3>
-      <p>忙しい時期にチェックが漏れて、対象になり得た案件を逃してしまう。</p>
-    </div>
-    <div class="card reveal d2">
-      <div class="icon">🔍</div>
-      <h3>対象案件を探すのが大変</h3>
-      <p>大量の公告の中から自社の業種に関係する案件だけを探すのが手間。</p>
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">PROBLEM</span>こんな悩みありませんか</p>
+    <h2 class="reveal">入札公告のチェック、<br>実は毎日けっこう大変。</h2>
+    <p class="lead reveal">忙しい現場業務の合間に、自治体サイトを毎日開いて確認するのは負担です。</p>
+    <div class="card-grid">
+      <div class="card reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 6.5 L12 12 L16 14.5" /></svg>
+        </div>
+        <h3>毎日の確認が負担</h3>
+        <p>自治体の公告一覧を毎日チェックするだけで時間を取られてしまう。</p>
+      </div>
+      <div class="card reveal d1">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6 L9.5 13 L13.5 9.5 L21 17" /><path d="M21 11.5 L21 17 L15.5 17" /></svg>
+        </div>
+        <h3>見落としで機会損失</h3>
+        <p>忙しい時期にチェックが漏れて、対象になり得た案件を逃してしまう。</p>
+      </div>
+      <div class="card reveal d2">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 L21 21" /></svg>
+        </div>
+        <h3>対象案件を探すのが大変</h3>
+        <p>大量の公告の中から自社の業種に関係する案件だけを探すのが手間。</p>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="how">
-  <div class="eyebrow reveal">仕組み</div>
-  <h2 class="reveal">やることは、メールを待つだけ。</h2>
-  <p class="lead reveal">横浜市の公告確認から案件抽出まで、すべて自動で行います。</p>
-  <div class="how-flow reveal d1">
-    <div class="flow-item">
-      <div class="flow-icon">
-        <!-- 役所（横浜市サイト）アイコン -->
-        <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M6 18 L24 7 L42 18" />
-          <line x1="9" y1="18" x2="39" y2="18" />
-          <line x1="12" y1="22" x2="12" y2="36" />
-          <line x1="20" y1="22" x2="20" y2="36" />
-          <line x1="28" y1="22" x2="28" y2="36" />
-          <line x1="36" y1="22" x2="36" y2="36" />
-          <line x1="8" y1="40" x2="40" y2="40" />
+<section id="how" class="band-alt">
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">HOW IT WORKS</span>仕組み</p>
+    <h2 class="reveal">やることは、メールを待つだけ。</h2>
+    <p class="lead reveal">横浜市の公告確認から案件抽出まで、すべて自動で行います。</p>
+    <div class="how-flow reveal d1">
+      <div class="flow-item">
+        <div class="flow-icon">
+          <!-- 役所（横浜市サイト）アイコン -->
+          <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 18 L24 7 L42 18" />
+            <line x1="9" y1="18" x2="39" y2="18" />
+            <line x1="12" y1="22" x2="12" y2="36" />
+            <line x1="20" y1="22" x2="20" y2="36" />
+            <line x1="28" y1="22" x2="28" y2="36" />
+            <line x1="36" y1="22" x2="36" y2="36" />
+            <line x1="8" y1="40" x2="40" y2="40" />
+          </svg>
+        </div>
+        <div class="flow-step-label">STEP 1</div>
+        <h3>毎朝6時に自動チェック</h3>
+        <p>横浜市の入札公告ページを、毎朝欠かさず自動で確認します。</p>
+      </div>
+      <div class="flow-arrow" aria-hidden="true">
+        <svg viewBox="0 0 34 34" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="17" x2="27" y2="17" />
+          <path d="M20 10 L27 17 L20 24" />
         </svg>
       </div>
-      <div class="flow-step-label">STEP 1</div>
-      <h3>毎朝6時に自動チェック</h3>
-      <p>横浜市の入札公告ページを、毎朝欠かさず自動で確認します。</p>
-    </div>
-    <div class="flow-arrow" aria-hidden="true">
-      <svg viewBox="0 0 34 34" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="5" y1="17" x2="27" y2="17" />
-        <path d="M20 10 L27 17 L20 24" />
-      </svg>
-    </div>
-    <div class="flow-item">
-      <div class="flow-icon">
-        <!-- 絞り込み（じょうご）アイコン -->
-        <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M7 9 L41 9 L28 25 L28 37 L20 41 L20 25 Z" />
+      <div class="flow-item">
+        <div class="flow-icon">
+          <!-- 絞り込み（じょうご）アイコン -->
+          <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 9 L41 9 L28 25 L28 37 L20 41 L20 25 Z" />
+          </svg>
+        </div>
+        <div class="flow-step-label">STEP 2</div>
+        <h3>関係する案件だけを抽出</h3>
+        <p>清掃・設備点検・造園・除草など、対象業種の案件だけを自動で絞り込みます。</p>
+      </div>
+      <div class="flow-arrow" aria-hidden="true">
+        <svg viewBox="0 0 34 34" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="17" x2="27" y2="17" />
+          <path d="M20 10 L27 17 L20 24" />
         </svg>
       </div>
-      <div class="flow-step-label">STEP 2</div>
-      <h3>関係する案件だけを抽出</h3>
-      <p>清掃・設備点検・造園・除草など、対象業種の案件だけを自動で絞り込みます。</p>
-    </div>
-    <div class="flow-arrow" aria-hidden="true">
-      <svg viewBox="0 0 34 34" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="5" y1="17" x2="27" y2="17" />
-        <path d="M20 10 L27 17 L20 24" />
-      </svg>
-    </div>
-    <div class="flow-item">
-      <div class="flow-icon">
-        <!-- メール通知アイコン -->
-        <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="6" y="12" width="36" height="26" rx="3" />
-          <path d="M7 14 L24 27 L41 14" />
-        </svg>
+      <div class="flow-item">
+        <div class="flow-icon">
+          <!-- メール通知アイコン -->
+          <svg viewBox="0 0 48 48" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="6" y="12" width="36" height="26" rx="3" />
+            <path d="M7 14 L24 27 L41 14" />
+          </svg>
+        </div>
+        <div class="flow-step-label">STEP 3</div>
+        <h3>メールでお知らせ</h3>
+        <p>該当案件があった日だけ、締切や参加資格などの詳細をメールでお届けします。</p>
       </div>
-      <div class="flow-step-label">STEP 3</div>
-      <h3>メールでお知らせ</h3>
-      <p>該当案件があった日だけ、締切や参加資格などの詳細をメールでお届けします。</p>
     </div>
-  </div>
-  <p class="how-note">あなたがやることは、<strong>届いたメールを開くだけ</strong>。面倒な設定や検索条件の登録は一切不要です。</p>
-  <div class="mid-cta reveal">
-    <p>「対象案件を見逃したくない」方は、今すぐ無料で事前登録できます。</p>
-    <a class="btn-primary" href="#register">無料で事前登録する</a>
+    <p class="how-note">あなたがやることは、<strong>届いたメールを開くだけ</strong>。面倒な設定や検索条件の登録は一切不要です。</p>
+    <div class="mid-cta reveal">
+      <p>「対象案件を見逃したくない」方は、今すぐ無料で事前登録できます。</p>
+      <a class="btn-primary" href="#register">無料で事前登録する</a>
+    </div>
   </div>
 </section>
 
 <section id="mail-sample">
-  <div class="eyebrow reveal">通知メールのイメージ</div>
-  <h2 class="reveal">実際に届くメールは、こんな内容です。</h2>
-  <p class="lead reveal">対象案件が見つかった日にだけ届く通知メールのサンプルです。案件ごとに詳細情報をまとめてお届けします。</p>
-  <div class="mail-mock reveal d1">
-    <div class="mail-mock-bar">
-      <span class="mail-dot"></span><span class="mail-dot"></span><span class="mail-dot"></span>
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">MAIL SAMPLE</span>通知メールのイメージ</p>
+    <h2 class="reveal">実際に届くメールは、こんな内容です。</h2>
+    <p class="lead reveal">対象案件が見つかった日にだけ届く通知メールのサンプルです。案件ごとに詳細情報をまとめてお届けします。</p>
+    <div class="mail-mock reveal d1">
+      <div class="mail-mock-bar">
+        <span class="mail-dot"></span><span class="mail-dot"></span><span class="mail-dot"></span>
+      </div>
+      <div class="mail-mock-header">
+        <div class="mail-mock-row"><span class="mail-mock-label">件名</span><span>【入札情報ウォッチ】横浜市 第18104号 清掃関連案件7件</span></div>
+        <div class="mail-mock-row"><span class="mail-mock-label">差出人</span><span>入札情報ウォッチ &lt;notify@info.zer0-infra.com&gt;</span></div>
+      </div>
+      <div class="mail-mock-body">
+        <div class="mail-mock-brand">入札情報ウォッチ（横浜市パイロット版）</div>
+        <p class="mail-mock-case-title">1. ○○地区 学校施設清掃業務委託（サンプル）</p>
+        <ul class="mail-mock-list">
+          <li><strong>契約番号</strong>18104-0001</li>
+          <li><strong>入札方式</strong>一般競争入札（電子入札）</li>
+          <li><strong>担当部局</strong>教育委員会事務局 施設課</li>
+          <li><strong>種目</strong>清掃業務</li>
+          <li><strong>参加資格</strong>市内業者／小規模企業者</li>
+          <li><strong>履行場所</strong>横浜市○○区○○</li>
+          <li><strong>履行期間</strong>2026年4月1日〜2027年3月31日</li>
+          <li><strong>締切残日数</strong>あと3日</li>
+          <li><strong>開札予定日時</strong>2026年7月28日 10:00</li>
+        </ul>
+        <p class="mail-mock-more">…以下、その日にマッチした案件が続きます（この例では計7件）</p>
+      </div>
     </div>
-    <div class="mail-mock-header">
-      <div class="mail-mock-row"><span class="mail-mock-label">件名</span><span>【入札情報ウォッチ】横浜市 第18104号 清掃関連案件7件</span></div>
-      <div class="mail-mock-row"><span class="mail-mock-label">差出人</span><span>入札情報ウォッチ &lt;notify@info.zer0-infra.com&gt;</span></div>
-    </div>
-    <div class="mail-mock-body">
-      <div class="mail-mock-brand">入札情報ウォッチ（横浜市パイロット版）</div>
-      <p class="mail-mock-case-title">1. ○○地区 学校施設清掃業務委託（サンプル）</p>
-      <ul class="mail-mock-list">
-        <li><strong>契約番号</strong>18104-0001</li>
-        <li><strong>入札方式</strong>一般競争入札（電子入札）</li>
-        <li><strong>担当部局</strong>教育委員会事務局 施設課</li>
-        <li><strong>種目</strong>清掃業務</li>
-        <li><strong>参加資格</strong>市内業者／小規模企業者</li>
-        <li><strong>履行場所</strong>横浜市○○区○○</li>
-        <li><strong>履行期間</strong>2026年4月1日〜2027年3月31日</li>
-        <li><strong>締切残日数</strong>あと3日</li>
-        <li><strong>開札予定日時</strong>2026年7月28日 10:00</li>
-      </ul>
-      <p class="mail-mock-more">…以下、その日にマッチした案件が続きます（この例では計7件）</p>
+    <p class="mail-mock-note">※上記はイメージを伝えるためのサンプルです。実際にはこのような情報が毎回のメールに含まれます。</p>
+  </div>
+</section>
+
+<section id="reason" class="band-alt">
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">FEATURES</span>入札情報ウォッチの特長</p>
+    <h2 class="reveal">小さなサービスだから、<br>できることがあります。</h2>
+    <p class="lead reveal">全国対応の大手データベースとは役割が違います。「横浜市で、清掃・ビルメンテナンスの案件だけ分かればいい」方のための、必要十分なサービスです。</p>
+    <div class="reason-grid">
+      <div class="reason-card reveal">
+        <span class="reason-num">01</span>
+        <h3>横浜市に特化</h3>
+        <p>全国の案件は届きません。そのかわり、横浜市の対象案件を毎朝確実にチェックします。<strong>必要な情報だけに絞る</strong>ことで、読むのに時間がかからない通知を実現しています。</p>
+      </div>
+      <div class="reason-card reveal d1">
+        <span class="reason-num">02</span>
+        <h3>設定は一切不要</h3>
+        <p>キーワード登録も検索条件の設定もありません。清掃・ビルメンテナンス業向けに<strong>絞り込み条件を最初から組み込んでいる</strong>ので、メールアドレスを登録するだけで使い始められます。</p>
+      </div>
+      <div class="reason-card reveal d2">
+        <span class="reason-num">03</span>
+        <h3>続けやすい価格</h3>
+        <p>正式版は<strong>月額3,000円（予定）</strong>。広域対応の有償サービス（月8,000円前後〜）と比べて、横浜市だけを見たい場合に無駄なく使える価格設定です。テスト運用中はすべて無料です。</p>
+      </div>
+      <div class="reason-card reveal d3">
+        <span class="reason-num">04</span>
+        <h3>正直な運営</h3>
+        <p>個人運営のパイロット版であることを隠しません。通知実績（月8〜14件）や集計方法など、<strong>実際の数字だけ</strong>を掲載しています。できないことは「できない」とFAQに明記しています。</p>
+      </div>
     </div>
   </div>
-  <p class="mail-mock-note">※上記はイメージを伝えるためのサンプルです。実際にはこのような情報が毎回のメールに含まれます。</p>
 </section>
 
 <section id="market">
-  <div class="eyebrow reveal">落札実績データ</div>
-  <h2 class="reveal">横浜市の関連案件、<br>実際の落札規模は？</h2>
-  <p class="lead reveal">横浜市が公開する入札・契約結果（令和7年度分）を集計しました。数十万円の小規模案件から数千万円の大型案件まで幅があり、会社の規模を問わず参入の機会があります。</p>
-  <div class="market-grid">
-    <div class="market-card reveal">
-      <p class="kicker">種目</p>
-      <p class="cat-name">建物管理</p>
-      <p class="cat-note">※清掃業務のほか設備保守等も含む区分です</p>
-      <p class="big-label">契約金額の中央値</p>
-      <p class="big-num">約277<small>万円</small></p>
-      <ul class="market-sub">
-        <li><span>平均</span><span>約449万円</span></li>
-        <li><span>金額の幅</span><span>約8.0万〜約2,501万円</span></li>
-        <li><span>集計件数</span><span>42件（全46件中）</span></li>
-      </ul>
-    </div>
-    <div class="market-card reveal d1">
-      <p class="kicker">種目</p>
-      <p class="cat-name">浄化槽・貯水槽等清掃</p>
-      <p class="cat-note">※浄化槽・貯水槽などの清掃業務の区分です</p>
-      <p class="big-label">契約金額の中央値</p>
-      <p class="big-num">約245<small>万円</small></p>
-      <ul class="market-sub">
-        <li><span>平均</span><span>約423万円</span></li>
-        <li><span>金額の幅</span><span>約16.1万〜約5,295万円</span></li>
-        <li><span>集計件数</span><span>31件（全33件中）</span></li>
-      </ul>
-    </div>
-  </div>
-  <p class="source-note reveal">
-    出典: 横浜市「入札・契約結果検索」より当サービスが集計（令和7年度分、2026年7月時点）。金額は公開されている契約金額（税込）に基づく統計値で、契約金額が公開されていない案件は集計から除いています。「建物管理」は清掃以外の業務も含む区分のため、清掃業務単体の相場とは異なる場合があります。個別の落札事業者名は掲載していません。本データは年度替わり（毎年4月頃）を目安に更新予定です。
-  </p>
-</section>
-
-<section id="coverage">
-  <div class="split">
-    <div class="info-box reveal">
-      <h3>対象エリア・対象業種</h3>
-      <p style="color:var(--ink-soft);font-size:14.5px;margin:0;">現在は横浜市の案件を対象にパイロット運用中です。検証が安定次第、対応エリアの拡大を予定しています。</p>
-      <div class="tag-row">
-        <span class="tag">横浜市</span>
-        <span class="tag">清掃</span>
-        <span class="tag">美化</span>
-        <span class="tag">害虫防除</span>
-        <span class="tag">ねずみ防除</span>
-        <span class="tag">消防用設備点検</span>
-        <span class="tag">造園・緑地・街路樹</span>
-        <span class="tag">除草</span>
-        <span class="tag">設備保守点検</span>
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">MARKET DATA</span>落札実績データ</p>
+    <h2 class="reveal">横浜市の関連案件、<br>実際の落札規模は？</h2>
+    <p class="lead reveal">横浜市が公開する入札・契約結果（令和7年度分）を集計しました。数十万円の小規模案件から数千万円の大型案件まで幅があり、会社の規模を問わず参入の機会があります。</p>
+    <div class="market-grid">
+      <div class="market-card reveal">
+        <p class="kicker">種目</p>
+        <p class="cat-name">建物管理</p>
+        <p class="cat-note">※清掃業務のほか設備保守等も含む区分です</p>
+        <p class="big-label">契約金額の中央値</p>
+        <p class="big-num">約277<small>万円</small></p>
+        <ul class="market-sub">
+          <li><span>平均</span><span>約449万円</span></li>
+          <li><span>金額の幅</span><span>約8.0万〜約2,501万円</span></li>
+          <li><span>集計件数</span><span>42件（全46件中）</span></li>
+        </ul>
+      </div>
+      <div class="market-card reveal d1">
+        <p class="kicker">種目</p>
+        <p class="cat-name">浄化槽・貯水槽等清掃</p>
+        <p class="cat-note">※浄化槽・貯水槽などの清掃業務の区分です</p>
+        <p class="big-label">契約金額の中央値</p>
+        <p class="big-num">約245<small>万円</small></p>
+        <ul class="market-sub">
+          <li><span>平均</span><span>約423万円</span></li>
+          <li><span>金額の幅</span><span>約16.1万〜約5,295万円</span></li>
+          <li><span>集計件数</span><span>31件（全33件中）</span></li>
+        </ul>
       </div>
     </div>
-    <div class="price-card reveal d1">
-      <div class="eyebrow" style="justify-content:center;">料金</div>
-      <div class="price">無料<small>（テスト運用期間中）</small></div>
-      <p class="note">正式版は月額3,000円（予定）です。<br>価格・提供時期は検証状況により変更となる場合があります。詳細は<a href="tokushoho.html" style="color:var(--accent);font-weight:600;">特定商取引法に基づく表記</a>をご覧ください。</p>
-    </div>
-  </div>
-  <div class="compare-wrap reveal d2">
-    <table class="compare-table">
-      <thead>
-        <tr>
-          <th>サービス</th>
-          <th>対象範囲</th>
-          <th>料金目安</th>
-          <th>特徴</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>官公需情報ポータルサイト</td>
-          <td>全国</td>
-          <td>無料</td>
-          <td>公的サイト。キーワード条件は自分で設定し、RSSリーダー等で確認する必要がある</td>
-        </tr>
-        <tr>
-          <td>NJSS</td>
-          <td>全国</td>
-          <td>初期30万円+年77万円〜</td>
-          <td>検索軸が豊富な有償データベース。個人・小規模事業者には導入コストが高い</td>
-        </tr>
-        <tr>
-          <td>入札王 等</td>
-          <td>都道府県単位</td>
-          <td>月7,920〜8,709円〜</td>
-          <td>広域カバーの有償サービス。横浜市単体を使う場合は割高になりやすい</td>
-        </tr>
-        <tr class="self-row">
-          <td>入札情報ウォッチ</td>
-          <td>横浜市（パイロット版）</td>
-          <td>月額3,000円（予定）</td>
-          <td>設定不要。対象業種の案件だけを毎朝自動チェックしメールで届ける</td>
-        </tr>
-      </tbody>
-    </table>
-    <p class="compare-note">他社の料金は公開情報をもとにした目安です（2026-07時点）。詳細は各サービスの公式サイトをご確認ください。</p>
+    <p class="source-note reveal">
+      出典: 横浜市「入札・契約結果検索」より当サービスが集計（令和7年度分、2026年7月時点）。金額は公開されている契約金額（税込）に基づく統計値で、契約金額が公開されていない案件は集計から除いています。「建物管理」は清掃以外の業務も含む区分のため、清掃業務単体の相場とは異なる場合があります。個別の落札事業者名は掲載していません。本データは年度替わり（毎年4月頃）を目安に更新予定です。
+    </p>
   </div>
 </section>
 
-<section id="faq">
-  <div class="eyebrow reveal">よくある質問</div>
-  <h2 class="reveal">FAQ</h2>
-  <div class="faq-list">
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-1" aria-expanded="false" aria-controls="faq-a-1">対象エリアは横浜市だけですか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-1" role="region" aria-labelledby="faq-q-1" aria-hidden="true"><p>現在は横浜市の案件のみを対象にパイロット運用中です。検証が安定次第、他エリアへの対応拡大を検討しています。</p></div>
+<section id="price" class="band-alt">
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">PRICE</span>料金と対象範囲</p>
+    <h2 class="reveal">テスト運用中は無料。<br>正式版も、続けやすい価格に。</h2>
+    <p class="lead reveal">大手サービスのような全国データベースは持ちません。そのぶん、横浜市の対象案件だけを低価格で届けることに集中しています。</p>
+    <div class="split">
+      <div class="info-box reveal">
+        <h3>対象エリア・対象業種</h3>
+        <p style="color:var(--ink-soft);font-size:14.5px;margin:0;">現在は横浜市の案件を対象にパイロット運用中です。検証が安定次第、対応エリアの拡大を予定しています。</p>
+        <div class="tag-row">
+          <span class="tag">横浜市</span>
+          <span class="tag">清掃</span>
+          <span class="tag">美化</span>
+          <span class="tag">害虫防除</span>
+          <span class="tag">ねずみ防除</span>
+          <span class="tag">消防用設備点検</span>
+          <span class="tag">造園・緑地・街路樹</span>
+          <span class="tag">除草</span>
+          <span class="tag">設備保守点検</span>
+        </div>
+      </div>
+      <div class="price-card reveal d1">
+        <span class="price-kicker">テスト運用期間中</span>
+        <div class="price">無料<small>／月</small></div>
+        <p class="price-next">正式版は月額3,000円（予定）</p>
+        <p class="note">価格・提供時期は検証状況により変更となる場合があります。正式版への移行時は事前にご案内し、事前登録だけで課金が始まることはありません。詳細は<a href="tokushoho.html" style="color:var(--accent);font-weight:600;">特定商取引法に基づく表記</a>をご覧ください。</p>
+      </div>
     </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-2" aria-expanded="false" aria-controls="faq-a-2">どのくらいの頻度で届きますか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-2" role="region" aria-labelledby="faq-q-2" aria-hidden="true"><p>横浜市の入札公告は原則毎週火曜日に発行されます。毎朝の自動チェック自体は欠かしませんが、通知が届くのは対象キーワードに合う案件が実際にある時だけです。直近の実測では月あたり8〜14件が対象条件にマッチしていますが、該当案件がまったくない週もあります。「毎日届く」サービスではなく、「出た時に見逃さない」サービスとしてご利用ください。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-3" aria-expanded="false" aria-controls="faq-a-3">今すぐ利用開始できますか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-3" role="region" aria-labelledby="faq-q-3" aria-hidden="true"><p>現在は無料のテスト運用期間中です。事前登録いただいた方から順次ご案内します。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-4" aria-expanded="false" aria-controls="faq-a-4">料金はいつから発生しますか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-4" role="region" aria-labelledby="faq-q-4" aria-hidden="true"><p>テスト運用期間中は無料です。正式版（月額3,000円を予定）への移行時には、事前に本サイトと登録メールアドレス宛にご案内します。事前登録しただけで自動的に課金が始まることはありません。詳細は<a href="tokushoho.html">特定商取引法に基づく表記</a>をご確認ください。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-5" aria-expanded="false" aria-controls="faq-a-5">対象業種は追加されますか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-5" role="region" aria-labelledby="faq-q-5" aria-hidden="true"><p>現在は清掃・美化・害虫防除・ねずみ防除・消防用設備点検・造園/緑地/街路樹・除草・設備保守点検・建物管理を対象にしています。ご要望があればお問い合わせください。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-6" aria-expanded="false" aria-controls="faq-a-6">個人事業主でも利用できますか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-6" role="region" aria-labelledby="faq-q-6" aria-hidden="true"><p>はい、法人・個人事業主どちらも対象としています。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-7" aria-expanded="false" aria-controls="faq-a-7">中小企業庁の「官公需情報ポータルサイト」との違いは？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-7" role="region" aria-labelledby="faq-q-7" aria-hidden="true"><p>官公需情報ポータルサイトは無料で有用なサービスですが、自分でキーワード条件を設定してRSSリーダー等で確認する必要があります。本サービスは、清掃・ビルメンテナンス関連のキーワードで絞り込んだ案件を、設定不要でメールボックスに直接届けることに特化しています。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-8" aria-expanded="false" aria-controls="faq-a-8">登録すればすぐに入札に参加できますか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-8" role="region" aria-labelledby="faq-q-8" aria-hidden="true"><p>本サービスは案件情報の収集・通知のみを行うものです。実際に入札に参加するには、別途横浜市への入札参加資格審査申請（随時受付）が必要です。まだ資格をお持ちでない場合は、先に横浜市の案内をご確認ください。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-9" aria-expanded="false" aria-controls="faq-a-9">どこが運営しているサービスですか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-9" role="region" aria-labelledby="faq-q-9" aria-hidden="true"><p>「Zer0-Infra」の屋号で個人が運営しているサービスです。現在はパイロット版として無料で提供しており、ご利用者の声をもとに改善を続けています。詳細は<a href="privacy.html">プライバシーポリシー</a>をご確認ください。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-10" aria-expanded="false" aria-controls="faq-a-10">解約（配信停止）はどうすればいいですか？<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-10" role="region" aria-labelledby="faq-q-10" aria-hidden="true"><p>現在は無料のテスト運用期間中のため、解約手続きは不要です。メールで受け取っている場合は通知メール末尾の配信停止リンクをクリック、LINEで受け取っている場合は公式アカウントをブロックしていただければ、いつでも配信を停止できます。お困りの際はお問い合わせ窓口までご連絡ください。正式版移行後の解約方法も同様です。</p></div>
-    </div>
-    <div class="faq-item reveal">
-      <button class="faq-q" id="faq-q-11" aria-expanded="false" aria-controls="faq-a-11">登録したのに確認メールが届きません<span class="plus">+</span></button>
-      <div class="faq-a" id="faq-a-11" role="region" aria-labelledby="faq-q-11" aria-hidden="true"><p>迷惑メールフォルダに振り分けられている可能性があります。まずそちらをご確認のうえ、送信元アドレス（notify@info.zer0-infra.com）を連絡先・許可リストに追加していただくと、以降のメールが届きやすくなります。それでも見当たらない場合はお問い合わせください。</p></div>
+    <h3 class="compare-title reveal">他のサービスとの違い</h3>
+    <div class="compare-wrap reveal d1">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>サービス</th>
+            <th>対象範囲</th>
+            <th>料金目安</th>
+            <th>特徴</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>官公需情報ポータルサイト</td>
+            <td>全国</td>
+            <td class="price-cell">無料</td>
+            <td>公的サイト。キーワード条件は自分で設定し、RSSリーダー等で確認する必要がある</td>
+          </tr>
+          <tr>
+            <td>NJSS</td>
+            <td>全国</td>
+            <td class="price-cell">初期30万円+年77万円〜</td>
+            <td>検索軸が豊富な有償データベース。個人・小規模事業者には導入コストが高い</td>
+          </tr>
+          <tr>
+            <td>入札王 等</td>
+            <td>都道府県単位</td>
+            <td class="price-cell">月7,920〜8,709円〜</td>
+            <td>広域カバーの有償サービス。横浜市単体を使う場合は割高になりやすい</td>
+          </tr>
+          <tr class="self-row">
+            <td>入札情報ウォッチ<span class="self-badge">本サービス</span></td>
+            <td>横浜市（パイロット版）</td>
+            <td class="price-cell">月額3,000円（予定）</td>
+            <td>設定不要。対象業種の案件だけを毎朝自動チェックしメールで届ける</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="compare-note">他社の料金は公開情報をもとにした目安です（2026-07時点）。詳細は各サービスの公式サイトをご確認ください。</p>
     </div>
   </div>
 </section>
 
-<section class="cta-section reveal" id="register">
-  <h2>入札情報を、見逃さない。</h2>
-  <p class="lead">事前登録いただいた方から、テスト運用のご案内をお送りします。</p>
-  <div class="channel-toggle" role="radiogroup" aria-label="通知の受け取り方法">
-    <label class="channel-option">
-      <input type="radio" name="channel" value="email" id="channelEmail" checked /> メールで受け取る
-    </label>
-    <label class="channel-option">
-      <input type="radio" name="channel" value="line" id="channelLine" /> LINEで受け取る
-    </label>
+<section id="trust">
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">ABOUT US</span>運営について</p>
+    <h2 class="reveal">導入実績の代わりに、<br>すべてを開示します。</h2>
+    <p class="lead reveal">立ち上げたばかりのサービスなので、「導入企業◯◯社」のような実績はまだありません。そのかわり、誰が・どうやって運営しているかを隠さずお伝えします。</p>
+    <div class="trust-grid">
+      <div class="trust-card reveal">
+        <h3>個人運営です</h3>
+        <p>屋号「Zer0-Infra」でAWSインフラエンジニアが個人で開発・運営しています。お問い合わせには運営者本人が直接回答します。</p>
+      </div>
+      <div class="trust-card reveal d1">
+        <h3>データはすべて公的情報</h3>
+        <p>通知する案件情報は横浜市が公開する入札公告、掲載中の落札データは横浜市の入札・契約結果に基づきます。出典と集計方法はページ内に明記しています。</p>
+      </div>
+      <div class="trust-card reveal d2">
+        <h3>パイロット版として検証中</h3>
+        <p>現在は横浜市を対象にしたテスト運用段階です。だからこそ無料でお試しいただけます。改善のご要望は今が一番反映されやすい時期です。</p>
+      </div>
+    </div>
   </div>
-  <form class="register-form" id="registerForm">
-    <input type="email" id="emailInput" name="email" placeholder="メールアドレス" aria-label="メールアドレス" autocomplete="email" required />
-    <input type="text" id="websiteInput" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
-    <button type="submit" id="submitBtn">登録する</button>
-  </form>
-  <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
-  <p class="cta-trust">登録・利用は無料（テスト運用期間中）。承認後に配信が始まり、いつでも配信停止できます。LINEを選ぶと登録後に友だち追加画面へ進みます。<br>登録により<a href="privacy.html">プライバシーポリシー</a>および<a href="terms.html">利用規約</a>に同意したものとみなします。</p>
 </section>
+
+<section id="faq" class="band-alt">
+  <div class="container">
+    <p class="eyebrow reveal"><span class="en">FAQ</span>よくある質問</p>
+    <h2 class="reveal">気になる点は、<br>先にお答えします。</h2>
+    <div class="faq-list">
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-1" aria-expanded="false" aria-controls="faq-a-1">対象エリアは横浜市だけですか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-1" role="region" aria-labelledby="faq-q-1" aria-hidden="true"><p>現在は横浜市の案件のみを対象にパイロット運用中です。検証が安定次第、他エリアへの対応拡大を検討しています。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-2" aria-expanded="false" aria-controls="faq-a-2">どのくらいの頻度で届きますか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-2" role="region" aria-labelledby="faq-q-2" aria-hidden="true"><p>横浜市の入札公告は原則毎週火曜日に発行されます。毎朝の自動チェック自体は欠かしませんが、通知が届くのは対象キーワードに合う案件が実際にある時だけです。直近の実測では月あたり8〜14件が対象条件にマッチしていますが、該当案件がまったくない週もあります。「毎日届く」サービスではなく、「出た時に見逃さない」サービスとしてご利用ください。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-3" aria-expanded="false" aria-controls="faq-a-3">今すぐ利用開始できますか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-3" role="region" aria-labelledby="faq-q-3" aria-hidden="true"><p>現在は無料のテスト運用期間中です。事前登録いただいた方から順次ご案内します。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-4" aria-expanded="false" aria-controls="faq-a-4">料金はいつから発生しますか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-4" role="region" aria-labelledby="faq-q-4" aria-hidden="true"><p>テスト運用期間中は無料です。正式版（月額3,000円を予定）への移行時には、事前に本サイトと登録メールアドレス宛にご案内します。事前登録しただけで自動的に課金が始まることはありません。詳細は<a href="tokushoho.html">特定商取引法に基づく表記</a>をご確認ください。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-5" aria-expanded="false" aria-controls="faq-a-5">対象業種は追加されますか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-5" role="region" aria-labelledby="faq-q-5" aria-hidden="true"><p>現在は清掃・美化・害虫防除・ねずみ防除・消防用設備点検・造園/緑地/街路樹・除草・設備保守点検・建物管理を対象にしています。ご要望があればお問い合わせください。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-6" aria-expanded="false" aria-controls="faq-a-6">個人事業主でも利用できますか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-6" role="region" aria-labelledby="faq-q-6" aria-hidden="true"><p>はい、法人・個人事業主どちらも対象としています。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-7" aria-expanded="false" aria-controls="faq-a-7">中小企業庁の「官公需情報ポータルサイト」との違いは？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-7" role="region" aria-labelledby="faq-q-7" aria-hidden="true"><p>官公需情報ポータルサイトは無料で有用なサービスですが、自分でキーワード条件を設定してRSSリーダー等で確認する必要があります。本サービスは、清掃・ビルメンテナンス関連のキーワードで絞り込んだ案件を、設定不要でメールボックスに直接届けることに特化しています。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-8" aria-expanded="false" aria-controls="faq-a-8">登録すればすぐに入札に参加できますか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-8" role="region" aria-labelledby="faq-q-8" aria-hidden="true"><p>本サービスは案件情報の収集・通知のみを行うものです。実際に入札に参加するには、別途横浜市への入札参加資格審査申請（随時受付）が必要です。まだ資格をお持ちでない場合は、先に横浜市の案内をご確認ください。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-9" aria-expanded="false" aria-controls="faq-a-9">どこが運営しているサービスですか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-9" role="region" aria-labelledby="faq-q-9" aria-hidden="true"><p>「Zer0-Infra」の屋号で個人が運営しているサービスです。現在はパイロット版として無料で提供しており、ご利用者の声をもとに改善を続けています。詳細は<a href="privacy.html">プライバシーポリシー</a>をご確認ください。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-10" aria-expanded="false" aria-controls="faq-a-10">解約（配信停止）はどうすればいいですか？<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-10" role="region" aria-labelledby="faq-q-10" aria-hidden="true"><p>現在は無料のテスト運用期間中のため、解約手続きは不要です。メールで受け取っている場合は通知メール末尾の配信停止リンクをクリック、LINEで受け取っている場合は公式アカウントをブロックしていただければ、いつでも配信を停止できます。お困りの際はお問い合わせ窓口までご連絡ください。正式版移行後の解約方法も同様です。</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" id="faq-q-11" aria-expanded="false" aria-controls="faq-a-11">登録したのに確認メールが届きません<span class="plus">+</span></button>
+        <div class="faq-a" id="faq-a-11" role="region" aria-labelledby="faq-q-11" aria-hidden="true"><p>迷惑メールフォルダに振り分けられている可能性があります。まずそちらをご確認のうえ、送信元アドレス（notify@info.zer0-infra.com）を連絡先・許可リストに追加していただくと、以降のメールが届きやすくなります。それでも見当たらない場合はお問い合わせください。</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="cta-outer">
+  <section class="cta-section reveal" id="register" style="padding-left:6vw;padding-right:6vw;">
+    <p class="eyebrow"><span class="en">FREE REGISTRATION</span>無料事前登録</p>
+    <h2>入札情報を、見逃さない。</h2>
+    <p class="lead">事前登録いただいた方から、テスト運用のご案内をお送りします。</p>
+    <div class="channel-toggle" role="radiogroup" aria-label="通知の受け取り方法">
+      <label class="channel-option">
+        <input type="radio" name="channel" value="email" id="channelEmail" checked /> メールで受け取る
+      </label>
+      <label class="channel-option">
+        <input type="radio" name="channel" value="line" id="channelLine" /> LINEで受け取る
+      </label>
+    </div>
+    <form class="register-form" id="registerForm">
+      <input type="email" id="emailInput" name="email" placeholder="メールアドレス" aria-label="メールアドレス" autocomplete="email" required />
+      <input type="text" id="websiteInput" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
+      <button type="submit" id="submitBtn">登録する</button>
+    </form>
+    <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
+    <p class="cta-trust">登録・利用は無料（テスト運用期間中）。承認後に配信が始まり、いつでも配信停止できます。LINEを選ぶと登録後に友だち追加画面へ進みます。<br>登録により<a href="privacy.html">プライバシーポリシー</a>および<a href="terms.html">利用規約</a>に同意したものとみなします。</p>
+  </section>
+</div>
 
 <footer>
   <p>清掃・ビルメンテナンス業向け 入札情報ウォッチ（パイロット版）</p>
@@ -897,7 +1262,8 @@
       } catch (err) {
         msg.classList.add('err');
         msg.textContent = '通信エラーが発生しました。時間をおいて再度お試しください。';
-      } finally {
+      }
+      finally {
         submitBtn.disabled = false;
       }
     });
