@@ -226,22 +226,7 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 ## 変更履歴
 
-直近3日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
-
-### 2026-06-27
-
-#### IAM最小権限化（v2.3）
-
-- コードレビュー反映。Bedrock IAM Resource の全リージョンワイルドカード `arn:aws:bedrock:*::foundation-model/...` を削除
-- 明示の `ap-northeast-1` と `ap-northeast-3` の2リージョンに統一（001 と同じ最小権限構成に揃える）
-
-### 2026-07-03
-
-#### 第2巡Fableレビュー HIGH修正（v2.4）
-
-- 001と共通の加重文字数バグを修正（weighted length安全弁を追加）
-- 複数タグ1行のケースでタグ除去漏れが再発する不具合を行単位判定に変更
-- EventBridge Schedulerのデフォルトリトライ（185回）を無効化（二重投稿防止）。6フィード直列取得のtimeoutを10→5秒に短縮
+直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
 ### 2026-07-05
 

@@ -151,29 +151,7 @@ bash scripts/download_article.sh
 
 ## 変更履歴
 
-直近3日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
-
-### 2026-07-01
-
-#### 構成図生成の安定化（v2.2）
-
-- diagram_generator.py: `try/finally` で `plt.close(fig)` を保証（figureリーク防止）、`plt.tight_layout()` を削除
-- lambda_function.py: 孤立 `{DIAGRAM_N}` マーカーのクリーンアップを追加
-- 005 のコードレビュー結果を 002 へ横展開
-
-### 2026-07-03
-
-#### 第2巡Fableレビュー修正（v2.3）
-
-- HIGH: Bedrock IAM ARNを2リージョン明示に修正（ap-northeast-3ルーティング時のAccessDenied対策）
-- HIGH: Bedrock応答content空時のIndexErrorを安全抽出関数で修正
-- MEDIUM: `RECENT_TOPICS_LIMIT` を28→20に修正（重複除外の恒久ロック解消）
-
-#### 構成図6トピック追加（v2.4）
-
-- v2.0で追加した6サブトピックが構成図未対応で画像なしのまま記事生成されていた問題を修正
-- 各2枚・計12枚の構成図関数を追加し、SSM/EBS/PrivateLink/S3 Glacierの公式アイコンを `aws_icons/` にローカル同梱
-- 本番Lambda実行でPNG生成を確認済み
+直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
 ### 2026-07-05
 

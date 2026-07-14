@@ -151,22 +151,7 @@ bash src/deploy.sh
 
 ## 変更履歴
 
-直近3日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
-
-### 2026-06-27
-
-#### IAM最小権限化・第2弾（v2.0）
-
-- コードレビュー反映。CFn の IAM ポリシーから未使用の `ssm:GetParameters`（複数形）を削除
-- Lambda コードは `get_parameter`（単数）しか呼ばないため過剰権限を排除し、`ssm:GetParameter`（単数）のみ許可する構成に統一
-
-### 2026-07-03
-
-#### 第2巡Fableレビュー HIGH修正（v2.1）
-
-- Xのweighted length（日本語は加重2）を考慮せず`len()`で280文字判定していたため、実質140文字超で投稿403になり得たバグを修正
-- EventInvokeConfigでLambda非同期リトライを無効化（二重投稿防止）
-- 履歴保存失敗を投稿成功時は握りつぶすよう修正
+直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
 ### 2026-07-04
 
