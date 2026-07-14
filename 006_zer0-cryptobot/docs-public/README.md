@@ -224,63 +224,7 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 
 ## 変更履歴
 
-直近3日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
-
-### 2026-07-03
-
-#### 第2巡Fableレビュー HIGH3件修正（v3.6）
-
-- 緊急決済失敗時にstateを消去せず建玉を残す問題を修正。トレーリングSL再発注失敗時の自己修復を追加。部分約定エントリーの孤児化を防止
-- MEDIUM: TP1数量丸め誤差修正・SL損益記録の実約定量化・EventInvokeConfigリトライ0化で二重発注防止
-
-#### CloudWatchアラーム2個追加（v3.7）
-
-- Executor Errors（1件以上でメール通知）とExecutor死活監視（1時間呼び出しゼロで通知、TreatMissingData: breaching）をSNSメール通知付きで追加
-- 可観測性ゼロだった状態を解消（無料枠10個中7個使用）
-
-#### state⇄実建玉リコンサイル追加（v3.8）
-
-- `GET /user/margin/positions`で実建玉を取得し、SSM stateとの不一致（孤児state・孤児建玉・方向不一致）をExecutor実行毎に検知しメール通知（自動修復なし）
-- buy_pendingは対象外。本番実行で一致確認OK
-
-#### 週次サマリーに資金増額判断進捗を追加（v3.9）
-
-- 累計クローズN/20・N/30、実勝率/実PF/最大DDの基準達成（○/△/×）を自動表示
-- 無敗時に「クローズなし」と誤表示するバグを修正
-- 陳腐化した参考値をv3.1基準（勝率72.9%/PF1.16/DD5.2%）に更新。本番メール送信確認済み
-
-#### セーフモード・キルスイッチ追加（v4.0）
-
-- SSMパラメータ`/Zer0/CryptoBot/mode`（normal/pause_entry/halt）でExecutorの挙動を切替
-- pause_entryは新規建てのみ停止、haltは全処理停止。未作成・不正値・読込失敗はnormal扱い（fail-safe）
-- 本番でhalt→normalの実動作確認済み
-
-#### トレーリングSL更新メールを抑制（v4.1）
-
-- 強トレンド時は30分毎に送信され得た`notify_trail_updated`をログのみに変更（メール送信廃止）
-- 約定・クローズ・警告・緊急の重要通知がトレール更新メールに埋もれるのを防止。更新の事実はCloudWatch Logsに引き続き記録される
-
-#### ドキュメント鮮度修正（v4.2）
-
-- v3.6で`MaximumRetryAttempts`を2→0にした後も残っていた「最大2回リトライ」「3回連続起動失敗時」等の記述をFailureNotifier docstring・README・システム仕様書・アーキテクチャ図から一掃
-- 件名も「🚨Executor 起動失敗（リトライ上限）」→「🚨Executor 起動失敗」に修正
-
-#### Binance APIフォールバックホスト追加（v4.3）
-
-- `fetch_binance`を同一ホスト3回再試行からapi.binance.com→api1〜4→data-api.binance.visionのホストローテーションに変更
-- 単一ホスト障害・レート制限時のシグナル欠落を防止。本番疎通確認済み
-
-#### pytestテスト整備（v4.4）
-
-- `tests/`にpytest 27件を新設（純関数・リコンサイル・セーフモード・Binanceフォールバック・analyze_coin）
-- backtest.py（pandas）とanalyzer（純Python）のATR/Supertrend一致を検証するパリティテストを追加し、二重実装のドリフトを検知可能に
-
-### 2026-07-04
-
-#### stats.json用語整理（v4.5）
-
-- update_public_stats→update_stats_json改名。バケットは完全非公開のため「public-read」という古い記述をコメント・ログから削除
-- 閲覧経路は004 SSR Lambdaのs3:GetObjectのみに統一（004側でBasic認証ページ実装・本番検証済み）
+直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
 ### 2026-07-13
 

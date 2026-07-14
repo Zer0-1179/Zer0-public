@@ -136,35 +136,7 @@ bash scripts/deploy.sh
 
 ## 変更履歴
 
-直近3日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
-
-### 2026-07-06
-
-#### モバイルメニュー表示修正（v3.8）
-
-- HIGH: モバイルメニューのnavItems.mapが`label`を見ず`t(key)`のみ表示していたため、翻訳辞書に存在しない管理者リンク（nav.cryptobot）が空文字（見えないリンク）になっていた
-- デスクトップ側と同じ`label ?? t(key)`に統一し表示を修正。本番でモバイルメニューのHTML出力を確認済み
-
-### 2026-07-08
-
-#### ユーザー向けテキスト総点検（v3.9）
-
-- StatsBarの日本語ラベル「日 Bot無停止自動運用」が数字要素と分離した単位「日」で不自然だった問題を修正（`104+日` / `Bot無停止自動運用` に変更）
-- 併せてFableで全ユーザー向けテキストをレビューし8件修正
-- ArticleCardの日付が英語ページでも`ja-JP`ロケール表示だった問題を修正（lang判定で`en-US`に出し分け）
-- en/articles.astroのBotリンク区切り「・」→「/」。テンプレートページのコピー完了トースト表記ゆれを統一（「コピー済！」→「コピーしました！」）
-- section.projects.subの見出し語重複を解消。projects.tsの助詞抜け・用語ゆれ2箇所、templates.tsの日英説明ズレ1箇所を修正
-- en/about.astroの職務経歴タイトルが日本語版の「構築」を欠いていた問題を修正。本番デプロイ・全ページ疎通確認済み
-
-#### スクロール入場アニメーション追加（v3.10）
-
-- 実績カードにレイヤーせり上がり(stagger)、Hero見出しに精密製図線(clip-path)、StatsBar数値にカウントアップを実装
-- JS未実行時は常時フル表示・prefers-reduced-motion対応。BaseLayoutに共通IntersectionObserverスクリプトを新設
-
-#### アニメーション横展開（v3.11）
-
-- reveal-io（フェード＋stagger）をTemplatesカテゴリバッジ・ArticleCard一覧(ホーム/articles.astro)・Aboutの職務経歴タイムラインに追加
-- ファイルブラウザ系(templates一覧)は対象外(操作性優先のため見送り)
+直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
 ### 2026-07-13
 
