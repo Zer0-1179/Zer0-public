@@ -510,6 +510,24 @@ _SERVICE_ICON_KEYWORDS: list[tuple] = [
     ("IAM Identity Center", "iam"),
     ("Glue", "glue"),
     ("S3", "s3"),
+    # ── v3.3で追加: トピックプール拡充（新8トピック）用 ──
+    # 「IAM Role」を先に判定し、その後の汎用「IAM」に取り込まれないようにする
+    ("IAM Role", "iam_role"),
+    ("IAM", "iam"),
+    ("NAT Gateway", "nat"),
+    ("Internet Gateway", "igw"),
+    ("VPC", "vpc"),
+    ("EventBridge", "eventbridge"),
+    ("Auto Scaling", "autoscaling"),
+    ("CodeDeploy", "codedeploy"),
+    ("EC2", "ec2"),
+    ("Cognito", "cognito"),
+    ("CloudWatch Alarm", "cloudwatch_alarm"),
+    ("CloudWatch", "cloudwatch"),
+    ("WAF", "waf"),
+    ("Shield", "shield"),
+    ("Secrets Manager", "secrets_manager"),
+    ("Lake Formation", "lake_formation"),
 ]
 
 _SERVICE_LABEL_OVERRIDE: dict[str, str] = {

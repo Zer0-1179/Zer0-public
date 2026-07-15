@@ -160,6 +160,50 @@ AWS_TOPICS = [
         "primary_service_label": "Amazon Bedrock",
         "emoji": "🤖",
     },
+    {
+        "id": "vpc_network",
+        "name": "セキュアなVPCネットワーク基盤設計",
+        "article_type": "architecture",
+        "services": ["VPC", "NAT Gateway", "Internet Gateway"],
+        "subtitle": "VPC + NAT Gateway + Internet Gateway で構築するセキュアなネットワーク基盤",
+        "keywords": "VPC, サブネット設計, NAT Gateway, Internet Gateway, ルートテーブル, ネットワークACL, セキュリティグループ",
+        "primary_service": "vpc",
+        "primary_service_label": "VPC",
+        "emoji": "🔌",
+    },
+    {
+        "id": "async_orchestration",
+        "name": "非同期ジョブオーケストレーション基盤",
+        "article_type": "architecture",
+        "services": ["EventBridge", "Step Functions", "SQS"],
+        "subtitle": "EventBridge + Step Functions + SQS で疎結合な非同期処理基盤を構築する",
+        "keywords": "EventBridge, Step Functions, SQS, 非同期処理, ジョブオーケストレーション, 疎結合, リトライ制御",
+        "primary_service": "eventbridge",
+        "primary_service_label": "EventBridge",
+        "emoji": "⚙️",
+    },
+    {
+        "id": "cicd_ec2_deploy",
+        "name": "EC2 Blue/Greenデプロイパイプライン",
+        "article_type": "architecture",
+        "services": ["Auto Scaling", "CodeDeploy", "EC2"],
+        "subtitle": "EC2 Auto Scaling + CodeDeploy で構築するBlue/Greenデプロイパイプライン",
+        "keywords": "CodeDeploy, EC2, Auto Scaling, Blue/Greenデプロイ, ローリングアップデート, デプロイ自動化, ロールバック",
+        "primary_service": "codedeploy",
+        "primary_service_label": "CodeDeploy",
+        "emoji": "🔁",
+    },
+    {
+        "id": "user_auth_cognito",
+        "name": "Cognitoによるユーザー認証基盤",
+        "article_type": "architecture",
+        "services": ["Amazon Cognito", "API Gateway", "IAM Role"],
+        "subtitle": "Cognito + API Gateway + IAM Role で構築するユーザー認証・認可基盤",
+        "keywords": "Cognito, ユーザープール, IDプール, API Gateway, 認証, 認可, フェデレーション",
+        "primary_service": "cognito",
+        "primary_service_label": "Amazon Cognito",
+        "emoji": "🔑",
+    },
     # ── ユースケース別ソリューション ────────────────────────────────────────
     {
         "id": "cicd_pipeline",
@@ -249,6 +293,50 @@ AWS_TOPICS = [
         "primary_service_label": "AWS Glue",
         "emoji": "🏞️",
     },
+    {
+        "id": "observability_monitoring",
+        "name": "運用監視・アラート基盤の構築",
+        "article_type": "usecase",
+        "services": ["CloudWatch", "CloudWatch Alarm", "SNS"],
+        "subtitle": "CloudWatch + CloudWatch Alarm + SNS で運用監視・アラート基盤を構築する",
+        "keywords": "CloudWatch, メトリクス, アラーム, SNS, 運用監視, 可観測性, しきい値設計",
+        "primary_service": "cloudwatch",
+        "primary_service_label": "CloudWatch",
+        "emoji": "📈",
+    },
+    {
+        "id": "edge_security",
+        "name": "CloudFrontエッジセキュリティ強化",
+        "article_type": "usecase",
+        "services": ["CloudFront", "WAF", "Shield"],
+        "subtitle": "CloudFront + WAF + Shield で構築するエッジセキュリティ基盤",
+        "keywords": "CloudFront, WAF, Shield, DDoS対策, Webセキュリティ, レートリミット, ルールグループ",
+        "primary_service": "waf",
+        "primary_service_label": "WAF",
+        "emoji": "🧱",
+    },
+    {
+        "id": "secrets_rotation",
+        "name": "認証情報ローテーション基盤の構築",
+        "article_type": "usecase",
+        "services": ["Secrets Manager", "EC2", "IAM Role"],
+        "subtitle": "Secrets Manager + EC2 + IAM Role で認証情報の自動ローテーションを実現する",
+        "keywords": "Secrets Manager, 認証情報ローテーション, IAM Role, EC2, シークレット管理, 最小権限",
+        "primary_service": "secrets_manager",
+        "primary_service_label": "Secrets Manager",
+        "emoji": "🔐",
+    },
+    {
+        "id": "data_governance",
+        "name": "データレイクガバナンス基盤",
+        "article_type": "usecase",
+        "services": ["Lake Formation", "AWS Glue", "IAM"],
+        "subtitle": "Lake Formation + Glue + IAM でデータレイクのアクセス制御を実現する",
+        "keywords": "Lake Formation, データガバナンス, アクセス制御, Glue, IAM, データカタログ, 列レベル権限",
+        "primary_service": "lake_formation",
+        "primary_service_label": "Lake Formation",
+        "emoji": "🗂️",
+    },
 ]
 
 # ─── AWS公式ドキュメント URL マップ（サービスIDキー） ─────────────────────────
@@ -287,6 +375,20 @@ DOCS_URL_MAP: dict[str, str] = {
     "security_hub":        "https://docs.aws.amazon.com/ja_jp/securityhub/latest/userguide/what-is-securityhub.html",
     "control_tower":       "https://docs.aws.amazon.com/ja_jp/controltower/latest/userguide/what-is-control-tower.html",
     "iam_identity_center": "https://docs.aws.amazon.com/ja_jp/singlesignon/latest/userguide/what-is.html",
+    # ── v3.3で追加: トピックプール拡充（新8トピック）用 ──
+    "vpc":             "https://docs.aws.amazon.com/ja_jp/vpc/latest/userguide/what-is-amazon-vpc.html",
+    "eventbridge":     "https://docs.aws.amazon.com/ja_jp/eventbridge/latest/userguide/eb-what-is.html",
+    "autoscaling":     "https://docs.aws.amazon.com/ja_jp/autoscaling/ec2/userguide/what-is-amazon-ec2-auto-scaling.html",
+    "codedeploy":      "https://docs.aws.amazon.com/ja_jp/codedeploy/latest/userguide/welcome.html",
+    "ec2":             "https://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/concepts.html",
+    "cognito":         "https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/what-is-amazon-cognito.html",
+    "iam":             "https://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/introduction.html",
+    "cloudwatch":      "https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/monitoring/WhatIsCloudWatch.html",
+    "waf":             "https://docs.aws.amazon.com/ja_jp/waf/latest/developerguide/what-is-aws-waf.html",
+    # Shield Advancedは現在AWS WAF開発者ガイドに統合されているため同一URL（意図的な重複）
+    "shield":          "https://docs.aws.amazon.com/ja_jp/waf/latest/developerguide/what-is-aws-waf.html",
+    "secrets_manager": "https://docs.aws.amazon.com/ja_jp/secretsmanager/latest/userguide/intro.html",
+    "lake_formation":  "https://docs.aws.amazon.com/ja_jp/lake-formation/latest/dg/what-is-lake-formation.html",
 }
 
 # ─── トピックの services 表記文字列 → DOCS_URL_MAP キー ───────────────────────
@@ -326,6 +428,23 @@ _SERVICE_NAME_TO_DOCS_ID: dict[str, str] = {
     "Control Tower": "control_tower",
     "IAM Identity Center": "iam_identity_center",
     "AWS Glue": "glue",
+    # ── v3.3で追加: トピックプール拡充（新8トピック）用 ──
+    "VPC": "vpc",
+    "NAT Gateway": "vpc",
+    "Internet Gateway": "vpc",
+    "EventBridge": "eventbridge",
+    "Auto Scaling": "autoscaling",
+    "CodeDeploy": "codedeploy",
+    "EC2": "ec2",
+    "Amazon Cognito": "cognito",
+    "IAM Role": "iam",
+    "CloudWatch": "cloudwatch",
+    "CloudWatch Alarm": "cloudwatch",
+    "WAF": "waf",
+    "Shield": "shield",
+    "Secrets Manager": "secrets_manager",
+    "Lake Formation": "lake_formation",
+    "IAM": "iam",
 }
 
 # ─── Zennフロントマター用メタ情報 ─────────────────────────────────────────────
@@ -346,6 +465,14 @@ _ZENN_META: dict[str, dict] = {
     "backup_dr":        {"emoji": "💾", "topics": ["aws", "backup", "dr", "可用性"]},
     "multi_account":    {"emoji": "🏢", "topics": ["aws", "organizations", "マルチアカウント", "ガバナンス"]},
     "data_lake":        {"emoji": "🏞️", "topics": ["aws", "datalake", "glue", "athena"]},
+    "vpc_network":      {"emoji": "🔌", "topics": ["aws", "vpc", "network", "architecture"]},
+    "async_orchestration": {"emoji": "⚙️", "topics": ["aws", "eventbridge", "stepfunctions", "architecture"]},
+    "cicd_ec2_deploy":  {"emoji": "🔁", "topics": ["aws", "codedeploy", "ec2", "cicd"]},
+    "user_auth_cognito":{"emoji": "🔑", "topics": ["aws", "cognito", "認証", "architecture"]},
+    "observability_monitoring": {"emoji": "📈", "topics": ["aws", "cloudwatch", "監視", "sns"]},
+    "edge_security":    {"emoji": "🧱", "topics": ["aws", "waf", "セキュリティ", "cloudfront"]},
+    "secrets_rotation": {"emoji": "🔐", "topics": ["aws", "secretsmanager", "セキュリティ", "iam"]},
+    "data_governance":  {"emoji": "🗂️", "topics": ["aws", "lakeformation", "glue", "データガバナンス"]},
 }
 
 ARTICLE_PROMPT_TEMPLATE = """
@@ -514,6 +641,7 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 | --- | --- | --- |
 | Amazon SageMaker AI | Amazon SageMaker | 2024年11月 |
 | Amazon Q Business | Amazon Kendra Intelligent Ranking（一部機能） | 2024年 |
+| Amazon Quick（BI機能はQuick Sight） | Amazon QuickSight | 2025年10月〜2026年 |
 
 ---
 
