@@ -150,3 +150,15 @@
 - `_inject_reference_link`をprimary_service 1件のみからトピックの services 全件に対応するよう修正。DOCS_URL_MAP・_SERVICE_NAME_TO_DOCS_IDは既に全サービス分のURLを保持していたため、参照範囲を広げるだけで対応可能だった
 - プロンプト指示を変更し、LLMは「## 参考」見出しのみ書き本文（リンク一覧）は一切書かないよう変更。全リンクはコード側の確定済みURLから挿入する方式に統一（ハルシネーション防止）
 - ユニットテスト2件（全サービスリンク化・対応表に無いサービスのスキップ）を追加し全9件パス。本番Lambdaへデプロイ・test_mode実行（マルチリージョンDR構成トピック）でRoute 53・RDS・S3 Cross-Region Replicationの3件全てが正しいURLでリンク化されることを実機確認済み
+
+### トピック選択の偏り修正・test_mode分離（v3.3）
+
+- ユーザーから「最近の記事の質が似ている」「使用サービスが同じことが多い」との指摘を受け、Fableモデルにコード・過去記事・SSM履歴の調査を依頼
+- SSMパラメータ `/mid-article-bot/recent-topics` の全バージョン履歴（v1〜v43）を全数集計した結果、`select_topic_with_bedrock`がBedrockに「ランダムに選んでください」と依頼していたトピック選択が実際には強く偏っており、log_analyticsが全41回の選択中9回（22%）選ばれる一方、serverless_ec・static_web_hosting・container_platform・backup_dr・security_hardingの5トピックは一度も選ばれていなかったことが判明
+- さらに、開発中のtest_mode実行（動作確認・デバッグ用の手動起動）が本番と同じSSMパラメータを無条件に更新し続けており、本番のトピック重複除外（直近12件を除外する仕組み）が実質機能していなかったことも判明。SSM履歴を辿ると、05-01と07-15のlog_analytics再登場は、いずれも直前の集中的なtest実行によって直近の本番選択分がFIFO除外リストから押し出されたことが直接の原因だった
+- `select_topic_with_bedrock`を廃止し、コード側の`random.choice`で選ぶ`select_topic`に置き換え。Bedrock呼び出し自体が不要になり偏りが解消（副次的にコスト・レイテンシも削減）
+- test_modeはSSMトピック履歴（除外リスト・周回カウント）を一切更新しないよう変更。S3保存先も本番の`zenn-mid-articles/`から`zenn-mid-articles-test/`に分離し、メール件名にも`【TEST】`を付与
+- `save_topic_to_ssm`が保存直前にSSMを再取得する実装になっており、一時的な読み込みエラー時に履歴が`[topic_id]`1件だけに縮退するリスクがあったため、Step 1で取得済みのリストをそのまま渡す方式に修正
+- ローカル実行（`python3 lambda_function.py`）がデフォルトでtest_modeにならず、Sonnet本番課金・本番SSM/S3更新をしてしまうバグも合わせて修正（デフォルトtest_mode化。`LOCAL_TEST_MODE=0`で本番相当実行も可能）
+- 汚染されていたSSM状態（トピック除外リスト・周回カウント）を、ローカルoutput/フォルダの実生成タイムスタンプ（毎月1日・15日21:00 JST採取分のみ）から再構成した実績値に手動復旧
+- ユニットテスト3件（偏りのない除外・全除外時のリセット・SSM再取得しないことの検証）を追加し全12件パス。本番Lambdaへコードデプロイ済み。記事生成を伴う実行はBedrockコストとSSM/S3状態の汚染を避けるため今回は実施せず、ユニットテストとコード検証のみで動作を確認
