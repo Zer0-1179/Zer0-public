@@ -162,3 +162,15 @@
 - ローカル実行（`python3 lambda_function.py`）がデフォルトでtest_modeにならず、Sonnet本番課金・本番SSM/S3更新をしてしまうバグも合わせて修正（デフォルトtest_mode化。`LOCAL_TEST_MODE=0`で本番相当実行も可能）
 - 汚染されていたSSM状態（トピック除外リスト・周回カウント）を、ローカルoutput/フォルダの実生成タイムスタンプ（毎月1日・15日21:00 JST採取分のみ）から再構成した実績値に手動復旧
 - ユニットテスト3件（偏りのない除外・全除外時のリセット・SSM再取得しないことの検証）を追加し全12件パス。本番Lambdaへコードデプロイ済み。記事生成を伴う実行はBedrockコストとSSM/S3状態の汚染を避けるため今回は実施せず、ユニットテストとコード検証のみで動作を確認
+
+## 2026-07-16
+
+### トピックプール拡充 16→24種類（v3.4）
+
+- v3.3でトピック選択の偏りバグは修正したが、そもそも16トピックが固定3サービスの組み合わせで構成されているため、S3が16トピック中7回・Lambdaが5回登場するなど、選択が均一になっても「サービス自体の偏り」は残る構造的な問題が残っていた
+- 既存の16トピックで使われていないAWS公式アイコン（`aws_icons/`に既に同梱済みの65種のうち未使用のもの）を軸に、S3・Lambdaを一切含まない新規8トピックを追加: `vpc_network`（VPC+NAT Gateway+Internet Gateway）、`async_orchestration`（EventBridge+Step Functions+SQS）、`cicd_ec2_deploy`（Auto Scaling+CodeDeploy+EC2）、`user_auth_cognito`（Cognito+API Gateway+IAM Role）、`observability_monitoring`（CloudWatch+CloudWatch Alarm+SNS）、`edge_security`（CloudFront+WAF+Shield）、`secrets_rotation`（Secrets Manager+EC2+IAM Role）、`data_governance`（Lake Formation+Glue+IAM）
+- 新サービス分の`DOCS_URL_MAP`・`_SERVICE_NAME_TO_DOCS_ID`エントリを追加。URLは全12件をWebFetchで実際にアクセスして実在確認してから登録（既存の「LLMにURLを生成させずコード側で確定挿入する」ハルシネーション防止方針を、新規追加時の運用にも適用）
+- 調査の過程でAmazon QuickSightが2025年10月〜2026年にかけて「Amazon Quick」へ改称・機能再編中であることが判明。名称がまだ安定していないため新トピックへの採用は見送り、代わりにプロンプトの「AWSサービス名の最新化」テーブルに改称情報を追記し、既存トピックの記事内で誤って古い名称が使われることを防止
+- `diagram_generator.py`の`_SERVICE_ICON_KEYWORDS`に新サービス分のアイコンキーワードを追加。「IAM Role」を汎用の「IAM」より先に判定させ、部分一致で汎用アイコンに吸収されないよう順序を調整
+- 整合性チェックスクリプトで全24トピック×全サービスが`DOCS_URL_MAP`・アイコンファイル・`_ZENN_META`と過不足なく対応していることを確認。新8トピックはローカルで実際に構成図をレンダリングし、アイコン解決（人物アイコンへのフォールバックが発生していないか）・日本語表示・レイアウト崩れがないことを目視確認
+- 本番Lambdaへコードデプロイ済み。記事生成を伴う実機テストは前回（v3.3）に続き今回も見送り、上記の整合性チェックとローカル図生成のみで動作を確認
