@@ -502,8 +502,8 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 - 発展として学ぶべき次のトピック（関連サービス・設計パターン）
 
 ### ## 参考
-- {primary_service_label} の公式ドキュメントへの参照は自動挿入されるため書かない
-- それ以外のサービスへの参照（URLは書かず「AWS公式ドキュメント: サービス名」形式）
+- 「## 参考」の見出しだけを書き、本文（リンク一覧）は一切書かない
+- 関連する全サービスの公式ドキュメントへのリンクはシステムが自動挿入する
 
 ---
 
@@ -889,15 +889,24 @@ def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: st
 
 
 def _inject_reference_link(article: str, topic: dict) -> str:
-    """primary_service の公式ドキュメントURLを '## 参考' セクションに挿入する。
+    """topicのservices全件について、公式ドキュメントURLを '## 参考' セクションに挿入する。
     LLMにURLを書かせるとハルシネーションのリスクがあるため、DOCS_URL_MAPの
     確定済みURLをコード側で直接挿入する（LLM生成テキストとは独立した安全な追記）。
+    services内に対応表・URLマップが無いサービスがあれば、そのサービスだけ静かにスキップする
+    （記事全体を失敗させない）。
     """
-    url = DOCS_URL_MAP.get(topic.get("primary_service", ""), "")
-    if not url:
+    link_lines: list[str] = []
+    seen_urls: set[str] = set()
+    for svc in topic.get("services", []):
+        doc_id = _SERVICE_NAME_TO_DOCS_ID.get(svc, "")
+        url = DOCS_URL_MAP.get(doc_id, "") if doc_id else ""
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        link_lines.append(f"- [{svc} 公式ドキュメント]({url})")
+    if not link_lines:
         return article
-    label = topic.get("primary_service_label", topic.get("primary_service", ""))
-    link_line = f"- [{label} 公式ドキュメント]({url})"
+    link_block = "\n".join(link_lines)
 
     lines = article.split("\n")
     # 完全一致「## 参考」を優先。見出し改題（例:「## 参考アーキテクチャとの比較」）に
@@ -909,9 +918,9 @@ def _inject_reference_link(article: str, topic: dict) -> str:
         partial = [i for i, line in enumerate(lines) if line.startswith("## ") and "参考" in line]
         ref_idx = partial[-1] if partial else None
     if ref_idx is None:
-        return article.rstrip() + f"\n\n## 参考\n\n{link_line}\n"
+        return article.rstrip() + f"\n\n## 参考\n\n{link_block}\n"
 
-    lines.insert(ref_idx + 1, f"\n{link_line}")
+    lines.insert(ref_idx + 1, f"\n{link_block}")
     return "\n".join(lines)
 
 

@@ -24,6 +24,33 @@ def test_article_prompt_no_key_error():
     assert "{DIAGRAM_1}" in result
 
 
+def test_inject_reference_link_covers_all_services():
+    """primary_service以外のサービスも含めて全件リンク化されること（S3・Athena等）"""
+    topic = {
+        "services": ["CloudTrail", "S3", "Athena"],
+        "primary_service": "cloudtrail",
+        "primary_service_label": "CloudTrail",
+    }
+    article = "本文\n\n## 参考\n"
+    result = lambda_function._inject_reference_link(article, topic)
+    assert "[CloudTrail 公式ドキュメント]" in result
+    assert "[S3 公式ドキュメント]" in result
+    assert "[Athena 公式ドキュメント]" in result
+
+
+def test_inject_reference_link_skips_unmapped_service():
+    """対応表・URLマップに無いサービス名が混ざっていても、他のサービスのリンクは挿入されること"""
+    topic = {
+        "services": ["CloudTrail", "存在しないサービス"],
+        "primary_service": "cloudtrail",
+        "primary_service_label": "CloudTrail",
+    }
+    article = "本文\n\n## 参考\n"
+    result = lambda_function._inject_reference_link(article, topic)
+    assert "[CloudTrail 公式ドキュメント]" in result
+    assert "存在しないサービス" not in result
+
+
 def test_get_recent_topics_empty(monkeypatch):
     """SSMパラメータが存在しない場合は空リストを返すこと"""
     from unittest.mock import MagicMock
