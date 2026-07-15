@@ -57,7 +57,6 @@ SSM_PARAM_OCCURRENCE = "/mid-article-bot/topic-occurrence"
 
 # ─── Bedrock 呼び出しパラメータ（定数化） ────────────────────────────────────
 BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
-TOPIC_SELECT_MAX_TOKENS   = 20        # トピックID（短い文字列）の選択用
 ARTICLE_MAX_TOKENS        = 24000     # 記事本文生成用
 # Claude Sonnet 4.6 概算単価（USD / 100万トークン）
 SONNET_INPUT_COST_PER_MTOK  = 3.0
@@ -608,9 +607,12 @@ def get_recent_topics() -> list[str]:
         return []
 
 
-def save_topic_to_ssm(topic_id: str):
-    """選択したトピックを SSM に保存する（最新 RECENT_TOPICS_LIMIT 件を保持）"""
-    recent = get_recent_topics()
+def save_topic_to_ssm(topic_id: str, recent: list[str]):
+    """選択したトピックを SSM に保存する（最新 RECENT_TOPICS_LIMIT 件を保持）。
+    recentはStep 1で取得済みの除外リストをそのまま渡す（ここで再取得すると、
+    一時的なSSM読み込みエラー時に履歴が丸ごと[topic_id]1件だけに縮退してしまうため）。
+    """
+    recent = list(recent)
     if topic_id in recent:
         recent.remove(topic_id)
     recent.append(topic_id)
@@ -669,49 +671,17 @@ def increment_topic_occurrence(topic_id: str) -> None:
 
 # ─── トピック選択 ─────────────────────────────────────────────────────────────
 
-def select_topic_with_bedrock(excluded_ids: list[str], model_id: str) -> dict:
-    """Bedrock を使って重複を避けながらトピックを選択する"""
+def select_topic(excluded_ids: list[str]) -> dict:
+    """重複を避けながらトピックを選択する。
+    以前はBedrockに「ランダムに選んで」と依頼していたが、実績を集計すると
+    特定トピック（log_analytics）に強く偏っており、LLMの「ランダム」は
+    公平な乱択として機能していなかった。Bedrock呼び出し自体が不要なため、
+    コスト・レイテンシ削減も兼ねてrandom.choiceに置き換える。
+    """
     available = [t for t in AWS_TOPICS if t["id"] not in excluded_ids]
     if not available:
         print("全トピックが除外済みのためリセットします")
         available = AWS_TOPICS
-
-    topic_list = "\n".join([f"- {t['id']}: {t['name']} ({t['article_type']})" for t in available])
-
-    prompt = f"""以下のAWSアーキテクチャ・ソリューション一覧から、今月の記事テーマを1つランダムに選んでください。
-architectureとusecaseが交互になるように選ぶと良いですが、純粋にランダムでも構いません。
-
-{topic_list}
-
-選んだトピックのIDのみを返してください（例: serverless_ec）。説明は不要です。"""
-
-    response = bedrock.invoke_model(
-        modelId=model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({
-            "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
-            "max_tokens": TOPIC_SELECT_MAX_TOKENS,
-            "thinking": {"type": "disabled"},
-            "messages": [{"role": "user", "content": prompt}],
-        }),
-    )
-
-    result   = json.loads(response["body"].read())
-    topic_id = result["content"][0]["text"].strip().lower()
-    usage = result.get("usage", {})
-    print(f"[Bedrock/topic] in={usage.get('input_tokens',0)}, out={usage.get('output_tokens',0)}")
-
-    # 完全一致を優先し、なければ ID を含む応答（句読点等の付与）も許容する
-    for topic in available:
-        if topic["id"] == topic_id:
-            return topic
-    for topic in available:
-        if topic["id"] in topic_id:
-            print(f"[Bedrock/topic] 部分一致で解決: '{topic_id}' → {topic['id']}")
-            return topic
-
-    print(f"[Bedrock/topic] 一致なし（'{topic_id}'）。ランダム選択にフォールバックします")
     return random.choice(available)
 
 
@@ -1004,9 +974,9 @@ published: false
 
 # ─── S3 アップロード ──────────────────────────────────────────────────────────
 
-def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
+def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str, prefix: str = S3_PREFIX) -> str:
     """MD ファイルと PNG 画像を S3 にアップロードし、S3 フォルダパスを返す"""
-    s3_base = f"{S3_PREFIX}/{s3_folder}"
+    s3_base = f"{prefix}/{s3_folder}"
 
     md_key = f"{s3_base}/{os.path.basename(md_path)}"
     s3.upload_file(md_path, S3_BUCKET, md_key, ExtraArgs={"ContentType": "text/markdown"})
@@ -1148,7 +1118,7 @@ _DEFAULT_REVIEW_HINT = "料金・バージョン表記が最新か、AWS公式�
 def send_email_notification(
     topic: dict, article: str, md_path: str, png_paths: list[str],
     timestamp: str, s3_url: str = "", is_truncated: bool = False,
-    cfn_issues: list | None = None,
+    cfn_issues: list | None = None, test_mode: bool = False,
 ):
     """SES でメール通知を送信する（MD・PNG添付付き）"""
     import html as _html
@@ -1168,10 +1138,11 @@ def send_email_notification(
     review_hints_text = "\n".join(f"  - {h}" for h in review_hints)
     review_hints_html = "".join(f'<li>{_html.escape(h)}</li>' for h in review_hints)
 
+    subject_prefix = "【TEST】" if test_mode else ""
     subject = (
-        f"【⚠️ 記事が途中で切れています】{topic['name']} - {timestamp}"
+        f"{subject_prefix}【⚠️ 記事が途中で切れています】{topic['name']} - {timestamp}"
         if is_truncated else
-        f"【Zenn中級記事生成完了】{topic['name']} - {timestamp}"
+        f"{subject_prefix}【Zenn中級記事生成完了】{topic['name']} - {timestamp}"
     )
 
     png_list_html = "".join(
@@ -1386,8 +1357,8 @@ def lambda_handler(event, context):
 
     # Step 2: トピック選択
     _t = time.time()
-    print("Step 2: Bedrockでトピックを選択中...")
-    topic = select_topic_with_bedrock(excluded_ids, model_id)
+    print("Step 2: トピックを選択中...")
+    topic = select_topic(excluded_ids)
     print(f"  選択されたトピック: {topic['name']} ({topic['id']}) [{time.time()-_t:.1f}s]")
     print(f"  記事タイプ: {topic['article_type']}")
     print(f"  使用サービス: {', '.join(topic['services'])}")
@@ -1411,21 +1382,28 @@ def lambda_handler(event, context):
     # Step 5: S3 アップロード（Lambda環境のみ）
     # ここで例外を伝播させるとLambdaの再試行で記事生成（Bedrockコスト）から
     # 丸ごとやり直しになるため、失敗しても後続のSSM保存・メール通知は続行する
+    # test_modeはprefixを分け、本番の成果物と混ざらないようにする
     s3_url = ""
     if _IS_LAMBDA:
         _t = time.time()
         print("Step 5: S3にアップロード中...")
         try:
+            folder_prefix = "zenn-mid-articles-test" if event.get("test_mode") else "zenn-mid-articles"
             s3_folder = f"{timestamp}_{topic['id']}"
-            s3_url = upload_to_s3(md_path, png_paths, s3_folder)
+            s3_url = upload_to_s3(md_path, png_paths, s3_folder, prefix=folder_prefix)
             print(f"  S3アップロード完了: {s3_url} [{time.time()-_t:.1f}s]")
         except Exception as e:
             print(f"  S3アップロード失敗（無視して続行、記事はローカル/tmpにのみ存在）: {e}")
 
     # Step 6: SSM 更新
-    print("Step 6: SSMにトピックを保存中...")
-    save_topic_to_ssm(topic["id"])
-    increment_topic_occurrence(topic["id"])
+    # test_modeでは本番のトピックローテーション状態（除外リスト・周回数）を汚染しないよう
+    # 一切書き込まない（過去にtest実行の連打で本番の重複除外が実質機能しなくなっていた）
+    if event.get("test_mode"):
+        print("Step 6: SSM更新をスキップ（test_modeのため本番ローテーション状態は変更しません）")
+    else:
+        print("Step 6: SSMにトピックを保存中...")
+        save_topic_to_ssm(topic["id"], excluded_ids)
+        increment_topic_occurrence(topic["id"])
 
     # Step 7: 記事品質チェック（AWS CLI要素＋機械的な品質ルール、検出のみ）
     _t = time.time()
@@ -1446,6 +1424,7 @@ def lambda_handler(event, context):
     try:
         send_email_notification(
             topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues,
+            test_mode=bool(event.get("test_mode")),
         )
         print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
     except Exception as e:
@@ -1471,6 +1450,9 @@ def lambda_handler(event, context):
 # ─── ローカル実行エントリーポイント ──────────────────────────────────────────
 
 if __name__ == "__main__":
-    result = lambda_handler({}, None)
+    # ローカル動作確認はデフォルトでtest_mode（Haiku使用・本番SSM/S3を汚染しない）。
+    # 本番同様のSonnet実行を試したい場合のみ環境変数で明示的に無効化する。
+    _local_test_mode = os.environ.get("LOCAL_TEST_MODE", "1") != "0"
+    result = lambda_handler({"test_mode": _local_test_mode}, None)
     print("\n=== 実行結果 ===")
     print(json.dumps(json.loads(result["body"]), ensure_ascii=False, indent=2))
