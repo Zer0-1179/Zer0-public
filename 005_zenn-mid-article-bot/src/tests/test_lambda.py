@@ -51,6 +51,36 @@ def test_inject_reference_link_skips_unmapped_service():
     assert "存在しないサービス" not in result
 
 
+def test_select_topic_excludes_given_ids():
+    """除外リストに含まれるトピックは選ばれないこと（Bedrockに依頼しないコード側乱択）"""
+    excluded = [t["id"] for t in lambda_function.AWS_TOPICS if t["id"] != "log_analytics"]
+    for _ in range(20):
+        topic = lambda_function.select_topic(excluded)
+        assert topic["id"] == "log_analytics"
+
+
+def test_select_topic_resets_when_all_excluded():
+    """全トピックが除外済みでも例外にならず、全トピックから選ばれること"""
+    all_ids = [t["id"] for t in lambda_function.AWS_TOPICS]
+    topic = lambda_function.select_topic(all_ids)
+    assert topic["id"] in all_ids
+
+
+def test_save_topic_to_ssm_uses_passed_recent_list(monkeypatch):
+    """SSMを再取得せず、渡されたrecentリストをそのまま使って保存すること
+    （再取得だと一時的な読み込みエラー時に履歴が[topic_id]1件に縮退するバグがあった）"""
+    from unittest.mock import MagicMock
+    mock_ssm = MagicMock()
+    monkeypatch.setattr(lambda_function, "ssm", mock_ssm)
+    # get_recent_topics が呼ばれたら（＝再取得してしまっていたら）テストを失敗させる
+    mock_ssm.get_parameter.side_effect = AssertionError("save_topic_to_ssmはSSMを再取得してはいけない")
+
+    lambda_function.save_topic_to_ssm("log_analytics", ["data_lake", "cost_optimization"])
+
+    saved_value = json.loads(mock_ssm.put_parameter.call_args.kwargs["Value"])
+    assert saved_value == ["data_lake", "cost_optimization", "log_analytics"]
+
+
 def test_get_recent_topics_empty(monkeypatch):
     """SSMパラメータが存在しない場合は空リストを返すこと"""
     from unittest.mock import MagicMock
