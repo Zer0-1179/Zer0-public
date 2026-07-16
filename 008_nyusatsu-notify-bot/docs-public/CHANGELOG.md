@@ -208,3 +208,14 @@
 
 - Fable追加レビューの中優先度4件を修正。法務ページのLINE/IP/Stripe未反映・Stripe invoice.paid未処理でpast_due復帰不可・SSMパラメータのSecureStringコメント齟齬・送信失敗宛先への重複通知を解消
 - 修正中に発覚したIAM UpdateItem権限漏れの実障害（実データ8件が実際に配信済み）も即時復旧（pytest計56件）
+
+## 2026-07-16
+
+### 低優先度ドキュメント整備
+
+- `docs_payment_setup.md`への相対リンク切れを修正。README.md（`docs-public/`配下）からは`../docs/docs_payment_setup.md`、システム仕様書.md（`docs/`配下、同一ディレクトリ）からは`docs_payment_setup.md`が正しい相対パスだった
+- README.md「概要」表・システム仕様書.md「基本情報」表の通知手段が「メール（Amazon SES）」のみのまま古く、v0.28で追加したLINE通知（購読者がメール/LINEを選択）が未反映だったため両方修正
+- README.md冒頭のステータス表記（古いバージョン番号「v0.24」が残存）を、バージョン番号を付けない現行方針に沿って実態ベースの説明文に更新
+- README.md「今後の進め方」・システム仕様書.md「制約・注意事項」にあった「法務対応（特商法表記・利用規約・プライバシーポリシー）は未着手」という古い記述を修正。実際は`tokushoho.html`/`terms.html`/`privacy.html`として実装済みで、所在地・電話番号は消費者庁Q&A準拠の「開示請求があれば開示」方式を採用しバーチャルオフィス契約は不要と判断済み
+- システム仕様書.mdの「mail-forwarder-dlqにアラーム未設定」という記述も古く、`zer0-nyusatsu-mail-forwarder-dlq-alarm-01`として既に設定済みだったため修正
+- lp_waitlist Lambda（登録・確認・配信停止・LINE連携・Stripe Webhook全APIの実処理）にエラー検知用CloudWatchアラームが無いことを確認したが、AWSアカウント全体で無料枠10個中10個が使用中のため、既存の他プロジェクトのアラームを1つ削る判断が必要と分かり追加は見送り。ユーザー確認待ちとしてシステム仕様書に明記
