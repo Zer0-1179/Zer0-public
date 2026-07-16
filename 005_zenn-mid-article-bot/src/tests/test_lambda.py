@@ -9,19 +9,54 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import lambda_function
 
 
+def _prompt_topic():
+    return {
+        "name": "サーバーレスEコマース",
+        "subtitle": "Lambda + API Gateway + DynamoDB",
+        "services": ["Lambda", "API Gateway", "DynamoDB"],
+        "keywords": "サーバーレス, eコマース, スケーリング",
+        "primary_service_label": "API Gateway",
+    }
+
+
 def test_article_prompt_no_key_error():
-    """プロンプトテンプレートのformat()がKeyErrorを出さないこと"""
-    result = lambda_function.ARTICLE_PROMPT_TEMPLATE.format(
-        topic_name="サーバーレスEコマース",
-        topic_subtitle="Lambda + API Gateway + DynamoDB",
-        services="Lambda, API Gateway, DynamoDB",
-        keywords="サーバーレス, eコマース, スケーリング",
-        today="2026-01-01",
-        docs_section="",
-        primary_service_label="API Gateway",
-    )
+    """プロンプト組み立て（テンプレートformat＋乱択要素の埋め込み）がKeyErrorを出さないこと"""
+    result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
     assert "Lambda" in result
     assert "{DIAGRAM_1}" in result
+
+
+def test_build_prompt_keeps_diagram_marker_and_sections():
+    """乱択要素が入ってもDIAGRAM_1マーカーと必須セクション指示が毎回含まれること"""
+    for _ in range(30):
+        result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
+        assert "{DIAGRAM_1}" in result
+        assert "## 各コンポーネントの選定理由" in result
+        assert "## 構成手順" in result
+        assert "## はじめに" in result
+
+
+def test_build_prompt_opening_style_varies():
+    """書き出しスタイルがコード側乱択で切り替わること（LLM任せの偏り防止）"""
+    assert len(set(lambda_function._OPENING_STYLES)) >= 4
+    seen = set()
+    for _ in range(100):
+        result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
+        for i, style in enumerate(lambda_function._OPENING_STYLES):
+            if style in result:
+                seen.add(i)
+    assert len(seen) >= 2, "書き出しスタイルが1種類しか選ばれていません"
+
+
+def test_build_prompt_section_order_varies():
+    """選定理由と構成手順の並び順が両方向とも出現すること"""
+    orders = set()
+    for _ in range(100):
+        result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
+        idx_components = result.index("## 各コンポーネントの選定理由")
+        idx_steps = result.index("## 構成手順")
+        orders.add(idx_components < idx_steps)
+    assert orders == {True, False}
 
 
 def test_inject_reference_link_covers_all_services():
@@ -64,6 +99,77 @@ def test_select_topic_resets_when_all_excluded():
     all_ids = [t["id"] for t in lambda_function.AWS_TOPICS]
     topic = lambda_function.select_topic(all_ids)
     assert topic["id"] in all_ids
+
+
+def _all_service_combos(topic: dict) -> list[list[str]]:
+    """トピックの基本形＋全バリエーションのservicesリストを列挙する"""
+    combos = [topic["services"]]
+    for v in topic.get("variants", []):
+        if "services" in v:
+            combos.append(v["services"])
+    return combos
+
+
+def test_select_topic_resolves_variants():
+    """variantsを持つトピックは複数回の選択で異なるサービス組み合わせが選ばれ得ること。
+    返る辞書は解決済み（variantsキーなし・servicesは定義済み組み合わせのいずれか）であること。"""
+    base = next(t for t in lambda_function.AWS_TOPICS if t["id"] == "log_analytics")
+    assert base.get("variants"), "log_analyticsにvariantsが定義されている前提のテスト"
+    allowed = {tuple(c) for c in _all_service_combos(base)}
+    excluded = [t["id"] for t in lambda_function.AWS_TOPICS if t["id"] != "log_analytics"]
+
+    seen = set()
+    for _ in range(100):
+        topic = lambda_function.select_topic(excluded)
+        assert topic["id"] == "log_analytics"
+        assert "variants" not in topic
+        assert tuple(topic["services"]) in allowed
+        # subtitle・keywordsもバリエーションに合わせて解決されていること（AWS_TOPICS本体は不変）
+        assert topic["subtitle"]
+        assert topic["keywords"]
+        seen.add(tuple(topic["services"]))
+    assert len(seen) >= 2, "100回選択してもサービス組み合わせが1種類しか出ていません"
+    # 乱択がAWS_TOPICS本体を書き換えていないこと
+    assert base["services"] == ["CloudTrail", "S3", "Athena"]
+    assert "variants" in base
+
+
+def test_resolve_variant_passthrough_for_fixed_topic():
+    """variantsを持たないトピックはそのままの内容で返ること"""
+    base = next(t for t in lambda_function.AWS_TOPICS if not t.get("variants"))
+    resolved = lambda_function._resolve_topic_variant(base)
+    assert resolved == base
+
+
+def test_all_variant_services_have_docs_urls():
+    """基本形・バリエーション含む全サービス名が公式ドキュメントURLに解決できること
+    （URLハルシネーション・追加漏れの回帰防止）"""
+    for topic in lambda_function.AWS_TOPICS:
+        for combo in _all_service_combos(topic):
+            for svc in combo:
+                doc_id = lambda_function._SERVICE_NAME_TO_DOCS_ID.get(svc)
+                assert doc_id, f"{topic['id']}: '{svc}' が_SERVICE_NAME_TO_DOCS_IDに未登録"
+                url = lambda_function.DOCS_URL_MAP.get(doc_id)
+                assert url and url.startswith("https://docs.aws.amazon.com/"), (
+                    f"{topic['id']}: '{svc}' ({doc_id}) のDOCS_URL_MAPエントリが不正"
+                )
+
+
+def test_all_variant_services_have_official_icons():
+    """基本形・バリエーション含む全サービス名がAWS公式アイコンに解決できること
+    （userアイコン・色付きボックスへのフォールバック禁止）"""
+    import diagram_generator as dg
+
+    for topic in lambda_function.AWS_TOPICS:
+        for combo in _all_service_combos(topic):
+            for svc in combo:
+                icon = dg._icon_for_service(svc)
+                assert icon != "user", f"{topic['id']}: '{svc}' がuserアイコンにフォールバック"
+                official = os.path.join(dg._OFFICIAL_ICON_DIR, dg._OFFICIAL_ICON_MAP.get(icon, ""))
+                bundled = os.path.join(dg._BUNDLED_ICON_DIR, f"{icon}.png")
+                assert (icon in dg._OFFICIAL_ICON_MAP and os.path.exists(official)) or os.path.exists(bundled), (
+                    f"{topic['id']}: '{svc}' のアイコン '{icon}' の実ファイルが存在しない"
+                )
 
 
 def test_save_topic_to_ssm_uses_passed_recent_list(monkeypatch):
