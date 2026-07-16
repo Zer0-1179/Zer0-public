@@ -218,4 +218,10 @@
 - README.md冒頭のステータス表記（古いバージョン番号「v0.24」が残存）を、バージョン番号を付けない現行方針に沿って実態ベースの説明文に更新
 - README.md「今後の進め方」・システム仕様書.md「制約・注意事項」にあった「法務対応（特商法表記・利用規約・プライバシーポリシー）は未着手」という古い記述を修正。実際は`tokushoho.html`/`terms.html`/`privacy.html`として実装済みで、所在地・電話番号は消費者庁Q&A準拠の「開示請求があれば開示」方式を採用しバーチャルオフィス契約は不要と判断済み
 - システム仕様書.mdの「mail-forwarder-dlqにアラーム未設定」という記述も古く、`zer0-nyusatsu-mail-forwarder-dlq-alarm-01`として既に設定済みだったため修正
-- lp_waitlist Lambda（登録・確認・配信停止・LINE連携・Stripe Webhook全APIの実処理）にエラー検知用CloudWatchアラームが無いことを確認したが、AWSアカウント全体で無料枠10個中10個が使用中のため、既存の他プロジェクトのアラームを1つ削る判断が必要と分かり追加は見送り。ユーザー確認待ちとしてシステム仕様書に明記
+- lp_waitlist Lambda（登録・確認・配信停止・LINE連携・Stripe Webhook全APIの実処理）にエラー検知用CloudWatchアラームが無いことを確認。AWSアカウント全体で無料枠10個中10個が使用中のため、削除候補の妥当性をFableに独立検証してもらった上でユーザー承認を得た
+
+### lp_waitlist LambdaのCloudWatchアラーム追加
+
+- 007(TouringApp)の`Zer0-touring-lambda-errors`を削除して枠を確保（`apigw-5xx`と機能的にほぼ重複、007のLambdaはAPI Gateway同期呼び出し専用のため未処理例外・タイムアウト・スロットリングはいずれも5xxとして検知可能とFableも同結論）
+- `infra/cfn-lp-backend.yaml`に`zer0-nyusatsu-lp-waitlist-errors-alarm-01`を追加。007側`infra/cfn-touring.yaml`の変更と合わせて両CFnスタックを更新・デプロイ
+- デプロイ後`aws cloudwatch describe-alarms`でアカウント全体のアラーム総数が10個であることを確認。007の本番サイト（`touring.zer0-infra.com`）がHTTP 200で正常応答することも確認
