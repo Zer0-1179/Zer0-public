@@ -141,3 +141,11 @@
 
 - 独自ブランドfavicon一式(favicon-16/32.png・apple-touch-icon.png・favicon.ico)を既存のicon-512.pngから生成し追加
 - 以前は`<link rel="icon">`が未設定でブラウザタブのアイコン表示が保証されていなかった点も是正
+
+## 2026-07-16
+
+### CloudWatchアラーム1個を008へ譲渡
+
+- AWSアカウント全体でCloudWatchアラームが無料枠10個中10個で上限に達しており、008(入札情報ウォッチ)の中核Lambda(lp_waitlist、登録/LINE連携/Stripe Webhook等を処理)にエラー検知アラームが一つも無いことが判明した
+- `Zer0-touring-lambda-errors`を削除して枠を確保した。`Zer0-touring-apigw-5xx`は残置。007のLambdaはAPI Gateway同期呼び出し専用のため、未処理例外・タイムアウト・スロットリングはいずれも5xxとして検知でき、失敗検知のカバレッジはほぼ維持される（Fableに独立検証を依頼し同結論を確認済み）
+- CFn更新（`zer0-touring`スタック、`CertificateArn`必須の既知ルールに従い実施）後、本番サイト(`touring.zer0-infra.com`)がHTTP 200で正常応答することを確認

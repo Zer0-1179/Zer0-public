@@ -130,6 +130,7 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | `zer0-nyusatsu-bounce-handler-errors-alarm-01`   | bounce_handlerのエラー検知 |
 | `zer0-nyusatsu-mail-forwarder-dlq-alarm-01`      | mail_forwarderのDLQ滞留検知|
 | `zer0-nyusatsu-stripe-webhook-errors-alarm-01`   | stripe_webhookのエラー検知 |
+| `zer0-nyusatsu-lp-waitlist-errors-alarm-01`      | lp_waitlist（登録/LINE連携/Stripe Webhook受付等）のエラー検知（2026-07-16追加） |
 
 ### SES
 
@@ -219,4 +220,9 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 - `docs_payment_setup.md`への相対リンク切れを修正（README.mdからは`../docs/docs_payment_setup.md`が正しいパスだった）
 - 概要表の通知手段が「メールのみ」のまま古く、LINE通知（購読者選択制）が未反映だったため修正
 - 冒頭のステータス表記・「今後の進め方」を実態に合わせて更新（特商法対応・利用規約・プライバシーポリシーは実装済み、残るは主にStripe Payment Links発行と神奈川県回答待ち）
-- lp_waitlist LambdaのCloudWatchアラーム追加は、無料枠10個中10個で上限のため他アラームとのトレードオフ判断が必要と分かり今回は見送り、ユーザー確認待ち
+
+#### lp_waitlist LambdaのCloudWatchアラーム追加
+
+- 登録・確認・配信停止・LINE連携・Stripe Webhook受付の全APIを処理する中核Lambdaにエラー検知アラームが一つも無いことが判明
+- AWSアカウント全体で無料枠10個中10個が上限のため、007(TouringApp)の`Zer0-touring-lambda-errors`を削除して枠を確保（Fableに削除候補の妥当性を独立検証してもらった上でユーザー承認を得て実施）
+- `zer0-nyusatsu-lp-waitlist-errors-alarm-01`を追加しCFnデプロイ、最終的なアラーム総数が10個であることを確認

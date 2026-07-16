@@ -407,6 +407,14 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
+### 2026-07-16
+
+#### CloudWatchアラーム1個を008へ譲渡
+
+- AWSアカウント全体でCloudWatchアラームが無料枠10個中10個で上限に達しており、008(入札情報ウォッチ)の中核Lambda(lp_waitlist、登録/LINE連携/Stripe Webhook等を処理)にエラー検知アラームが無いことが判明
+- `Zer0-touring-lambda-errors`を削除して枠を確保（`Zer0-touring-apigw-5xx`は残置。007のLambdaはAPI Gateway同期呼び出し専用のため、未処理例外・タイムアウト・スロットリングはいずれも5xxとして検知でき、カバレッジはほぼ維持される。Fableでも同結論を確認済み）
+- CFn更新後、本番サイト(`touring.zer0-infra.com`)がHTTP 200で正常応答することを確認
+
 ### 2026-07-13
 
 #### OGP画像の刷新（v3.2）
