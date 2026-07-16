@@ -158,6 +158,28 @@ def _draw_diagram(
         if not moved:
             break
 
+    # ── xlim/figsize の自動拡張 ──────────────────────────────────────────
+    # 上記の重なり解消でクラスターが左右に押し出され、呼び出し元が指定した
+    # 固定 xlim の外に出てしまうことがある（枠が画像端でクリップされるバグ）。
+    # ノード・クラスターの実際の座標範囲を集計し、指定 xlim を超える場合のみ
+    # その方向に拡張する。figsize は元の xlim 幅との比率で拡大し、
+    # アイコン等の見た目のサイズ感（1単位あたりのピクセル数）を変えない。
+    _EDGE_MARGIN = 0.5
+    _extents = [n['x'] - 0.55 for n in nodes] + [n['x'] + 0.55 for n in nodes]
+    for cl in (clusters or []):
+        _extents += [cl['x'], cl['x'] + cl['w']]
+    if _extents:
+        content_min_x = min(_extents) - _EDGE_MARGIN
+        content_max_x = max(_extents) + _EDGE_MARGIN
+        new_left = min(xlim[0], content_min_x)
+        new_right = max(xlim[1], content_max_x)
+        if new_left != xlim[0] or new_right != xlim[1]:
+            orig_width = xlim[1] - xlim[0]
+            new_width = new_right - new_left
+            if orig_width > 0:
+                figsize = (figsize[0] * new_width / orig_width, figsize[1])
+            xlim = (new_left, new_right)
+
     fig, ax = plt.subplots(figsize=figsize, dpi=150)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
