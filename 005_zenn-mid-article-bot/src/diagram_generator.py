@@ -42,6 +42,7 @@ _OFFICIAL_ICON_MAP: dict[str, str] = {
     'backup':           f'{_SVC}/Arch_Storage/64/Arch_AWS-Backup_64.png',
     # ── Database ──
     'rds':              f'{_SVC}/Arch_Database/64/Arch_Amazon-RDS_64.png',
+    'aurora':           f'{_SVC}/Arch_Database/64/Arch_Amazon-Aurora_64.png',
     'opensearch':       f'{_SVC}/Arch_Analytics/64/Arch_Amazon-OpenSearch-Service_64.png',
     # ── Networking ──
     'alb':              f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Elastic-Load-Balancing_64.png',
@@ -63,6 +64,7 @@ _OFFICIAL_ICON_MAP: dict[str, str] = {
     'xray':             f'{_SVC}/Arch_Developer-Tools/64/Arch_AWS-X-Ray_64.png',
     # ── Analytics ──
     'kinesis':          f'{_SVC}/Arch_Analytics/64/Arch_Amazon-Kinesis_64.png',
+    'firehose':         f'{_SVC}/Arch_Analytics/64/Arch_Amazon-Data-Firehose_64.png',
     'athena':           f'{_SVC}/Arch_Analytics/64/Arch_Amazon-Athena_64.png',
     'glue':             f'{_SVC}/Arch_Analytics/64/Arch_AWS-Glue_64.png',
     'lake_formation':   f'{_SVC}/Arch_Analytics/64/Arch_AWS-Lake-Formation_64.png',
@@ -128,6 +130,7 @@ _ICON_FALLBACK: dict[str, tuple[str, str, str]] = {
     'backup':            ('#7AA116', '#FFFFFF', 'Bkp'),
     # Database
     'rds':               ('#C7131F', '#FFFFFF', 'RDS'),
+    'aurora':            ('#C7131F', '#FFFFFF', 'Aur'),
     'dynamodb':          ('#C7131F', '#FFFFFF', 'DDB'),
     'dynamodb_streams':  ('#C7131F', '#FFFFFF', 'DDS'),
     'dax':               ('#C7131F', '#FFFFFF', 'DAX'),
@@ -160,6 +163,7 @@ _ICON_FALLBACK: dict[str, tuple[str, str, str]] = {
     'codedeploy':        ('#C7131F', '#FFFFFF', 'CD'),
     # Analytics & Data
     'kinesis':           ('#8C4FFF', '#FFFFFF', 'KDS'),
+    'firehose':          ('#8C4FFF', '#FFFFFF', 'KDF'),
     'athena':            ('#8C4FFF', '#FFFFFF', 'Ath'),
     'glue':              ('#8C4FFF', '#FFFFFF', 'Glue'),
     'quicksight':        ('#8C4FFF', '#FFFFFF', 'QS'),
@@ -486,6 +490,10 @@ _SERVICE_ICON_KEYWORDS: list[tuple] = [
     ("ECS", "ecs"),
     ("ALB", "alb"),
     ("ECR", "ecr"),
+    # 「Firehose」を「Kinesis」より先に判定する（旧称「Kinesis Data Firehose」表記でも
+    # kinesisアイコンに誤マッチしないようにするため）
+    ("Firehose", "firehose"),
+    ("Aurora", "aurora"),
     ("Kinesis", "kinesis"),
     ("X-Ray", "xray"),
     ("Route 53", "route53"),
@@ -542,6 +550,8 @@ _SERVICE_LABEL_OVERRIDE: dict[str, str] = {
     "Kinesis Data Streams": "Kinesis\nData Streams",
     "OpenSearch Serverless": "OpenSearch\nServerless",
     "ECS Fargate": "ECS\nFargate",
+    "Amazon Data Firehose": "Data Firehose",
+    "Aurora Serverless v2": "Aurora\nServerless v2",
 }
 
 
@@ -563,67 +573,122 @@ def _label_for_service(name: str) -> str:
 # 中間ノードを貫通しCLAUDE.mdの構成図ルールに反するため）。安全に定義できない
 # トピック（3サービスが単一方向のパイプラインでなく並列的な構成要素の場合）は
 # あえて定義せず、_diagram_generic側で無向線にフォールバックさせる。
-_TOPIC_FLOWS: dict[str, dict] = {
-    "serverless_ec": {
-        "order": ["API Gateway", "Lambda", "DynamoDB"],
-        "edges": [("API Gateway", "Lambda"), ("Lambda", "DynamoDB")],
-    },
-    "static_web_hosting": {
-        "order": ["S3", "CloudFront", "ACM"],
-        "edges": [("CloudFront", "S3"), ("ACM", "CloudFront")],
-    },
-    "container_platform": {
-        "order": ["ALB", "ECS Fargate", "ECR"],
-        "edges": [("ALB", "ECS Fargate"), ("ECR", "ECS Fargate")],
-    },
-    "event_driven_pipeline": {
-        "order": ["Kinesis Data Streams", "Lambda", "S3"],
-        "edges": [("Kinesis Data Streams", "Lambda"), ("Lambda", "S3")],
-    },
-    "microservices_base": {
-        "order": ["API Gateway", "Lambda", "X-Ray"],
-        "edges": [("API Gateway", "Lambda"), ("Lambda", "X-Ray")],
-    },
+#
+# 値はflow定義のリスト。トピックにservicesのバリエーション（lambda_function.pyのvariants）
+# がある場合、実際のservices組み合わせと一致するorderを持つflowだけが使われる。
+# 矢印の向きを検証できていないバリエーションはflowを追加せず無向線に倒す
+# （誤った矢印を描くより無向線の方が安全、という既存方針）。
+_TOPIC_FLOWS: dict[str, list[dict]] = {
+    "serverless_ec": [
+        {
+            "order": ["API Gateway", "Lambda", "DynamoDB"],
+            "edges": [("API Gateway", "Lambda"), ("Lambda", "DynamoDB")],
+        },
+        {
+            "order": ["API Gateway", "Lambda", "Aurora Serverless v2"],
+            "edges": [("API Gateway", "Lambda"), ("Lambda", "Aurora Serverless v2")],
+        },
+    ],
+    "static_web_hosting": [
+        {
+            "order": ["S3", "CloudFront", "ACM"],
+            "edges": [("CloudFront", "S3"), ("ACM", "CloudFront")],
+        },
+        {
+            "order": ["Route 53", "CloudFront", "S3"],
+            "edges": [("Route 53", "CloudFront"), ("CloudFront", "S3")],
+        },
+    ],
+    "container_platform": [
+        {
+            "order": ["ALB", "ECS Fargate", "ECR"],
+            "edges": [("ALB", "ECS Fargate"), ("ECR", "ECS Fargate")],
+        },
+    ],
+    "event_driven_pipeline": [
+        {
+            "order": ["Kinesis Data Streams", "Lambda", "S3"],
+            "edges": [("Kinesis Data Streams", "Lambda"), ("Lambda", "S3")],
+        },
+    ],
+    "microservices_base": [
+        {
+            "order": ["API Gateway", "Lambda", "X-Ray"],
+            "edges": [("API Gateway", "Lambda"), ("Lambda", "X-Ray")],
+        },
+    ],
     # multi_region_dr: Route 53 / RDS / S3 CRR は独立したDR構成要素で単一方向の
     # パイプラインではないため未定義（無向線にフォールバック）
-    "realtime_notify": {
-        "order": ["SNS", "SQS", "Lambda"],
-        "edges": [("SNS", "SQS"), ("SQS", "Lambda")],
-    },
-    "bedrock_rag": {
-        "order": ["S3", "Amazon Bedrock", "OpenSearch Serverless"],
-        "edges": [("S3", "Amazon Bedrock"), ("Amazon Bedrock", "OpenSearch Serverless")],
-    },
-    "cicd_pipeline": {
-        "order": ["CodePipeline", "CodeBuild", "ECR"],
-        "edges": [("CodePipeline", "CodeBuild"), ("CodeBuild", "ECR")],
-    },
-    "ml_pipeline": {
-        "order": ["Step Functions", "SageMaker AI", "S3"],
-        "edges": [("Step Functions", "SageMaker AI"), ("SageMaker AI", "S3")],
-    },
-    "log_analytics": {
-        "order": ["CloudTrail", "S3", "Athena"],
-        "edges": [("CloudTrail", "S3"), ("S3", "Athena")],
-    },
+    "realtime_notify": [
+        {
+            "order": ["SNS", "SQS", "Lambda"],
+            "edges": [("SNS", "SQS"), ("SQS", "Lambda")],
+        },
+    ],
+    "bedrock_rag": [
+        {
+            "order": ["S3", "Amazon Bedrock", "OpenSearch Serverless"],
+            "edges": [("S3", "Amazon Bedrock"), ("Amazon Bedrock", "OpenSearch Serverless")],
+        },
+    ],
+    "cicd_pipeline": [
+        {
+            "order": ["CodePipeline", "CodeBuild", "ECR"],
+            "edges": [("CodePipeline", "CodeBuild"), ("CodeBuild", "ECR")],
+        },
+        {
+            "order": ["CodePipeline", "CodeBuild", "CodeDeploy"],
+            "edges": [("CodePipeline", "CodeBuild"), ("CodeBuild", "CodeDeploy")],
+        },
+        {
+            "order": ["CodePipeline", "CodeBuild", "S3"],
+            "edges": [("CodePipeline", "CodeBuild"), ("CodeBuild", "S3")],
+        },
+    ],
+    "ml_pipeline": [
+        {
+            "order": ["Step Functions", "SageMaker AI", "S3"],
+            "edges": [("Step Functions", "SageMaker AI"), ("SageMaker AI", "S3")],
+        },
+    ],
+    # log_analytics のバリエーション（Glue Data Catalog / Data Firehose）は中間にS3や
+    # CloudWatch Logsを挟む間接的な連携のため矢印を定義せず無向線に倒す
+    "log_analytics": [
+        {
+            "order": ["CloudTrail", "S3", "Athena"],
+            "edges": [("CloudTrail", "S3"), ("S3", "Athena")],
+        },
+    ],
     # cost_optimization: Cost Explorer / Budgets / Lambda は並列的なコスト統制ツールで
     # 単一方向のパイプラインではないため未定義（無向線にフォールバック）
-    "security_hardening": {
-        "order": ["CloudTrail", "GuardDuty", "Security Hub"],
-        "edges": [("CloudTrail", "GuardDuty"), ("GuardDuty", "Security Hub")],
-    },
-    "backup_dr": {
-        "order": ["RDS", "AWS Backup", "DynamoDB"],
-        "edges": [("AWS Backup", "RDS"), ("AWS Backup", "DynamoDB")],
-    },
-    "multi_account": {
-        "order": ["AWS Organizations", "Control Tower", "IAM Identity Center"],
-        "edges": [("Control Tower", "AWS Organizations"), ("Control Tower", "IAM Identity Center")],
-    },
-    "data_lake": {
-        "order": ["S3", "AWS Glue", "Athena"],
-        "edges": [("S3", "AWS Glue"), ("AWS Glue", "Athena")],
-    },
+    "security_hardening": [
+        {
+            "order": ["CloudTrail", "GuardDuty", "Security Hub"],
+            "edges": [("CloudTrail", "GuardDuty"), ("GuardDuty", "Security Hub")],
+        },
+    ],
+    "backup_dr": [
+        {
+            "order": ["RDS", "AWS Backup", "DynamoDB"],
+            "edges": [("AWS Backup", "RDS"), ("AWS Backup", "DynamoDB")],
+        },
+        {
+            "order": ["RDS", "AWS Backup", "EC2"],
+            "edges": [("AWS Backup", "RDS"), ("AWS Backup", "EC2")],
+        },
+    ],
+    "multi_account": [
+        {
+            "order": ["AWS Organizations", "Control Tower", "IAM Identity Center"],
+            "edges": [("Control Tower", "AWS Organizations"), ("Control Tower", "IAM Identity Center")],
+        },
+    ],
+    "data_lake": [
+        {
+            "order": ["S3", "AWS Glue", "Athena"],
+            "edges": [("S3", "AWS Glue"), ("AWS Glue", "Athena")],
+        },
+    ],
 }
 
 
@@ -634,16 +699,17 @@ def _diagram_generic(topic_id: str, topic_name: str, services: list[str], output
     一致するため、本文と図が食い違うバグが原理的に起きない。
     _TOPIC_FLOWSに人手検証済みの定義があるトピックのみ有向矢印を描き、
     それ以外は従来どおり無向の接続線にフォールバックする。
+    トピックにservicesのバリエーションがある場合は、現在の組み合わせと一致する
+    orderを持つflowだけを使う（一致しないバリエーションは安全側の無向線）。
     """
-    flow = _TOPIC_FLOWS.get(topic_id)
+    flows = _TOPIC_FLOWS.get(topic_id) or []
+    flow = next((f for f in flows if sorted(f["order"]) == sorted(services)), None)
     directed = flow is not None
     ordered_services = flow["order"] if flow else services
-    # flow定義がAWS_TOPICSのservices実体と食い違っていた場合（記事本文との不整合を防ぐため）
-    # 安全側の無向線モードにフォールバックする
-    if flow and sorted(ordered_services) != sorted(services):
-        print(f"[diagram_generator][WARNING] '{topic_id}' のflow定義がservicesと不一致のため無向線にフォールバックします")
-        ordered_services = services
-        directed = False
+    if flows and flow is None:
+        # 矢印未検証のバリエーション、またはflow定義とservices実体の食い違い。
+        # どちらの場合も誤った矢印を描くより無向線の方が安全
+        print(f"[diagram_generator] '{topic_id}' の現在のservices組み合わせに一致するflow定義がないため無向線で描画します")
 
     n = len(ordered_services)
     spacing = 4.2

@@ -70,6 +70,14 @@ DOCS_MAX_CHARS         = 6000
 
 # ─── 中級者向けトピック定義（16記事分 ≒ 8ヶ月分） ────────────────────────────
 # サービス数は1トピック3つまでに絞る（複数サービスを跨ぐ細かい統合バグの温床になりやすいため）
+#
+# "variants": トピック内のサービス組み合わせ変動枠。同一トピックが再登場しても記事内容が
+# 完全に同じにならないよう、services / subtitle / keywords を上書きする差分辞書のリストを持つ。
+# select_topic() が「基本形 + 各バリエーション」から random.choice で1つに確定するため、
+# 呼び出し側（generate_article / diagram_generator / fetch_aws_docs）は従来どおり固定の
+# services リストとして扱える。バリエーションのサービス名は _SERVICE_NAME_TO_DOCS_ID と
+# diagram_generator の _SERVICE_ICON_KEYWORDS に必ず対応エントリを持つこと。
+# _ZENN_META のタグに含まれるサービスはバリエーションでも必ず残すこと（タグの正確性維持）。
 AWS_TOPICS = [
     # ── 複合アーキテクチャ系 ─────────────────────────────────────────────────
     {
@@ -82,6 +90,13 @@ AWS_TOPICS = [
         "primary_service": "apigateway",
         "primary_service_label": "API Gateway",
         "emoji": "🛒",
+        "variants": [
+            {
+                "services": ["API Gateway", "Lambda", "Aurora Serverless v2"],
+                "subtitle": "API Gateway + Lambda + Aurora Serverless v2 で構築するリレーショナルDBバックエンド",
+                "keywords": "サーバーレス, API Gateway, Lambda, Aurora Serverless v2, RDS Proxy, コネクション管理, オートスケーリング",
+            },
+        ],
     },
     {
         "id": "static_web_hosting",
@@ -93,6 +108,13 @@ AWS_TOPICS = [
         "primary_service": "cloudfront",
         "primary_service_label": "CloudFront",
         "emoji": "🌐",
+        "variants": [
+            {
+                "services": ["S3", "CloudFront", "Route 53"],
+                "subtitle": "S3 + CloudFront + Route 53 で構築するカスタムドメインの静的サイト",
+                "keywords": "静的サイト, CloudFront, S3, Route 53, カスタムドメイン, エイリアスレコード, OAC, キャッシュ制御",
+            },
+        ],
     },
     {
         "id": "container_platform",
@@ -215,6 +237,18 @@ AWS_TOPICS = [
         "primary_service": "codepipeline",
         "primary_service_label": "CodePipeline",
         "emoji": "🚀",
+        "variants": [
+            {
+                "services": ["CodePipeline", "CodeBuild", "CodeDeploy"],
+                "subtitle": "CodePipeline + CodeBuild + CodeDeploy でビルド〜デプロイまでを自動化する",
+                "keywords": "CI/CD, CodePipeline, CodeBuild, CodeDeploy, デプロイ自動化, ロールバック, パイプラインステージ",
+            },
+            {
+                "services": ["CodePipeline", "CodeBuild", "S3"],
+                "subtitle": "CodePipeline + CodeBuild + S3 で静的サイトのビルド〜配信を自動化する",
+                "keywords": "CI/CD, CodePipeline, CodeBuild, S3, 静的サイト配信, アーティファクト管理, 自動テスト",
+            },
+        ],
     },
     {
         "id": "ml_pipeline",
@@ -237,6 +271,18 @@ AWS_TOPICS = [
         "primary_service": "cloudtrail",
         "primary_service_label": "CloudTrail",
         "emoji": "🔍",
+        "variants": [
+            {
+                "services": ["CloudTrail", "AWS Glue", "Athena"],
+                "subtitle": "CloudTrail + Glue Data Catalog + Athena でスキーマ管理されたログ分析基盤を構築する",
+                "keywords": "CloudTrail, AWS Glue, Athena, Glue Data Catalog, クローラー, ログ分析, セキュリティ監査, スキーマ管理",
+            },
+            {
+                "services": ["CloudTrail", "Amazon Data Firehose", "Athena"],
+                "subtitle": "CloudTrail + Data Firehose + Athena でログをニアリアルタイムに集約・分析する",
+                "keywords": "CloudTrail, Amazon Data Firehose, Athena, CloudWatch Logs サブスクリプションフィルター, ニアリアルタイム, ログ集約, 動的パーティショニング",
+            },
+        ],
     },
     {
         "id": "cost_optimization",
@@ -270,6 +316,13 @@ AWS_TOPICS = [
         "primary_service": "backup",
         "primary_service_label": "AWS Backup",
         "emoji": "💾",
+        "variants": [
+            {
+                "services": ["AWS Backup", "RDS", "EC2"],
+                "subtitle": "AWS Backup + RDS + EC2 のバックアッププランで障害に強い設計を実現する",
+                "keywords": "AWS Backup, RDS スナップショット, EC2 AMIバックアップ, EBSスナップショット, RTO, RPO, 復元テスト",
+            },
+        ],
     },
     {
         "id": "multi_account",
@@ -303,6 +356,13 @@ AWS_TOPICS = [
         "primary_service": "cloudwatch",
         "primary_service_label": "CloudWatch",
         "emoji": "📈",
+        "variants": [
+            {
+                "services": ["CloudWatch", "EventBridge", "SNS"],
+                "subtitle": "CloudWatch + EventBridge + SNS でアラームイベントを柔軟にルーティングする監視基盤",
+                "keywords": "CloudWatch, EventBridge, SNS, アラーム状態変化イベント, イベントルール, 運用監視, 通知ルーティング",
+            },
+        ],
     },
     {
         "id": "edge_security",
@@ -389,6 +449,9 @@ DOCS_URL_MAP: dict[str, str] = {
     "shield":          "https://docs.aws.amazon.com/ja_jp/waf/latest/developerguide/what-is-aws-waf.html",
     "secrets_manager": "https://docs.aws.amazon.com/ja_jp/secretsmanager/latest/userguide/intro.html",
     "lake_formation":  "https://docs.aws.amazon.com/ja_jp/lake-formation/latest/dg/what-is-lake-formation.html",
+    # ── トピック内サービス変動枠（variants）用 ──
+    "firehose":          "https://docs.aws.amazon.com/ja_jp/firehose/latest/dev/what-is-this-service.html",
+    "aurora_serverless": "https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html",
 }
 
 # ─── トピックの services 表記文字列 → DOCS_URL_MAP キー ───────────────────────
@@ -445,6 +508,9 @@ _SERVICE_NAME_TO_DOCS_ID: dict[str, str] = {
     "Secrets Manager": "secrets_manager",
     "Lake Formation": "lake_formation",
     "IAM": "iam",
+    # ── トピック内サービス変動枠（variants）用 ──
+    "Amazon Data Firehose": "firehose",
+    "Aurora Serverless v2": "aurora_serverless",
 }
 
 # ─── Zennフロントマター用メタ情報 ─────────────────────────────────────────────
@@ -556,9 +622,8 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 テーマの特性に応じてセクションの統合・分割・改題は自由。
 
 ### ## はじめに
-- **冒頭の1〜2文で「誰が・どんな課題を持っているか」を具体的に描く**
-  - 課題から入る例:「オーダー急増でAPIが落ちた経験はありませんか？{topic_name}を使うと〜」
-  - ニーズから入る例:「{topic_name}が必要になるのは、〜というシナリオが多いです」
+{opening_style}
+  - 指定された切り口はアプローチの指示であり、例文の転写ではなく自分の言葉で具体的に書く
   - 「この記事では〜を解説します」という宣言は使わない
 - この記事で「何が作れるようになるか・何を判断できるようになるか」を1〜2文で示す
 - **「この記事でわかること」を3行の箇条書きで示す**（スキマー向けの要点先出し。冒頭の課題描写のすぐ後、対象読者の前に置く）
@@ -570,9 +635,8 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 
 **`{{DIAGRAM_1}}` マーカーの配置ルール（必ず守ること）**
 - マーカーは `## アーキテクチャ概要` セクションの本文中にのみ置く。他のセクション・見出し直後には置かない。
-- 直前（1文）: このアーキテクチャで何が実現できるかを一言で示す予告文を書く（毎回違う切り口で）
-  - 良い例: 「{topic_name}の全体像を先に把握しておくと、以降の設計判断が理解しやすくなります。」
-  - 良い例: 「以下の構成図に、{services}の接続関係と主なデータの流れをまとめました。」
+- 直前（1文）: {diagram_intro_style}
+  - 決まり文句ではなく、このテーマの内容に即した自分の言葉で書く
   - 禁止: 「以下が全体構成図です。」のような内容のない定型文
 - 直後（1〜2文）: 図から読み取れる最重要ポイントを具体的に補足する
 
@@ -584,24 +648,7 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 5. 各サービスが担う役割を1〜2行で箇条書き
 6. データ・リクエストの流れを番号付きで説明
 
-### ## 各コンポーネントの選定理由
-- なぜこのサービスの組み合わせを選んだか（代替案との比較をテーブルで）
-- 各サービスが解決する課題を「課題 → 解決策 → 採用理由」の形で書く
-- `:::message` で「設計のポイント」を強調する
-
-### ## 構成手順
-- **前提条件**: 必要なツール・権限（AWSアカウント、AWS CLI、適切なIAM権限）
-- **作業ディレクトリと変数の設定（冒頭に必須）**: `bash:変数設定` ブロックで `APP_NAME` / `REGION` / `ACCOUNT_ID` を定義する
-- **ステップ1〜5以上**: AWS CLIコマンドを中心に手順を説明する
-  - 各ステップ冒頭に `# ── ①目的 ────` 形式のセクションコメントを付ける（番号は通し番号）
-  - コードブロックは `bash:ステップ名` 形式で記述する
-  - IAMポリシー等の長いJSONはすべてファイル参照（`file://policy.json`）で記述する
-  - 変数展開が必要なJSONファイルは unquoted heredoc（`<< EOF`）を使用し、リテラルは quoted heredoc（`<< 'EOF'`）を明示的に使い分ける
-  - リソース作成後に取得した ARN・URI は変数に保存して後続コマンドで参照する
-  - 各ステップのつまずきポイントを `:::message` で注記する
-  - AWS CLIコマンドは**成功時のレスポンス例を必ずコードブロックで示す**（「結果が表示されます」は使わない）
-- **クリーンアップ（末尾に必須）**: 作成したリソースを逆順に削除するコマンドを列挙する
-- **動作確認**: 実際に動かして確認する手順
+{middle_sections}
 
 ### ## 設計上の考慮ポイント
 
@@ -685,6 +732,72 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 - **Savings Plans キャンセル不可**: 購入後のキャンセルは不可。推奨額の80〜90%からスタートする旨を必ず記載する
 - サービスの制約・注意点は「できること」と同等の重みで記載する
 """
+
+# ─── 書き出し・構成のバリエーション（コード側乱択） ───────────────────────────
+# 以前はプロンプトに「課題から入る例」「ニーズから入る例」の例文を併記していたが、
+# 生成記事7件中6件が同一パターン（失敗談引用型）の書き出しになる偏りが確認された。
+# LLMに「ランダムに選んで」と指示しても偏る（トピック選択で実証済み）ため、
+# コード側 random.choice で1つだけをプロンプトに埋め込む。逐語転写を誘発しないよう
+# 完全な例文は載せず「このアプローチで書け」という指示に留める。
+
+_OPENING_STYLES: list[str] = [
+    "- **冒頭の1〜2文は「実際に起きがちな失敗・障害」から入る**（運用現場で起きる具体的なトラブルを1つ描き、その対処として本構成につなげる）",
+    "- **冒頭の1〜2文は「具体的な数字」から入る**（レイテンシ・リクエスト数・コスト等の定量的な事実から、この構成が必要になる理由につなげる）",
+    "- **冒頭の1〜2文は「読者への問いかけ」から入る**（読者が現場で迷いそうな設計判断を疑問形で示し、その答えとして本構成を提示する）",
+    "- **冒頭の1〜2文は「素朴な構成の限界」から入る**（単純な構成では何が破綻するかを示し、本構成でどう変わるかのビフォーアフターにつなげる）",
+    "- **冒頭の1〜2文は「この構成が必要になる典型シナリオ」から入る**（どんなチーム・システム規模・フェーズで必要になるかを具体的に描く）",
+]
+
+# 構成図直前の予告文も「良い例」の逐語転写が確認されたため、切り口の指示のみ乱択で与える
+_DIAGRAM_INTRO_STYLES: list[str] = [
+    "図を先に把握しておくと以降のどの設計判断が理解しやすくなるか、を示す予告文を書く",
+    "図に何がまとまっているか（サービス間の接続関係・データの流れ）を予告する1文を書く",
+    "図のどこに注目して読んでほしいか（要のサービス・境界など）を示す1文を書く",
+]
+
+# 「選定理由」と「構成手順」は記事として自然さを損なわない範囲で順序を入れ替えられるため、
+# 2ブロックを乱択で並べ替えて {middle_sections} に埋め込む（見出し構成の紋切り型化を防ぐ）
+_SECTION_COMPONENTS = """### ## 各コンポーネントの選定理由
+- なぜこのサービスの組み合わせを選んだか（代替案との比較をテーブルで）
+- 各サービスが解決する課題を「課題 → 解決策 → 採用理由」の形で書く
+- `:::message` で「設計のポイント」を強調する"""
+
+_SECTION_STEPS = """### ## 構成手順
+- **前提条件**: 必要なツール・権限（AWSアカウント、AWS CLI、適切なIAM権限）
+- **作業ディレクトリと変数の設定（冒頭に必須）**: `bash:変数設定` ブロックで `APP_NAME` / `REGION` / `ACCOUNT_ID` を定義する
+- **ステップ1〜5以上**: AWS CLIコマンドを中心に手順を説明する
+  - 各ステップ冒頭に `# ── ①目的 ────` 形式のセクションコメントを付ける（番号は通し番号）
+  - コードブロックは `bash:ステップ名` 形式で記述する
+  - IAMポリシー等の長いJSONはすべてファイル参照（`file://policy.json`）で記述する
+  - 変数展開が必要なJSONファイルは unquoted heredoc（`<< EOF`）を使用し、リテラルは quoted heredoc（`<< 'EOF'`）を明示的に使い分ける
+  - リソース作成後に取得した ARN・URI は変数に保存して後続コマンドで参照する
+  - 各ステップのつまずきポイントを `:::message` で注記する
+  - AWS CLIコマンドは**成功時のレスポンス例を必ずコードブロックで示す**（「結果が表示されます」は使わない）
+- **クリーンアップ（末尾に必須）**: 作成したリソースを逆順に削除するコマンドを列挙する
+- **動作確認**: 実際に動かして確認する手順"""
+
+
+def build_article_prompt(topic: dict, today: str, docs_section: str) -> str:
+    """記事生成プロンプトを組み立てる。書き出しスタイル・図の予告文の切り口・
+    中盤セクション（選定理由/構成手順）の順序をコード側乱択で決定する。
+    {{DIAGRAM_1}}マーカーの記法・配置ルールはここでは一切変更しない。
+    """
+    middle_order = random.choice([
+        (_SECTION_COMPONENTS, _SECTION_STEPS),
+        (_SECTION_STEPS, _SECTION_COMPONENTS),
+    ])
+    return ARTICLE_PROMPT_TEMPLATE.format(
+        topic_name=topic["name"],
+        topic_subtitle=topic["subtitle"],
+        services="、".join(topic["services"]),
+        keywords=topic["keywords"],
+        today=today,
+        docs_section=docs_section,
+        primary_service_label=topic.get("primary_service_label", ""),
+        opening_style=random.choice(_OPENING_STYLES),
+        diagram_intro_style=random.choice(_DIAGRAM_INTRO_STYLES),
+        middle_sections="\n\n".join(middle_order),
+    )
 
 
 # ─── AWS公式ドキュメント取得 ──────────────────────────────────────────────────
@@ -799,6 +912,20 @@ def increment_topic_occurrence(topic_id: str) -> None:
 
 # ─── トピック選択 ─────────────────────────────────────────────────────────────
 
+def _resolve_topic_variant(topic: dict) -> dict:
+    """variants定義を持つトピックは「基本形＋各バリエーション」から1つを乱択して確定する。
+    返す辞書はvariantsキーを持たない解決済みトピックで、呼び出し側は従来どおり
+    固定のservices/subtitle/keywordsとして扱える。variantsが無いトピックはそのまま返す
+    （コピーするのは、呼び出し側の変更がAWS_TOPICS本体を汚染しないようにするため）。
+    """
+    resolved = {k: v for k, v in topic.items() if k != "variants"}
+    variants = topic.get("variants")
+    if variants:
+        # 空辞書 {} は「基本形のまま」を表す（基本形も等確率で選ばれ続けるようにする）
+        resolved.update(random.choice([{}] + list(variants)))
+    return resolved
+
+
 def select_topic(excluded_ids: list[str]) -> dict:
     """重複を避けながらトピックを選択する。
     以前はBedrockに「ランダムに選んで」と依頼していたが、実績を集計すると
@@ -810,7 +937,7 @@ def select_topic(excluded_ids: list[str]) -> dict:
     if not available:
         print("全トピックが除外済みのためリセットします")
         available = AWS_TOPICS
-    return random.choice(available)
+    return _resolve_topic_variant(random.choice(available))
 
 
 # ─── 記事生成 ─────────────────────────────────────────────────────────────────
@@ -840,16 +967,7 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
         f"{docs_content}\n\n---\n"
         if docs_content else ""
     )
-    services_str = "、".join(topic["services"])
-    prompt = ARTICLE_PROMPT_TEMPLATE.format(
-        topic_name=topic["name"],
-        topic_subtitle=topic["subtitle"],
-        services=services_str,
-        keywords=topic["keywords"],
-        today=today,
-        docs_section=docs_section,
-        primary_service_label=topic.get("primary_service_label", ""),
-    )
+    prompt = build_article_prompt(topic, today, docs_section)
 
     body_dict = {
         "anthropic_version": BEDROCK_ANTHROPIC_VERSION,
