@@ -197,3 +197,41 @@ def test_auto_fix_noop_when_no_issues():
     fixed, fixes = lambda_function._auto_fix_article(article)
     assert fixed == article
     assert fixes == []
+
+
+def test_all_diagram_functions_render_without_error(tmp_path):
+    """全構成図生成関数がエラーなくPNGを出力すること（回帰防止）"""
+    import diagram_generator as dg
+
+    fns = [
+        (name, obj) for name, obj in vars(dg).items()
+        if name.startswith("_diagram_") and callable(obj)
+    ]
+    assert len(fns) > 0, "構成図関数が1つも見つかりません"
+    for name, fn in fns:
+        out = str(tmp_path / f"{name}.png")
+        fn(out)
+        assert os.path.exists(out), f"{name}: PNGが出力されませんでした"
+
+
+def test_diagram_vpc_1_cluster_not_clipped_by_xlim(tmp_path):
+    """VPCトピック図1で、クラスター重なり解消により押し出された枠がxlim内に収まること
+    （2026-07-16に発覚した右端クリップバグの回帰防止。過去はxlimが固定(0,13)で
+    プライベートサブネット枠の右端がちょうど境界に達し画像端でクリップされていた）"""
+    import diagram_generator as dg
+    from unittest.mock import patch
+
+    captured = {}
+    orig_subplots = dg.plt.subplots
+
+    def spy_subplots(*args, **kwargs):
+        captured["figsize"] = kwargs.get("figsize", args[0] if args else None)
+        return orig_subplots(*args, **kwargs)
+
+    with patch.object(dg.plt, "subplots", side_effect=spy_subplots):
+        dg._diagram_vpc_1(str(tmp_path / "vpc_1.png"))
+
+    # 修正前は常に (13, 6) 固定だった。押し出された枠を収めるため幅が拡張されていること
+    assert captured["figsize"][0] > 13.0, (
+        "xlim自動拡張が発動していません。クラスター枠がクリップされる可能性があります"
+    )
