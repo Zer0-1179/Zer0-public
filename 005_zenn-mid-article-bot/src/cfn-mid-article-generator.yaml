@@ -74,7 +74,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: "arn:aws:s3:::zer0-dev-s3/zenn-mid-articles/*"
+                Resource:
+                  - "arn:aws:s3:::zer0-dev-s3/zenn-mid-articles/*"
+                  - "arn:aws:s3:::zer0-dev-s3/zenn-mid-articles-test/*"
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
