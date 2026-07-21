@@ -118,6 +118,7 @@ Resources:
                   - s3:PutObject
                 Resource:
                   - !Sub "${CryptoBotStatsBucket.Arn}/stats.json"
+                  - !Sub "${CryptoBotStatsBucket.Arn}/positions.json"
 
   # ── IAM ロール: FailureNotifier ───────────────────────────────────────────
   FailureNotifierRole:
