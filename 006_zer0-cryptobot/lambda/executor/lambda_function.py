@@ -51,6 +51,7 @@ JST                = timezone(timedelta(hours=9))
 # 閲覧は004 SSR LambdaのIAMロールに付与したs3:GetObjectのみで行い、匿名アクセスは不可）
 STATS_BUCKET = os.environ.get("STATS_BUCKET", "")
 STATS_KEY    = "stats.json"
+POSITIONS_KEY = "positions.json"  # 現在保有中ポジションのスナップショット（Phase A毎に上書き）
 
 # TP/SL 倍率（v3.1: 現実コスト込みグリッドスイープ＋ウォークフォワード検証で最適化）
 TP1_MULT    = 1.25  # TP1 = entry ± ATR × 1.25
@@ -275,6 +276,87 @@ def update_stats_json():
         CacheControl="public, max-age=300",
     )
     log(f"統計JSON更新完了（{len(trades)}件）")
+
+
+def update_positions_json(state: dict):
+    """現在保有中ポジションのスナップショットを004ポートフォリオ向けに書き出す。
+    「TP1部分利確後、次はいつ利確するのか分からず不安」というユーザー要望を受け、
+    トレーリングSLには固定の利確ラインが存在しない（高値/安値からATR×TRAIL_MULT反落で決済）
+    ことを前提に、現在の含み損益・確保済み利益ライン（trail_sl_price）・値幅を毎サイクル
+    （Phase A後）更新する。ベストエフォート処理で、失敗しても取引処理は継続する。"""
+    if not STATS_BUCKET:
+        return
+
+    snapshots = []
+    for pair, pos in state.get("positions", {}).items():
+        status = pos.get("status")
+        if status not in ("active", "trailing"):
+            continue  # buy_pending は未約定のため保有ポジションとして表示しない
+
+        direction   = pos.get("direction")
+        entry_price = pos.get("entry_price")
+        try:
+            current_price = get_bitbank_price(pair)
+        except Exception as e:
+            log(f"{pair}: positions.json用の現在価格取得失敗 → スキップ: {e}")
+            continue
+
+        snap = {
+            "pair":          pair,
+            "direction":     direction,
+            "status":        status,
+            "entry_price":   entry_price,
+            "current_price": current_price,
+            "atr_jpy":       pos.get("atr_jpy"),
+        }
+
+        if status == "active":
+            # TP1未約定: 保有数量は全量、確保済み利益ラインはまだ存在しない（初期SLのみ）
+            amount = pos.get("total_amount", 0)
+            sl_price = pos.get("sl_price")
+            snap.update({
+                "amount":            amount,
+                "tp1_price":         pos.get("tp1_price"),
+                "sl_price":          sl_price,
+                "unrealized_pnl_jpy": round(
+                    (current_price - entry_price) * amount if direction == "long"
+                    else (entry_price - current_price) * amount, 1),
+            })
+        else:  # trailing
+            # TP1約定済み: 残数量(trail_amount)がトレーリングSLで管理されている。
+            # trail_sl_price は高値/安値更新に伴い一方向にのみ改善する「確保済み利益ライン」。
+            amount = pos.get("trail_amount", 0)
+            snap.update({
+                "amount":            amount,
+                "tp1_price":         pos.get("tp1_price"),
+                "trail_sl_price":    pos.get("trail_sl_price"),
+                "highest_price":     pos.get("highest_price"),
+                "lowest_price":      pos.get("lowest_price"),
+                "unrealized_pnl_jpy": round(
+                    (current_price - entry_price) * amount if direction == "long"
+                    else (entry_price - current_price) * amount, 1),
+                # trail_sl_price に達した場合の確定損益見込み（スリッページ考慮前の概算）
+                "locked_pnl_jpy": round(
+                    (pos.get("trail_sl_price", entry_price) - entry_price) * amount if direction == "long"
+                    else (entry_price - pos.get("trail_sl_price", entry_price)) * amount, 1),
+            })
+
+        snapshots.append(snap)
+
+    payload = {
+        "generated_at": datetime.now(JST).isoformat(timespec="seconds"),
+        "positions":    snapshots,
+    }
+    try:
+        _s3.put_object(
+            Bucket=STATS_BUCKET, Key=POSITIONS_KEY,
+            Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            ContentType="application/json",
+            CacheControl="public, max-age=300",
+        )
+        log(f"ポジションJSON更新完了（{len(snapshots)}件）")
+    except Exception as e:
+        log(f"ポジションJSON更新失敗（取引処理は継続）: {e}")
 
 
 def send_email(subject: str, body: str):
@@ -1312,6 +1394,10 @@ def lambda_handler(event, context):
             save_state(state)
             log("state⇄実建玉リコンサイル確認")
             reconcile_positions(bb, state)
+            try:
+                update_positions_json(state)
+            except Exception as e:
+                log(f"ポジションJSON更新失敗（取引処理は継続）: {e}")
             log("緊急決済完了 → Phase A/B をスキップ")
             return {"statusCode": 200, "body": json.dumps({"emergency_close": True})}
 
@@ -1335,6 +1421,11 @@ def lambda_handler(event, context):
         # 毎回発生していた(2026-07-13、ユーザー報告により発覚)。
         log("state⇄実建玉リコンサイル確認")
         reconcile_positions(bb, state)
+
+        try:
+            update_positions_json(state)
+        except Exception as e:
+            log(f"ポジションJSON更新失敗（取引処理は継続）: {e}")
 
         save_state(state)
         log("状態保存完了")

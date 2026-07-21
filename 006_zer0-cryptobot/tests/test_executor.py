@@ -204,3 +204,85 @@ def test_record_trade_does_not_raise_when_stats_update_fails(executor, monkeypat
     monkeypatch.setattr(executor._s3, "put_object", MagicMock())
     monkeypatch.setattr(executor, "update_stats_json", MagicMock(side_effect=Exception("stats write failed")))
     executor.record_trade("btc_jpy", "long", "トレーリングSL", 100.0, 110.0, 0.01, "pos-1")  # 例外が伝播しないこと
+
+
+# ── 現在ポジションのスナップショット（positions.json） ─────────────────────
+
+def test_update_positions_json_skips_silently_when_bucket_unset(executor, monkeypatch):
+    monkeypatch.setattr(executor, "STATS_BUCKET", "")
+    mock_put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", mock_put)
+    executor.update_positions_json({"positions": {}})
+    assert not mock_put.called
+
+
+def test_update_positions_json_excludes_buy_pending(executor, monkeypatch):
+    monkeypatch.setattr(executor, "STATS_BUCKET", "zer0-cryptobot-stats-s3")
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=11000000.0))
+    mock_put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", mock_put)
+
+    state = {"positions": {"btc_jpy": {"status": "buy_pending", "direction": "long"}}}
+    executor.update_positions_json(state)
+
+    payload = json.loads(mock_put.call_args.kwargs["Body"])
+    assert payload["positions"] == []
+
+
+def test_update_positions_json_active_position_unrealized_pnl(executor, monkeypatch):
+    monkeypatch.setattr(executor, "STATS_BUCKET", "zer0-cryptobot-stats-s3")
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=10600000.0))
+    mock_put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", mock_put)
+
+    state = {"positions": {"btc_jpy": {
+        "status": "active", "direction": "long", "entry_price": 10493433.0,
+        "total_amount": 0.0006, "atr_jpy": 144042.0,
+        "tp1_price": 10673486.0, "sl_price": 10133348.0,
+    }}}
+    executor.update_positions_json(state)
+
+    assert mock_put.call_args.kwargs["Bucket"] == "zer0-cryptobot-stats-s3"
+    assert mock_put.call_args.kwargs["Key"] == "positions.json"
+    payload = json.loads(mock_put.call_args.kwargs["Body"])
+    pos = payload["positions"][0]
+    assert pos["pair"] == "btc_jpy"
+    assert pos["status"] == "active"
+    assert pos["current_price"] == 10600000.0
+    assert pos["unrealized_pnl_jpy"] == round((10600000.0 - 10493433.0) * 0.0006, 1)
+
+
+def test_update_positions_json_trailing_position_locked_pnl(executor, monkeypatch):
+    monkeypatch.setattr(executor, "STATS_BUCKET", "zer0-cryptobot-stats-s3")
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=10700000.0))
+    mock_put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", mock_put)
+
+    state = {"positions": {"btc_jpy": {
+        "status": "trailing", "direction": "long", "entry_price": 10493433.0,
+        "trail_amount": 0.0005, "atr_jpy": 144042.0, "tp1_price": 10673486.0,
+        "trail_sl_price": 10688597.0, "highest_price": 10796629.0, "lowest_price": None,
+    }}}
+    executor.update_positions_json(state)
+
+    payload = json.loads(mock_put.call_args.kwargs["Body"])
+    pos = payload["positions"][0]
+    assert pos["status"] == "trailing"
+    assert pos["trail_sl_price"] == 10688597.0
+    # trail_sl_price は entry を上回っており、これに達しても含み益が確保される想定
+    assert pos["locked_pnl_jpy"] == round((10688597.0 - 10493433.0) * 0.0005, 1)
+    assert pos["locked_pnl_jpy"] > 0
+    assert pos["unrealized_pnl_jpy"] == round((10700000.0 - 10493433.0) * 0.0005, 1)
+
+
+def test_update_positions_json_skips_pair_on_price_fetch_failure(executor, monkeypatch):
+    monkeypatch.setattr(executor, "STATS_BUCKET", "zer0-cryptobot-stats-s3")
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(side_effect=Exception("timeout")))
+    mock_put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", mock_put)
+
+    state = {"positions": {"btc_jpy": {"status": "active", "direction": "long", "entry_price": 100.0, "total_amount": 1.0}}}
+    executor.update_positions_json(state)
+
+    payload = json.loads(mock_put.call_args.kwargs["Body"])
+    assert payload["positions"] == []

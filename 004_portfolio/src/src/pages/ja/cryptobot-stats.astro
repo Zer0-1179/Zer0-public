@@ -4,9 +4,11 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
 // 006 CryptoBot の非公開トレード実績ページ。認証は middleware.ts の Basic 認証で行う
 // （このファイル自体には認証ロジックを持たせない）。
-// stats.json は 006 Executor Lambda が取引確定のたびに書き出す非公開S3オブジェクト。
+// stats.json / positions.json は 006 Executor Lambda がそれぞれ取引確定のたび・
+// 30分毎のPhase A実行のたびに書き出す非公開S3オブジェクト。
 const STATS_BUCKET = 'zer0-cryptobot-stats-s3';
 const STATS_KEY = 'stats.json';
+const POSITIONS_KEY = 'positions.json';
 
 const PAIR_LABEL: Record<string, string> = {
   btc_jpy: 'BTC/JPY',
@@ -30,8 +32,31 @@ interface StatsPayload {
   points: StatsPoint[];
 }
 
+// active: TP1未約定（全量が初期SLで保護中）/ trailing: TP1約定済み（残量がトレーリングSLで保護中）
+interface PositionSnapshot {
+  pair: string;
+  direction: 'long' | 'short';
+  status: 'active' | 'trailing';
+  entry_price: number;
+  current_price: number;
+  atr_jpy: number | null;
+  amount: number;
+  tp1_price: number | null;
+  sl_price?: number;
+  trail_sl_price?: number;
+  highest_price?: number | null;
+  lowest_price?: number | null;
+  unrealized_pnl_jpy: number;
+  locked_pnl_jpy?: number;
+}
+interface PositionsPayload {
+  generated_at: string;
+  positions: PositionSnapshot[];
+}
+
 let stats: StatsPayload | null = null;
 let fetchError = false;
+let positionsPayload: PositionsPayload | null = null;
 
 try {
   const s3 = new S3Client({ region: process.env.AWS_REGION || 'ap-northeast-1' });
@@ -45,6 +70,22 @@ try {
     console.error('[cryptobot-stats] stats.json 取得失敗:', e);
   }
 }
+
+try {
+  const s3 = new S3Client({ region: process.env.AWS_REGION || 'ap-northeast-1' });
+  const obj = await s3.send(new GetObjectCommand({ Bucket: STATS_BUCKET, Key: POSITIONS_KEY }));
+  const body = await obj.Body?.transformToString();
+  if (body) positionsPayload = JSON.parse(body);
+} catch (e: any) {
+  // positions.json 未生成（デプロイ直後でまだPhase Aが1周していない等）は想定内。
+  if (e?.name !== 'NoSuchKey') {
+    console.error('[cryptobot-stats] positions.json 取得失敗:', e);
+  }
+}
+
+const openPositions = positionsPayload?.positions ?? [];
+const fmtYen = (v: number) => `${v >= 0 ? '+' : ''}${v.toLocaleString()}円`;
+const fmtPrice = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
 
 const points = stats?.points ?? [];
 const winCount = points.filter((p) => p.pnl_jpy >= 0).length;
@@ -103,6 +144,85 @@ const xLabels =
       <div class="w-12 h-0.5 bg-accent mb-4"></div>
       {stats && (
         <p class="text-slate-400 text-sm">最終更新: {new Date(stats.generated_at).toLocaleString('ja-JP')}</p>
+      )}
+    </div>
+
+    <div class="mb-10">
+      <h2 class="text-lg font-semibold text-white mb-1">現在のポジション</h2>
+      {positionsPayload && (
+        <p class="text-slate-500 text-xs mb-4">
+          スナップショット更新: {new Date(positionsPayload.generated_at).toLocaleString('ja-JP')}（Executor実行毎・最大30分遅延）
+        </p>
+      )}
+
+      {openPositions.length === 0 && (
+        <div class="p-6 bg-navy-800/40 border border-navy-700 rounded-lg text-slate-300 text-sm">
+          現在保有中のポジションはありません。
+        </div>
+      )}
+
+      {openPositions.length > 0 && (
+        <div class="grid gap-4 md:grid-cols-2">
+          {openPositions.map((p) => (
+            <div class="p-5 bg-navy-800/40 border border-navy-700 rounded-xl">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold text-white">{PAIR_LABEL[p.pair] ?? p.pair}</span>
+                  <span class={`text-xs px-2 py-0.5 rounded-full ${p.direction === 'long' ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'}`}>
+                    {DIR_LABEL[p.direction] ?? p.direction}
+                  </span>
+                </div>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">
+                  {p.status === 'trailing' ? 'トレーリング中（TP1済）' : 'TP1待ち'}
+                </span>
+              </div>
+
+              <div class="grid grid-cols-3 gap-2 text-sm mb-3">
+                <div>
+                  <div class="text-xs text-slate-400">エントリー</div>
+                  <div class="text-slate-200">{fmtPrice(p.entry_price)}円</div>
+                </div>
+                <div>
+                  <div class="text-xs text-slate-400">現在価格</div>
+                  <div class="text-slate-200">{fmtPrice(p.current_price)}円</div>
+                </div>
+                <div>
+                  <div class="text-xs text-slate-400">含み損益</div>
+                  <div class={`font-semibold ${p.unrealized_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {fmtYen(p.unrealized_pnl_jpy)}
+                  </div>
+                </div>
+              </div>
+
+              {p.status === 'active' && (
+                <div class="text-xs text-slate-400 bg-navy-900/40 rounded-lg p-3 leading-relaxed">
+                  TP1（一部利確ライン）: <span class="text-slate-200">{fmtPrice(p.tp1_price)}円</span>（全量の30%）<br />
+                  初期SL（損切りライン）: <span class="text-slate-200">{fmtPrice(p.sl_price)}円</span><br />
+                  TP1到達で30%を確定利確し、残り70%はトレーリングSLでの管理に移行します。
+                </div>
+              )}
+
+              {p.status === 'trailing' && (
+                <div class="text-xs text-slate-400 bg-navy-900/40 rounded-lg p-3 leading-relaxed">
+                  確保済み利益ライン（トレーリングSL）: <span class="text-green-300 font-medium">{fmtPrice(p.trail_sl_price)}円</span>
+                  {typeof p.locked_pnl_jpy === 'number' && (
+                    <> （このラインで決済されても残り70%分で概算 {fmtYen(p.locked_pnl_jpy)}）</>
+                  )}
+                  <br />
+                  {p.direction === 'long' ? (
+                    <>これまでの高値: <span class="text-slate-200">{fmtPrice(p.highest_price)}円</span></>
+                  ) : (
+                    <>これまでの安値: <span class="text-slate-200">{fmtPrice(p.lowest_price)}円</span></>
+                  )}
+                  <br />
+                  トレーリングSLに固定の利確ラインはありません。{p.direction === 'long' ? '高値からの反落' : '安値からの反発'}が
+                  ATR×0.75（≈{p.atr_jpy != null ? Math.round(p.atr_jpy * 0.75).toLocaleString() : '—'}円）に達すると自動決済されます。
+                  価格が有利な方向に進むほど、このラインも追従して切り上がって（切り下がって）いきます。
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
 

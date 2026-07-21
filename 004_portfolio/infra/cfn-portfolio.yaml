@@ -87,7 +87,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        # 006 CryptoBot の非公開統計JSON（stats.json 1オブジェクトのみ）読み取り用。
+        # 006 CryptoBot の非公開統計JSON（stats.json・positions.json のみ）読み取り用。
         # Basic認証で保護した /ja/cryptobot-stats ページがこの権限でSSR描画する。
         - PolicyName: Zer0-portfolio-cryptobot-stats-read
           PolicyDocument:
@@ -96,7 +96,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: "arn:aws:s3:::zer0-cryptobot-stats-s3/stats.json"
+                Resource:
+                  - "arn:aws:s3:::zer0-cryptobot-stats-s3/stats.json"
+                  - "arn:aws:s3:::zer0-cryptobot-stats-s3/positions.json"
               # ListBucket がないと存在しないキーの GetObject が NoSuchKey でなく
               # AccessDenied になり、初回取引前の「実績なし」判定ができないため必要
               - Effect: Allow
@@ -105,7 +107,9 @@ Resources:
                 Resource: "arn:aws:s3:::zer0-cryptobot-stats-s3"
                 Condition:
                   StringEquals:
-                    s3:prefix: "stats.json"
+                    s3:prefix:
+                      - "stats.json"
+                      - "positions.json"
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
