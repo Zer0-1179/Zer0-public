@@ -167,3 +167,11 @@
 
 - reconcile_positionsをPhase A/B（決済検知・state更新）より前に実行していたため、取引所側で先に約定したトレーリングSL決済等の正常なクローズも「stateにあるが実建玉なし（孤児state）」と誤検知しメール送信していた
 - Phase A/Bの後に実行するよう順序変更し解消。テスト側の未改名（update_public_stats→update_stats_json）5件も修正
+
+## 2026-07-21
+
+### state⇄実建玉不一致アラートの原因調査・復旧
+
+- bitbankアプリで手動決済したbtc_jpy/eth_jpyのlongポジションが、Bot側のTP1/SL/トレーリング経路を通らずに成行決済されたため、SSM stateだけがポジション保有中のまま残り30分毎にreconcile不一致メールが送信され続けていた
+- コード側の不具合ではなく手動決済によるstateとの乖離と確認。SSM stateの孤児ポジションを削除し、bitbank側に残っていたbtc_jpyの未約定トレーリングSL注文（stop_limit、INACTIVE）をキャンセルして解消
+- 通知メールの文字化け報告も合わせて調査。Gmail上の件名・本文・HTML部は実データで確認した限り正しくUTF-8エンコードされており再現せず。スマートフォンの非Gmailメールアプリ側の表示崩れの可能性が高く、Bot側の送信コード（send_email、Charset=UTF-8）に問題は見つからなかった
