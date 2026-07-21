@@ -145,3 +145,4 @@ bash scripts/deploy.sh
 - 006 CryptoBotで「TP1部分利確後、次はいつ利確するのか分からず不安」というフィードバックを受け、非公開ページ`/ja/cryptobot-stats`に保有中ポジションの状況（確保済み利益ライン・これまでの高値/安値・含み損益）を表示するセクションを新設
 - データソースは006 Executorが30分毎に書き出す非公開S3オブジェクト`positions.json`。cfn-portfolio.yamlのIAMポリシーにGetObject/ListBucket権限を追加
 - 既存の「最終更新」表示がSSR実行環境(UTC)でレンダリングされ実際の時刻より9時間ずれていたバグも修正（`timeZone: 'Asia/Tokyo'`を明示）
+- スマートフォンでチャートの各点詳細（ホバー依存）が見えない問題を修正。テーブル表示をデフォルト展開にし案内文も端末別に出し分け
