@@ -86,6 +86,9 @@ try {
 const openPositions = positionsPayload?.positions ?? [];
 const fmtYen = (v: number) => `${v >= 0 ? '+' : ''}${v.toLocaleString()}円`;
 const fmtPrice = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
+// SSR実行環境(Lambda)のデフォルトタイムゾーンはUTCのため、timeZone省略だと
+// generated_at(JSTのISO文字列)がUTC表示になってしまう。明示的にJST指定する。
+const fmtJST = (iso: string) => new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 
 const points = stats?.points ?? [];
 const winCount = points.filter((p) => p.pnl_jpy >= 0).length;
@@ -143,7 +146,7 @@ const xLabels =
       <h1 class="text-3xl font-bold text-white mb-2">トレード実績</h1>
       <div class="w-12 h-0.5 bg-accent mb-4"></div>
       {stats && (
-        <p class="text-slate-400 text-sm">最終更新: {new Date(stats.generated_at).toLocaleString('ja-JP')}</p>
+        <p class="text-slate-400 text-sm">最終更新: {fmtJST(stats.generated_at)}</p>
       )}
     </div>
 
@@ -151,7 +154,7 @@ const xLabels =
       <h2 class="text-lg font-semibold text-white mb-1">現在のポジション</h2>
       {positionsPayload && (
         <p class="text-slate-500 text-xs mb-4">
-          スナップショット更新: {new Date(positionsPayload.generated_at).toLocaleString('ja-JP')}（Executor実行毎・最大30分遅延）
+          スナップショット更新: {fmtJST(positionsPayload.generated_at)}（Executor実行毎・最大30分遅延）
         </p>
       )}
 
