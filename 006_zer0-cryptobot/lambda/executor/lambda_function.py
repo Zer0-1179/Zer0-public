@@ -52,6 +52,8 @@ JST                = timezone(timedelta(hours=9))
 STATS_BUCKET = os.environ.get("STATS_BUCKET", "")
 STATS_KEY    = "stats.json"
 POSITIONS_KEY = "positions.json"  # 現在保有中ポジションのスナップショット（Phase A毎に上書き）
+# 004ポートフォリオの非公開トレード実績ページ（要admin Cookie。通知メール本文への案内用）
+PORTFOLIO_STATS_URL = "https://www.zer0-infra.com/ja/cryptobot-stats"
 
 # TP/SL 倍率（v3.1: 現実コスト込みグリッドスイープ＋ウォークフォワード検証で最適化）
 TP1_MULT    = 1.25  # TP1 = entry ± ATR × 1.25
@@ -424,16 +426,22 @@ def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: flo
     else:
         tp1_pct = (entry - tp1_price) / entry * 100
     subject = f"【CryptoBot】TP1約定・トレーリング開始 - {coin}/JPY"
+    # トレーリングSLには固定の利確ラインが存在しない（高値/安値からATR×TRAIL_MULT反落/反発で決済）。
+    # 「次はいくらで決済されるのか」への回答として、TP1直後時点の暫定決済ライン（現時点ではブレイクイーブン）
+    # と、それが固定ではなく価格に追従して変わる旨を明記する。最新値はPORTFOLIO_STATS_URLで随時確認できる。
     body = (
         f"■ {coin}/JPY  {dir_str}  TP1約定\n"
         f"\n"
         f"現在価格　　：{current_price:,.0f}円\n"
         f"TP1約定価格：{tp1_price:,.0f}円（{tp1_pct:+.1f}%）\n"
         f"確定利益　　：{realized_pnl:+,.0f}円\n"
-        f"現在SL　　　：{entry:,.0f}円（ブレイクイーブン）\n"
         f"\n"
-        f"残り70%のトレーリングSLを開始しました。\n"
-        f"高値/安値更新ごとにSLが自動追従します（ATR×{TRAIL_MULT}）。"
+        f"次の決済ライン（現時点）：{entry:,.0f}円（ブレイクイーブン）\n"
+        f"※固定の利確ラインではありません。価格が有利な方向に進むほど、このラインも自動的に切り上がり（切り下がり）ます。\n"
+        f"　高値/安値から ATR×{TRAIL_MULT} 分反転すると、その時点のラインで残り70%が決済されます。\n"
+        f"\n"
+        f"最新の決済ライン・含み損益はいつでも実績ページで確認できます：\n"
+        f"{PORTFOLIO_STATS_URL}"
     )
     send_email(subject, body)
 
