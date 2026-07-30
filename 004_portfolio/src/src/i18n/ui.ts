@@ -64,8 +64,6 @@ export const ui = {
     'contact.title': 'お問い合わせ',
     'contact.sub': '各種SNS・プラットフォームでつながりましょう',
     'contact.inquiry': '副業・業務委託のご相談は X の DM からどうぞ。',
-    'contact.qr': '名刺用QRコード',
-    'contact.qr.sub': 'このポートフォリオサイトへのリンク',
 
     'templates.title': 'CFnテンプレート',
     'templates.sub': '無料ダウンロードできるCloudFormationテンプレート集',
@@ -139,8 +137,6 @@ export const ui = {
     'contact.title': 'Contact',
     'contact.sub': 'Connect with me on social platforms',
     'contact.inquiry': 'For freelance / contract inquiries, feel free to DM me on X.',
-    'contact.qr': 'QR Code for Business Card',
-    'contact.qr.sub': 'Link to this portfolio site',
 
     'templates.title': 'CFn Templates',
     'templates.sub': 'Free CloudFormation templates ready to deploy',
