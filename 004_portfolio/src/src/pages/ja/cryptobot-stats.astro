@@ -207,6 +207,10 @@ const xLabels =
 
               {p.status === 'trailing' && (
                 <div class="text-xs text-slate-400 bg-navy-900/40 rounded-lg p-3 leading-relaxed">
+                  <span class="text-slate-200 font-medium">
+                    {fmtPrice(p.trail_sl_price)}円まで{p.direction === 'long' ? '下がる' : '戻す'}と、残り70%が自動決済されます。
+                  </span>
+                  <br />
                   確保済み利益ライン（トレーリングSL）: <span class="text-green-300 font-medium">{fmtPrice(p.trail_sl_price)}円</span>
                   {typeof p.locked_pnl_jpy === 'number' && (
                     <> （このラインで決済されても残り70%分で概算 {fmtYen(p.locked_pnl_jpy)}）</>
@@ -218,8 +222,8 @@ const xLabels =
                     <>これまでの安値: <span class="text-slate-200">{fmtPrice(p.lowest_price)}円</span></>
                   )}
                   <br />
-                  トレーリングSLに固定の利確ラインはありません。{p.direction === 'long' ? '高値からの反落' : '安値からの反発'}が
-                  ATR×0.75（≈{p.atr_jpy != null ? Math.round(p.atr_jpy * 0.75).toLocaleString() : '—'}円）に達すると自動決済されます。
+                  固定の利確ラインはなく、{p.direction === 'long' ? '高値からの反落' : '安値からの反発'}が
+                  ATR×0.75（≈{p.atr_jpy != null ? Math.round(p.atr_jpy * 0.75).toLocaleString() : '—'}円）に達すると自動決済される方式です。
                   価格が有利な方向に進むほど、このラインも追従して切り上がって（切り下がって）いきます。
                 </div>
               )}
