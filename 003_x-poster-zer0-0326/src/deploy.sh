@@ -13,6 +13,7 @@ STACK_NAME="x-poster-zer0-0326"
 FUNCTION_NAME="x-poster-zer0-0326"
 BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-jp.anthropic.claude-haiku-4-5-20251001-v1:0}"
 SSM_PREFIX="${SSM_PREFIX:-/ai_bot}"
+RECIPIENT_EMAIL="${RECIPIENT_EMAIL:-sinnjibaby@gmail.com}"
 ZIP_PATH="/tmp/x-poster-zer0-0326_function.zip"
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -35,7 +36,8 @@ aws cloudformation deploy \
     --capabilities CAPABILITY_NAMED_IAM \
     --parameter-overrides \
         "BedrockModelId=${BEDROCK_MODEL_ID}" \
-        "SsmPrefix=${SSM_PREFIX}"
+        "SsmPrefix=${SSM_PREFIX}" \
+        "RecipientEmail=${RECIPIENT_EMAIL}"
 
 # Step 2: Package Lambda code into a local zip
 echo "[2/3] Packaging Lambda code..."
