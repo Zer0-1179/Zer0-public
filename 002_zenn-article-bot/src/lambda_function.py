@@ -1238,7 +1238,7 @@ def run(dry_run: bool = False):
     # Step 4: ローカル保存（MD + 画像プレースホルダー埋め込み）
     _t = time.time()
     print("Step 4: ファイル保存中...")
-    save_to_local(topic, article, md_path, png_paths, timestamp, title, output_dir, dry_run=dry_run)
+    save_to_local(topic, article, md_path, png_paths, timestamp, title)
     print(f"  MD保存完了: {md_path} [{time.time()-_t:.1f}s]")
 
     # Step 5: S3 アップロード
