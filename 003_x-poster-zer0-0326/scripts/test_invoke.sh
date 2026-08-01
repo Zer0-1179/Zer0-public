@@ -21,6 +21,7 @@ aws lambda invoke \
   --region "${REGION}" \
   --invocation-type RequestResponse \
   --cli-binary-format raw-in-base64-out \
+  --cli-read-timeout 0 \
   --payload "{\"mode\": \"${MODE}\", \"dry_run\": true}" \
   /tmp/xai_test_result.json > /dev/null
 

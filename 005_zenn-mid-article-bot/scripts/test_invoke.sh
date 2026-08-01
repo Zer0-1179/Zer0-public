@@ -21,6 +21,7 @@ aws lambda invoke \
   --region "${REGION}" \
   --invocation-type RequestResponse \
   --cli-binary-format raw-in-base64-out \
+  --cli-read-timeout 0 \
   --payload '{"dry_run": true, "test_mode": true}' \
   "${OUTPUT_FILE}"
 
