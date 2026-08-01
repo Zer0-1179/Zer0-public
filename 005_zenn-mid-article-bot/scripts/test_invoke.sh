@@ -1,6 +1,9 @@
 #!/bin/bash
 # ZennMidArticleGenerator テスト実行スクリプト
-# test_mode: true を渡すことでHaiku(安価)に自動切替
+# dry_run: true でS3アップロード・メール送信・SSM書き込みを一切スキップする
+# （test_mode: true はHaiku(安価)への切替のみで、S3・メール送信は実行されるため
+#  動作確認の既定はdry_runを使うこと。2026-08-01にdry_run未実装のまま呼び出し、
+#  実メール送信8通・実課金が発生した事故を踏まえて既定をdry_runに変更した）
 
 set -euo pipefail
 
@@ -10,22 +13,22 @@ LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
 OUTPUT_FILE="/tmp/mid_test_result.json"
 
 echo "=============================="
-echo "テスト実行（Haiku使用）"
+echo "テスト実行（dry_run=true, test_mode=true でHaiku使用）"
 echo "=============================="
 
-# test_mode: true を渡して非同期実行
 aws lambda invoke \
   --function-name "${FUNCTION_NAME}" \
   --region "${REGION}" \
-  --invocation-type Event \
-  --payload '{"test_mode": true}' \
-  "${OUTPUT_FILE}" > /dev/null
+  --invocation-type RequestResponse \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"dry_run": true, "test_mode": true}' \
+  "${OUTPUT_FILE}"
 
-echo "実行開始しました。ログを確認中..."
 echo ""
-
-# ログをフォロー（Ctrl+Cで停止）
+echo "Lambda レスポンス:"
+cat "${OUTPUT_FILE}" | python3 -m json.tool
+echo ""
+echo "直近ログ:"
 aws logs tail "${LOG_GROUP}" \
   --region "${REGION}" \
-  --since 1m \
-  --follow
+  --since 3m

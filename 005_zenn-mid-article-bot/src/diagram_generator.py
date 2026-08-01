@@ -579,6 +579,14 @@ def _label_for_service(name: str) -> str:
 # 矢印の向きを検証できていないバリエーションはflowを追加せず無向線に倒す
 # （誤った矢印を描くより無向線の方が安全、という既存方針）。
 _TOPIC_FLOWS: dict[str, list[dict]] = {
+    # EventBridgeルールがSQSにメッセージを投入し、オーケストレーターLambda（SQSイベントソース
+    # マッピング経由）がStep Functionsを起動する実装のため、SQSはStep Functionsより手前
+    "async_orchestration": [
+        {
+            "order": ["EventBridge", "SQS", "Step Functions"],
+            "edges": [("EventBridge", "SQS"), ("SQS", "Step Functions")],
+        },
+    ],
     "serverless_ec": [
         {
             "order": ["API Gateway", "Lambda", "DynamoDB"],
