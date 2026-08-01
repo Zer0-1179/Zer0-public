@@ -17,6 +17,11 @@ const PAIR_LABEL: Record<string, string> = {
 };
 const DIR_LABEL: Record<string, string> = { long: 'ロング', short: 'ショート' };
 
+// 006 CryptoBot Executor（lambda_function.py の TP1_RATIO = 0.3）と一致させること。
+// 分割比率を変更する場合はこの2値だけを書き換えれば全表示箇所に反映される
+const TP1_RATIO_PCT = 30;
+const REMAINDER_RATIO_PCT = 100 - TP1_RATIO_PCT;
+
 interface StatsPoint {
   ts: string;
   pair: string;
@@ -199,21 +204,21 @@ const xLabels =
 
               {p.status === 'active' && (
                 <div class="text-xs text-slate-400 bg-navy-900/40 rounded-lg p-3 leading-relaxed">
-                  TP1（一部利確ライン）: <span class="text-slate-200">{fmtPrice(p.tp1_price)}円</span>（全量の30%）<br />
+                  TP1（一部利確ライン）: <span class="text-slate-200">{fmtPrice(p.tp1_price)}円</span>（全量の{TP1_RATIO_PCT}%）<br />
                   初期SL（損切りライン）: <span class="text-slate-200">{fmtPrice(p.sl_price)}円</span><br />
-                  TP1到達で30%を確定利確し、残り70%はトレーリングSLでの管理に移行します。
+                  TP1到達で{TP1_RATIO_PCT}%を確定利確し、残り{REMAINDER_RATIO_PCT}%はトレーリングSLでの管理に移行します。
                 </div>
               )}
 
               {p.status === 'trailing' && (
                 <div class="text-xs text-slate-400 bg-navy-900/40 rounded-lg p-3 leading-relaxed">
                   <span class="text-slate-200 font-medium">
-                    {fmtPrice(p.trail_sl_price)}円まで{p.direction === 'long' ? '下がる' : '戻す'}と、残り70%が自動決済されます。
+                    {fmtPrice(p.trail_sl_price)}円まで{p.direction === 'long' ? '下がる' : '戻す'}と、残り{REMAINDER_RATIO_PCT}%が自動決済されます。
                   </span>
                   <br />
                   確保済み利益ライン（トレーリングSL）: <span class="text-green-300 font-medium">{fmtPrice(p.trail_sl_price)}円</span>
                   {typeof p.locked_pnl_jpy === 'number' && (
-                    <> （このラインで決済されても残り70%分で概算 {fmtYen(p.locked_pnl_jpy)}）</>
+                    <> （このラインで決済されても残り{REMAINDER_RATIO_PCT}%分で概算 {fmtYen(p.locked_pnl_jpy)}）</>
                   )}
                   <br />
                   {p.direction === 'long' ? (
