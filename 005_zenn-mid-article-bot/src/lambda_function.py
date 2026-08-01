@@ -193,7 +193,7 @@ AWS_TOPICS = [
         "id": "async_orchestration",
         "name": "非同期ジョブオーケストレーション基盤",
         "article_type": "architecture",
-        "services": ["EventBridge", "Step Functions", "SQS"],
+        "services": ["EventBridge", "SQS", "Step Functions"],
         "subtitle": "EventBridge + Step Functions + SQS で疎結合な非同期処理基盤を構築する",
         "keywords": "EventBridge, Step Functions, SQS, 非同期処理, ジョブオーケストレーション, 疎結合, リトライ制御",
         "primary_service": "eventbridge",
@@ -1562,6 +1562,7 @@ HAIKU_MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 def lambda_handler(event, context):
     _total_start = time.time()
+    dry_run = bool((event or {}).get("dry_run", False))
     model_id = HAIKU_MODEL_ID if event.get("test_mode") else BEDROCK_MODEL_ID
     if event.get("test_mode"):
         print(f"[TEST MODE] モデルをHaikuに切り替えました: {model_id}")
@@ -1569,7 +1570,10 @@ def lambda_handler(event, context):
     now       = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     today     = now.strftime("%Y-%m-%d")
-    print(f"[{timestamp}] Zenn中級記事自動生成を開始します")
+    if dry_run:
+        print(f"[{timestamp}] [DRY_RUN] Zenn中級記事自動生成を開始します（S3保存・メール送信・SSM書き込みをスキップ）")
+    else:
+        print(f"[{timestamp}] Zenn中級記事自動生成を開始します")
 
     # Step 1: 直近トピック取得
     _t = time.time()
@@ -1606,7 +1610,10 @@ def lambda_handler(event, context):
     # 丸ごとやり直しになるため、失敗しても後続のSSM保存・メール通知は続行する
     # test_modeはprefixを分け、本番の成果物と混ざらないようにする
     s3_url = ""
-    if _IS_LAMBDA:
+    if dry_run:
+        print("Step 5: [DRY_RUN] S3アップロードをスキップ")
+        s3_url = "(dry_run: S3アップロードなし)"
+    elif _IS_LAMBDA:
         _t = time.time()
         print("Step 5: S3にアップロード中...")
         try:
@@ -1618,9 +1625,11 @@ def lambda_handler(event, context):
             print(f"  S3アップロード失敗（無視して続行、記事はローカル/tmpにのみ存在）: {e}")
 
     # Step 6: SSM 更新
-    # test_modeでは本番のトピックローテーション状態（除外リスト・周回数）を汚染しないよう
+    # test_mode・dry_runでは本番のトピックローテーション状態（除外リスト・周回数）を汚染しないよう
     # 一切書き込まない（過去にtest実行の連打で本番の重複除外が実質機能しなくなっていた）
-    if event.get("test_mode"):
+    if dry_run:
+        print("Step 6: [DRY_RUN] SSM更新をスキップ")
+    elif event.get("test_mode"):
         print("Step 6: SSM更新をスキップ（test_modeのため本番ローテーション状態は変更しません）")
     else:
         print("Step 6: SSMにトピックを保存中...")
@@ -1642,21 +1651,24 @@ def lambda_handler(event, context):
 
     # Step 8: メール通知
     _t = time.time()
-    print("Step 8: メール通知を送信中...")
-    try:
-        send_email_notification(
-            topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues,
-            test_mode=bool(event.get("test_mode")),
-        )
-        print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
-    except Exception as e:
-        print(f"  メール送信失敗（無視して続行）: {e}")
+    if dry_run:
+        print("Step 8: [DRY_RUN] メール送信をスキップ")
+    else:
+        print("Step 8: メール通知を送信中...")
+        try:
+            send_email_notification(
+                topic, article, md_path, png_paths, timestamp, s3_url, is_truncated, cfn_issues,
+                test_mode=bool(event.get("test_mode")),
+            )
+            print(f"  メール送信完了 [{time.time()-_t:.1f}s]")
+        except Exception as e:
+            print(f"  メール送信失敗（無視して続行）: {e}")
 
     print(f"[{timestamp}] 処理完了 (合計: {time.time()-_total_start:.1f}s)")
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "message": "中級記事生成が完了しました",
+            "message": "中級記事生成が完了しました" if not dry_run else "中級記事生成が完了しました（dry_run）",
             "topic": topic["name"],
             "topic_id": topic["id"],
             "article_type": topic["article_type"],
@@ -1665,6 +1677,7 @@ def lambda_handler(event, context):
             "png_count": len(png_paths),
             "s3_url": s3_url,
             "timestamp": timestamp,
+            "dry_run": dry_run,
         }, ensure_ascii=False),
     }
 
