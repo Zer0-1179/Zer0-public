@@ -43,6 +43,7 @@ if [ "$MODE" = "--test" ]; then
     aws lambda invoke \
         --function-name "$FUNCTION_NAME" \
         --region "$REGION" \
+        --cli-read-timeout 0 \
         --log-type Tail \
         --query "LogResult" \
         --output text \
