@@ -38,7 +38,6 @@ OUTPUT_DIR = os.environ.get(
 )
 S3_BUCKET  = os.environ.get("S3_BUCKET", "zer0-dev-s3")
 S3_PREFIX  = "zenn-articles"
-OUTPUT_KEEP_MAX     = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
 
 # SSM: 直近トピック履歴
 # 注意: AWS_TOPICS の総数（28件）と同値にすると、全トピック消化後に除外リストが
@@ -809,16 +808,6 @@ def _next_article_number(output_dir: str, dry_run: bool = False) -> str:
     return f"{next_num:03d}"
 
 
-def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
-    """output/ 内の記事フォルダが keep 個を超えたら古いものを削除する"""
-    import glob
-    import shutil
-    folders = sorted(glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*")))
-    for folder in folders[:-keep] if len(folders) > keep else []:
-        shutil.rmtree(folder)
-        print(f"古い記事フォルダを削除: {os.path.basename(folder)}")
-
-
 def _prepare_article_paths(topic: dict, timestamp: str, output_dir: str, dry_run: bool = False) -> tuple[str, str]:
     """記事の出力先ディレクトリを準備する。(mdパス, 構成図ベースパス) を返す"""
     os.makedirs(output_dir, exist_ok=True)
@@ -837,7 +826,7 @@ def _prepare_article_paths(topic: dict, timestamp: str, output_dir: str, dry_run
 
 def save_to_local(
     topic: dict, article: str, md_path: str, png_paths: list[str],
-    timestamp: str, title: str, output_dir: str, dry_run: bool = False,
+    timestamp: str, title: str,
 ) -> str:
     """記事を MD ファイルに保存する（構成図は生成済みの png_paths を使用）。mdパスを返す"""
     # 図1・図2ともに {DIAGRAM_N} マーカーで記事中に挿入（マーカー不在時はフォールバック）
@@ -864,10 +853,6 @@ published: false
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_content)
 
-    if dry_run:
-        print("[DRY_RUN] 古い記事フォルダのクリーンアップをスキップ")
-    else:
-        _cleanup_old_articles(output_dir)
     return md_path
 
 

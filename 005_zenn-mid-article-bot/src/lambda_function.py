@@ -42,10 +42,6 @@ OUTPUT_DIR = os.environ.get(
 S3_BUCKET  = os.environ.get("S3_BUCKET", "zer0-dev-s3")
 S3_PREFIX  = "zenn-mid-articles"
 
-# 出力フォルダの保持上限（超過分は古いものから削除）。
-# Lambda の /tmp はウォームスタート間で永続するため、削除しないとディスクが逼迫する。
-OUTPUT_KEEP_MAX = int(os.environ.get("OUTPUT_KEEP_MAX", "5"))
-
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/mid-article-bot/recent-topics"
 # 16トピック中、除外しすぎて即リセットにならない範囲で最大限除外する。
@@ -1141,29 +1137,11 @@ def _inject_reference_link(article: str, topic: dict) -> str:
 
 
 def _next_article_number(output_dir: str) -> str:
-    """既存フォルダの最大番号+1を返す。_cleanup_old_articlesが古いフォルダを
-    削除した後は len(existing)+1 だと番号が常に一定値に張り付くため、
-    実際に存在する番号の最大値を見る。
-    """
+    """既存フォルダの最大番号+1を返す。"""
     import glob
     existing = glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*"))
     nums = [int(os.path.basename(p)[:3]) for p in existing]
     return f"{(max(nums) if nums else 0) + 1:03d}"
-
-
-def _cleanup_old_articles(output_dir: str, keep: int = OUTPUT_KEEP_MAX) -> None:
-    """output/ 内の記事フォルダが keep 個を超えたら古いものを削除する。
-    Lambda の /tmp はウォームスタート間で永続するため、放置するとディスクが逼迫する。
-    """
-    import glob
-    import shutil
-    folders = sorted(glob.glob(os.path.join(output_dir, "[0-9][0-9][0-9]_*")))
-    for folder in (folders[:-keep] if len(folders) > keep else []):
-        try:
-            shutil.rmtree(folder)
-            print(f"古い記事フォルダを削除: {os.path.basename(folder)}")
-        except Exception as e:
-            print(f"古い記事フォルダ削除エラー（無視して続行）: {os.path.basename(folder)} — {e}")
 
 
 def save_to_local(topic: dict, article: str, timestamp: str, occurrence: int = 1) -> tuple[str, list[str]]:
@@ -1212,8 +1190,6 @@ published: false
 
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_content)
-
-    _cleanup_old_articles(output_dir)
 
     return md_path, png_paths
 

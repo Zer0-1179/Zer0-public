@@ -139,6 +139,16 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
+### 2026-08-01
+
+#### メール本文の`download_article.sh`パス不整合を修正
+
+- 2026-07-14の`scripts/`フォルダ移行後もメール本文の案内コマンドが旧パスのまま残っており実行できない状態だったため、`scripts/download_article.sh`に修正
+
+#### ローカル`output/`の自動クリーンアップを廃止
+
+- 「ローカルの記事を削除すると、いつ投稿したか分からなくなる」というユーザー指摘を受け、最新5件超過分を自動削除する`_cleanup_old_articles()`を廃止。ローカルの`output/`は投稿履歴として無期限に蓄積する方針に変更
+
 ### 2026-07-16
 
 #### トピック内サービス組み合わせの変動枠＋書き出しバリエーション追加（v3.5）
