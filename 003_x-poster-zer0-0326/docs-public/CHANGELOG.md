@@ -156,3 +156,12 @@
 
 - 仕様書の分かりにくさを修正（コード変更なし）
 - 「1回の実行＝1投稿」ではない点（url_reactionは2件・リプ営業込みで最大3件）が表に反映されていなかったため、投稿カテゴリ表に注記を追加し明記
+
+## 2026-08-03
+
+### 投稿を一時停止
+
+- 反応が伸びないため投稿を一時停止することを決定
+- `src/cfn-x-poster-zer0-0326.yaml`の`EveningSchedule`・`TrendSchedule`（`AWS::Scheduler::Schedule`）両方に`State: DISABLED`を追加し、CFnスタック`x-poster-zer0-0326`を更新
+- `aws scheduler get-schedule`で両スケジュールが`DISABLED`になったことを確認。Lambda・SSM等のリソースは削除せず維持（`State: ENABLED`に戻せば再開可能）
+- README.md・システム仕様書.mdの冒頭に停止中である旨を明記。004ポートフォリオのプロジェクト説明文にも反映

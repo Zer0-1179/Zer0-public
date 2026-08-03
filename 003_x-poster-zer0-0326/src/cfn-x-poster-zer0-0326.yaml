@@ -181,6 +181,7 @@ Resources:
       Name: x-poster-zer0-0326-evening
       Description: "毎週月・木 20:00 JSTにランダムカテゴリでAI関連ツイートを1件投稿"
       ScheduleExpression: "cron(0 11 ? * MON,THU *)"
+      State: DISABLED
       FlexibleTimeWindow:
         Mode: "OFF"
       Target:
@@ -200,6 +201,7 @@ Resources:
       Name: x-poster-zer0-0326-trend
       Description: "毎週日曜10:00 JSTにGoogleトレンドを取得してAIトレンド投稿を1件生成"
       ScheduleExpression: "cron(0 1 ? * SUN *)"
+      State: DISABLED
       FlexibleTimeWindow:
         Mode: "OFF"
       Target:
