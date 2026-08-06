@@ -144,7 +144,7 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 #### メール本文のダウンロードコマンドをコピペで実行できる形に修正
 
 - 案内コマンドが番号付きリストの行内（`1. bash ...`）に埋め込まれ、コピーすると先頭の`1. `が混入して実行できない状態だったため、コマンドを単独行に分離
-- 実際の運用（`~/Zer0`をカレントディレクトリにして実行する）に合わせ、`cd ~/Zer0 && bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh`に変更
+- 実際の運用（`~/Zer0`を常にカレントディレクトリにしているため`cd`は不要）に合わせ、`bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh`に変更
 
 ### 2026-07-16
 
