@@ -1209,7 +1209,7 @@ def _diagram_lambda_layers_1(output_path: str):
     """図1: 開発者 → Layer発行 → Lambda関数へアタッチ"""
     nodes = [
         {'id': 'dev',   'icon': 'user',   'label': '開発者',       'x': 1.5, 'y': 3.0},
-        {'id': 'layer', 'icon': None,     'label': 'Lambda Layer', 'short': 'Layer', 'x': 6.0, 'y': 3.0},
+        {'id': 'layer', 'icon': 'lambda', 'label': 'Lambda Layer', 'x': 6.0, 'y': 3.0},
         {'id': 'fn',    'icon': 'lambda', 'label': 'Lambda 関数',  'x': 10.5,'y': 3.0},
     ]
     edges = [
@@ -1223,7 +1223,7 @@ def _diagram_lambda_layers_1(output_path: str):
 def _diagram_lambda_layers_2(output_path: str):
     """図2: 共通Layerを複数Lambda関数で共有"""
     nodes = [
-        {'id': 'layer', 'icon': None,     'label': 'Lambda Layer（共通ライブラリ）', 'short': 'Layer', 'x': 3.5, 'y': 3.0},
+        {'id': 'layer', 'icon': 'lambda', 'label': 'Lambda Layer（共通ライブラリ）', 'x': 3.5, 'y': 3.0},
         {'id': 'fn1',   'icon': 'lambda', 'label': 'Lambda 関数A', 'x': 9.5, 'y': 4.2},
         {'id': 'fn2',   'icon': 'lambda', 'label': 'Lambda 関数B', 'x': 9.5, 'y': 1.8},
     ]
