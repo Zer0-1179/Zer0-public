@@ -1041,7 +1041,7 @@ def send_email_notification(
     download_row = (
         '<li>S3からローカルにダウンロード（下記コマンドをそのままコピペして実行）<br>'
         '<code style="display:inline-block;margin-top:4px;">'
-        'cd ~/Zer0 &amp;&amp; bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh'
+        'bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh'
         '</code></li>'
         if s3_url else ""
     )
@@ -1086,7 +1086,7 @@ Zennに投稿する前に内容を必ず確認してください。
 
 ■ 次のアクション
 1. 記事をダウンロード（下記コマンドをそのままコピペして実行）
-cd ~/Zer0 && bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh
+bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh
 2. Zennエディタで新規記事を作成（または zenn-cli で管理）
 3. MDファイルの内容を貼り付け
 4. :::message ブロック内の指示に従ってPNGをアップロード・差し替え
