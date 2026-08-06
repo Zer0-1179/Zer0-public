@@ -221,5 +221,5 @@
 
 - メール本文（テキスト・HTML両方）の案内コマンドが番号付きリストの行内（`1. bash ...`）に埋め込まれており、そのままコピーすると先頭の`1. `が混入してターミナルで実行できない状態だった
 - コマンドを説明文と別の行に分離し、単独でコピペしてそのまま実行できるようにした
-- 実際の運用（`~/Zer0`をカレントディレクトリにしてプロジェクト相対パスでスクリプトを実行する）に合わせ、コマンドを`cd ~/Zer0 && bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh`に変更した（従来は`bash ~/Zer0/005_Zenn_Mid_Article_Bot/scripts/download_article.sh`とカレントディレクトリに依存しない形だったが、実際の使い方と表記を一致させた）
+- 実際の運用（`~/Zer0`を常にカレントディレクトリにしているため`cd`は不要）に合わせ、コマンドを`bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh`に変更した（従来は`bash ~/Zer0/005_Zenn_Mid_Article_Bot/scripts/download_article.sh`だったが、実際の使い方と表記を一致させた。一度`cd ~/Zer0 &&`を付ける形にしたが、ユーザーから「基本的にこのフォルダにいるから不要」と指摘を受け外した）
 - `aws lambda update-function-code`で反映した
