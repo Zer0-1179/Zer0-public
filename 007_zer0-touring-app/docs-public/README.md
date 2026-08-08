@@ -42,7 +42,7 @@
                                                      └─ Open-Meteo（目的地天気）
 
 [EventBridge Scheduler（毎日5:00 JST）] ─▶ [Lambda zer0-touring-stats] ─▶ [S3 stats.json]
-  （利用実績集計バッチ。CloudWatch Invocationsを集計しポートフォリオサイトのグラフに公開）
+  （利用実績集計バッチ。/api/suggest成功時のカスタムメトリクスを集計しポートフォリオサイトのグラフに公開）
 ```
 
 ## 技術スタック
@@ -415,6 +415,6 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 #### 利用実績集計バッチ・ポートフォリオサイトへの公開グラフ追加
 
 - 利用回数をユーザーから問われ調査した結果、CloudFrontアクセス数はbotノイズが混ざり不正確と判明。実際にAPI(Bedrock呼び出し)が呼ばれた回数を実利用の指標として採用
-- 新規Lambda`zer0-touring-stats`を実装。CloudWatch `AWS/Lambda Invocations`を日次集計し、呼び出しゼロの日も0件で明示的に埋めた90日分のJSONをS3に書き出す設計
+- 新規Lambda`zer0-touring-stats`を実装。Fableレビューで「関数単位のAWS/Lambda Invocationsだと他ルートも合算される」「CloudWatch日次PeriodがUTC境界固定でJST日付とずれる」の2件を発見・修正し、`/api/suggest`成功時のみ発火するカスタムメトリクスをJST暦日で再集計する方式にした
 - EventBridge Scheduler(毎日5:00 JST)で日次起動する構成をCFnに追加（CFnスタック更新・Lambdaコードデプロイはユーザー確認待ち、本エントリ時点では未適用）
-- pytestに`stats_handler`のテストを2件追加（計19件）。004ポートフォリオの`touring-app`ページに累計呼び出し回数と日別バーチャートを公開表示する機能を追加しデプロイ済み
+- pytestにテストを3件追加（計20件）。004ポートフォリオの`touring-app`ページに累計呼び出し回数と日別バーチャートを公開表示する機能を追加しデプロイ済み（5分TTLキャッシュ付き）

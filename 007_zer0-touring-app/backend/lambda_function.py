@@ -52,10 +52,11 @@ dynamodb = boto3.client("dynamodb", region_name="ap-northeast-1")
 cloudwatch = boto3.client("cloudwatch", region_name="ap-northeast-1")
 s3 = boto3.client("s3", region_name="ap-northeast-1")
 
-STATS_BUCKET       = os.environ.get("STATS_BUCKET", "zer0-touring-s3")
-STATS_KEY          = "stats.json"
-STATS_FUNCTION_NAME = os.environ.get("STATS_FUNCTION_NAME", "zer0-touring-suggest")
-STATS_HISTORY_DAYS = 90
+STATS_BUCKET          = os.environ.get("STATS_BUCKET", "zer0-touring-s3")
+STATS_KEY             = "stats.json"
+STATS_METRIC_NAMESPACE = "Zer0Touring"
+STATS_METRIC_NAME     = "SuggestCalls"
+STATS_HISTORY_DAYS    = 90
 
 # Nominatim は 1req/sec の制限があるためロックで直列化
 _NOM_LOCK = threading.Lock()
@@ -916,6 +917,8 @@ def lambda_handler(event, context):
     # これにより /api/suggest の応答時間が Bedrock 生成のみ（約9秒）まで短縮される
     # （旧実装は3コース分のNominatim直列ジオコーディングを同一リクエスト内で行い
     # 20〜28秒かかっていた）。
+    _emit_suggest_metric()
+
     return {
         "statusCode": 200,
         "headers": cors,
@@ -923,34 +926,58 @@ def lambda_handler(event, context):
     }
 
 
+def _emit_suggest_metric():
+    """コース提案が成功した回数をカスタムメトリクスとして記録する。
+    このLambda(zer0-touring-suggest)は /api/status /api/history /api/share /s/{id}
+    /api/enrich も同居しているため、AWS/Lambda Invocations（関数単位の呼び出し数）を
+    そのまま「利用実績」として使うと無関係な呼び出しまで合算されてしまう。
+    そのため /api/suggest 成功時にのみ発火するカスタムメトリクスを用意し、
+    stats_handler はこちらだけを集計する。"""
+    try:
+        cloudwatch.put_metric_data(
+            Namespace=STATS_METRIC_NAMESPACE,
+            MetricData=[{"MetricName": STATS_METRIC_NAME, "Value": 1, "Unit": "Count"}],
+        )
+    except Exception as e:
+        print(f"[metrics] ERR {e}")
+
+
 def stats_handler(event, context):
-    """EventBridge Schedulerから日次起動。zer0-touring-suggest（提案API）の
-    CloudWatch呼び出し回数（AWS/Lambda Invocations）を集計し、S3にstats.jsonとして
-    書き出す（ポートフォリオサイトの利用回数グラフ用）。
-    CloudFrontの生アクセス数はbot/クローラーの静的ファイル取得が混ざり実利用の指標として
-    不正確なため、実際にAPIが呼ばれた回数（Lambda呼び出し数）を利用実績として採用する。
+    """EventBridge Schedulerから日次起動。/api/suggest成功時に発火するカスタム
+    メトリクス（Zer0Touring/SuggestCalls）を集計し、S3にstats.jsonとして書き出す
+    （ポートフォリオサイトの利用回数グラフ用）。
+    このLambda(zer0-touring-suggest)は /api/status /api/history /api/share /s/{id}
+    /api/enrich も同居しているため、AWS/Lambda Invocations（関数単位の呼び出し数）を
+    使うと無関係な呼び出しまで合算され実態と乖離する。カスタムメトリクスのみを対象にする。
+    CloudWatchの日次Period(86400)は常にUTC 0時境界で集計されるため、JST圏の利用者向けに
+    Period=1時間で取得しPython側でJSTの暦日に再集計する（日次Periodのままだと深夜0〜9時
+    JSTの呼び出しが前日扱いになりグラフの日付がずれる）。
     """
-    end = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    start = end - timedelta(days=STATS_HISTORY_DAYS)
+    today_jst = datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    first_day_jst = today_jst - timedelta(days=STATS_HISTORY_DAYS - 1)
+    start = first_day_jst.astimezone(timezone.utc)
+    end = (today_jst + timedelta(days=1)).astimezone(timezone.utc)
 
     resp = cloudwatch.get_metric_statistics(
-        Namespace="AWS/Lambda",
-        MetricName="Invocations",
-        Dimensions=[{"Name": "FunctionName", "Value": STATS_FUNCTION_NAME}],
+        Namespace=STATS_METRIC_NAMESPACE,
+        MetricName=STATS_METRIC_NAME,
         StartTime=start,
         EndTime=end,
-        Period=86400,
+        Period=3600,
         Statistics=["Sum"],
     )
 
-    daily = {dp["Timestamp"].strftime("%Y-%m-%d"): int(dp["Sum"]) for dp in resp.get("Datapoints", [])}
+    daily = {}
+    for dp in resp.get("Datapoints", []):
+        date_str = dp["Timestamp"].astimezone(JST).strftime("%Y-%m-%d")
+        daily[date_str] = daily.get(date_str, 0) + int(dp["Sum"])
 
-    # CloudWatchはデータがない日はDatapointを返さないため、呼び出しゼロの日も
-    # 明示的に0で埋める（間引くとグラフのx軸間隔が実際のカレンダー日と合わなくなり、
-    # 利用頻度が実態より高く見えてしまう）
+    # データがない日はDatapointが返らないため、呼び出しゼロの日も明示的に0で埋める
+    # （間引くとグラフのx軸間隔が実際のカレンダー日と合わなくなり、利用頻度が実態より
+    # 高く見えてしまう）
     history = []
-    cursor = start
-    while cursor < end:
+    cursor = first_day_jst
+    while cursor <= today_jst:
         date_str = cursor.strftime("%Y-%m-%d")
         history.append({"date": date_str, "count": daily.get(date_str, 0)})
         cursor += timedelta(days=1)

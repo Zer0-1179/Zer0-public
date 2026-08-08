@@ -141,6 +141,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - cloudwatch:GetMetricStatistics
+                  - cloudwatch:PutMetricData
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -271,11 +272,10 @@ Resources:
       Role: !GetAtt TouringLambdaRole.Arn
       MemorySize: 128
       Timeout: 30
-      Description: 利用回数集計バッチ（CloudWatch Invocationsを集計しS3のstats.jsonへ書き出す。ポートフォリオサイトの利用実績グラフ用）
+      Description: 利用回数集計バッチ（カスタムメトリクスZer0Touring/SuggestCallsを集計しS3のstats.jsonへ書き出す。ポートフォリオサイトの利用実績グラフ用）
       Environment:
         Variables:
           STATS_BUCKET: !Ref TouringBucket
-          STATS_FUNCTION_NAME: !Ref TouringLambdaFunction
       Code:
         ZipFile: |
           def stats_handler(event, context):
@@ -310,6 +310,8 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/zer0-touring-stats-daily"
       Policies:
         - PolicyName: InvokeStatsLambda
           PolicyDocument:

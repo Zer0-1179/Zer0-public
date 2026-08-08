@@ -47,7 +47,7 @@ def _load(key):
 
 
 def draw():
-    # ── レイアウト (xlim=18, ylim=9, figsize=(18,9)) ──
+    # ── レイアウト (xlim=18, ylim=10, figsize=(18,10)) ──
     #
     # 外部サービス         Edge/Global        ap-northeast-1
     # x=1.5               x=5.5              x=9~16

@@ -141,6 +141,11 @@ def test_suggest_returns_without_calling_enrich(module, monkeypatch):
     data = json.loads(resp["body"])
     assert data["courses"][0]["name"] == "テストコース"
 
+    # 成功時のみ利用実績カスタムメトリクスを発火すること（stats_handler集計対象）
+    _, kwargs = module.cloudwatch.put_metric_data.call_args
+    assert kwargs["Namespace"] == module.STATS_METRIC_NAMESPACE
+    assert kwargs["MetricData"][0]["MetricName"] == module.STATS_METRIC_NAME
+
 
 def test_enrich_post_updates_course_and_returns_it(module, monkeypatch):
     monkeypatch.setattr(module, "check_and_reserve_gmaps", MagicMock(return_value=False))
@@ -206,14 +211,18 @@ def test_enrich_course_skips_everything_when_time_is_critically_low(module, monk
 
 def test_stats_handler_zero_fills_days_without_invocations(module):
     """CloudWatchはデータがない日はDatapointを返さないため、間引かず0件として埋めること。
-    間引くとグラフのx軸間隔が実際のカレンダー日とずれ、利用頻度が実態より高く見えてしまう。"""
-    from datetime import datetime, timezone, timedelta
+    間引くとグラフのx軸間隔が実際のカレンダー日とずれ、利用頻度が実態より高く見えてしまう。
+    日付はJSTの暦日で判定すること（UTC日境界のままだと深夜0〜9時JSTの呼び出しが
+    前日扱いになりグラフの日付がずれるバグが過去にあった）。"""
+    today_jst = module.datetime.now(module.JST).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    def jst_hour(days_ago, hour):
+        return (today_jst - module.timedelta(days=days_ago)).replace(hour=hour).astimezone(module.timezone.utc)
+
     module.cloudwatch.get_metric_statistics.return_value = {
         "Datapoints": [
-            {"Timestamp": today - timedelta(days=1), "Sum": 5.0},
-            {"Timestamp": today - timedelta(days=3), "Sum": 2.0},
+            {"Timestamp": jst_hour(1, 20), "Sum": 5.0},
+            {"Timestamp": jst_hour(3, 2), "Sum": 2.0},  # JST深夜2時 = 前日UTCだが集計はJST暦日で3日前扱い
         ]
     }
 
@@ -226,9 +235,22 @@ def test_stats_handler_zero_fills_days_without_invocations(module):
     assert payload["total"] == 7
     assert len(payload["history"]) == module.STATS_HISTORY_DAYS
     by_date = {d["date"]: d["count"] for d in payload["history"]}
-    assert by_date[(today - timedelta(days=1)).strftime("%Y-%m-%d")] == 5
-    assert by_date[(today - timedelta(days=3)).strftime("%Y-%m-%d")] == 2
-    assert by_date[(today - timedelta(days=2)).strftime("%Y-%m-%d")] == 0
+    assert by_date[(today_jst - module.timedelta(days=1)).strftime("%Y-%m-%d")] == 5
+    assert by_date[(today_jst - module.timedelta(days=3)).strftime("%Y-%m-%d")] == 2
+    assert by_date[(today_jst - module.timedelta(days=2)).strftime("%Y-%m-%d")] == 0
+
+
+def test_stats_handler_queries_custom_metric_only(module):
+    """関数全体(AWS/Lambda Invocations)ではなく、/api/suggest成功時のみ発火する
+    カスタムメトリクスだけを集計対象にすること（他ルート呼び出しの誤集計防止）。"""
+    module.cloudwatch.get_metric_statistics.return_value = {"Datapoints": []}
+    module.stats_handler({}, None)
+
+    _, kwargs = module.cloudwatch.get_metric_statistics.call_args
+    assert kwargs["Namespace"] == module.STATS_METRIC_NAMESPACE
+    assert kwargs["MetricName"] == module.STATS_METRIC_NAME
+    assert kwargs["Period"] == 3600
+    assert "Dimensions" not in kwargs
 
 
 def test_stats_handler_writes_to_configured_bucket_and_key(module):
