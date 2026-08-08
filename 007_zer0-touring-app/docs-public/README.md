@@ -40,6 +40,9 @@
                                                      ├─ Google Maps Directions API（走行時間）
                                                      ├─ OSRM（フォールバック距離）
                                                      └─ Open-Meteo（目的地天気）
+
+[EventBridge Scheduler（毎日5:00 JST）] ─▶ [Lambda zer0-touring-stats] ─▶ [S3 stats.json]
+  （利用実績集計バッチ。CloudWatch Invocationsを集計しポートフォリオサイトのグラフに公開）
 ```
 
 ## 技術スタック
@@ -407,22 +410,11 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-07-16
+### 2026-08-08
 
-#### CloudWatchアラーム1個を008へ譲渡
+#### 利用実績集計バッチ・ポートフォリオサイトへの公開グラフ追加
 
-- AWSアカウント全体でCloudWatchアラームが無料枠10個中10個で上限に達しており、008(入札情報ウォッチ)の中核Lambda(lp_waitlist、登録/LINE連携/Stripe Webhook等を処理)にエラー検知アラームが無いことが判明
-- `Zer0-touring-lambda-errors`を削除して枠を確保（`Zer0-touring-apigw-5xx`は残置。007のLambdaはAPI Gateway同期呼び出し専用のため、未処理例外・タイムアウト・スロットリングはいずれも5xxとして検知でき、カバレッジはほぼ維持される。Fableでも同結論を確認済み）
-- CFn更新後、本番サイト(`touring.zer0-infra.com`)がHTTP 200で正常応答することを確認
-
-### 2026-07-13
-
-#### OGP画像の刷新（v3.2）
-
-- OGP画像を正方形アイコン(icon-512.png)流用から専用の1200x630画像に変更。SNS共有時に不自然に切れる問題を解消
-- 008プロジェクトのブランドアセット作業の際、ユーザー指示による自己調査で発見・修正
-
-#### ブランドfavicon一式追加（v3.3）
-
-- 独自ブランドfavicon一式(favicon-16/32.png・apple-touch-icon.png・favicon.ico)を既存のicon-512.pngから生成し追加
-- 以前は`<link rel="icon">`が未設定でブラウザタブのアイコン表示が保証されていなかった点も是正
+- 利用回数をユーザーから問われ調査した結果、CloudFrontアクセス数はbotノイズが混ざり不正確と判明。実際にAPI(Bedrock呼び出し)が呼ばれた回数を実利用の指標として採用
+- 新規Lambda`zer0-touring-stats`を実装。CloudWatch `AWS/Lambda Invocations`を日次集計し、呼び出しゼロの日も0件で明示的に埋めた90日分のJSONをS3に書き出す設計
+- EventBridge Scheduler(毎日5:00 JST)で日次起動する構成をCFnに追加（CFnスタック更新・Lambdaコードデプロイはユーザー確認待ち、本エントリ時点では未適用）
+- pytestに`stats_handler`のテストを2件追加（計19件）。004ポートフォリオの`touring-app`ページに累計呼び出し回数と日別バーチャートを公開表示する機能を追加しデプロイ済み

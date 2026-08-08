@@ -155,3 +155,14 @@
 - AWSアカウント全体でCloudWatchアラームが無料枠10個中10個で上限に達しており、008(入札情報ウォッチ)の中核Lambda(lp_waitlist、登録/LINE連携/Stripe Webhook等を処理)にエラー検知アラームが一つも無いことが判明した
 - `Zer0-touring-lambda-errors`を削除して枠を確保した。`Zer0-touring-apigw-5xx`は残置。007のLambdaはAPI Gateway同期呼び出し専用のため、未処理例外・タイムアウト・スロットリングはいずれも5xxとして検知でき、失敗検知のカバレッジはほぼ維持される（Fableに独立検証を依頼し同結論を確認済み）
 - CFn更新（`zer0-touring`スタック、`CertificateArn`必須の既知ルールに従い実施）後、本番サイト(`touring.zer0-infra.com`)がHTTP 200で正常応答することを確認
+
+## 2026-08-08
+
+### 利用実績集計バッチ・ポートフォリオサイトへの公開グラフ追加
+
+- 利用回数（何回呼び出されているか）をユーザーから問われ調査した結果、CloudFrontアクセス数はbot/クローラーの静的ファイル取得が混ざり実利用の指標として不正確と判明。実際にAPI(Bedrock呼び出し)が呼ばれた回数(Lambda Invocationsメトリクス)を実利用の指標として採用することにした
+- 新規Lambda`zer0-touring-stats`(`stats_handler`)を実装。CloudWatch `AWS/Lambda Invocations`を日次集計し、呼び出しゼロの日も0件で明示的に埋めた90日分のJSON(`stats.json`)をS3(`zer0-touring-s3`)に書き出す設計。ゼロ埋めしないとグラフのx軸間隔が実カレンダーとずれ利用頻度が実態より高く見えるため
+- EventBridge Scheduler(`zer0-touring-stats-daily`、毎日5:00 JST)で日次起動する構成をCFnに追加。既存`TouringLambdaRole`にCloudWatch読み取り・S3書き込み権限を追加、Scheduler専用のIAMロールも新設（CFnスタック更新・Lambdaコードデプロイは自動実行系の作業のためユーザー確認待ち、本エントリ時点では未適用）
+- pytestに`stats_handler`のゼロ埋め・書き込み先検証テストを2件追加（計19件）
+- 004ポートフォリオの`touring-app`プロジェクトページに新規`TouringStatsChart.astro`コンポーネントを追加し、`stats.json`をSSR時にfetchして累計呼び出し回数と日別バーチャートを公開表示（dataviz skillのガイドラインに準拠。日本語/英語両対応、stats.json未生成時は自動的にセクション非表示）
+- 構成図(`007_architecture.png`)にEventBridge Scheduler・統計集計Lambdaを追加

@@ -31,6 +31,7 @@ ICONS = {
     'cloudwatch': f'{_SVC}/Arch_Management-Governance/64/Arch_Amazon-CloudWatch_64.png',
     'ssm':        f'{_SVC}/Arch_Management-Governance/64/Arch_AWS-Systems-Manager_64.png',
     'dynamodb':   f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
+    'eventbridge': f'{_SVC}/Arch_App-Integration/64/Arch_Amazon-EventBridge_64.png',
     'region':     f'{_GRP}/Region_32.png',
     'aws_cloud':  f'{_GRP}/AWS-Cloud_32.png',
 }
@@ -82,6 +83,8 @@ def draw():
         {'id': 'ssm',      'icon': 'ssm',        'label': 'SSM\nGMaps使用カウント',             'x': 16.0, 'y': 4.5},
         {'id': 'cw',       'icon': 'cloudwatch', 'label': 'CloudWatch\nLogs',                  'x': 12.5, 'y': 2.5},
         {'id': 'dynamodb', 'icon': 'dynamodb',   'label': 'DynamoDB\nratelimit / share',        'x': 16.0, 'y': 2.5},
+        {'id': 'scheduler','icon': 'eventbridge','label': 'EventBridge\nSchedule(日次5時)',      'x': 9.0,  'y': 8.5},
+        {'id': 'stats',    'icon': 'lambda',     'label': 'Lambda\nzer0-touring-stats',          'x': 12.5, 'y': 8.5},
     ]
 
     edges = [
@@ -94,6 +97,8 @@ def draw():
         ('lambda',  'ssm',      ''),
         ('lambda',  'cw',       ''),
         ('lambda',  'dynamodb', ''),
+        ('scheduler', 'stats',  ''),
+        ('stats',   's3',       'stats.json'),
     ]
 
     # クラスター座標は auto-padding が発火しないよう事前計算済み
@@ -113,7 +118,7 @@ def draw():
         },
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 8.0, 'y': 0.4, 'w': 9.2, 'h': 7.5,
+            'x': 8.0, 'y': 0.4, 'w': 9.2, 'h': 9.2,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
@@ -155,9 +160,9 @@ def draw():
         if not moved:
             break
 
-    fig, ax = plt.subplots(figsize=(18, 9), dpi=150)
+    fig, ax = plt.subplots(figsize=(18, 10), dpi=150)
     ax.set_xlim(0, 18)
-    ax.set_ylim(0, 9)
+    ax.set_ylim(0, 10)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')
