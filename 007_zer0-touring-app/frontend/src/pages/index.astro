@@ -1252,15 +1252,18 @@
       }
 
       function buildMapUrl(c){
-        const dest  = c.dest_lat&&c.dest_lon
+        const dest  = c.dest_lat!=null&&c.dest_lon!=null
           ? `${c.dest_lat},${c.dest_lon}`
           : encodeURIComponent(c.destination);
         const spots = (c.outbound_spots ?? c.rest_spots ?? []).map(s=>
-          s.lat&&s.lon ? `${s.lat},${s.lon}` : encodeURIComponent(s.name)
+          s.lat!=null&&s.lon!=null ? `${s.lat},${s.lon}` : encodeURIComponent(s.name)
         );
-        const hasGps = userLat&&userLon;
-        const coord  = hasGps?`${userLat.toFixed(6)},${userLon.toFixed(6)}`:'';
-        const op = hasGps?`&origin=${coord}`:'';
+        // GPS現在地モード・手動出発地モードいずれも userLat/userLon に反映される（findCourses参照）ため、
+        // ここでは真偽値ではなくnullチェックでナビ起点の有無を判定する（0付近の座標でも誤って
+        // 起点なし扱いにならないように）
+        const hasOrigin = userLat!=null&&userLon!=null;
+        const coord  = hasOrigin?`${userLat.toFixed(6)},${userLon.toFixed(6)}`:'';
+        const op = hasOrigin?`&origin=${coord}`:'';
         const wp = spots.length?`&waypoints=${spots.join('%7C')}` :'';
         return `https://www.google.com/maps/dir/?api=1${op}&destination=${dest}${wp}&travelmode=driving`;
       }
@@ -1396,7 +1399,10 @@
               const dm=getWeatherMeta(c.dest_weather_code);
               wcDest.innerHTML=`<span class="wc-label">📌目的地</span><span class="wc-icon">${dm.icon}</span><span class="wc-temp">${c.dest_temp}℃</span><span class="wc-cond">${dm.label}</span>`;
             }else{
-              wcDest.innerHTML=`<span class="wc-label">📌目的地</span><span class="wc-icon" style="font-size:1rem;color:var(--muted)">取得中...</span>`;
+              // ジオコーディング失敗等でenrichが完了しても目的地天気が取れないことがあるため、
+              // 取得試行が終わっているのに「取得中...」のまま表示され続けないようにする
+              const destMsg = c._enrichFailed ? '取得できませんでした' : '取得中...';
+              wcDest.innerHTML=`<span class="wc-label">📌目的地</span><span class="wc-icon" style="font-size:1rem;color:var(--muted)">${destMsg}</span>`;
             }
           }
           compareEl.classList.add('visible');
@@ -1466,13 +1472,21 @@
           if (!res.ok) throw new Error('enrich failed');
           const data = await res.json();
           Object.assign(c, data.course);
-          c._enriched = true;
+          // 目的地ジオコーディングが失敗すると dest_lat が付かず天気も取れないままになる。
+          // その場合は _enriched を true にせず次回詳細画面を開いた時に再試行できるようにしつつ、
+          // _enrichFailed で「今開いている画面」には取得中のまま止まらず終端状態を表示する
+          c._enriched = data.course.dest_lat !== undefined;
+          c._enrichFailed = data.course.dest_weather_code === undefined;
           // 開いたまま待っている間に他のコースへ移動していたら再描画しない
           if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
             openDetail(idx);
           }
         } catch (_) {
           // 失敗してもAI推定値のまま表示を継続する（再試行は次回詳細画面を開いた時）
+          c._enrichFailed = true;
+          if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
+            openDetail(idx);
+          }
         } finally {
           c._enriching = false;
         }

@@ -197,7 +197,7 @@ Resources:
     Properties:
       FunctionName: zer0-nyusatsu-lp-waitlist
       Description: LP事前登録・二重オプトイン確認・配信停止をDynamoDB+SESで処理する
-      Runtime: python3.13
+      Runtime: python3.14
       Handler: lambda_function.lambda_handler
       Role: !GetAtt WaitlistFunctionRole.Arn
       Timeout: 10
@@ -370,7 +370,7 @@ Resources:
     Properties:
       FunctionName: zer0-nyusatsu-stripe-webhook
       Description: Stripe Webhookを受信し課金者⇔購読者を突合してDynamoDBを更新する
-      Runtime: python3.13
+      Runtime: python3.14
       Handler: lambda_function.lambda_handler
       Role: !GetAtt StripeWebhookFunctionRole.Arn
       Timeout: 10
