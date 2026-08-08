@@ -128,7 +128,9 @@ if $DEPLOY_FRONTEND; then
   # 含まれないため、--delete で誤って消されないよう除外する
   aws s3 sync dist/ "s3://${BUCKET}" --delete \
     --exclude "_astro/*" --exclude "stats.json"
-  aws s3 sync dist/_astro/ "s3://${BUCKET}/_astro/" \
+  # --delete必須: コンテンツハッシュ付きファイル名のため再ビルドのたびに新規ファイル扱いになり、
+  # --deleteが無いと古いバンドルがS3に無期限に蓄積する（2026-08-09に3世代分の蓄積を発見・削除）
+  aws s3 sync dist/_astro/ "s3://${BUCKET}/_astro/" --delete \
     --cache-control "public,max-age=31536000,immutable"
   aws s3 cp dist/index.html "s3://${BUCKET}/index.html" \
     --cache-control "public,max-age=0,must-revalidate"

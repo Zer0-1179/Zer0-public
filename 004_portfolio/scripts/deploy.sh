@@ -143,8 +143,10 @@ echo "  ✓ Lambda 更新完了"
 echo ""
 echo "[4/6] 静的アセット同期中..."
 cd "$SCRIPT_DIR"
-# _astro/ はコンテンツハッシュ付きなので長期キャッシュ
-aws s3 sync "${SRC_DIR}/dist/client/_astro/" "s3://${BUCKET_NAME}/_astro/" \
+# _astro/ はコンテンツハッシュ付きなので長期キャッシュ。--delete必須:
+# 再ビルドのたびに新規ファイル名になるため、--deleteが無いと古いバンドルが
+# S3に無期限に蓄積する（2026-08-09に05-31〜08-08分・75ファイルの蓄積を発見・削除）
+aws s3 sync "${SRC_DIR}/dist/client/_astro/" "s3://${BUCKET_NAME}/_astro/" --delete \
   --cache-control "public,max-age=31536000,immutable" \
   --region "$REGION" \
   --no-progress
