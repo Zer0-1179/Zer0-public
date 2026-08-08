@@ -2,6 +2,16 @@
 
 ※ バージョン番号の付与は2026-07-14に廃止（実質的なバージョン管理をしておらず、詳細な変更履歴はGitで追跡可能なため）。過去分の番号（vX.Y）は見出しに参照用として残している。
 
+## 2026-08-09
+
+### Lambdaランタイムのバージョン統一
+
+- 全Lambda関数のPythonランタイムがpython3.13とpython3.14で混在していたため、最新のpython3.14に統一
+- 対象は本プロジェクトの6関数（activate-ruleset・bounce-handler・mail-forwarder・collector・lp-waitlist・stripe-webhook）で、他プロジェクトは既にpython3.14だった
+- `cfn-nyusatsu-notify-bot.yaml`・`cfn-mail-relay.yaml`・`cfn-lp-backend.yaml`の`Runtime`を変更しCloudFormationで3スタックを更新
+- いずれもLayer未使用（標準ライブラリのみ）のため互換性リスクは低いと判断。全スタックがUPDATE_COMPLETE、全関数がState:Active・LastUpdateStatus:Successfulであることを確認
+- 本番運用中のため実メール転送・Stripe決済処理を伴うinvokeテストは実施せず、CFn更新成功をもって確認完了とした（ユーザー確認済み）
+
 ## 2026-08-02
 
 ### 神奈川県回答の反映と回答書の非公開化

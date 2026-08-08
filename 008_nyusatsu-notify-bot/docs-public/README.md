@@ -74,7 +74,7 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 リソース種別ごとに分けて記載する。全リソースは5つのCloudFormationスタックで管理（詳細は最後の一覧を参照）。
 
-### Lambda関数（すべてPython 3.13）
+### Lambda関数（すべてPython 3.14）
 
 | 関数名                         | 役割                                       |
 | ------------------------------ | ------------------------------------------ |
@@ -213,13 +213,13 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-02
+### 2026-08-09
 
-#### 神奈川県回答の反映と回答書の非公開化
+#### Lambdaランタイムのバージョン統一
 
-- 2026-07-24付の回答受領を反映し、商用利用の個別承認とは断定せず、PDL1.0等の利用条件確認が必要と明記
-- 回答PDFを非公開`docs/`へ移動し、公開同期から公文書回答PDFと`Zone.Identifier`を除外
-- 東京都への展開は同都からの回答待ちと明記
+- 全Lambda関数のPythonランタイムがpython3.13とpython3.14で混在していたため、最新のpython3.14に統一
+- 対象は本プロジェクトの6関数（activate-ruleset・bounce-handler・mail-forwarder・collector・lp-waitlist・stripe-webhook）
+- CloudFormationで3スタック（notify-bot・mail-relay・lp-backend）を更新し、全関数がActive/Successfulであることを確認
 
 ### 2026-07-16
 
