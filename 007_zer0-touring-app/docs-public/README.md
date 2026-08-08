@@ -417,4 +417,5 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 - 利用回数をユーザーから問われ調査した結果、CloudFrontアクセス数はbotノイズが混ざり不正確と判明。実際にAPI(Bedrock呼び出し)が呼ばれた回数を実利用の指標として採用
 - 新規Lambda`zer0-touring-stats`を実装。Fableレビューで「関数単位のAWS/Lambda Invocationsだと他ルートも合算される」「CloudWatch日次PeriodがUTC境界固定でJST日付とずれる」の2件を発見・修正し、`/api/suggest`成功時のみ発火するカスタムメトリクスをJST暦日で再集計する方式にした
 - EventBridge Scheduler(毎日5:00 JST)で日次起動する構成をCFnに追加。実デプロイで判明した2件（CFn Early ValidationフックがScheduleExpressionTimeZoneを拒否・GetMetricStatisticsのデータポイント上限超過）を修正し、CFnスタック更新・Lambdaコードデプロイ・実際のAPI呼び出しからstats.json反映までを本番で確認済み
+- 2巡目のFableレビューでScheduler実行ロールをワイルドカード条件(`schedule/default/*`)に改善しconfused deputy対策を復活、GetMetricDataのページネーション未考慮への防御ログも追加
 - pytestにテストを3件追加（計20件）。004ポートフォリオの`touring-app`ページに累計呼び出し回数と日別バーチャートを公開表示する機能を追加し、本番サイトでグラフ表示を確認済み（5分TTLキャッシュ付き）
