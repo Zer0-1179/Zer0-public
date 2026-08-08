@@ -209,6 +209,19 @@ def test_enrich_course_skips_everything_when_time_is_critically_low(module, monk
 
 # ── stats_handler（利用統計集計バッチ） ────────────────────────────────
 
+def _mock_metric_data(module, points):
+    """[(datetime, value), ...] からGetMetricDataのレスポンス形状を組み立てる。"""
+    module.cloudwatch.get_metric_data.return_value = {
+        "MetricDataResults": [
+            {
+                "Id": "suggest_calls",
+                "Timestamps": [p[0] for p in points],
+                "Values": [p[1] for p in points],
+            }
+        ]
+    }
+
+
 def test_stats_handler_zero_fills_days_without_invocations(module):
     """CloudWatchはデータがない日はDatapointを返さないため、間引かず0件として埋めること。
     間引くとグラフのx軸間隔が実際のカレンダー日とずれ、利用頻度が実態より高く見えてしまう。
@@ -219,12 +232,10 @@ def test_stats_handler_zero_fills_days_without_invocations(module):
     def jst_hour(days_ago, hour):
         return (today_jst - module.timedelta(days=days_ago)).replace(hour=hour).astimezone(module.timezone.utc)
 
-    module.cloudwatch.get_metric_statistics.return_value = {
-        "Datapoints": [
-            {"Timestamp": jst_hour(1, 20), "Sum": 5.0},
-            {"Timestamp": jst_hour(3, 2), "Sum": 2.0},  # JST深夜2時 = 前日UTCだが集計はJST暦日で3日前扱い
-        ]
-    }
+    _mock_metric_data(module, [
+        (jst_hour(1, 20), 5.0),
+        (jst_hour(3, 2), 2.0),  # JST深夜2時 = 前日UTCだが集計はJST暦日で3日前扱い
+    ])
 
     result = module.stats_handler({}, None)
     assert result["statusCode"] == 200
@@ -242,19 +253,22 @@ def test_stats_handler_zero_fills_days_without_invocations(module):
 
 def test_stats_handler_queries_custom_metric_only(module):
     """関数全体(AWS/Lambda Invocations)ではなく、/api/suggest成功時のみ発火する
-    カスタムメトリクスだけを集計対象にすること（他ルート呼び出しの誤集計防止）。"""
-    module.cloudwatch.get_metric_statistics.return_value = {"Datapoints": []}
+    カスタムメトリクスだけを集計対象にすること（他ルート呼び出しの誤集計防止）。
+    GetMetricStatisticsは90日×1時間=2,160点で1,440点上限を超えるため、
+    上限がはるかに大きいGetMetricDataを使うこと（実機invokeで発覚したバグの回帰防止）。"""
+    _mock_metric_data(module, [])
     module.stats_handler({}, None)
 
-    _, kwargs = module.cloudwatch.get_metric_statistics.call_args
-    assert kwargs["Namespace"] == module.STATS_METRIC_NAMESPACE
-    assert kwargs["MetricName"] == module.STATS_METRIC_NAME
-    assert kwargs["Period"] == 3600
-    assert "Dimensions" not in kwargs
+    _, kwargs = module.cloudwatch.get_metric_data.call_args
+    query = kwargs["MetricDataQueries"][0]
+    assert query["MetricStat"]["Metric"]["Namespace"] == module.STATS_METRIC_NAMESPACE
+    assert query["MetricStat"]["Metric"]["MetricName"] == module.STATS_METRIC_NAME
+    assert query["MetricStat"]["Period"] == 3600
+    assert "Dimensions" not in query["MetricStat"]["Metric"]
 
 
 def test_stats_handler_writes_to_configured_bucket_and_key(module):
-    module.cloudwatch.get_metric_statistics.return_value = {"Datapoints": []}
+    _mock_metric_data(module, [])
     module.stats_handler({}, None)
 
     args, kwargs = module.s3.put_object.call_args

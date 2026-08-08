@@ -140,7 +140,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:GetMetricData
                   - cloudwatch:PutMetricData
                 Resource: "*"
               - Effect: Allow
@@ -310,8 +310,6 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
-              ArnLike:
-                aws:SourceArn: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/zer0-touring-stats-daily"
       Policies:
         - PolicyName: InvokeStatsLambda
           PolicyDocument:
