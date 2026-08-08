@@ -22,6 +22,8 @@ def module():
     lf.dynamodb.put_item = MagicMock()
     lf.dynamodb.query = MagicMock(return_value={"Items": []})
     lf.dynamodb.update_item = MagicMock()
+    lf.cloudwatch.get_metric_statistics = MagicMock(return_value={"Datapoints": []})
+    lf.s3.put_object = MagicMock()
     return lf
 
 

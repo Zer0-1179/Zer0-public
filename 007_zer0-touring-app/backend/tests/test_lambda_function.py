@@ -200,3 +200,42 @@ def test_enrich_course_skips_everything_when_time_is_critically_low(module, monk
 
     assert "dest_lat" in course  # 目的地ジオコーディングだけは無条件で行う
     assert course["outbound_spots"] == [{"name": "A", "type": "道の駅"}]  # 以降はAI原文のまま
+
+
+# ── stats_handler（利用統計集計バッチ） ────────────────────────────────
+
+def test_stats_handler_zero_fills_days_without_invocations(module):
+    """CloudWatchはデータがない日はDatapointを返さないため、間引かず0件として埋めること。
+    間引くとグラフのx軸間隔が実際のカレンダー日とずれ、利用頻度が実態より高く見えてしまう。"""
+    from datetime import datetime, timezone, timedelta
+
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    module.cloudwatch.get_metric_statistics.return_value = {
+        "Datapoints": [
+            {"Timestamp": today - timedelta(days=1), "Sum": 5.0},
+            {"Timestamp": today - timedelta(days=3), "Sum": 2.0},
+        ]
+    }
+
+    result = module.stats_handler({}, None)
+    assert result["statusCode"] == 200
+
+    _, kwargs = module.s3.put_object.call_args
+    payload = json.loads(kwargs["Body"])
+
+    assert payload["total"] == 7
+    assert len(payload["history"]) == module.STATS_HISTORY_DAYS
+    by_date = {d["date"]: d["count"] for d in payload["history"]}
+    assert by_date[(today - timedelta(days=1)).strftime("%Y-%m-%d")] == 5
+    assert by_date[(today - timedelta(days=3)).strftime("%Y-%m-%d")] == 2
+    assert by_date[(today - timedelta(days=2)).strftime("%Y-%m-%d")] == 0
+
+
+def test_stats_handler_writes_to_configured_bucket_and_key(module):
+    module.cloudwatch.get_metric_statistics.return_value = {"Datapoints": []}
+    module.stats_handler({}, None)
+
+    args, kwargs = module.s3.put_object.call_args
+    assert kwargs["Bucket"] == module.STATS_BUCKET
+    assert kwargs["Key"] == module.STATS_KEY
+    assert kwargs["ContentType"] == "application/json"
