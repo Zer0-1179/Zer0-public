@@ -124,8 +124,10 @@ if $DEPLOY_FRONTEND; then
   npm run build
 
   # dist/ → S3 同期（ハッシュ付き _astro/ は長期キャッシュ、それ以外は1日）
+  # stats.json は zer0-touring-stats Lambdaが日次生成する動的ファイルでビルド成果物に
+  # 含まれないため、--delete で誤って消されないよう除外する
   aws s3 sync dist/ "s3://${BUCKET}" --delete \
-    --exclude "_astro/*"
+    --exclude "_astro/*" --exclude "stats.json"
   aws s3 sync dist/_astro/ "s3://${BUCKET}/_astro/" \
     --cache-control "public,max-age=31536000,immutable"
   aws s3 cp dist/index.html "s3://${BUCKET}/index.html" \
