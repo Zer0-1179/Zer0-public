@@ -161,8 +161,9 @@
 ### 利用実績集計バッチ・ポートフォリオサイトへの公開グラフ追加
 
 - 利用回数（何回呼び出されているか）をユーザーから問われ調査した結果、CloudFrontアクセス数はbot/クローラーの静的ファイル取得が混ざり実利用の指標として不正確と判明。実際にAPI(Bedrock呼び出し)が呼ばれた回数(Lambda Invocationsメトリクス)を実利用の指標として採用することにした
-- 新規Lambda`zer0-touring-stats`(`stats_handler`)を実装。CloudWatch `AWS/Lambda Invocations`を日次集計し、呼び出しゼロの日も0件で明示的に埋めた90日分のJSON(`stats.json`)をS3(`zer0-touring-s3`)に書き出す設計。ゼロ埋めしないとグラフのx軸間隔が実カレンダーとずれ利用頻度が実態より高く見えるため
-- EventBridge Scheduler(`zer0-touring-stats-daily`、毎日5:00 JST)で日次起動する構成をCFnに追加。既存`TouringLambdaRole`にCloudWatch読み取り・S3書き込み権限を追加、Scheduler専用のIAMロールも新設（CFnスタック更新・Lambdaコードデプロイは自動実行系の作業のためユーザー確認待ち、本エントリ時点では未適用）
-- pytestに`stats_handler`のゼロ埋め・書き込み先検証テストを2件追加（計19件）
-- 004ポートフォリオの`touring-app`プロジェクトページに新規`TouringStatsChart.astro`コンポーネントを追加し、`stats.json`をSSR時にfetchして累計呼び出し回数と日別バーチャートを公開表示（dataviz skillのガイドラインに準拠。日本語/英語両対応、stats.json未生成時は自動的にセクション非表示）
+- 新規Lambda`zer0-touring-stats`(`stats_handler`)を実装。当初`AWS/Lambda Invocations`（関数単位の呼び出し数）を使う設計だったが、`zer0-touring-suggest`は`/api/status`等の他ルートも同居しているため無関係な呼び出しまで合算されると判明。`/api/suggest`成功時のみ発火するカスタムメトリクス`Zer0Touring/SuggestCalls`方式に変更した（Fableレビューで発見・修正）
+- CloudWatchの日次Period(86400)はUTC 0時境界固定でJST日付とずれる問題も同レビューで発見。Period=1時間で取得しPython側でJST暦日に再集計する方式に修正。呼び出しゼロの日も0件で明示的に埋めた90日分のJSON(`stats.json`)をS3(`zer0-touring-s3`)に書き出す設計（ゼロ埋めしないとグラフのx軸間隔が実カレンダーとずれ利用頻度が実態より高く見えるため）
+- EventBridge Scheduler(`zer0-touring-stats-daily`、毎日5:00 JST)で日次起動する構成をCFnに追加。既存`TouringLambdaRole`にCloudWatch読み取り・書き込み・S3書き込み権限を追加、Scheduler専用のIAMロールも新設（`aws:SourceArn`条件付きでconfused deputy対策）。CFnスタック更新・Lambdaコードデプロイは自動実行系の作業のためユーザー確認待ち、本エントリ時点では未適用
+- pytestに`stats_handler`・メトリクス発火のテストを3件追加（計20件）
+- 004ポートフォリオの`touring-app`プロジェクトページに新規`TouringStatsChart.astro`コンポーネントを追加し、`stats.json`をSSR時にfetchして累計呼び出し回数と日別バーチャートを公開表示（dataviz skillのガイドラインに準拠。日本語/英語両対応、stats.json未生成時は自動的にセクション非表示）。SSR毎回の外部fetchを避けるため5分TTLのメモリキャッシュ(`lib/touringStats.ts`)を追加し、スキーマ検証も強化
 - 構成図(`007_architecture.png`)にEventBridge Scheduler・統計集計Lambdaを追加

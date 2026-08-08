@@ -1,35 +1,16 @@
 ---
 // 007バイクツーリングPWAの利用実績(日次API呼び出し回数)を、007側が日次バッチで
-// 生成しているstats.json(https://touring.zer0-infra.com/stats.json)から取得して
-// グラフ表示する。CloudFrontの生アクセス数はbot/クローラーの静的ファイル取得が
-// 混ざり実利用の指標として不正確なため、実際にAPIが呼ばれた回数(Lambda呼び出し数)
-// を集計したものを利用実績として採用している(007側 stats_handler で集計)。
+// 生成しているstats.jsonから取得してグラフ表示する。/api/suggest成功時のみ発火する
+// カスタムメトリクスを集計したものを利用実績として採用している(007側 stats_handler)。
+import { getTouringStats } from '../lib/touringStats';
+
 interface Props {
   lang: 'ja' | 'en';
 }
 
 const { lang } = Astro.props;
 
-type StatsPayload = {
-  history: { date: string; count: number }[];
-  total: number;
-  updatedAt: string;
-};
-
-let stats: StatsPayload | null = null;
-try {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-  const res = await fetch('https://touring.zer0-infra.com/stats.json', { signal: controller.signal });
-  clearTimeout(timeout);
-  if (res.ok) {
-    const data = await res.json();
-    if (data && Array.isArray(data.history)) stats = data;
-  }
-} catch {
-  stats = null;
-}
-
+const stats = await getTouringStats();
 const hasData = !!stats && stats.history.length > 0;
 const history = hasData ? stats!.history : [];
 
