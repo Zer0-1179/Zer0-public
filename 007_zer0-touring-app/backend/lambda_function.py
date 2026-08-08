@@ -767,7 +767,22 @@ def _handle_enrich_post(event, cors, context):
     except Exception as e:
         print(f"[enrich] エラー（AI推定値のまま返す）: {e}")
 
+    if course.get("dest_lat") is None:
+        # 目的地ジオコーディング失敗の発生率を追跡する（フロント側が永久に「取得中...」の
+        # ままになるバグの再発検知用。2026-08-09発見・修正）
+        _emit_enrich_geocode_failed_metric()
+
     return {"statusCode": 200, "headers": cors, "body": json.dumps({"course": course}, ensure_ascii=False)}
+
+
+def _emit_enrich_geocode_failed_metric():
+    try:
+        cloudwatch.put_metric_data(
+            Namespace=STATS_METRIC_NAMESPACE,
+            MetricData=[{"MetricName": "EnrichGeocodeFailed", "Value": 1, "Unit": "Count"}],
+        )
+    except Exception as e:
+        print(f"[metrics] ERR {e}")
 
 
 def lambda_handler(event, context):
