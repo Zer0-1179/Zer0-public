@@ -85,6 +85,42 @@ def test_nominatim_geocode_cache_miss_calls_network_and_populates_cache(module):
     assert module.dynamodb.put_item.called
 
 
+def test_nominatim_geocode_retry_recovers_from_transient_error(module):
+    """目的地ジオコーディングが接続エラーで失敗すると天気取得も道連れでフロントが
+    「取得中...」のまま固まるバグがあったため、retry=Trueで1回だけ再試行できること。"""
+    module.dynamodb.get_item = MagicMock(return_value={})
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'[{"lat":"35.3","lon":"139.48"}]'
+        mock_urlopen.side_effect = [TimeoutError("timed out"), MagicMock(__enter__=lambda s: mock_resp, __exit__=lambda *a: None)]
+        lat, lon = module.nominatim_geocode("江の島", 35.6, 139.6, retry=True)
+    assert (lat, lon) == (35.3, 139.48)
+    assert mock_urlopen.call_count == 2
+
+
+def test_nominatim_geocode_no_retry_by_default(module):
+    """retry=False（デフォルト）では従来通り1回失敗したら即諦めること
+    （スポット側geocode_and_filter_filterの時間予算を圧迫しないため）。"""
+    module.dynamodb.get_item = MagicMock(return_value={})
+    with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")) as mock_urlopen:
+        lat, lon = module.nominatim_geocode("江の島", 35.6, 139.6)
+    assert (lat, lon) == (None, None)
+    assert mock_urlopen.call_count == 1
+
+
+def test_nominatim_geocode_empty_result_not_retried(module):
+    """0件ヒットはネットワークエラーではないため、retry=Trueでも再試行しないこと
+    （再試行しても結果は変わらず無駄なNominatim呼び出しになるため）。"""
+    module.dynamodb.get_item = MagicMock(return_value={})
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"[]"
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+        lat, lon = module.nominatim_geocode("存在しない地名", 35.6, 139.6, retry=True)
+    assert (lat, lon) == (None, None)
+    assert mock_urlopen.call_count == 1
+
+
 # ── コース履歴保存機能 ────────────────────────────────────────────────────
 
 def test_history_post_rejects_invalid_device_id(module):
