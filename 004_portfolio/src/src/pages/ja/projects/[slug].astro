@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import TouringStatsChart from '../../../components/TouringStatsChart.astro';
 import { projects, getProjectBySlug } from '../../../data/projects';
 import { useTranslations } from '../../../i18n/utils';
 
@@ -60,6 +61,8 @@ const siteUrl = project.siteUrl;
         />
       </div>
     </section>
+
+    {slug === 'touring-app' && <TouringStatsChart lang="ja" />}
 
     <!-- 実装のポイント -->
     <section class="mb-10">

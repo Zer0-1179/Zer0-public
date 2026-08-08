@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import TouringStatsChart from '../../../components/TouringStatsChart.astro';
 import { projects, getProjectBySlug } from '../../../data/projects';
 import { useTranslations } from '../../../i18n/utils';
 
@@ -53,6 +54,8 @@ const siteUrl = project.siteUrl;
         />
       </div>
     </section>
+    {slug === 'touring-app' && <TouringStatsChart lang="en" />}
+
     <section class="mb-10">
       <h2 class="text-accent text-xs uppercase tracking-wider mb-4">Key Implementation Points</h2>
       <ul class="space-y-3">

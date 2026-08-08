@@ -134,6 +134,18 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:Query
                 Resource: !GetAtt TouringHistoryTable.Arn
+        - PolicyName: StatsAggregation
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricStatistics
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${TouringBucket.Arn}/stats.json"
 
   # ── DynamoDB レートリミットテーブル ───────────────────────────
   TouringRateLimitTable:
@@ -248,6 +260,78 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TouringApi}/*/*"
+
+  # ── Lambda 関数（利用統計集計バッチ） ────────────────────────────
+  TouringStatsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zer0-touring-stats
+      Runtime: python3.14
+      Handler: lambda_function.stats_handler
+      Role: !GetAtt TouringLambdaRole.Arn
+      MemorySize: 128
+      Timeout: 30
+      Description: 利用回数集計バッチ（CloudWatch Invocationsを集計しS3のstats.jsonへ書き出す。ポートフォリオサイトの利用実績グラフ用）
+      Environment:
+        Variables:
+          STATS_BUCKET: !Ref TouringBucket
+          STATS_FUNCTION_NAME: !Ref TouringLambdaFunction
+      Code:
+        ZipFile: |
+          def stats_handler(event, context):
+              return {"statusCode": 200, "body": '{"status":"deploying"}'}
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  # ── Lambda ロググループ（統計集計バッチ）───────────────────────
+  TouringStatsLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${TouringStatsFunction}"
+      RetentionInDays: 7
+      Tags:
+        - Key: Project
+          Value: Zer0-touring
+
+  # ── EventBridge Scheduler 実行ロール（統計集計Lambdaの起動専用）
+  TouringSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "Zer0-touring-scheduler-role-${AWS::AccountId}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: InvokeStatsLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt TouringStatsFunction.Arn
+
+  # ── EventBridge Scheduler（毎日5時JSTに統計集計Lambdaを起動）───
+  TouringStatsSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: zer0-touring-stats-daily
+      Description: 利用統計集計バッチを毎日起動しstats.jsonを更新する
+      ScheduleExpression: "cron(0 5 * * ? *)"
+      ScheduleExpressionTimeZone: Asia/Tokyo
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt TouringStatsFunction.Arn
+        RoleArn: !GetAtt TouringSchedulerRole.Arn
 
   # ── API Gateway HTTP API（CORS: localhost 開発用）──────────────
   TouringApi:

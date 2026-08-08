@@ -1,0 +1,152 @@
+---
+// 007バイクツーリングPWAの利用実績(日次API呼び出し回数)を、007側が日次バッチで
+// 生成しているstats.json(https://touring.zer0-infra.com/stats.json)から取得して
+// グラフ表示する。CloudFrontの生アクセス数はbot/クローラーの静的ファイル取得が
+// 混ざり実利用の指標として不正確なため、実際にAPIが呼ばれた回数(Lambda呼び出し数)
+// を集計したものを利用実績として採用している(007側 stats_handler で集計)。
+interface Props {
+  lang: 'ja' | 'en';
+}
+
+const { lang } = Astro.props;
+
+type StatsPayload = {
+  history: { date: string; count: number }[];
+  total: number;
+  updatedAt: string;
+};
+
+let stats: StatsPayload | null = null;
+try {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  const res = await fetch('https://touring.zer0-infra.com/stats.json', { signal: controller.signal });
+  clearTimeout(timeout);
+  if (res.ok) {
+    const data = await res.json();
+    if (data && Array.isArray(data.history)) stats = data;
+  }
+} catch {
+  stats = null;
+}
+
+const hasData = !!stats && stats.history.length > 0;
+const history = hasData ? stats!.history : [];
+
+const W = 640;
+const H = 140;
+const PAD_L = 4;
+const PAD_R = 4;
+const PAD_TOP = 8;
+const PAD_BOTTOM = 20;
+const chartW = W - PAD_L - PAD_R;
+const chartH = H - PAD_TOP - PAD_BOTTOM;
+
+const n = history.length;
+const maxCount = Math.max(1, ...history.map((d) => d.count));
+const slotW = n > 0 ? chartW / n : 0;
+const barW = Math.max(1.5, slotW - 1.5);
+
+const bars = history.map((d, i) => {
+  const x = PAD_L + i * slotW;
+  const h = maxCount > 0 ? (d.count / maxCount) * chartH : 0;
+  const y = PAD_TOP + (chartH - h);
+  return { date: d.date, count: d.count, x, y, h, w: barW };
+});
+
+// スパースなx軸ラベル(先頭・末尾+間引き。全日ラベルは重なって読めなくなるため)
+const labelEvery = Math.max(1, Math.ceil(n / 6));
+const labelIdx = new Set<number>();
+for (let i = 0; i < n; i += labelEvery) labelIdx.add(i);
+if (n > 0) labelIdx.add(n - 1);
+
+const copy = lang === 'ja'
+  ? {
+      heading: '利用実績',
+      totalLabel: '累計呼び出し回数',
+      unit: '',
+      dailyLabel: '日別 提案API呼び出し回数(直近90日)',
+      note: 'AIコース提案API(Bedrock呼び出し)の呼び出し回数を集計。ページ表示等の静的ファイルアクセスは含みません。',
+      table: '日別データを表で見る',
+      updated: '更新',
+      dateHeader: '日付',
+      countHeader: '回数',
+    }
+  : {
+      heading: 'Usage',
+      totalLabel: 'Total API calls',
+      unit: '',
+      dailyLabel: 'Daily suggestion API calls (last 90 days)',
+      note: 'Counts calls to the AI route-suggestion API (Bedrock invocations) only. Static asset requests are excluded.',
+      table: 'View daily breakdown',
+      updated: 'Updated',
+      dateHeader: 'Date',
+      countHeader: 'Calls',
+    };
+
+const updatedLabel = hasData
+  ? new Date(stats!.updatedAt).toLocaleDateString(lang === 'ja' ? 'ja-JP' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  : '';
+---
+
+{hasData && (
+  <section class="mb-10">
+    <h2 class="text-accent text-xs uppercase tracking-wider mb-4">{copy.heading}</h2>
+    <div class="bg-navy-800/40 border border-navy-700/40 rounded-lg p-5">
+      <div class="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-4">
+        <span class="text-3xl font-bold text-white">{stats!.total.toLocaleString()}</span>
+        <span class="text-sm text-slate-400">{copy.totalLabel}{copy.unit}</span>
+        <span class="text-xs text-slate-500 sm:ml-auto">{copy.updated}: {updatedLabel}</span>
+      </div>
+
+      <p class="text-xs text-slate-500 mb-3">{copy.dailyLabel}</p>
+
+      <svg viewBox={`0 0 ${W} ${H}`} class="w-full h-auto" role="img" aria-label={copy.dailyLabel}>
+        <line x1={PAD_L} y1={PAD_TOP + chartH} x2={W - PAD_R} y2={PAD_TOP + chartH} stroke="#1e3a5f" stroke-width="1" />
+        {bars.map((b) => (
+          <rect x={b.x} y={b.y} width={b.w} height={Math.max(0.5, b.h)} rx="1.5" fill="var(--color-accent)" opacity="0.85">
+            <title>{`${b.date}: ${b.count}${lang === 'ja' ? '回' : ''}`}</title>
+          </rect>
+        ))}
+        {bars.map((b, i) => {
+          if (!labelIdx.has(i)) return null;
+          // 先頭・末尾のラベルはmiddle基準だとviewBox外にはみ出て見切れるため、
+          // 端はstart/endに寄せてviewBox内に収める
+          const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+          const x = i === 0 ? PAD_L : i === n - 1 ? W - PAD_R : b.x + b.w / 2;
+          return (
+            <text x={x} y={H - 4} font-size="9" fill="#64748b" text-anchor={anchor}>{b.date.slice(5)}</text>
+          );
+        })}
+      </svg>
+
+      <details class="mt-3">
+        <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300 select-none">{copy.table}</summary>
+        <div class="mt-2 max-h-48 overflow-y-auto">
+          <table class="w-full text-xs text-slate-400">
+            <thead>
+              <tr class="text-slate-500 border-b border-navy-700/40">
+                <th class="text-left font-normal py-1">{copy.dateHeader}</th>
+                <th class="text-right font-normal py-1">{copy.countHeader}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.slice().reverse().map((d) => (
+                <tr class="border-b border-navy-700/20">
+                  <td class="py-1">{d.date}</td>
+                  <td class="py-1 text-right">{d.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <p class="text-[11px] text-slate-600 mt-3">{copy.note}</p>
+    </div>
+  </section>
+)}

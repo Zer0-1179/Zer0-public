@@ -49,6 +49,13 @@ bedrock = boto3.client(
     config=Config(read_timeout=20, connect_timeout=5),
 )
 dynamodb = boto3.client("dynamodb", region_name="ap-northeast-1")
+cloudwatch = boto3.client("cloudwatch", region_name="ap-northeast-1")
+s3 = boto3.client("s3", region_name="ap-northeast-1")
+
+STATS_BUCKET       = os.environ.get("STATS_BUCKET", "zer0-touring-s3")
+STATS_KEY          = "stats.json"
+STATS_FUNCTION_NAME = os.environ.get("STATS_FUNCTION_NAME", "zer0-touring-suggest")
+STATS_HISTORY_DAYS = 90
 
 # Nominatim は 1req/sec の制限があるためロックで直列化
 _NOM_LOCK = threading.Lock()
@@ -914,3 +921,55 @@ def lambda_handler(event, context):
         "headers": cors,
         "body": json.dumps({"courses": courses}, ensure_ascii=False),
     }
+
+
+def stats_handler(event, context):
+    """EventBridge Schedulerから日次起動。zer0-touring-suggest（提案API）の
+    CloudWatch呼び出し回数（AWS/Lambda Invocations）を集計し、S3にstats.jsonとして
+    書き出す（ポートフォリオサイトの利用回数グラフ用）。
+    CloudFrontの生アクセス数はbot/クローラーの静的ファイル取得が混ざり実利用の指標として
+    不正確なため、実際にAPIが呼ばれた回数（Lambda呼び出し数）を利用実績として採用する。
+    """
+    end = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    start = end - timedelta(days=STATS_HISTORY_DAYS)
+
+    resp = cloudwatch.get_metric_statistics(
+        Namespace="AWS/Lambda",
+        MetricName="Invocations",
+        Dimensions=[{"Name": "FunctionName", "Value": STATS_FUNCTION_NAME}],
+        StartTime=start,
+        EndTime=end,
+        Period=86400,
+        Statistics=["Sum"],
+    )
+
+    daily = {dp["Timestamp"].strftime("%Y-%m-%d"): int(dp["Sum"]) for dp in resp.get("Datapoints", [])}
+
+    # CloudWatchはデータがない日はDatapointを返さないため、呼び出しゼロの日も
+    # 明示的に0で埋める（間引くとグラフのx軸間隔が実際のカレンダー日と合わなくなり、
+    # 利用頻度が実態より高く見えてしまう）
+    history = []
+    cursor = start
+    while cursor < end:
+        date_str = cursor.strftime("%Y-%m-%d")
+        history.append({"date": date_str, "count": daily.get(date_str, 0)})
+        cursor += timedelta(days=1)
+
+    total = sum(d["count"] for d in history)
+
+    payload = {
+        "history": history,
+        "total": total,
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+    s3.put_object(
+        Bucket=STATS_BUCKET,
+        Key=STATS_KEY,
+        Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        ContentType="application/json",
+        CacheControl="public, max-age=3600",
+    )
+
+    print(f"[stats] wrote {len(history)} days, total={total}")
+    return {"statusCode": 200, "body": json.dumps({"written": total})}
