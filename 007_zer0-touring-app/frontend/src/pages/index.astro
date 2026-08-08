@@ -979,7 +979,7 @@
       import markerIcon from 'leaflet/dist/images/marker-icon.png';
       import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
       import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-      import { escHtml, fmtHours, getWeatherMeta } from '../scripts/course-utils';
+      import { buildMapUrl as buildMapUrlPure, computeEnrichState, escHtml, fmtHours, getWeatherMeta } from '../scripts/course-utils';
 
       // Leafletのデフォルトマーカーアイコンはバンドラー経由だとパス解決が壊れる既知の問題があるため、
       // Viteが解決した実URLを明示的に設定する
@@ -1251,21 +1251,10 @@
         }catch(_){imgEl.src='';}
       }
 
+      // ロジック本体は course-utils.ts の buildMapUrl（テスト済み）に切り出し、
+      // ここでは現在の userLat/userLon を渡すだけのラッパーにする
       function buildMapUrl(c){
-        const dest  = c.dest_lat!=null&&c.dest_lon!=null
-          ? `${c.dest_lat},${c.dest_lon}`
-          : encodeURIComponent(c.destination);
-        const spots = (c.outbound_spots ?? c.rest_spots ?? []).map(s=>
-          s.lat!=null&&s.lon!=null ? `${s.lat},${s.lon}` : encodeURIComponent(s.name)
-        );
-        // GPS現在地モード・手動出発地モードいずれも userLat/userLon に反映される（findCourses参照）ため、
-        // ここでは真偽値ではなくnullチェックでナビ起点の有無を判定する（0付近の座標でも誤って
-        // 起点なし扱いにならないように）
-        const hasOrigin = userLat!=null&&userLon!=null;
-        const coord  = hasOrigin?`${userLat.toFixed(6)},${userLon.toFixed(6)}`:'';
-        const op = hasOrigin?`&origin=${coord}`:'';
-        const wp = spots.length?`&waypoints=${spots.join('%7C')}` :'';
-        return `https://www.google.com/maps/dir/?api=1${op}&destination=${dest}${wp}&travelmode=driving`;
+        return buildMapUrlPure(c, userLat, userLon);
       }
 
       // ルートマップ描画: 現在地・目的地・立ち寄りスポットにマーカーを置き、
@@ -1472,18 +1461,19 @@
           if (!res.ok) throw new Error('enrich failed');
           const data = await res.json();
           Object.assign(c, data.course);
-          // 目的地ジオコーディングが失敗すると dest_lat が付かず天気も取れないままになる。
-          // その場合は _enriched を true にせず次回詳細画面を開いた時に再試行できるようにしつつ、
-          // _enrichFailed で「今開いている画面」には取得中のまま止まらず終端状態を表示する
-          c._enriched = data.course.dest_lat !== undefined;
-          c._enrichFailed = data.course.dest_weather_code === undefined;
+          // 状態遷移ロジックは course-utils.ts の computeEnrichState（テスト済み）に切り出し済み
+          const state = computeEnrichState(data.course);
+          c._enriched = state.enriched;
+          c._enrichFailed = state.enrichFailed;
           // 開いたまま待っている間に他のコースへ移動していたら再描画しない
           if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
             openDetail(idx);
           }
         } catch (_) {
           // 失敗してもAI推定値のまま表示を継続する（再試行は次回詳細画面を開いた時）
-          c._enrichFailed = true;
+          const state = computeEnrichState(null);
+          c._enriched = state.enriched;
+          c._enrichFailed = state.enrichFailed;
           if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
             openDetail(idx);
           }
