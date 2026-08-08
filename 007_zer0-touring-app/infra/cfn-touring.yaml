@@ -322,13 +322,15 @@ Resources:
                 Resource: !GetAtt TouringStatsFunction.Arn
 
   # ── EventBridge Scheduler（毎日5時JSTに統計集計Lambdaを起動）───
+  # ScheduleExpressionTimeZoneはこのアカウントのCFn Early Validationフックが
+  # プロパティ自体を（値に関わらず）拒否するため使用せず、UTC基準のcron式で
+  # 5:00 JST(=20:00 UTC 前日)を直接指定する
   TouringStatsSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: zer0-touring-stats-daily
-      Description: 利用統計集計バッチを毎日起動しstats.jsonを更新する
-      ScheduleExpression: "cron(0 5 * * ? *)"
-      ScheduleExpressionTimeZone: Asia/Tokyo
+      Description: 利用統計集計バッチを毎日起動しstats.jsonを更新する(UTC20:00=JST5:00)
+      ScheduleExpression: "cron(0 20 * * ? *)"
       FlexibleTimeWindow:
         Mode: "OFF"
       Target:
