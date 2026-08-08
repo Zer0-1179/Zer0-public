@@ -952,25 +952,40 @@ def stats_handler(event, context):
     CloudWatchの日次Period(86400)は常にUTC 0時境界で集計されるため、JST圏の利用者向けに
     Period=1時間で取得しPython側でJSTの暦日に再集計する（日次Periodのままだと深夜0〜9時
     JSTの呼び出しが前日扱いになりグラフの日付がずれる）。
+    GetMetricStatisticsは1呼び出しあたり1,440データポイントまでしか返せず、90日×24時間の
+    2,160点を要求するとInvalidParameterCombinationExceptionになるため、上限がはるかに
+    大きいGetMetricDataを使う（実機invokeで発覚・修正）。
     """
     today_jst = datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
     first_day_jst = today_jst - timedelta(days=STATS_HISTORY_DAYS - 1)
     start = first_day_jst.astimezone(timezone.utc)
     end = (today_jst + timedelta(days=1)).astimezone(timezone.utc)
 
-    resp = cloudwatch.get_metric_statistics(
-        Namespace=STATS_METRIC_NAMESPACE,
-        MetricName=STATS_METRIC_NAME,
+    resp = cloudwatch.get_metric_data(
+        MetricDataQueries=[
+            {
+                "Id": "suggest_calls",
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": STATS_METRIC_NAMESPACE,
+                        "MetricName": STATS_METRIC_NAME,
+                    },
+                    "Period": 3600,
+                    "Stat": "Sum",
+                },
+                "ReturnData": True,
+            }
+        ],
         StartTime=start,
         EndTime=end,
-        Period=3600,
-        Statistics=["Sum"],
+        ScanBy="TimestampAscending",
     )
 
     daily = {}
-    for dp in resp.get("Datapoints", []):
-        date_str = dp["Timestamp"].astimezone(JST).strftime("%Y-%m-%d")
-        daily[date_str] = daily.get(date_str, 0) + int(dp["Sum"])
+    result = resp["MetricDataResults"][0] if resp.get("MetricDataResults") else {"Timestamps": [], "Values": []}
+    for ts, value in zip(result["Timestamps"], result["Values"]):
+        date_str = ts.astimezone(JST).strftime("%Y-%m-%d")
+        daily[date_str] = daily.get(date_str, 0) + int(value)
 
     # データがない日はDatapointが返らないため、呼び出しゼロの日も明示的に0で埋める
     # （間引くとグラフのx軸間隔が実際のカレンダー日と合わなくなり、利用頻度が実態より
