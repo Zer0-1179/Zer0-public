@@ -213,6 +213,36 @@ def test_enrich_post_returns_200_with_original_course_on_internal_error(module, 
     assert json.loads(resp["body"])["course"]["name"] == "テスト2"
 
 
+def test_enrich_post_emits_metric_when_geocode_fails(module, monkeypatch):
+    """目的地ジオコーディング失敗（dest_lat無し）の発生率を追跡できるよう、
+    その場合のみカスタムメトリクスを発火すること（フロントの「取得中...」固着バグの
+    再発検知用、2026-08-09追加）。"""
+    monkeypatch.setattr(module, "check_and_reserve_gmaps", MagicMock(return_value=False))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())  # course.dest_latを付けない=失敗を模擬
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/enrich"}}, "headers": {},
+             "body": json.dumps({"course": {"name": "テスト3", "destination": "箱根"},
+                                  "latitude": 35.6, "longitude": 139.6})}
+    resp = module.lambda_handler(event, MagicMock())
+    assert resp["statusCode"] == 200
+    _, kwargs = module.cloudwatch.put_metric_data.call_args
+    assert kwargs["MetricData"][0]["MetricName"] == "EnrichGeocodeFailed"
+
+
+def test_enrich_post_does_not_emit_metric_when_geocode_succeeds(module, monkeypatch):
+    monkeypatch.setattr(module, "check_and_reserve_gmaps", MagicMock(return_value=False))
+
+    def fake_enrich(course, lat, lon, ctx, use_gmaps=True):
+        course["dest_lat"] = 35.2
+
+    monkeypatch.setattr(module, "enrich_course", MagicMock(side_effect=fake_enrich))
+    module.cloudwatch.put_metric_data.reset_mock()
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/enrich"}}, "headers": {},
+             "body": json.dumps({"course": {"name": "テスト4", "destination": "箱根"},
+                                  "latitude": 35.6, "longitude": 139.6})}
+    module.lambda_handler(event, MagicMock())
+    assert not module.cloudwatch.put_metric_data.called
+
+
 # ── 外部API呼び出しの時間予算管理（enrich_course の残り時間ガード） ────────
 
 def test_enrich_course_skips_weather_when_time_is_low(module, mock_context, monkeypatch):
