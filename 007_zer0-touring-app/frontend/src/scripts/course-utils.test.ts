@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escHtml, fmtHours, getWeatherMeta } from './course-utils';
+import { buildMapUrl, computeEnrichState, escHtml, fmtHours, getWeatherMeta } from './course-utils';
 
 describe('escHtml', () => {
   it('HTMLの特殊文字をエスケープする', () => {
@@ -59,5 +59,60 @@ describe('getWeatherMeta', () => {
   it('未定義のコードはデフォルト値にフォールバックする', () => {
     const meta = getWeatherMeta(20);
     expect(meta.label).toBe('まずまず');
+  });
+});
+
+describe('buildMapUrl', () => {
+  const dest = { destination: '箱根', dest_lat: 35.23, dest_lon: 139.03 };
+
+  it('GPS現在地モード: userLat/userLonをoriginにする', () => {
+    const url = buildMapUrl(dest, 35.68, 139.76);
+    expect(url).toContain('origin=35.680000,139.760000');
+  });
+
+  it('起点未確定(null)ならoriginパラメータを付けない', () => {
+    const url = buildMapUrl(dest, null, null);
+    expect(url).not.toContain('origin=');
+  });
+
+  it('緯度0付近でも起点なし扱いにしない(falsy-zero対策の回帰防止)', () => {
+    // 実運用上ありえないが、真偽値判定(userLat&&userLon)だと0はfalsyになり
+    // 起点なし扱いになってしまうバグが過去にあった
+    const url = buildMapUrl(dest, 0, 139.76);
+    expect(url).toContain('origin=0.000000,139.760000');
+  });
+
+  it('dest_lat/lonが無ければ目的地名をエンコードして使う', () => {
+    const url = buildMapUrl({ destination: '箱根' }, 35.68, 139.76);
+    expect(url).toContain(`destination=${encodeURIComponent('箱根')}`);
+  });
+
+  it('outbound_spotsを%7C区切りのwaypointsにする', () => {
+    const c = { ...dest, outbound_spots: [{ name: '道の駅A', lat: 35.5, lon: 139.5 }] };
+    const url = buildMapUrl(c, 35.68, 139.76);
+    expect(url).toContain('waypoints=35.5,139.5');
+  });
+});
+
+describe('computeEnrichState', () => {
+  it('ジオコーディング・天気とも成功: enriched=true, enrichFailed=false', () => {
+    const state = computeEnrichState({ dest_lat: 35.23, dest_weather_code: 1 });
+    expect(state).toEqual({ enriched: true, enrichFailed: false });
+  });
+
+  it('目的地ジオコーディング失敗(dest_lat無し): 次回再試行できるようenriched=falseのまま', () => {
+    // 過去のバグ: ここでenriched=trueにしてしまい天気取得が永久にスキップされていた
+    const state = computeEnrichState({});
+    expect(state).toEqual({ enriched: false, enrichFailed: true });
+  });
+
+  it('ジオコーディングは成功したが天気だけ取得失敗: enriched=trueのままenrichFailed=true', () => {
+    const state = computeEnrichState({ dest_lat: 35.23 });
+    expect(state).toEqual({ enriched: true, enrichFailed: true });
+  });
+
+  it('通信例外等でレスポンス自体が無い場合もenrichFailed=true', () => {
+    const state = computeEnrichState(null);
+    expect(state).toEqual({ enriched: false, enrichFailed: true });
   });
 });
