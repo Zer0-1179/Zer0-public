@@ -266,10 +266,14 @@ def _put_geocode_cache(name, origin_lat, origin_lon, lat, lon):
         print(f"[geocode-cache] ERR write {name}: {e}")
 
 
-def nominatim_geocode(name, origin_lat, origin_lon):
+def nominatim_geocode(name, origin_lat, origin_lon, retry=False):
     """地名をNominatimでジオコーディング。(lat, lon) または (None, None) を返す。
     DynamoDBに結果をキャッシュし（既存の zer0-touring-ratelimit テーブルに相乗り）、
-    同名スポットの再ジオコーディングでNominatimの1req/秒制限に引っかからないようにする。"""
+    同名スポットの再ジオコーディングでNominatimの1req/秒制限に引っかからないようにする。
+    retry=True のとき、接続エラー・タイムアウト時のみ1回だけ再試行する（0件ヒットはリトライしても
+    結果が変わらないため対象外）。目的地ジオコーディングは失敗すると天気取得も道連れで
+    フロント側が永久に「取得中...」のままになるため呼び出し元で retry=True にしている。
+    スポット側（geocode_and_filter_spots）は時間予算がすでに厳しいため対象外のまま。"""
     cached = _get_geocode_cache(name, origin_lat, origin_lon)
     if cached is not None:
         return cached
@@ -287,12 +291,16 @@ def nominatim_geocode(name, origin_lat, origin_lon):
     }
     url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
-    try:
-        with _NOM_LOCK:
-            with urllib.request.urlopen(req, timeout=4) as r:
-                data = json.loads(r.read())
-            time.sleep(0.25)  # 1req/sec 制限を守る
-        if data:
+
+    attempts = 2 if retry else 1
+    for attempt in range(attempts):
+        try:
+            with _NOM_LOCK:
+                with urllib.request.urlopen(req, timeout=4) as r:
+                    data = json.loads(r.read())
+                time.sleep(0.25)  # 1req/sec 制限を守る
+            if not data:
+                return None, None
             lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
             dist = _haversine_km(origin_lat, origin_lon, lat, lon)
             if dist > MAX_WAYPOINT_KM:
@@ -301,8 +309,8 @@ def nominatim_geocode(name, origin_lat, origin_lon):
             print(f"[geocode] OK   {name}: ({lat:.4f},{lon:.4f}) {dist:.0f}km")
             _put_geocode_cache(name, origin_lat, origin_lon, lat, lon)
             return lat, lon
-    except Exception as e:
-        print(f"[geocode] ERR  {name}: {e}")
+        except Exception as e:
+            print(f"[geocode] ERR  {name} (attempt {attempt+1}/{attempts}): {e}")
     return None, None
 
 
@@ -467,7 +475,9 @@ def enrich_course(course, origin_lat, origin_lon, context, use_gmaps=True):
     if not dest_name:
         return
 
-    dest_lat, dest_lon = nominatim_geocode(dest_name, origin_lat, origin_lon)
+    # 目的地は/api/enrichで1コースにつき1回しか呼ばれず、この時点はまだ他の外部API呼び出しを
+    # 行っていないため時間予算に余裕があり、retry=Trueにしても後段の残り時間チェックを壊さない
+    dest_lat, dest_lon = nominatim_geocode(dest_name, origin_lat, origin_lon, retry=True)
     if dest_lat is None:
         print(f"[enrich] {course.get('name','')} destination geocode failed, keeping AI estimate")
         return
