@@ -153,9 +153,9 @@ bash scripts/download_article.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-06
+### 2026-08-09
 
-#### メール本文のダウンロードコマンドをコピペで実行できる形に修正
+#### ハンズオンプロンプトをAWS CloudShell標準化・記事レビューで発見した実行時バグ対応
 
-- 案内コマンドが番号付きリストの行内（`1. bash ...`）に埋め込まれ、コピーすると先頭の`1. `が混入して実行できない状態だったため、コマンドを単独行に分離
-- 実際の運用（`~/Zer0`を常にカレントディレクトリにしているため`cd`は不要）に合わせ、`bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh`に変更
+- Lambda Layers記事のハンズオンレビューで実行時バグ（Node.jsレイヤーのディレクトリ構造誤り・後片付けスクリプトのIAMロール削除失敗等）を検出・修正し、実際にAWS上で全ステップ実行して検証、結果を記事に画像として埋め込んだ
+- `ARTICLE_PROMPT_TEMPLATE`のハンズオン生成ルールをAWS CloudShell標準に更新し、`aws lambda update-function-code`で直接デプロイした
