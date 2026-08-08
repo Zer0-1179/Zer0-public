@@ -981,6 +981,11 @@ def stats_handler(event, context):
         ScanBy="TimestampAscending",
     )
 
+    if resp.get("NextToken"):
+        # 現状(90日×1時間=2,160点)は上限100,800点に対して十分小さく発生しないはずだが、
+        # 将来STATS_HISTORY_DAYSやPeriodを変更した際にサイレントな欠落に気づけるようにする
+        print("[stats] WARN NextToken present — datapoints may be truncated")
+
     daily = {}
     result = resp["MetricDataResults"][0] if resp.get("MetricDataResults") else {"Timestamps": [], "Values": []}
     for ts, value in zip(result["Timestamps"], result["Values"]):

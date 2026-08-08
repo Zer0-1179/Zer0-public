@@ -165,7 +165,8 @@
 - CloudWatchの日次Period(86400)はUTC 0時境界固定でJST日付とずれる問題も同レビューで発見。Period=1時間で取得しPython側でJST暦日に再集計する方式に修正。呼び出しゼロの日も0件で明示的に埋めた90日分のJSON(`stats.json`)をS3(`zer0-touring-s3`)に書き出す設計（ゼロ埋めしないとグラフのx軸間隔が実カレンダーとずれ利用頻度が実態より高く見えるため）
 - EventBridge Scheduler(`zer0-touring-stats-daily`、毎日5:00 JST)で日次起動する構成をCFnに追加。既存`TouringLambdaRole`にCloudWatch読み取り・書き込み・S3書き込み権限を追加、Scheduler専用のIAMロールも新設
 - 実デプロイで2件の不具合が判明し修正。①このAWSアカウントのCFn Early Validationフックが`ScheduleExpressionTimeZone`プロパティを値に関わらず拒否するため、UTC基準のcron式(`cron(0 20 * * ? *)`=JST5:00)に変更して回避。②`GetMetricStatistics`は1呼び出き1,440データポイント上限だが90日×1時間=2,160点を要求し実行時エラーになったため、上限がはるかに大きい`GetMetricData`に切り替えて解消（実機invokeで発見）
-- Scheduler実行ロールへの`aws:SourceArn`条件追加も試みたが、Schedulerのassume role事前チェックが実際のSourceArnと一致せず作成失敗したため`aws:SourceAccount`のみに戻した
+- Scheduler実行ロールへの`aws:SourceArn`条件は、スケジュール名を完全一致させると（スケジュールARN未確定な時点で行われる）assume role事前チェックに失敗すると判明。2巡目のFableレビューで「defaultグループ単位のワイルドカード(`schedule/default/*`)なら両立できるはず」と指摘を受け検証したところ成功し、confused deputy対策を維持したまま反映
+- GetMetricDataは1回答あたり最大100,800データポイントまで返せる仕様のため現状(2,160点)は十分余裕があるが、上限超過時はエラーにならずサイレントに一部データが欠落する仕様と判明。`NextToken`が返った場合に警告ログを出す防御コードを追加（2巡目のFableレビューで指摘）
 - pytestに`stats_handler`・メトリクス発火のテストを3件追加（計20件）。CFnスタック更新・Lambdaコードデプロイ・実際の`/api/suggest`呼び出しからstats.json反映までを本番で確認済み
 - 004ポートフォリオの`touring-app`プロジェクトページに新規`TouringStatsChart.astro`コンポーネントを追加し、`stats.json`をSSR時にfetchして累計呼び出し回数と日別バーチャートを公開表示（dataviz skillのガイドラインに準拠。日本語/英語両対応、stats.json未生成時は自動的にセクション非表示）。SSR毎回の外部fetchを避けるため5分TTLのメモリキャッシュ(`lib/touringStats.ts`)を追加し、スキーマ検証も強化。本番サイトでグラフ表示を確認済み
 - 構成図(`007_architecture.png`)にEventBridge Scheduler・統計集計Lambdaを追加

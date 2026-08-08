@@ -310,6 +310,11 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                # スケジュール名を完全一致させるとCreateSchedule時のassume role事前検証
+                # （スケジュールARNが未確定な時点で行われる）に失敗するため、
+                # defaultグループ単位のワイルドカードでconfused deputy対策を維持する
+                aws:SourceArn: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/*"
       Policies:
         - PolicyName: InvokeStatsLambda
           PolicyDocument:
