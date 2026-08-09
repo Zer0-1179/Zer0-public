@@ -66,18 +66,18 @@ def draw():
 
         # --- レーン2: LP事前登録(新規)  y=6.5 ---
         {'id': 'browser', 'icon': 'user',        'label': 'LP利用者\n(ブラウザ)',                 'x': 0.8,  'y': 6.5},
-        # S3(LP静的サイト)はregion枠上端寄り・ssm/cw列とlambda_wlの間の空きスペース
-        # に配置。'lambda'→'site'(GET収集)がy=12.0でregionの全幅(x=6.0〜24.5)を
-        # 横断しているため、2行ラベル(matplotlibのget_window_extent実測で
-        # 高さ約0.34、下端y≈13.36)がそれと交差しないy=14.3に置く(region上端を
-        # その分押し上げてある)。x=11.5はeb/lambda(x=4.2〜6.0)からアイコン矩形が
-        # 重ならない十分な距離。
-        {'id': 's3lp',    'icon': 's3',          'label': 'Amazon S3\nLP静的サイト',              'x': 11.5, 'y': 14.3},
+        # S3(LP静的サイト)はCloudFrontの真下(同じx=10.2)に配置し、cf→s3lpが
+        # 一直線の垂直線になるようにする(ユーザー指摘)。'lambda'→'site'
+        # (GET収集、y=12.0でregionの全幅を横断)と交差しないよう、2行ラベル
+        # (matplotlibのget_window_extent実測で高さ約0.34、下端y≈13.36)を
+        # その上に置けるy=14.3に置く(region上端をその分押し上げてある)。
+        {'id': 's3lp',    'icon': 's3',          'label': 'Amazon S3\nLP静的サイト',              'x': 10.2, 'y': 14.3},
         {'id': 'apigw',   'icon': 'api_gateway', 'label': 'Amazon API Gateway\n事前登録API',      'x': 9.5,  'y': 6.5},
-        # lambda_wl/lambda_sw(下記Stripe節)はapigwからの上下2トラックに分岐させ、
-        # ddb_wl/ses_outへの経路が互いの垂直線と交差しないよう縦にずらして配置する。
-        # apigwからの距離をほぼ揃え(上下対称寄り)、雑然と見えないよう整えてある。
-        {'id': 'lambda_wl','icon': 'lambda',     'label': 'AWS Lambda\nlp-waitlist',              'x': 13.0, 'y': 8.2},
+        # lambda_wlはapigw/ses_outと同じy=6.5に揃え、apigw→lambda_wl→ses_outが
+        # 一直線の水平線になるようにする(ユーザー指摘、直線の方がすっきり見える)。
+        # lambda_sw(下記Stripe節)はそのままだと同じ経路上で衝突するため、
+        # 下トラック(y=4.8)へ分離しapigwから迂回させてddb_wl/ses_outへ接続する。
+        {'id': 'lambda_wl','icon': 'lambda',     'label': 'AWS Lambda\nlp-waitlist',              'x': 13.0, 'y': 6.5},
         {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'Amazon DynamoDB\nlp-waitlist',         'x': 14.75,'y': 2.4},
 
         # --- エッジ/グローバルサービス(2026-08-09、region枠の外・AWS Cloud内) ---
@@ -124,11 +124,9 @@ def draw():
         # x=-0.3とは0.15離して並走)を通り、region枠の外(エッジ/グローバル
         # クラスター、y=17.1)まで直接立ち上げる。
         ('browser',   'cf',       'HTTPS', [(-0.45, 6.5), (-0.45, 18.5)]),
-        # cf→s3lpはエッジクラスター下端(y=16.2)とregion枠上端(y=15.0)の間の
-        # 隙間(y=15.6)を東西に通ってからs3lpへ下りる。s3lpをy=14.3に置いたのは、
-        # 'lambda'→'site'(GET収集、y=12.0でregion全幅を横断)とラベルごと
-        # 交差しないため。
-        ('cf',        's3lp',     '', [(10.2, 15.6), (11.5, 15.6)]),
+        # cf→s3lpはs3lpをcfと同じx=10.2に置いたことで迂回なしの一直線になる
+        # (ユーザー指摘)。
+        ('cf',        's3lp',     ''),
         # cf/acmをregion外へ退避させたことでy=6.5〜7.3が完全に空いたため、
         # browser→apigwは迂回なしの直線で引ける(2026-08-09に単純化)。
         ('browser',   'apigw',    '事前登録\nfetch'),
@@ -150,11 +148,11 @@ def draw():
         # apigw→lambda_sw(下トラック)はlambda_wl→ddb_wl/ses_out(上トラック)の
         # 経路と高さが重ならないよう、いったんddb_wlのラベル下端より低い専用帯
         # まで下りてから右へ進み、lambda_swへ合流する。matplotlibの実測テキスト
-        # 境界(get_window_extent)で確認したところ、ddb_wlの2行ラベルは
-        # y=1.459〜1.800。その下端から0.1余裕を取ったy=1.35を通す
-        # (s3mail/lambda_fw接続線y=1.0とは0.35離れており平行線として
-        # 視覚的に十分区別できる)。
-        ('apigw',     'lambda_sw','', [(10.3, 1.35), (16.5, 1.35)]),
+        # 境界(get_window_extent、ラベル描画時と同じ y-HALF-0.2 アンカーを使用)
+        # で確認したところ、ddb_wlの2行ラベルはy=1.308〜1.650。その下端から
+        # 0.1余裕を取ったy=1.2を通す(s3mail/lambda_fw接続線y=1.0とは0.2離れて
+        # おり平行線として視覚的に区別できる)。
+        ('apigw',     'lambda_sw','', [(10.3, 1.2), (16.5, 1.2)]),
         ('lambda_sw', 'ddb_wl',   ''),
         ('lambda_sw', 'ses_out',  ''),
     ]
