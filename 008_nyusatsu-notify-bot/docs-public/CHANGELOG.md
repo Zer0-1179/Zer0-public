@@ -4,6 +4,13 @@
 
 ## 2026-08-09
 
+### 構成図をAWS公式ベストプラクティスに準拠させる
+
+- ユーザー共有のAWS Summit Japan 2025セッション「AWS アーキテクチャ作図入門」（ソラコム松下氏）のチェックリストを参考に、`scripts/generate_diagram.py`を全面的に見直し
+- サービス名を正式名称に統一（「Lambda」→「AWS Lambda」、「SSM」→「AWS Systems Manager」、「SQS」→「Amazon SQS」、「ACM」→「AWS Certificate Manager」等）。ラベルは2行以内・単語途中で改行しないルールを徹底
+- 図全体を囲む「AWS Cloud」外枠（公式AWS Cloudロゴ付き）を新設し、ap-northeast-1リージョン枠をその内側に配置する2階層構造に変更
+- 併せて、EventBridgeノードがap-northeast-1枠からはみ出して配置されていた既存の座標ズレ（今回の見直しで発覚）も修正
+
 ### 構成図の線の交差を解消
 
 - ユーザーから構成図（`008_architecture.png`）の線が交差して見づらいと指摘を受け、`scripts/generate_diagram.py`のノード座標・経路を全面的に再設計

@@ -34,6 +34,7 @@ ICONS = {
     'api_gateway': f'{_SVC}/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64.png',
     'dynamodb':    f'{_SVC}/Arch_Database/64/Arch_Amazon-DynamoDB_64.png',
     'region':      f'{_GRP}/Region_32.png',
+    'aws_cloud_logo': f'{_GRP}/AWS-Cloud-logo_32.png',
 }
 
 _USER_PNG = os.path.join(_BASE, '..', '002_Zenn_Auto_Article_Bot', 'src', 'aws_icons', 'user.png')
@@ -54,44 +55,46 @@ def draw():
     # が存在しない右側の専用縦帯(x=19.5付近)を通って合流させる。
     nodes = [
         # --- レーン1: 収集Bot(既存)  y=12.0 ---
-        {'id': 'eb',      'icon': 'eventbridge', 'label': 'EventBridge\n毎日 6:00 JST',          'x': 2.0,  'y': 12.0},
-        {'id': 'lambda',  'icon': 'lambda',      'label': 'Lambda\ncollector',                   'x': 6.0,  'y': 12.0},
-        {'id': 'dlq',     'icon': 'sqs',         'label': 'SQS (DLQ)',                           'x': 6.0,  'y': 9.7},
-        {'id': 'ssm',     'icon': 'ssm',         'label': 'SSM\n設定値',                          'x': 9.5,  'y': 10.6},
-        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'CloudWatch\nLogs',                    'x': 9.5,  'y': 8.5},
+        # ebはap-northeast-1枠に収まるよう、レーン内の他ノードと3.5以上の間隔を
+        # 保ちつつ枠の左パディング分(区画x=3.3+パディング0.9)右へ寄せてある。
+        {'id': 'eb',      'icon': 'eventbridge', 'label': 'Amazon EventBridge\n毎日 6:00 JST',    'x': 4.2,  'y': 12.0},
+        {'id': 'lambda',  'icon': 'lambda',      'label': 'AWS Lambda\ncollector',                'x': 6.0,  'y': 12.0},
+        {'id': 'dlq',     'icon': 'sqs',         'label': 'Amazon SQS (DLQ)',                     'x': 6.0,  'y': 9.7},
+        {'id': 'ssm',     'icon': 'ssm',         'label': 'AWS Systems Manager\n設定値',           'x': 9.5,  'y': 10.6},
+        {'id': 'cw',      'icon': 'cloudwatch',  'label': 'Amazon CloudWatch\nLogs',              'x': 9.5,  'y': 8.5},
         {'id': 'site',    'icon': 'user',        'label': '横浜市 入札サイト\n(公開情報)',        'x': 24.5, 'y': 12.0},
 
         # --- レーン2: LP事前登録(新規)  y=6.5 ---
         {'id': 'browser', 'icon': 'user',        'label': 'LP利用者\n(ブラウザ)',                 'x': 0.8,  'y': 6.5},
-        {'id': 'cf',      'icon': 'cloudfront',  'label': 'CloudFront\nnyusatsu.zer0-infra.com',  'x': 5.0,  'y': 6.5},
-        {'id': 's3lp',    'icon': 's3',          'label': 'S3\nLP静的サイト',                     'x': 5.0,  'y': 4.2},
-        {'id': 'apigw',   'icon': 'api_gateway', 'label': 'API Gateway\n事前登録API',             'x': 9.5,  'y': 6.5},
+        {'id': 'cf',      'icon': 'cloudfront',  'label': 'Amazon CloudFront\nnyusatsu.zer0-infra.com', 'x': 5.0,  'y': 6.5},
+        {'id': 's3lp',    'icon': 's3',          'label': 'Amazon S3\nLP静的サイト',              'x': 5.0,  'y': 4.2},
+        {'id': 'apigw',   'icon': 'api_gateway', 'label': 'Amazon API Gateway\n事前登録API',      'x': 9.5,  'y': 6.5},
         # lambda_wl/lambda_sw(下記Stripe節)はapigwからの上下2トラックに分岐させ、
         # ddb_wl/ses_outへの経路が互いの垂直線と交差しないよう縦にずらして配置する。
-        {'id': 'lambda_wl','icon': 'lambda',     'label': 'Lambda\nlp-waitlist',                  'x': 13.2, 'y': 7.9},
-        {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'DynamoDB\nlp-waitlist',                'x': 14.4, 'y': 2.4},
+        {'id': 'lambda_wl','icon': 'lambda',     'label': 'AWS Lambda\nlp-waitlist',              'x': 13.2, 'y': 7.9},
+        {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'Amazon DynamoDB\nlp-waitlist',         'x': 14.4, 'y': 2.4},
         # CloudFront用ACM証明書はAWS仕様によりus-east-1リージョンで発行・管理
         # (スタック: zer0-nyusatsu-lp-cert)。図はap-northeast-1枠内に置くため、
         # 誤解を避けるようラベルにリージョンを明記する。
-        {'id': 'acm',     'icon': 'acm',         'label': 'ACM (us-east-1)\nSSL/TLS証明書',       'x': 8.8,  'y': 4.4},
+        {'id': 'acm',     'icon': 'acm',         'label': 'AWS Certificate Manager\n(us-east-1) SSL/TLS証明書', 'x': 8.8,  'y': 4.4},
 
         # --- レーン3: 問合せメール転送(新規)  y=1.0 ---
         {'id': 'inquirer','icon': 'user',        'label': '問合せ送信者\n(外部)',                 'x': 0.8,  'y': 1.0},
-        {'id': 'ses_in',  'icon': 'ses',         'label': 'SES 受信\nnyusatsu@zer0-infra.com',    'x': 5.0,  'y': 1.0},
-        {'id': 's3mail',  'icon': 's3',          'label': 'S3\n受信メール(一時)',                 'x': 9.5,  'y': 1.0},
+        {'id': 'ses_in',  'icon': 'ses',         'label': 'Amazon SES (受信)\nnyusatsu@zer0-infra.com', 'x': 5.0,  'y': 1.0},
+        {'id': 's3mail',  'icon': 's3',          'label': 'Amazon S3\n受信メール(一時)',          'x': 9.5,  'y': 1.0},
         # lambda_swのddb_wl向け迂回経路(y=1.7)と交差しないよう、mail-forwarderは
         # lambda_sw/ddb_wl列より右側(x=18.4)へ寄せる。
-        {'id': 'lambda_fw','icon': 'lambda',     'label': 'Lambda\nmail-forwarder',               'x': 18.4, 'y': 1.0},
+        {'id': 'lambda_fw','icon': 'lambda',     'label': 'AWS Lambda\nmail-forwarder',           'x': 18.4, 'y': 1.0},
 
         # --- 共有: SES送信・通知先(右端の専用縦帯) ---
-        {'id': 'ses_out', 'icon': 'ses',         'label': 'SES 送信\ninfo.zer0-infra.com',        'x': 20.5, 'y': 6.5},
+        {'id': 'ses_out', 'icon': 'ses',         'label': 'Amazon SES (送信)\ninfo.zer0-infra.com', 'x': 20.5, 'y': 6.5},
         {'id': 'recv',    'icon': 'user',        'label': '通知先/転送先\nメール',                'x': 24.5, 'y': 6.5},
 
         # --- Stripe Webhook突合(v0.19、新規)。既存のapigw/ddb_wl(レーン2)を共有し、
         # stripe自体は左側の外部クラスターにbrowser/inquirerと並べて配置、
         # lambda_swはapigwの下トラックとして、lambda_wl(上トラック)と対称に配置する。 ---
         {'id': 'stripe',    'icon': 'user',   'label': 'Stripe\n(決済)',         'x': 0.8,  'y': 3.75},
-        {'id': 'lambda_sw', 'icon': 'lambda', 'label': 'Lambda\nstripe-webhook', 'x': 15.6, 'y': 5.1},
+        {'id': 'lambda_sw', 'icon': 'lambda', 'label': 'AWS Lambda\nstripe-webhook', 'x': 15.6, 'y': 5.1},
     ]
 
     edges = [
@@ -140,9 +143,21 @@ def draw():
     ]
 
     clusters = [
+        # AWS Cloud全体を示す外枠(ソラコム松下氏のAWS Summit Japan 2025セッション
+        # 「AWS アーキテクチャ作図入門」のチェックリストに準拠。region枠の外側を
+        # 覆うだけの単純な外枠のため、ノード内包判定に基づく自動パディングの対象
+        # 外(region枠確定後の値を直接指定)にしている。
+        {
+            'label': 'AWS Cloud', 'icon': 'aws_cloud_logo',
+            'x': 2.95, 'y': -1.0, 'w': 19.5, 'h': 15.1,
+            'color': '#FFFFFF', 'edgecolor': '#879196',
+            'linestyle': '-', 'linewidth': 1.5,
+        },
         {
             'label': 'ap-northeast-1', 'icon': 'region',
-            'x': 3.6, 'y': -0.65, 'w': 18.5, 'h': 13.85,
+            # 左端をx=3.3に調整(旧値3.6)。ebノードがこの枠に収まるよう
+            # x=4.2へ配置し直したため、パディング0.9(旧ノードでは未収容だった)。
+            'x': 3.3, 'y': -0.65, 'w': 18.8, 'h': 13.85,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
             'linestyle': '-', 'linewidth': 2.0,
         },
@@ -178,9 +193,9 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
-    fig, ax = plt.subplots(figsize=(24, 13), dpi=150)
+    fig, ax = plt.subplots(figsize=(24, 14.1), dpi=150)
     ax.set_xlim(-1.2, 26.2)
-    ax.set_ylim(-1.2, 13.6)
+    ax.set_ylim(-1.5, 14.6)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')
