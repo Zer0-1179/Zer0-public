@@ -76,16 +76,17 @@ def draw():
         {'id': 'apigw',   'icon': 'api_gateway', 'label': 'Amazon API Gateway\n事前登録API',      'x': 9.5,  'y': 6.5},
         # lambda_wl/lambda_sw(下記Stripe節)はapigwからの上下2トラックに分岐させ、
         # ddb_wl/ses_outへの経路が互いの垂直線と交差しないよう縦にずらして配置する。
-        {'id': 'lambda_wl','icon': 'lambda',     'label': 'AWS Lambda\nlp-waitlist',              'x': 13.2, 'y': 7.9},
-        {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'Amazon DynamoDB\nlp-waitlist',         'x': 14.4, 'y': 2.4},
+        # apigwからの距離をほぼ揃え(上下対称寄り)、雑然と見えないよう整えてある。
+        {'id': 'lambda_wl','icon': 'lambda',     'label': 'AWS Lambda\nlp-waitlist',              'x': 13.0, 'y': 8.2},
+        {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'Amazon DynamoDB\nlp-waitlist',         'x': 14.75,'y': 2.4},
 
         # --- エッジ/グローバルサービス(2026-08-09、region枠の外・AWS Cloud内) ---
         # CloudFrontはグローバルサービス、ACMもCloudFront証明書はus-east-1発行のため
         # 両方ともap-northeast-1リージョンに属さない。AWS Cloud直下・region枠の外の
         # 専用クラスターに切り出し、region枠との二重内包(冗長)を解消する。
         # y座標はregion枠拡大後のギャップ(y=14.1〜14.8)を確保できる高さに設定。
-        {'id': 'acm', 'icon': 'acm',        'label': 'AWS Certificate Manager\n(us-east-1) SSL/TLS証明書', 'x': 6.0,  'y': 17.3},
-        {'id': 'cf',  'icon': 'cloudfront', 'label': 'Amazon CloudFront\nnyusatsu.zer0-infra.com',        'x': 10.2, 'y': 18.0},
+        {'id': 'acm', 'icon': 'acm',        'label': 'AWS Certificate Manager\n(us-east-1) SSL/TLS証明書', 'x': 6.0,  'y': 17.8},
+        {'id': 'cf',  'icon': 'cloudfront', 'label': 'Amazon CloudFront\nnyusatsu.zer0-infra.com',        'x': 10.2, 'y': 18.5},
 
         # --- レーン3: 問合せメール転送(新規)  y=1.0 ---
         {'id': 'inquirer','icon': 'user',        'label': '問合せ送信者\n(外部)',                 'x': 0.8,  'y': 1.0},
@@ -103,7 +104,7 @@ def draw():
         # stripe自体は左側の外部クラスターにbrowser/inquirerと並べて配置、
         # lambda_swはapigwの下トラックとして、lambda_wl(上トラック)と対称に配置する。 ---
         {'id': 'stripe',    'icon': 'user',   'label': 'Stripe\n(決済)',         'x': 0.8,  'y': 3.75},
-        {'id': 'lambda_sw', 'icon': 'lambda', 'label': 'AWS Lambda\nstripe-webhook', 'x': 15.6, 'y': 5.1},
+        {'id': 'lambda_sw', 'icon': 'lambda', 'label': 'AWS Lambda\nstripe-webhook', 'x': 16.5, 'y': 4.8},
     ]
 
     edges = [
@@ -122,12 +123,12 @@ def draw():
         # browser→cfは外部クラスター左端の専用縦帯(x=-0.45、stripe→apigwの
         # x=-0.3とは0.15離して並走)を通り、region枠の外(エッジ/グローバル
         # クラスター、y=17.1)まで直接立ち上げる。
-        ('browser',   'cf',       'HTTPS', [(-0.45, 6.5), (-0.45, 18.0)]),
-        # cf→s3lpはエッジクラスター下端(y=15.7)とregion枠上端(y=15.0)の間の
-        # 隙間(y=15.35)を東西に通ってからs3lpへ下りる。s3lpをy=14.3に置いたのは、
+        ('browser',   'cf',       'HTTPS', [(-0.45, 6.5), (-0.45, 18.5)]),
+        # cf→s3lpはエッジクラスター下端(y=16.2)とregion枠上端(y=15.0)の間の
+        # 隙間(y=15.6)を東西に通ってからs3lpへ下りる。s3lpをy=14.3に置いたのは、
         # 'lambda'→'site'(GET収集、y=12.0でregion全幅を横断)とラベルごと
         # 交差しないため。
-        ('cf',        's3lp',     '', [(10.2, 15.35), (11.5, 15.35)]),
+        ('cf',        's3lp',     '', [(10.2, 15.6), (11.5, 15.6)]),
         # cf/acmをregion外へ退避させたことでy=6.5〜7.3が完全に空いたため、
         # browser→apigwは迂回なしの直線で引ける(2026-08-09に単純化)。
         ('browser',   'apigw',    '事前登録\nfetch'),
@@ -153,7 +154,7 @@ def draw():
         # y=1.459〜1.800。その下端から0.1余裕を取ったy=1.35を通す
         # (s3mail/lambda_fw接続線y=1.0とは0.35離れており平行線として
         # 視覚的に十分区別できる)。
-        ('apigw',     'lambda_sw','', [(10.3, 1.35), (15.6, 1.35)]),
+        ('apigw',     'lambda_sw','', [(10.3, 1.35), (16.5, 1.35)]),
         ('lambda_sw', 'ddb_wl',   ''),
         ('lambda_sw', 'ses_out',  ''),
     ]
@@ -165,7 +166,7 @@ def draw():
         # の確定値をもとに手計算(auto-paddingの対象外)。
         {
             'label': 'AWS Cloud', 'icon': 'aws_cloud_logo',
-            'x': 2.95, 'y': -1.0, 'w': 19.5, 'h': 21.0,
+            'x': 2.95, 'y': -1.0, 'w': 19.5, 'h': 21.5,
             'color': '#FFFFFF', 'edgecolor': '#879196',
             'linestyle': '-', 'linewidth': 1.5,
         },
@@ -186,9 +187,13 @@ def draw():
         # 「リージョン/VPC/サブネット」のような公式グループアイコンが存在する
         # 概念ではないため、外部(非AWS)クラスターと同様アイコンなしとする
         # (ただしAWS所属を示すため水色系で外部クラスターの淡灰色と区別する)。
+        # 下端(y=16.2)とregion枠上端(y=15.0)の数値上の隙間は1.2だが、
+        # FancyBboxPatchのboxstyle='round,pad=0.15'により両クラスターとも
+        # 実際の描画は指定座標より0.15ずつ外側へ膨らむため、視覚的な隙間は
+        # 1.2-0.15-0.15=0.9(CLAUDE.mdの「0.8以上」を満たす最小限の計算)。
         {
             'label': 'エッジ/グローバルサービス', 'icon': None,
-            'x': 5.0, 'y': 15.7, 'w': 6.2, 'h': 3.4,
+            'x': 5.0, 'y': 16.2, 'w': 6.2, 'h': 3.4,
             'color': '#EAF4FB', 'edgecolor': '#8AAFCC',
             'linestyle': '-', 'linewidth': 2.0,
         },
@@ -224,9 +229,9 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
-    fig, ax = plt.subplots(figsize=(24, 19.3), dpi=150)
+    fig, ax = plt.subplots(figsize=(24, 19.7), dpi=150)
     ax.set_xlim(-1.2, 26.2)
-    ax.set_ylim(-1.5, 20.5)
+    ax.set_ylim(-1.5, 21.0)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')
