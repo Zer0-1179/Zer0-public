@@ -279,7 +279,13 @@ def draw():
                 fontsize=7.5, color='#4A7FA5', style='italic', zorder=6)
 
     node_map = {n['id']: n for n in nodes}
-    SHRINK = 42
+    # 矢印の始点はノードのアイコンではなく「ラベル文字から出ている」ように
+    # 見せたいため(2026-08-09、ユーザー指示)、出発側のshrinkAはアイコンの陰に
+    # 隠れる程度の最小値のみにする(アイコンはzorder=4で線のzorder=3より前面に
+    # あるため、アイコンの内側は自動的に隠れる)。到着側のshrinkBは矢頭を
+    # ノードの手前できれいに止めるため従来通り残す。
+    SHRINK_START = 3
+    SHRINK_END = 42
     for edge in edges:
         from_id, to_id = edge[0], edge[1]
         label = edge[2] if len(edge) > 2 else ''
@@ -294,8 +300,8 @@ def draw():
                 arrowprops=dict(
                     arrowstyle='->' if i == n_seg - 1 else '-',
                     color='#555555', lw=1.5,
-                    shrinkA=SHRINK if i == 0 else 0,
-                    shrinkB=SHRINK if i == n_seg - 1 else 0,
+                    shrinkA=SHRINK_START if i == 0 else 0,
+                    shrinkB=SHRINK_END if i == n_seg - 1 else 0,
                     connectionstyle='arc3,rad=0.0',
                 ),
                 zorder=3,
