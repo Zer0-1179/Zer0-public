@@ -301,10 +301,16 @@ def draw():
     # のまま残し、着信側(apigw→lambda_sw)を優先してラベル寄りにする。
     LABEL_START_EDGES = {('lambda', 'dlq'), ('cf', 's3lp'), ('lambda_wl', 'ddb_wl'), ('apigw', 'lambda_sw')}
     # ses_outは複数の接続が収束するノード。lambda_wl→ses_out(水平)・
-    # lambda_sw→ses_out(斜め)も、標準shrinkB=42だと矢頭がアイコン手前の
-    # 隙間で浮いていたため、mail-forwarderと同様に隙間を詰める(矢印の向き=
-    # xy(終点)/xytext(始点)の指定は変更しないため、向きはそのまま正しい)。
+    # lambda_sw→ses_out(斜め)は、標準shrinkB=42だと矢頭がアイコン手前の
+    # 隙間で浮いていたため隙間を詰める(矢印の向き=xy(終点)/xytext(始点)の
+    # 指定は変更しないため、向きはそのまま正しい)。
+    # 一方lambda_fw→ses_outはses_outの真下から近づくため、隙間を詰めすぎる
+    # (shrinkBを小さくしすぎる)とses_out自身のラベル文字(2行)をそのまま
+    # 突き抜けてしまう(2026-08-09、ユーザー指摘で発覚)。この接続だけは
+    # 「アイコン下端でちょうど止まる」shrinkB≈35pt(0.55データ単位相当)を
+    # 個別に使い、ラベルの手前で確実に止める。
     LABEL_END_EDGES = {('lambda_fw', 'ses_out'), ('apigw', 'lambda_sw'), ('lambda_wl', 'ses_out'), ('lambda_sw', 'ses_out')}
+    LABEL_END_SHRINK_OVERRIDE = {('lambda_fw', 'ses_out'): 35}
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     inv = ax.transData.inverted()
@@ -340,7 +346,8 @@ def draw():
         n_seg = len(pts) - 1
         for i in range(n_seg):
             shrink_a = (0 if use_label_start else SHRINK) if i == 0 else 0
-            shrink_b = (3 if use_label_end else SHRINK) if i == n_seg - 1 else 0
+            shrink_b_val = LABEL_END_SHRINK_OVERRIDE.get((from_id, to_id), 3)
+            shrink_b = (shrink_b_val if use_label_end else SHRINK) if i == n_seg - 1 else 0
             ax.annotate(
                 '', xy=pts[i + 1], xytext=pts[i],
                 arrowprops=dict(
