@@ -66,23 +66,32 @@ def draw():
 
         # --- レーン2: LP事前登録(新規)  y=6.5 ---
         {'id': 'browser', 'icon': 'user',        'label': 'LP利用者\n(ブラウザ)',                 'x': 0.8,  'y': 6.5},
-        {'id': 'cf',      'icon': 'cloudfront',  'label': 'Amazon CloudFront\nnyusatsu.zer0-infra.com', 'x': 5.0,  'y': 6.5},
-        {'id': 's3lp',    'icon': 's3',          'label': 'Amazon S3\nLP静的サイト',              'x': 5.0,  'y': 4.2},
+        # S3(LP静的サイト)はregion枠上端寄り・ssm/cw列とlambda_wlの間の空きスペース
+        # に配置。'lambda'→'site'(GET収集)がy=12.0でregionの全幅(x=6.0〜24.5)を
+        # 横断しているため、2行ラベル(matplotlibのget_window_extent実測で
+        # 高さ約0.34、下端y≈13.36)がそれと交差しないy=14.3に置く(region上端を
+        # その分押し上げてある)。x=11.5はeb/lambda(x=4.2〜6.0)からアイコン矩形が
+        # 重ならない十分な距離。
+        {'id': 's3lp',    'icon': 's3',          'label': 'Amazon S3\nLP静的サイト',              'x': 11.5, 'y': 14.3},
         {'id': 'apigw',   'icon': 'api_gateway', 'label': 'Amazon API Gateway\n事前登録API',      'x': 9.5,  'y': 6.5},
         # lambda_wl/lambda_sw(下記Stripe節)はapigwからの上下2トラックに分岐させ、
         # ddb_wl/ses_outへの経路が互いの垂直線と交差しないよう縦にずらして配置する。
         {'id': 'lambda_wl','icon': 'lambda',     'label': 'AWS Lambda\nlp-waitlist',              'x': 13.2, 'y': 7.9},
         {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'Amazon DynamoDB\nlp-waitlist',         'x': 14.4, 'y': 2.4},
-        # CloudFront用ACM証明書はAWS仕様によりus-east-1リージョンで発行・管理
-        # (スタック: zer0-nyusatsu-lp-cert)。図はap-northeast-1枠内に置くため、
-        # 誤解を避けるようラベルにリージョンを明記する。
-        {'id': 'acm',     'icon': 'acm',         'label': 'AWS Certificate Manager\n(us-east-1) SSL/TLS証明書', 'x': 8.8,  'y': 4.4},
+
+        # --- エッジ/グローバルサービス(2026-08-09、region枠の外・AWS Cloud内) ---
+        # CloudFrontはグローバルサービス、ACMもCloudFront証明書はus-east-1発行のため
+        # 両方ともap-northeast-1リージョンに属さない。AWS Cloud直下・region枠の外の
+        # 専用クラスターに切り出し、region枠との二重内包(冗長)を解消する。
+        # y座標はregion枠拡大後のギャップ(y=14.1〜14.8)を確保できる高さに設定。
+        {'id': 'acm', 'icon': 'acm',        'label': 'AWS Certificate Manager\n(us-east-1) SSL/TLS証明書', 'x': 6.0,  'y': 17.3},
+        {'id': 'cf',  'icon': 'cloudfront', 'label': 'Amazon CloudFront\nnyusatsu.zer0-infra.com',        'x': 10.2, 'y': 18.0},
 
         # --- レーン3: 問合せメール転送(新規)  y=1.0 ---
         {'id': 'inquirer','icon': 'user',        'label': '問合せ送信者\n(外部)',                 'x': 0.8,  'y': 1.0},
         {'id': 'ses_in',  'icon': 'ses',         'label': 'Amazon SES (受信)\nnyusatsu@zer0-infra.com', 'x': 5.0,  'y': 1.0},
         {'id': 's3mail',  'icon': 's3',          'label': 'Amazon S3\n受信メール(一時)',          'x': 9.5,  'y': 1.0},
-        # lambda_swのddb_wl向け迂回経路(y=1.7)と交差しないよう、mail-forwarderは
+        # lambda_swのddb_wl向け迂回経路(y=1.35)と交差しないよう、mail-forwarderは
         # lambda_sw/ddb_wl列より右側(x=18.4)へ寄せる。
         {'id': 'lambda_fw','icon': 'lambda',     'label': 'AWS Lambda\nmail-forwarder',           'x': 18.4, 'y': 1.0},
 
@@ -110,15 +119,21 @@ def draw():
         # 「設定取得」エッジラベル(x≈7.5〜8.0, 上端y≈11.6)への重なりを回避するため。
         ('lambda',    'ses_out',  '', [(8.6, 11.6), (20.5, 11.6)]),
 
-        ('browser',   'cf',       'HTTPS'),
-        ('cf',        's3lp',     ''),
-        # cfアイコン(x=5.0,y=6.5)を貫通しないよう、上方(y=7.3)を迂回する。
-        ('browser',   'apigw',    '事前登録\nfetch', [(2.0, 7.3), (8.2, 7.3)]),
+        # browser→cfは外部クラスター左端の専用縦帯(x=-0.45、stripe→apigwの
+        # x=-0.3とは0.15離して並走)を通り、region枠の外(エッジ/グローバル
+        # クラスター、y=17.1)まで直接立ち上げる。
+        ('browser',   'cf',       'HTTPS', [(-0.45, 6.5), (-0.45, 18.0)]),
+        # cf→s3lpはエッジクラスター下端(y=15.7)とregion枠上端(y=15.0)の間の
+        # 隙間(y=15.35)を東西に通ってからs3lpへ下りる。s3lpをy=14.3に置いたのは、
+        # 'lambda'→'site'(GET収集、y=12.0でregion全幅を横断)とラベルごと
+        # 交差しないため。
+        ('cf',        's3lp',     '', [(10.2, 15.35), (11.5, 15.35)]),
+        # cf/acmをregion外へ退避させたことでy=6.5〜7.3が完全に空いたため、
+        # browser→apigwは迂回なしの直線で引ける(2026-08-09に単純化)。
+        ('browser',   'apigw',    '事前登録\nfetch'),
         ('apigw',     'lambda_wl',''),
         ('lambda_wl', 'ddb_wl',   ''),
         ('lambda_wl', 'ses_out',  '登録通知'),
-        # ACM証明書をCloudFrontが利用。cfの上方はbrowser→apigw迂回帯(y=7.3)で
-        # 塞がっているため、交差ゼロで直線が引ける右下方向から接続する。
         ('acm',       'cf',       '証明書'),
 
         ('inquirer',  'ses_in',   'メール送信'),
@@ -128,28 +143,29 @@ def draw():
 
         ('ses_out',   'recv',     ''),
 
-        # Stripe Webhook突合(v0.19)。stripe→apigwは左側外部クラスター内(x=-0.3)を
-        # 通り、y=7.6の帯を東進する。cw(CloudWatch Logs)のラベル文字(x=8.97〜10.11)
-        # の手前x=8.2で折れてapigwへ斜めに降りることで、ラベル帯(y≈7.25〜7.60)を
-        # 通過する前に十分低い高度まで下げ、ラベルを踏まないようにする
-        # (browser→apigw迂回帯と同じ手口)。
-        ('stripe',    'apigw',    '', [(-0.3, 3.75), (-0.3, 7.6), (8.2, 7.6)]),
+        # Stripe Webhook突合(v0.19)。cf/acm退避でy=3.75〜6.5の経路も空いたため、
+        # stripe→apigwは迂回なしの直線で引ける(2026-08-09に単純化)。
+        ('stripe',    'apigw',    ''),
         # apigw→lambda_sw(下トラック)はlambda_wl→ddb_wl/ses_out(上トラック)の
-        # 経路と高さが重ならないよう、いったんlane3(問合せ転送、y=1.0)より下の
-        # y=1.7専用帯まで下りてから右へ進み、lambda_swへ合流する。
-        ('apigw',     'lambda_sw','', [(9.9, 1.7), (15.6, 1.7)]),
+        # 経路と高さが重ならないよう、いったんddb_wlのラベル下端より低い専用帯
+        # まで下りてから右へ進み、lambda_swへ合流する。matplotlibの実測テキスト
+        # 境界(get_window_extent)で確認したところ、ddb_wlの2行ラベルは
+        # y=1.459〜1.800。その下端から0.1余裕を取ったy=1.35を通す
+        # (s3mail/lambda_fw接続線y=1.0とは0.35離れており平行線として
+        # 視覚的に十分区別できる)。
+        ('apigw',     'lambda_sw','', [(10.3, 1.35), (15.6, 1.35)]),
         ('lambda_sw', 'ddb_wl',   ''),
         ('lambda_sw', 'ses_out',  ''),
     ]
 
     clusters = [
         # AWS Cloud全体を示す外枠(ソラコム松下氏のAWS Summit Japan 2025セッション
-        # 「AWS アーキテクチャ作図入門」のチェックリストに準拠。region枠の外側を
-        # 覆うだけの単純な外枠のため、ノード内包判定に基づく自動パディングの対象
-        # 外(region枠確定後の値を直接指定)にしている。
+        # 「AWS アーキテクチャ作図入門」のチェックリストに準拠)。region枠と
+        # エッジ/グローバルクラスターの両方を覆う。座標はこの2つの内側クラスター
+        # の確定値をもとに手計算(auto-paddingの対象外)。
         {
             'label': 'AWS Cloud', 'icon': 'aws_cloud_logo',
-            'x': 2.95, 'y': -1.0, 'w': 19.5, 'h': 15.1,
+            'x': 2.95, 'y': -1.0, 'w': 19.5, 'h': 21.0,
             'color': '#FFFFFF', 'edgecolor': '#879196',
             'linestyle': '-', 'linewidth': 1.5,
         },
@@ -157,8 +173,23 @@ def draw():
             'label': 'ap-northeast-1', 'icon': 'region',
             # 左端をx=3.3に調整(旧値3.6)。ebノードがこの枠に収まるよう
             # x=4.2へ配置し直したため、パディング0.9(旧ノードでは未収容だった)。
-            'x': 3.3, 'y': -0.65, 'w': 18.8, 'h': 13.85,
+            # 上端をy=15.0まで拡大。s3lp(y=14.3)の2行ラベル(実測高さ約0.34)を
+            # 'lambda'→'site'(GET収集、y=12.0で全幅横断)と交差しない高さに
+            # 置くための拡張。
+            'x': 3.3, 'y': -0.65, 'w': 18.8, 'h': 15.65,
             'color': '#F0F7EE', 'edgecolor': '#6BAE75',
+            'linestyle': '-', 'linewidth': 2.0,
+        },
+        # エッジ/グローバルサービス(2026-08-09新設)。CloudFront・ACM(us-east-1)は
+        # 特定リージョンに属さないため、ap-northeast-1枠の外・AWS Cloud内に
+        # 独立クラスターとして配置し、region枠との二重内包(冗長)を解消する。
+        # 「リージョン/VPC/サブネット」のような公式グループアイコンが存在する
+        # 概念ではないため、外部(非AWS)クラスターと同様アイコンなしとする
+        # (ただしAWS所属を示すため水色系で外部クラスターの淡灰色と区別する)。
+        {
+            'label': 'エッジ/グローバルサービス', 'icon': None,
+            'x': 5.0, 'y': 15.7, 'w': 6.2, 'h': 3.4,
+            'color': '#EAF4FB', 'edgecolor': '#8AAFCC',
             'linestyle': '-', 'linewidth': 2.0,
         },
         {
@@ -193,9 +224,9 @@ def draw():
             if ny - cl['y'] < _PAD_BOT:
                 d = _PAD_BOT - (ny - cl['y']); cl['y'] -= d; cl['h'] += d
 
-    fig, ax = plt.subplots(figsize=(24, 14.1), dpi=150)
+    fig, ax = plt.subplots(figsize=(24, 19.3), dpi=150)
     ax.set_xlim(-1.2, 26.2)
-    ax.set_ylim(-1.5, 14.6)
+    ax.set_ylim(-1.5, 20.5)
     ax.set_aspect('equal')
     ax.axis('off')
     fig.patch.set_facecolor('white')

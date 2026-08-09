@@ -10,6 +10,8 @@
 - サービス名を正式名称に統一（「Lambda」→「AWS Lambda」、「SSM」→「AWS Systems Manager」、「SQS」→「Amazon SQS」、「ACM」→「AWS Certificate Manager」等）。ラベルは2行以内・単語途中で改行しないルールを徹底
 - 図全体を囲む「AWS Cloud」外枠（公式AWS Cloudロゴ付き）を新設し、ap-northeast-1リージョン枠をその内側に配置する2階層構造に変更
 - 併せて、EventBridgeノードがap-northeast-1枠からはみ出して配置されていた既存の座標ズレ（今回の見直しで発覚）も修正
+- ユーザー指摘を受け、AWS Cloud・ap-northeast-1の二重内包が実質冗長（両クラスターの内包ノードが完全一致）だった点を是正。CloudFront・ACM（us-east-1発行）はリージョンに属さないグローバル/エッジサービスのため、region枠の外・AWS Cloud内に「エッジ/グローバルサービス」クラスターとして独立させ、region枠との境界を越える接続だけがまたぐ構成に変更
+- 上記の再配置に伴い、S3(LP静的サイト)がEventBridge/Lambdaと矩形重なりを起こす配置ミスを検出・修正。さらに矢印がノードラベルの文字にかぶる問題（ユーザー指摘）を受け、matplotlibの`get_window_extent`でラベルの実測境界を取得し、全経路がラベル文字と交差しない座標になるまで調整
 
 ### 構成図の線の交差を解消
 
