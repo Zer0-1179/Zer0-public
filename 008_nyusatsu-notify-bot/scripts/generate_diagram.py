@@ -66,8 +66,10 @@ def draw():
         {'id': 'cf',      'icon': 'cloudfront',  'label': 'CloudFront\nnyusatsu.zer0-infra.com',  'x': 5.0,  'y': 6.5},
         {'id': 's3lp',    'icon': 's3',          'label': 'S3\nLP静的サイト',                     'x': 5.0,  'y': 4.2},
         {'id': 'apigw',   'icon': 'api_gateway', 'label': 'API Gateway\n事前登録API',             'x': 9.5,  'y': 6.5},
-        {'id': 'lambda_wl','icon': 'lambda',     'label': 'Lambda\nlp-waitlist',                  'x': 13.5, 'y': 6.5},
-        {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'DynamoDB\nlp-waitlist',                'x': 13.5, 'y': 3.8},
+        # lambda_wl/lambda_sw(下記Stripe節)はapigwからの上下2トラックに分岐させ、
+        # ddb_wl/ses_outへの経路が互いの垂直線と交差しないよう縦にずらして配置する。
+        {'id': 'lambda_wl','icon': 'lambda',     'label': 'Lambda\nlp-waitlist',                  'x': 13.2, 'y': 7.9},
+        {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'DynamoDB\nlp-waitlist',                'x': 14.4, 'y': 2.4},
         # CloudFront用ACM証明書はAWS仕様によりus-east-1リージョンで発行・管理
         # (スタック: zer0-nyusatsu-lp-cert)。図はap-northeast-1枠内に置くため、
         # 誤解を避けるようラベルにリージョンを明記する。
@@ -77,7 +79,9 @@ def draw():
         {'id': 'inquirer','icon': 'user',        'label': '問合せ送信者\n(外部)',                 'x': 0.8,  'y': 1.0},
         {'id': 'ses_in',  'icon': 'ses',         'label': 'SES 受信\nnyusatsu@zer0-infra.com',    'x': 5.0,  'y': 1.0},
         {'id': 's3mail',  'icon': 's3',          'label': 'S3\n受信メール(一時)',                 'x': 9.5,  'y': 1.0},
-        {'id': 'lambda_fw','icon': 'lambda',     'label': 'Lambda\nmail-forwarder',               'x': 13.5, 'y': 1.0},
+        # lambda_swのddb_wl向け迂回経路(y=1.7)と交差しないよう、mail-forwarderは
+        # lambda_sw/ddb_wl列より右側(x=18.4)へ寄せる。
+        {'id': 'lambda_fw','icon': 'lambda',     'label': 'Lambda\nmail-forwarder',               'x': 18.4, 'y': 1.0},
 
         # --- 共有: SES送信・通知先(右端の専用縦帯) ---
         {'id': 'ses_out', 'icon': 'ses',         'label': 'SES 送信\ninfo.zer0-infra.com',        'x': 20.5, 'y': 6.5},
@@ -85,9 +89,9 @@ def draw():
 
         # --- Stripe Webhook突合(v0.19、新規)。既存のapigw/ddb_wl(レーン2)を共有し、
         # stripe自体は左側の外部クラスターにbrowser/inquirerと並べて配置、
-        # lambda_swは collector レーンと LP レーンの間の空きスペース(x=17.5)に置く ---
+        # lambda_swはapigwの下トラックとして、lambda_wl(上トラック)と対称に配置する。 ---
         {'id': 'stripe',    'icon': 'user',   'label': 'Stripe\n(決済)',         'x': 0.8,  'y': 3.75},
-        {'id': 'lambda_sw', 'icon': 'lambda', 'label': 'Lambda\nstripe-webhook', 'x': 17.5, 'y': 9.2},
+        {'id': 'lambda_sw', 'icon': 'lambda', 'label': 'Lambda\nstripe-webhook', 'x': 15.6, 'y': 5.1},
     ]
 
     edges = [
@@ -106,7 +110,7 @@ def draw():
         ('browser',   'cf',       'HTTPS'),
         ('cf',        's3lp',     ''),
         # cfアイコン(x=5.0,y=6.5)を貫通しないよう、上方(y=7.3)を迂回する。
-        ('browser',   'apigw',    '事前登録\nfetch', [(2.0, 7.3), (8.0, 7.3)]),
+        ('browser',   'apigw',    '事前登録\nfetch', [(2.0, 7.3), (8.2, 7.3)]),
         ('apigw',     'lambda_wl',''),
         ('lambda_wl', 'ddb_wl',   ''),
         ('lambda_wl', 'ses_out',  '登録通知'),
@@ -122,13 +126,16 @@ def draw():
         ('ses_out',   'recv',     ''),
 
         # Stripe Webhook突合(v0.19)。stripe→apigwは左側外部クラスター内(x=-0.3)を
-        # 通ってcf/cw等のアイコン・ラベルを避けてから右上のapigwへ合流する。
-        ('stripe',    'apigw',    '', [(-0.3, 3.75), (-0.3, 7.2), (9.5, 7.2)]),
-        ('apigw',     'lambda_sw',''),
-        # lambda_sw→ddb_wlはlambda_wl→ses_out(y=6.5)の水平線を避けるため、
-        # 一度y=5.3まで下りてから左へ移動する。最終区間はlambda_wl→ddb_wlの
-        # 既存の垂直線(x=13.5)と完全に重ならないよう、x=14.3から斜めに合流させる。
-        ('lambda_sw', 'ddb_wl',   '', [(17.5, 5.3), (14.3, 5.3)]),
+        # 通り、y=7.6の帯を東進する。cw(CloudWatch Logs)のラベル文字(x=8.97〜10.11)
+        # の手前x=8.2で折れてapigwへ斜めに降りることで、ラベル帯(y≈7.25〜7.60)を
+        # 通過する前に十分低い高度まで下げ、ラベルを踏まないようにする
+        # (browser→apigw迂回帯と同じ手口)。
+        ('stripe',    'apigw',    '', [(-0.3, 3.75), (-0.3, 7.6), (8.2, 7.6)]),
+        # apigw→lambda_sw(下トラック)はlambda_wl→ddb_wl/ses_out(上トラック)の
+        # 経路と高さが重ならないよう、いったんlane3(問合せ転送、y=1.0)より下の
+        # y=1.7専用帯まで下りてから右へ進み、lambda_swへ合流する。
+        ('apigw',     'lambda_sw','', [(9.9, 1.7), (15.6, 1.7)]),
+        ('lambda_sw', 'ddb_wl',   ''),
         ('lambda_sw', 'ses_out',  ''),
     ]
 

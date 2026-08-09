@@ -4,6 +4,13 @@
 
 ## 2026-08-09
 
+### 構成図の線の交差を解消
+
+- ユーザーから構成図（`008_architecture.png`）の線が交差して見づらいと指摘を受け、`scripts/generate_diagram.py`のノード座標・経路を全面的に再設計
+- 主な問題は、Stripe Webhook用Lambda（stripe-webhook）まわりの3本の斜線（apigw→lambda_sw、lambda_sw→DynamoDB、lambda_sw→SES送信）が既存のlp-waitlist系統の線と複数箇所で交差していたこと。加えてStripe→API Gatewayの迂回線がCloudWatch Logsのラベル文字を貫通していたことも判明
+- 全エッジの線分交差・アイコン近接をPythonスクリプトで機械的に検証するチェッカーを作成し、交差ゼロ・アイコン/ラベル非接触になるまで座標を反復調整（lp-waitlist系統を上トラック、stripe-webhook系統を下トラックに分離し、それぞれDynamoDB・SES送信への経路を迂回させる設計に変更）
+- 変更はドキュメント用画像のみでAWSリソースの変更を伴わないため、AWSデプロイ・pytestは対象外
+
 ### Lambdaランタイムのバージョン統一
 
 - 全Lambda関数のPythonランタイムがpython3.13とpython3.14で混在していたため、最新のpython3.14に統一
