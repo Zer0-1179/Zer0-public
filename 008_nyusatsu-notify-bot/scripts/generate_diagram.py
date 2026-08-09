@@ -290,8 +290,17 @@ def draw():
     #   lambda_fw→ses_outはses_outの真下から近づくため、標準shrinkB=42だと
     #   矢頭がアイコン下端とラベル上端の間の隙間で浮いてしまっていた)。
     #   shrinkBを縮小し、アイコンの陰(zorderが線より前面)で自然に隠れる形にする。
-    LABEL_START_EDGES = {('lambda', 'dlq'), ('cf', 's3lp'), ('lambda_wl', 'ddb_wl'), ('lambda_sw', 'ddb_wl')}
-    LABEL_END_EDGES = {('lambda_fw', 'ses_out')}
+    # waypoint経由の接続は「waypointを含めた最初/最後の区間」で判定する必要が
+    # あり、apigw→lambda_swは出発直後(apigw自身)・到着直前(lambda_sw自身)の
+    # 両方でラベルを貫通していた(直線判定のみのチェックで見落としていた分、
+    # 2026-08-09に追加)。
+    # lambda_swは apigw→lambda_sw(着信、真下から)と lambda_sw→ddb_wl(発信、
+    # 同じく真下寄り)の両方が同じノードの直下corridorを使うため、両方を
+    # ラベル起点にすると線同士が重なってしまう。lambda_sw→ddb_wlは自ラベルの
+    # 境界をわずかに掠める程度(ボーダーライン)だったため、こちらはアイコン基準
+    # のまま残し、着信側(apigw→lambda_sw)を優先してラベル寄りにする。
+    LABEL_START_EDGES = {('lambda', 'dlq'), ('cf', 's3lp'), ('lambda_wl', 'ddb_wl'), ('apigw', 'lambda_sw')}
+    LABEL_END_EDGES = {('lambda_fw', 'ses_out'), ('apigw', 'lambda_sw')}
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     inv = ax.transData.inverted()
