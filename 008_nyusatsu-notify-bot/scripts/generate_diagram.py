@@ -300,7 +300,11 @@ def draw():
     # 境界をわずかに掠める程度(ボーダーライン)だったため、こちらはアイコン基準
     # のまま残し、着信側(apigw→lambda_sw)を優先してラベル寄りにする。
     LABEL_START_EDGES = {('lambda', 'dlq'), ('cf', 's3lp'), ('lambda_wl', 'ddb_wl'), ('apigw', 'lambda_sw')}
-    LABEL_END_EDGES = {('lambda_fw', 'ses_out'), ('apigw', 'lambda_sw')}
+    # ses_outは複数の接続が収束するノード。lambda_wl→ses_out(水平)・
+    # lambda_sw→ses_out(斜め)も、標準shrinkB=42だと矢頭がアイコン手前の
+    # 隙間で浮いていたため、mail-forwarderと同様に隙間を詰める(矢印の向き=
+    # xy(終点)/xytext(始点)の指定は変更しないため、向きはそのまま正しい)。
+    LABEL_END_EDGES = {('lambda_fw', 'ses_out'), ('apigw', 'lambda_sw'), ('lambda_wl', 'ses_out'), ('lambda_sw', 'ses_out')}
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     inv = ax.transData.inverted()
