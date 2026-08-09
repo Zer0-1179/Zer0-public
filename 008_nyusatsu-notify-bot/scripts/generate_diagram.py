@@ -53,10 +53,18 @@ def draw():
     # 3本の独立した横方向レーン(収集Bot/LP事前登録/問合せ転送)を縦に並べ、
     # 各レーンのLambdaから共有のSES送信ノード(ses_out)へは、他レーンのノード
     # が存在しない右側の専用縦帯(x=19.5付近)を通って合流させる。
+    # --- 配置グリッド(2026-08-09、ユーザー指摘によるルール化) ---
+    # 横方向は水平間隔3.5(CLAUDE.md規定の最低値)刻みのグリッドに統一し、
+    # 既存の縦列(ssm/cw/apigw/s3mail、x=9.5)を基準点にする:
+    #   GRID = {..., 6.0, 9.5, 13.0, 16.5, 20.0, ...}  (各差分=3.5)
+    # acm/lambda(collector)はGRID[6.0]、ssm/cw/apigw/s3mail/cf/s3lpはGRID[9.5]、
+    # lambda_wlはGRID[13.0]、lambda_swはGRID[16.5]、ses_out/lambda_fwはGRID[20.0]
+    # に統一。ebのみap-northeast-1枠の左パディング制約(枠x=3.3+パディング0.9)で
+    # グリッドに乗せられない例外(詳細は配置コメント参照)。
+    # ddb_wl(14.75)はlambda_wl/lambda_swの中間点で、両者からの距離を揃えるための
+    # 意図的な非グリッド配置。
     nodes = [
         # --- レーン1: 収集Bot(既存)  y=12.0 ---
-        # ebはap-northeast-1枠に収まるよう、レーン内の他ノードと3.5以上の間隔を
-        # 保ちつつ枠の左パディング分(区画x=3.3+パディング0.9)右へ寄せてある。
         {'id': 'eb',      'icon': 'eventbridge', 'label': 'Amazon EventBridge\n毎日 6:00 JST',    'x': 4.2,  'y': 12.0},
         {'id': 'lambda',  'icon': 'lambda',      'label': 'AWS Lambda\ncollector',                'x': 6.0,  'y': 12.0},
         {'id': 'dlq',     'icon': 'sqs',         'label': 'Amazon SQS (DLQ)',                     'x': 6.0,  'y': 9.7},
@@ -66,17 +74,17 @@ def draw():
 
         # --- レーン2: LP事前登録(新規)  y=6.5 ---
         {'id': 'browser', 'icon': 'user',        'label': 'LP利用者\n(ブラウザ)',                 'x': 0.8,  'y': 6.5},
-        # S3(LP静的サイト)はCloudFrontの真下(同じx=10.2)に配置し、cf→s3lpが
-        # 一直線の垂直線になるようにする(ユーザー指摘)。'lambda'→'site'
-        # (GET収集、y=12.0でregionの全幅を横断)と交差しないよう、2行ラベル
-        # (matplotlibのget_window_extent実測で高さ約0.34、下端y≈13.36)を
-        # その上に置けるy=14.3に置く(region上端をその分押し上げてある)。
-        {'id': 's3lp',    'icon': 's3',          'label': 'Amazon S3\nLP静的サイト',              'x': 10.2, 'y': 14.3},
+        # S3はCloudFrontの真下・ssm/cw/apigw/s3mailと同じグリッド列(x=9.5)に配置し、
+        # cf→s3lpが一直線の垂直線になるようにする。'lambda'→'site'(GET収集、
+        # y=12.0でregionの全幅を横断)と交差しないよう、2行ラベル(matplotlibの
+        # get_window_extent実測で高さ約0.34、下端y≈13.36)がその上に来るy=14.3に
+        # 置く(region上端をその分押し上げてある)。
+        {'id': 's3lp',    'icon': 's3',          'label': 'Amazon S3\nLP静的サイト',              'x': 9.5,  'y': 14.3},
         {'id': 'apigw',   'icon': 'api_gateway', 'label': 'Amazon API Gateway\n事前登録API',      'x': 9.5,  'y': 6.5},
         # lambda_wlはapigw/ses_outと同じy=6.5に揃え、apigw→lambda_wl→ses_outが
-        # 一直線の水平線になるようにする(ユーザー指摘、直線の方がすっきり見える)。
-        # lambda_sw(下記Stripe節)はそのままだと同じ経路上で衝突するため、
-        # 下トラック(y=4.8)へ分離しapigwから迂回させてddb_wl/ses_outへ接続する。
+        # 一直線の水平線になるようにする。lambda_sw(下記Stripe節)はそのままだと
+        # 同じ経路上で衝突するため、下トラック(y=4.8)へ分離しapigwから迂回させて
+        # ddb_wl/ses_outへ接続する。
         {'id': 'lambda_wl','icon': 'lambda',     'label': 'AWS Lambda\nlp-waitlist',              'x': 13.0, 'y': 6.5},
         {'id': 'ddb_wl',  'icon': 'dynamodb',    'label': 'Amazon DynamoDB\nlp-waitlist',         'x': 14.75,'y': 2.4},
 
@@ -84,20 +92,21 @@ def draw():
         # CloudFrontはグローバルサービス、ACMもCloudFront証明書はus-east-1発行のため
         # 両方ともap-northeast-1リージョンに属さない。AWS Cloud直下・region枠の外の
         # 専用クラスターに切り出し、region枠との二重内包(冗長)を解消する。
-        # y座標はregion枠拡大後のギャップ(y=14.1〜14.8)を確保できる高さに設定。
+        # acmはlambda(collector)と同じグリッド列(x=6.0)、cfはssm/cw/apigw等と
+        # 同じ列(x=9.5、グリッド間隔3.5)に統一。
         {'id': 'acm', 'icon': 'acm',        'label': 'AWS Certificate Manager\n(us-east-1) SSL/TLS証明書', 'x': 6.0,  'y': 17.8},
-        {'id': 'cf',  'icon': 'cloudfront', 'label': 'Amazon CloudFront\nnyusatsu.zer0-infra.com',        'x': 10.2, 'y': 18.5},
+        {'id': 'cf',  'icon': 'cloudfront', 'label': 'Amazon CloudFront\nnyusatsu.zer0-infra.com',        'x': 9.5,  'y': 18.5},
 
         # --- レーン3: 問合せメール転送(新規)  y=1.0 ---
         {'id': 'inquirer','icon': 'user',        'label': '問合せ送信者\n(外部)',                 'x': 0.8,  'y': 1.0},
         {'id': 'ses_in',  'icon': 'ses',         'label': 'Amazon SES (受信)\nnyusatsu@zer0-infra.com', 'x': 5.0,  'y': 1.0},
         {'id': 's3mail',  'icon': 's3',          'label': 'Amazon S3\n受信メール(一時)',          'x': 9.5,  'y': 1.0},
-        # lambda_swのddb_wl向け迂回経路(y=1.35)と交差しないよう、mail-forwarderは
-        # lambda_sw/ddb_wl列より右側(x=18.4)へ寄せる。
-        {'id': 'lambda_fw','icon': 'lambda',     'label': 'AWS Lambda\nmail-forwarder',           'x': 18.4, 'y': 1.0},
+        # mail-forwarderはses_outと同じグリッド列(x=20.0)に揃え、
+        # lambda_fw→ses_outが一直線の垂直線になるようにする。
+        {'id': 'lambda_fw','icon': 'lambda',     'label': 'AWS Lambda\nmail-forwarder',           'x': 20.0, 'y': 1.0},
 
         # --- 共有: SES送信・通知先(右端の専用縦帯) ---
-        {'id': 'ses_out', 'icon': 'ses',         'label': 'Amazon SES (送信)\ninfo.zer0-infra.com', 'x': 20.5, 'y': 6.5},
+        {'id': 'ses_out', 'icon': 'ses',         'label': 'Amazon SES (送信)\ninfo.zer0-infra.com', 'x': 20.0, 'y': 6.5},
         {'id': 'recv',    'icon': 'user',        'label': '通知先/転送先\nメール',                'x': 24.5, 'y': 6.5},
 
         # --- Stripe Webhook突合(v0.19、新規)。既存のapigw/ddb_wl(レーン2)を共有し、
@@ -113,19 +122,19 @@ def draw():
         ('lambda',    'ssm',      '設定取得'),
         ('lambda',    'cw',       ''),
         ('lambda',    'dlq',      ''),
-        # ssm/cw列(x=9.5)とlambda_wl(x=13.5)を避けるため、GET収集線(y=12.0)の
+        # ssm/cw列(x=9.5)とlambda_wl(x=13.0)を避けるため、GET収集線(y=12.0)の
         # 下側・ssmアイコン上端(y=11.15)の上側の専用帯(y=11.6)を通り、
-        # ses_out直上(x=20.5)から下りる迂回ルートを取る(直線区間のみで構成)。
+        # ses_out直上(x=20.0)から下りる迂回ルートを取る(直線区間のみで構成)。
         # 第1区間の終点x=8.6は、lambda→ssm斜め線(y=11.6上でx=7.0)との交差、および
         # 「設定取得」エッジラベル(x≈7.5〜8.0, 上端y≈11.6)への重なりを回避するため。
-        ('lambda',    'ses_out',  '', [(8.6, 11.6), (20.5, 11.6)]),
+        ('lambda',    'ses_out',  '', [(8.6, 11.6), (20.0, 11.6)]),
 
         # browser→cfは外部クラスター左端の専用縦帯(x=-0.45、stripe→apigwの
         # x=-0.3とは0.15離して並走)を通り、region枠の外(エッジ/グローバル
-        # クラスター、y=17.1)まで直接立ち上げる。
+        # クラスター、y=18.5)まで直接立ち上げる。
         ('browser',   'cf',       'HTTPS', [(-0.45, 6.5), (-0.45, 18.5)]),
-        # cf→s3lpはs3lpをcfと同じx=10.2に置いたことで迂回なしの一直線になる
-        # (ユーザー指摘)。
+        # cf→s3lpはs3lpをcfと同じグリッド列(x=9.5)に置いたことで
+        # 迂回なしの一直線になる(ユーザー指摘)。
         ('cf',        's3lp',     ''),
         # cf/acmをregion外へ退避させたことでy=6.5〜7.3が完全に空いたため、
         # browser→apigwは迂回なしの直線で引ける(2026-08-09に単純化)。
