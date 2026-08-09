@@ -279,20 +279,44 @@ def draw():
                 fontsize=7.5, color='#4A7FA5', style='italic', zorder=6)
 
     node_map = {n['id']: n for n in nodes}
-    # 矢印の始点はノードのアイコンではなく「ラベル文字から出ている」ように
-    # 見せたいため(2026-08-09、ユーザー指示)、出発側のshrinkAはアイコンの陰に
-    # 隠れる程度の最小値のみにする(アイコンはzorder=4で線のzorder=3より前面に
-    # あるため、アイコンの内側は自動的に隠れる)。到着側のshrinkBは矢頭を
-    # ノードの手前できれいに止めるため従来通り残す。
-    SHRINK_START = 3
+
+    # 矢印はノードのラベル文字の真下(下端)を始点にする(2026-08-09、ユーザー指示:
+    # 「文字の下から矢印を出せ」)。アイコン中心からのshrinkでは済まないため、
+    # 先にラベルを描画してmatplotlibのget_window_extent()で実際のラベル下端
+    # 座標を取得し、それを矢印の始点座標そのものとして使う。
+    ICON_SZ_ = HALF * 2
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    inv = ax.transData.inverted()
+    label_bottom = {}
+    for n in nodes:
+        x, y = n['x'], n['y']
+        t = ax.text(x, y - HALF - 0.2, n['label'],
+                    ha='center', va='top', fontsize=7.5,
+                    color='#232F3E', fontweight='bold', zorder=4.5)
+        fig.canvas.draw()
+        bbox = t.get_window_extent(renderer=renderer)
+        (_, y0), (_, _) = inv.transform([(bbox.x0, bbox.y0), (bbox.x1, bbox.y1)])
+        label_bottom[n['id']] = y0
+
+    for n in nodes:
+        x, y = n['x'], n['y']
+        img = _load(n['icon'])
+        if img is not None:
+            ax.imshow(img, extent=[x - HALF, x + HALF, y - HALF, y + HALF],
+                      aspect='auto', zorder=4, interpolation='bilinear')
+
+    # 到着側のshrinkBは矢頭をノードの手前できれいに止めるため従来通り残す。
     SHRINK_END = 42
     for edge in edges:
         from_id, to_id = edge[0], edge[1]
         label = edge[2] if len(edge) > 2 else ''
         waypoints = edge[3] if len(edge) > 3 else []
         n1, n2 = node_map[from_id], node_map[to_id]
-        # 途中に経由点(waypoints)がある場合は直線区間を複数つなぎ、矢頭は最終区間のみに描く。
-        pts = [(n1['x'], n1['y'])] + waypoints + [(n2['x'], n2['y'])]
+        # 始点はラベル文字の下端(label_bottom)。ラベルは横方向にノード中心から
+        # 左右対称に広がるため、始点のx座標はノード中心のままでよい。
+        start_pt = (n1['x'], label_bottom[from_id])
+        pts = [start_pt] + waypoints + [(n2['x'], n2['y'])]
         n_seg = len(pts) - 1
         for i in range(n_seg):
             ax.annotate(
@@ -300,7 +324,7 @@ def draw():
                 arrowprops=dict(
                     arrowstyle='->' if i == n_seg - 1 else '-',
                     color='#555555', lw=1.5,
-                    shrinkA=SHRINK_START if i == 0 else 0,
+                    shrinkA=0,
                     shrinkB=SHRINK_END if i == n_seg - 1 else 0,
                     connectionstyle='arc3,rad=0.0',
                 ),
@@ -316,16 +340,6 @@ def draw():
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
                               edgecolor='none', alpha=0.9),
                     zorder=5)
-
-    for n in nodes:
-        x, y = n['x'], n['y']
-        img = _load(n['icon'])
-        if img is not None:
-            ax.imshow(img, extent=[x - HALF, x + HALF, y - HALF, y + HALF],
-                      aspect='auto', zorder=4, interpolation='bilinear')
-        ax.text(x, y - HALF - 0.2, n['label'],
-                ha='center', va='top', fontsize=7.5,
-                color='#232F3E', fontweight='bold', zorder=4.5)
 
     out = os.path.join(_BASE, 'images', '008_architecture.png')
     plt.tight_layout()
