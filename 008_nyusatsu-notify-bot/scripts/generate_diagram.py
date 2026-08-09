@@ -279,23 +279,62 @@ def draw():
                 fontsize=7.5, color='#4A7FA5', style='italic', zorder=6)
 
     node_map = {n['id']: n for n in nodes}
+
+    # 「直線が自ノードのラベル文字を自然に貫通する接続」だけ、矢印の始点/終点を
+    # ラベル寄りにする(2026-08-09、ユーザー確認済み)。判定基準は「その接続を
+    # 中心点どうしの直線で結んだ場合に、自分自身のラベル矩形を通過するか」。
+    # 通過しない接続(横方向・斜め浅めなど)は通常通りアイコン基準のまま変更しない。
+    # - LABEL_START_EDGES: 出発直後に自分のラベルを貫通する接続。始点をラベル
+    #   下端の実測座標(get_window_extent)にし、shrinkAを実質0にする。
+    # - LABEL_END_EDGES: 到着直前に自分のラベルを貫通する接続(例:
+    #   lambda_fw→ses_outはses_outの真下から近づくため、標準shrinkB=42だと
+    #   矢頭がアイコン下端とラベル上端の間の隙間で浮いてしまっていた)。
+    #   shrinkBを縮小し、アイコンの陰(zorderが線より前面)で自然に隠れる形にする。
+    LABEL_START_EDGES = {('lambda', 'dlq'), ('cf', 's3lp'), ('lambda_wl', 'ddb_wl'), ('lambda_sw', 'ddb_wl')}
+    LABEL_END_EDGES = {('lambda_fw', 'ses_out')}
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    inv = ax.transData.inverted()
+    label_bottom = {}
+    for n in nodes:
+        x, y = n['x'], n['y']
+        t = ax.text(x, y - HALF - 0.2, n['label'],
+                    ha='center', va='top', fontsize=7.5,
+                    color='#232F3E', fontweight='bold', zorder=4.5)
+        fig.canvas.draw()
+        bbox = t.get_window_extent(renderer=renderer)
+        (_, y0), (_, _) = inv.transform([(bbox.x0, bbox.y0), (bbox.x1, bbox.y1)])
+        label_bottom[n['id']] = y0
+
+    for n in nodes:
+        x, y = n['x'], n['y']
+        img = _load(n['icon'])
+        if img is not None:
+            ax.imshow(img, extent=[x - HALF, x + HALF, y - HALF, y + HALF],
+                      aspect='auto', zorder=4, interpolation='bilinear')
+
     SHRINK = 42
     for edge in edges:
         from_id, to_id = edge[0], edge[1]
         label = edge[2] if len(edge) > 2 else ''
         waypoints = edge[3] if len(edge) > 3 else []
         n1, n2 = node_map[from_id], node_map[to_id]
+        use_label_start = (from_id, to_id) in LABEL_START_EDGES
+        use_label_end = (from_id, to_id) in LABEL_END_EDGES
+        start_pt = (n1['x'], label_bottom[from_id]) if use_label_start else (n1['x'], n1['y'])
         # 途中に経由点(waypoints)がある場合は直線区間を複数つなぎ、矢頭は最終区間のみに描く。
-        pts = [(n1['x'], n1['y'])] + waypoints + [(n2['x'], n2['y'])]
+        pts = [start_pt] + waypoints + [(n2['x'], n2['y'])]
         n_seg = len(pts) - 1
         for i in range(n_seg):
+            shrink_a = (0 if use_label_start else SHRINK) if i == 0 else 0
+            shrink_b = (3 if use_label_end else SHRINK) if i == n_seg - 1 else 0
             ax.annotate(
                 '', xy=pts[i + 1], xytext=pts[i],
                 arrowprops=dict(
                     arrowstyle='->' if i == n_seg - 1 else '-',
                     color='#555555', lw=1.5,
-                    shrinkA=SHRINK if i == 0 else 0,
-                    shrinkB=SHRINK if i == n_seg - 1 else 0,
+                    shrinkA=shrink_a,
+                    shrinkB=shrink_b,
                     connectionstyle='arc3,rad=0.0',
                 ),
                 zorder=3,
@@ -310,16 +349,6 @@ def draw():
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
                               edgecolor='none', alpha=0.9),
                     zorder=5)
-
-    for n in nodes:
-        x, y = n['x'], n['y']
-        img = _load(n['icon'])
-        if img is not None:
-            ax.imshow(img, extent=[x - HALF, x + HALF, y - HALF, y + HALF],
-                      aspect='auto', zorder=4, interpolation='bilinear')
-        ax.text(x, y - HALF - 0.2, n['label'],
-                ha='center', va='top', fontsize=7.5,
-                color='#232F3E', fontweight='bold', zorder=4.5)
 
     out = os.path.join(_BASE, 'images', '008_architecture.png')
     plt.tight_layout()
