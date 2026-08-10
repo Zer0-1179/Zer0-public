@@ -119,32 +119,84 @@ SCALE_UP_WIN_RATE_REC  = 60.0
 SCALE_UP_PF_MIN         = 1.0
 
 
-def build_scale_up_progress(stats: dict) -> list[str]:
-    """資金増額判断の進捗をテキスト行のリストで返す（本文・HTML共通で使う素材）。"""
+def compute_scale_up_metrics(stats: dict) -> dict:
+    """資金増額判断に使う指標を構造化して返す（テキスト・HTML両方の整形の元データ）。"""
     n = stats["closed_count"]
     win_rate = stats["win_rate"]
     pf = stats["pf"]
 
-    lines = [f"  累計クローズ: {n}/{SCALE_UP_MIN_TRADES}（最低ライン）・{n}/{SCALE_UP_SAFE_TRADES}（安心ライン）"]
-
     if win_rate is None:
-        lines.append("  実勝率: —（クローズ済みポジションなし）")
+        win_str, win_mark = "—（クローズ済みポジションなし）", ""
     else:
-        mark = "○" if win_rate >= SCALE_UP_WIN_RATE_REC else ("△" if win_rate >= SCALE_UP_WIN_RATE_MIN else "×")
-        lines.append(f"  実勝率: {win_rate:.1f}% {mark}（基準: 60%推奨/55%最低）")
+        win_mark = "○" if win_rate >= SCALE_UP_WIN_RATE_REC else ("△" if win_rate >= SCALE_UP_WIN_RATE_MIN else "×")
+        win_str = f"{win_rate:.1f}%"
 
     if pf is None:
-        if n == 0:
-            lines.append("  実PF:   —（クローズ済みポジションなし）")
-        else:
-            lines.append("  実PF:   ∞ ○（無敗のためPF計算不可・基準: >1.0）")
+        pf_str, pf_mark = ("—（クローズ済みポジションなし）", "") if n == 0 else ("∞（無敗のためPF計算不可）", "○")
     else:
-        mark = "○" if pf > SCALE_UP_PF_MIN else "×"
-        lines.append(f"  実PF:   {pf:.2f} {mark}（基準: >1.0）")
+        pf_mark = "○" if pf > SCALE_UP_PF_MIN else "×"
+        pf_str = f"{pf:.2f}"
 
     dd_val = -stats["max_dd_jpy"] if stats["max_dd_jpy"] else 0.0
-    lines.append(f"  実現ベース最大DD: {fmt_jpy(dd_val)}（参考値・バックテストDD5.2%は資本比%のため単純比較不可）")
-    return lines
+    return {
+        "closed_count": n,
+        "win_str": win_str, "win_mark": win_mark,
+        "pf_str": pf_str, "pf_mark": pf_mark,
+        "dd_str": fmt_jpy(dd_val),
+    }
+
+
+def build_scale_up_progress(stats: dict) -> list[str]:
+    """資金増額判断の進捗をテキスト本文用の行リストで返す。"""
+    m = compute_scale_up_metrics(stats)
+    n = m["closed_count"]
+    return [
+        f"  累計クローズ: {n}/{SCALE_UP_MIN_TRADES}（最低ライン）・{n}/{SCALE_UP_SAFE_TRADES}（安心ライン）",
+        f"  実勝率: {m['win_str']} {m['win_mark']}（基準: 60%推奨/55%最低）".rstrip(),
+        f"  実PF:   {m['pf_str']} {m['pf_mark']}（基準: >1.0）".rstrip(),
+        f"  実現ベース最大DD: {m['dd_str']}（参考値・バックテストDD5.2%は資本比%のため単純比較不可）",
+    ]
+
+
+def build_scale_up_progress_html(stats: dict) -> str:
+    """資金増額判断の進捗をHTMLメール用のテーブル行として返す（他ブロックと統一した表形式）。"""
+    m = compute_scale_up_metrics(stats)
+    n = m["closed_count"]
+    mark_color = {"○": "#27ae60", "△": "#e2a03f", "×": "#e74c3c", "": "#888"}
+
+    def row(label: str, value: str, note: str = "", mark: str = "") -> str:
+        color = mark_color.get(mark, "#e0e0e0")
+        mark_html = f' <span style="color:{color};font-weight:bold;">{mark}</span>' if mark else ""
+        note_html = f' <span style="color:#666;">{note}</span>' if note else ""
+        return f"""
+        <tr>
+          <td style="padding:6px;color:#888;">{label}</td>
+          <td style="padding:6px;">{value}{mark_html}{note_html}</td>
+        </tr>"""
+
+    return (
+        row("累計クローズ", f"{n}/{SCALE_UP_MIN_TRADES}（最低ライン）・{n}/{SCALE_UP_SAFE_TRADES}（安心ライン）")
+        + row("実勝率", m["win_str"], "（基準: 60%推奨/55%最低）", m["win_mark"])
+        + row("実PF", m["pf_str"], "（基準: >1.0）", m["pf_mark"])
+        + row("実現ベース最大DD", m["dd_str"], "（参考値・単純比較不可）")
+    )
+
+
+def build_status_message(stats: dict | None) -> str:
+    """「稼働状況」セクションの本文（HTML/テキスト共通）を1文で返す。
+    シグナルが無い週は一見「止まっている」ように見えるため、Analyzer/Executorが
+    定期実行を継続していることと、異常時は別途アラームメールで通知される旨を
+    明示し、週次サマリー単体で「動いているか」の不安に答えられるようにする。"""
+    if stats is None:
+        return "取引履歴がまだありません。Analyzer（4時間毎）・Executor（30分毎）は正常に定期実行されています。"
+    if stats["weekly_count"] > 0:
+        return f"今週は{stats['weekly_count']}件の決済がありました。Bot は正常に稼働しています。"
+    return (
+        "今週は新規のエントリー・決済はありませんでした。"
+        "Supertrendの転換シグナル待ちのため様子見しているだけで、異常ではありません。"
+        "Analyzer（4時間毎）・Executor（30分毎）は定期実行を継続しており、"
+        "実際に問題が起きた場合は別途アラームメールで即時通知されます。"
+    )
 
 
 def fmt_jpy(value: float) -> str:
@@ -212,9 +264,10 @@ def lambda_handler(event, context):
 
     trades = load_trades()
     stats  = summarize_trades(trades, now) if trades else None
+    status_message = build_status_message(stats)
 
     # ── テキスト本文 ──────────────────────────────────────────────────────────
-    lines = [f"【Zer0-CryptoBot】週次サマリー - {timestamp}", ""]
+    lines = [f"【Zer0-CryptoBot】週次サマリー - {timestamp}", "", "■ 稼働状況", f"  {status_message}", ""]
     if not has_pos:
         lines.append("■ 現在のポジション: なし（キャッシュポジション）")
     else:
@@ -309,7 +362,8 @@ def lambda_handler(event, context):
     </div>
     <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;">
       <h3 style="color:#3ea8ff;margin:0 0 12px;">資金増額判断の進捗</h3>
-      <p style="margin:4px 0;font-size:14px;">{'<br>'.join(build_scale_up_progress(stats))}</p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">{build_scale_up_progress_html(stats)}
+      </table>
     </div>"""
 
     body_html = f"""<!DOCTYPE html>
@@ -318,6 +372,10 @@ def lambda_handler(event, context):
   <div style="max-width:660px;margin:0 auto;">
     <h2 style="color:#3ea8ff;margin-bottom:4px;">Zer0-CryptoBot 週次サマリー</h2>
     <p style="color:#888;margin-top:0;">{timestamp}</p>
+    <div style="background:#16321f;border-left:4px solid #27ae60;border-radius:8px;padding:14px 16px;margin:16px 0;">
+      <p style="margin:0;font-size:13px;color:#9fd6ad;">稼働状況</p>
+      <p style="margin:4px 0 0;font-size:14px;">{status_message}</p>
+    </div>
     <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;">
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <thead>

@@ -35,6 +35,7 @@ def _load_module(name: str, path: str):
 with patch("boto3.client", return_value=MagicMock()):
     _analyzer = _load_module("analyzer_lambda_function", os.path.join(ROOT, "lambda", "analyzer", "lambda_function.py"))
     _executor = _load_module("executor_lambda_function", os.path.join(ROOT, "lambda", "executor", "lambda_function.py"))
+    _weekly = _load_module("weekly_summary_lambda_function", os.path.join(ROOT, "lambda", "weekly_summary", "lambda_function.py"))
 
 
 @pytest.fixture
@@ -48,6 +49,11 @@ def executor():
     テスト間で毎回リセットする（副作用の持ち越し防止）。"""
     _executor.send_email = MagicMock()
     return _executor
+
+
+@pytest.fixture
+def weekly():
+    return _weekly
 
 
 @pytest.fixture
