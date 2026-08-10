@@ -177,7 +177,8 @@ Executor が実行するたびに証拠金維持率を確認：
 ├── infra/
 │   └── cfn-cryptobot.yaml
 └── images/
-    └── 006_architecture.png
+    ├── 006_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
+    └── 006_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -222,12 +223,11 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-07-21
+### 2026-08-10
 
-#### state⇄実建玉不一致アラートの原因調査・復旧
+#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
 
-- bitbankアプリで手動決済したbtc_jpy/eth_jpyのlongポジションが、Bot側のTP1/SL/トレーリング経路を通らずに成行決済されたため、SSM stateだけがポジション保有中のまま残り30分毎にreconcile不一致メールが送信され続けていた
-- コード側の不具合ではなく手動決済によるstateとの乖離と確認。SSM stateの孤児ポジションを削除し、bitbank側に残っていたbtc_jpyの未約定トレーリングSL注文（stop_limit、INACTIVE）をキャンセルして解消
-- 通知メールの文字化け報告も合わせて調査。Gmail上の件名・本文・HTML部は実データで確認した限り正しくUTF-8エンコードされており再現せず。スマートフォンの非Gmailメールアプリ側の表示崩れの可能性が高く、Bot側の送信コード（send_email、Charset=UTF-8）に問題は見つからなかった
-- 手動決済分の利益（+138.5円／+120.5円）を004ポートフォリオのトレード実績ページに反映。「TP1後いつ利確するか不安」という声を受け、現在のポジション状況（確保済み利益ライン・含み損益等）を表示する機能も追加
-- TP1約定メールにも「次の決済ライン（現時点）」と、固定のTP2ではなくトレーリングSLで動く旨を明記。詳細は[CHANGELOG.md](./CHANGELOG.md)を参照
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/006_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
