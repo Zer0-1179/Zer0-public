@@ -1,6 +1,6 @@
-<mxfile host="Electron" modified="2026-08-10T02:42:30.902Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.1.2 Chrome/106.0.5249.199 Electron/21.4.3 Safari/537.36" version="21.1.2" etag="LzjSymbUt3K1mUl0eKb8" type="device">
+<mxfile host="Electron" modified="2026-08-10T02:42:47.187Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.1.2 Chrome/106.0.5249.199 Electron/21.4.3 Safari/537.36" version="21.1.2" etag="bKhco_K9aYqIE498ULgI" type="device">
   <diagram name="006 architecture" id="d0">
-    <mxGraphModel dx="2960" dy="1731" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="2000" math="0" shadow="0">
+    <mxGraphModel dx="1151" dy="673" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="2000" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -77,7 +77,7 @@
         <mxCell id="e5" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="executor" target="ssm" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e6" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="executor" target="s3" edge="1">
+        <mxCell id="e6" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="executor" target="s3" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e7" value="失敗時" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="executor" target="fn" edge="1">

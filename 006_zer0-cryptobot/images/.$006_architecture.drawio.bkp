@@ -1,6 +1,6 @@
-<mxfile host="Electron" modified="2026-08-10T02:42:30.902Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.1.2 Chrome/106.0.5249.199 Electron/21.4.3 Safari/537.36" version="21.1.2" etag="LzjSymbUt3K1mUl0eKb8" type="device">
+<mxfile host="Electron" modified="2026-08-10T02:41:04.858Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.1.2 Chrome/106.0.5249.199 Electron/21.4.3 Safari/537.36" version="21.1.2" etag="oms9B68mlNkU0pZ43ToY" type="device">
   <diagram name="006 architecture" id="d0">
-    <mxGraphModel dx="2960" dy="1731" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="2000" math="0" shadow="0">
+    <mxGraphModel dx="2072" dy="1212" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="2000" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -11,7 +11,7 @@
           <mxGeometry x="40" y="40" width="1120" height="680" as="geometry" />
         </mxCell>
         <mxCell id="cl_extapi" value="外部API" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#AAAAAA;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontColor=#4A7FA5;fontStyle=2;fontSize=11;" parent="1" vertex="1">
-          <mxGeometry x="400" y="160" width="560" height="240" as="geometry" />
+          <mxGeometry x="360" y="135" width="630" height="243" as="geometry" />
         </mxCell>
         <mxCell id="cl_dest" value="通知先" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#AAAAAA;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontColor=#4A7FA5;fontStyle=2;fontSize=11;" parent="1" vertex="1">
           <mxGeometry x="1368" y="693" width="216" height="243" as="geometry" />
@@ -58,10 +58,8 @@
         <mxCell id="e0" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="eb_anl" target="analyzer" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e1" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="analyzer" edge="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="495" y="300" as="targetPoint" />
-          </mxGeometry>
+        <mxCell id="e1" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="analyzer" target="binance" edge="1">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e2" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="analyzer" target="executor" edge="1">
           <mxGeometry relative="1" as="geometry" />
@@ -69,10 +67,8 @@
         <mxCell id="e3" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="eb_exe" target="executor" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e4" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="executor" edge="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="855" y="300" as="targetPoint" />
-          </mxGeometry>
+        <mxCell id="e4" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="executor" target="bitbank" edge="1">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e5" value="" style="endArrow=block;html=1;rounded=0;edgeStyle=none;strokeColor=#555555;strokeWidth=1.5;fontSize=9;fontColor=#666666;labelBackgroundColor=#FFFFFF;" parent="1" source="executor" target="ssm" edge="1">
           <mxGeometry relative="1" as="geometry" />

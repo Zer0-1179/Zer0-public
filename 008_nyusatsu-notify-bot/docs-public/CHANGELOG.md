@@ -2,6 +2,15 @@
 
 ※ バージョン番号の付与は2026-07-14に廃止（実質的なバージョン管理をしておらず、詳細な変更履歴はGitで追跡可能なため）。過去分の番号（vX.Y）は見出しに参照用として残している。
 
+## 2026-08-10
+
+### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/008_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+
 ## 2026-08-09
 
 ### 構成図をAWS公式ベストプラクティスに準拠させる
