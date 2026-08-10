@@ -87,7 +87,7 @@ Astro の `i18n` ルーティングを使用し、`/ja/` と `/en/` で全ペー
 │   │   ├── data/projects.ts     # プロジェクト定義データ
 │   │   ├── layouts/             # BaseLayout
 │   │   └── pages/ja/, pages/en/ # 日英ページ
-│   ├── public/images/           # アーキテクチャ図（001〜007）
+│   ├── public/images/           # アーキテクチャ図（001〜008）
 │   ├── lambda.mjs               # CloudFront→Lambda ブリッジ
 │   ├── astro.config.mjs
 │   └── package.json
@@ -98,7 +98,8 @@ Astro の `i18n` ルーティングを使用し、`/ja/` と `/en/` で全ペー
 ├── scripts/
 │   └── deploy.sh                # 6ステップ自動デプロイ
 └── images/
-    └── 004_architecture.png
+    ├── 004_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
+    └── 004_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## セットアップ / デプロイ
@@ -138,9 +139,11 @@ bash scripts/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-09
+### 2026-08-10
 
-#### S3の_astro/フォルダに蓄積していた不要ファイルを削除・再発防止
+#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
 
-- `scripts/deploy.sh`の`_astro/`同期に`--delete`が付いておらず、コンテンツハッシュ付きファイルが再ビルドのたびに蓄積していたと判明。2026-05-31〜08-08分の74ファイル(現在使用中は1件のみ)を削除し、`--delete`追加で再発防止
-- 全主要ページ疎通・CSS参照先を確認済み
+- 構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/004_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源(004には専用のmatplotlib生成スクリプトは元々なかった)
+- クラスター枠にdraw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)を使用。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外

@@ -88,7 +88,8 @@ RSS の概要150文字だけを根拠に生成すると、対応リージョン�
 │   ├── cfn-x-poster-zer0-infra.yaml
 │   └── deploy.sh                   # デプロイスクリプト
 └── images/
-    └── 001_architecture.png
+    ├── 001_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
+    └── 001_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -153,24 +154,11 @@ bash src/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-07-04
+### 2026-08-10
 
-#### Fableブラッシュアップ①（v2.2）
+#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
 
-- Lambda非同期呼び出し失敗時にSNSメール通知を追加（無料・CloudWatchアラーム枠を消費しない）
-- deploy.sh --testのDRY_RUN復元をtrapで保証し、途中失敗時に本番がDRY_RUNのまま残るリスクを解消
-
-#### Fableブラッシュアップ②（v2.3）
-
-- 純関数群（加重文字数・clamp・投稿タイプ選択等）にpytest24件を新設
-- deploy.shの依存インストールをrequirements.txt（バージョン固定）参照に変更し再現性を担保
-
-#### Fableブラッシュアップ③④（v2.4）
-
-- 投稿タイプ別の効果測定用ログ（直近30件）を履歴に追加
-- 全RSSフィード同時取得不能時に記事なしでAWS Tipsを投稿するフォールバックを追加（欠投防止）
-
-#### Fableブラッシュアップ⑤（v2.5）
-
-- スレッド投稿末尾のURL付加で実URL長を差し引いていたバグを修正
-- XはURLを実際の長さに関わらず一律weighted23として数えるため、本文が必要以上に短く切られていた
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/001_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外

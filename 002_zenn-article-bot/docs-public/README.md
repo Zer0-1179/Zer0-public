@@ -105,10 +105,12 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 │       └── test_lambda.py    # ユニットテスト（21件）
 ├── scripts/
 │   ├── build_layer.sh        # Lambda Layer ビルド
-│   └── download_article.sh   # S3 から生成記事をローカルに取得
+│   ├── download_article.sh   # S3 から生成記事をローカルに取得
+│   └── generate_diagram.py   # 構成図生成（matplotlib版、2026-08-10以降は未使用）
 ├── cfn-article-generator.yaml
 └── images/
-    └── 002_architecture.png
+    ├── 002_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
+    └── 002_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 > **Note**: `src/fonts/NotoSansCJK-Regular.ttc`（図解PNGの日本語描画用フォント、約19MB）はファイルサイズの都合上このリポジトリには含まれていません。ローカルでデプロイする場合は [Noto Sans CJK](https://github.com/notofonts/noto-cjk) から取得し `src/fonts/` に配置してください。
@@ -153,9 +155,11 @@ bash scripts/download_article.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-09
+### 2026-08-10
 
-#### ハンズオンプロンプトをAWS CloudShell標準化・記事レビューで発見した実行時バグ対応
+#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
 
-- Lambda Layers記事のハンズオンレビューで実行時バグ（Node.jsレイヤーのディレクトリ構造誤り・後片付けスクリプトのIAMロール削除失敗等）を検出・修正し、実際にAWS上で全ステップ実行して検証、結果を記事に画像として埋め込んだ
-- `ARTICLE_PROMPT_TEMPLATE`のハンズオン生成ルールをAWS CloudShell標準に更新し、`aws lambda update-function-code`で直接デプロイした
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/002_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
