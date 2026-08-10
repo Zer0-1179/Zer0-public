@@ -145,9 +145,11 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 │   └── tests/
 │       └── test_lambda_function.py     # ユニットテスト（36件）
 ├── scripts/
-│   └── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
+│   ├── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
+│   └── generate_diagram.py             # 構成図生成（matplotlib版、2026-08-10以降は未使用）
 └── images/
-    └── 003_architecture.png
+    ├── 003_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
+    └── 003_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -230,10 +232,11 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-03
+### 2026-08-10
 
-#### 投稿を一時停止
+#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
 
-- 反応が伸びないため投稿を一時停止することを決定
-- `src/cfn-x-poster-zer0-0326.yaml`の`EveningSchedule`・`TrendSchedule`（`AWS::Scheduler::Schedule`）両方に`State: DISABLED`を追加し、CFnスタック`x-poster-zer0-0326`を更新
-- `aws scheduler get-schedule`で両スケジュールが`DISABLED`になったことを確認。Lambda・SSM等のリソースは削除せず維持（`State: ENABLED`に戻せば再開可能）
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/003_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外

@@ -184,3 +184,12 @@
 - `ARTICLE_PROMPT_TEMPLATE`のハンズオン生成ルールを、実行環境をAWS CloudShellに標準化する内容へ更新（ローカル環境へのインストール手順を書かない、IAM権限はCloudShellログインユーザーのものになる旨を注記、セッションタイムアウトを注記）。あわせて「後片付けのステップより後に新規リソースを作成するコードを置かない」ルールも明文化
 - 上記プロンプトテンプレート変更は`ARTICLE_PROMPT_TEMPLATE`（生成ロジック本体は不変）のみのコード差し替えのため、CloudFormationスタックには触れず`aws lambda update-function-code`で直接デプロイした
 - 今後Zenn記事のハンズオンレビューを依頼された際は実機検証＋エビデンス画像埋め込みを標準の進め方とする旨をCLAUDE.md・AGENTS.mdに明文化した
+
+## 2026-08-10
+
+### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/002_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
