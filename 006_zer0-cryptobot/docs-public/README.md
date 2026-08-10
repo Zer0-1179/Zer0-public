@@ -231,3 +231,9 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 - クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
 - 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
 - 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+
+#### 週次サマリーメールに「稼働状況」セクションを追加、資金増額進捗をテーブル化
+
+- シグナル0件の週でも「異常ではない、Analyzer/Executorは定期実行を継続しており問題があれば別途アラームメールで通知される」旨をメール冒頭に明記し、Botが止まっているように見える不安を解消
+- 資金増額判断の進捗（累計クローズ数・実勝率・実PF・最大DD）のHTML表示を、他セクションと統一したテーブル形式に変更し読みやすく整理
+- pytest 8件追加・全45件通過を確認。ローカルでメール本文の見た目もレンダリングして確認済み。`bash scripts/deploy.sh`で本番デプロイ済み
