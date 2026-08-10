@@ -213,13 +213,29 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-09
 
-#### 構成図の矢印の視認性を修正
+#### 構成図をAWS公式ベストプラクティスに準拠させる
 
-- SES送信ノードへの到達矢印2本（lp-waitlist Lambda→SES送信「登録通知」、stripe-webhook Lambda→SES送信）と、stripe-webhook Lambdaへの到達矢印（API Gateway→stripe-webhook Lambda）が、矢印の後退距離(shrinkB)を3ptに設定していたため矢先がアイコン中心近くまで入り込み、不透明なアイコン画像の裏に完全に隠れて見えなくなっていた問題をユーザー指摘で発見
-- 既に正しく調整済みだったmail-forwarder Lambda→SES送信（35pt）と同じ「アイコン境界でちょうど止まる」考え方に統一。水平・垂直到達は35pt、斜め到達（stripe-webhook Lambda→SES送信）は正方形境界までの距離が長くなる分39ptを個別に設定し、3接続すべてで矢先が見えるように修正
-- 修正後、全エッジ・全ラベルに対する機械的な線分交差チェックを再実行し、違反0件であることを確認
+- サービス名を正式名称に統一し、ラベルは2行以内・単語途中で改行しないルールを徹底（「Lambda」→「AWS Lambda」等）
+- 図全体を囲む「AWS Cloud」外枠を新設し、ap-northeast-1リージョン枠をその内側に配置する2階層構造に変更
+- ユーザー指摘で二重内包の冗長性が判明し、CloudFront・ACM(us-east-1)をリージョン外の「エッジ/グローバルサービス」クラスターへ分離。矢印がラベル文字にかぶる問題もmatplotlibの実測境界を使って解消
+- クラスター枠の重なり（`FancyBboxPatch`のpad分を計算に入れ忘れていたのが原因）、Lambda 2つの雑然とした配置もユーザー指摘を受けて修正
+- lp-waitlist LambdaをAPI Gateway・SES送信と一直線に、S3(LP静的サイト)をCloudFrontの真下に配置し直して経路を直線化。ラベル衝突の検証スクリプト自体にオフセット誤りがあった問題も、本番コードと同一条件で再検証する形に修正して解消
+- 「配置がルール化されていない」との指摘を受け、水平座標を3.5間隔の統一グリッドに再編（既存列x=9.5を基準にCloudFront・S3・ACM・SES送信・mail-forwarderを整列）
+- 「文字の下から矢印」の再指摘で検証スクリプト自体の不具合（実描画区間でなく消える断片をチェックしていた）を発見。cf→s3lp等「一直線」の経路が実は出発・到着ノード自身のラベルを貫通していた9箇所にいったん迂回経由点を追加したが、ユーザー確認の結果「自分自身のラベルに矢印がかかるのはOK、直線優先」との意図が判明し撤去（直線に復元）
+- 「矢印はラベル文字の下から出ているように見せてほしい」との指示を全接続に一律適用したところ横方向・斜めの接続まで不自然な迂回線になり、ユーザーから差し戻し指示を受け直線版へ復元。「直線が自ノードのラベルを自然に貫通する接続のみ」という条件に絞り込み、該当5接続（Lambda→SQS、CloudFront→S3、lp-waitlist/stripe-webhook Lambda→DynamoDB、mail-forwarder Lambda→SES送信）だけラベル寄りの始点/終点に変更
+
+#### 構成図の線の交差を解消
+
+- 構成図（`008_architecture.png`）でStripe Webhook関連の線が既存の線と複数箇所で交差していた問題を解消
+- lp-waitlist系統を上トラック、stripe-webhook系統を下トラックに分離し、線分交差・ラベル接触をスクリプトで機械的に検証しながら座標を再設計
+
+#### Lambdaランタイムのバージョン統一
+
+- 全Lambda関数のPythonランタイムがpython3.13とpython3.14で混在していたため、最新のpython3.14に統一
+- 対象は本プロジェクトの6関数（activate-ruleset・bounce-handler・mail-forwarder・collector・lp-waitlist・stripe-webhook）
+- CloudFormationで3スタック（notify-bot・mail-relay・lp-backend）を更新し、全関数がActive/Successfulであることを確認
 
 ### 2026-07-16
 
