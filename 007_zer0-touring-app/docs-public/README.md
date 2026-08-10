@@ -216,9 +216,10 @@ SNS にシェア → /s/abc123 → Lambda が OGP HTML 返却 → SNS クロー�
 │   ├── cfn-touring.yaml      # メインリソース
 │   └── deploy-infra.sh                  # フルデプロイ
 ├── scripts/
-│   └── generate_diagram.py      # アーキテクチャ図生成
+│   └── generate_diagram.py      # アーキテクチャ図生成（matplotlib版、2026-08-10以降は未使用）
 └── images/
-    └── 007_architecture.png
+    ├── 007_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
+    └── 007_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -410,16 +411,11 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-09
+### 2026-08-10
 
-#### 目的地天気「取得中...」固着・ナビ起点まわりの修正
+#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
 
-- 実機テストで「目的地の天気が取得中のまま変わらない」と報告。原因は目的地ジオコーディング失敗時に天気取得まで道連れでスキップされフロントが永久に「取得中...」表示のまま止まる不具合（Fable調査で特定）
-- `nominatim_geocode`に目的地ジオコーディング限定の1回リトライを追加。フロントは取得失敗時に「取得できませんでした」の終端表示を追加し無限「取得中...」を解消
-- Googleマップナビの起点判定(`buildMapUrl`)にfalsy-zero起因の潜在バグを発見・null判定に修正。GPS現在地/手動出発地いずれのモードでも競合状態がないことは確認済み
-- 本番デプロイ時に`s3 sync --delete`が動的生成物`stats.json`を誤削除する事故が発生、即復旧し`--exclude`で再発防止
-
-#### 品質向上: フロントエンドのテスト拡充・enrich失敗の可視化
-
-- 今回のバグが未テストのロジックに潜んでいたことを踏まえ、`buildMapUrl`・`computeEnrichState`を`course-utils.ts`に切り出しテスト9件追加（フロント計21件）。`index.astro`もこの関数を呼ぶよう配線し直し、テストが実コードを保証するようにした
-- `/api/enrich`の目的地ジオコーディング失敗回数を追跡するカスタムメトリクス`Zer0Touring/EnrichGeocodeFailed`を追加。バックエンドに回帰テスト2件追加（計25件）。本番デプロイ・疎通確認済み
+- 構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/007_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源(`scripts/generate_diagram.py`によるmatplotlib生成は現状維持だが更新には使わない)
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外

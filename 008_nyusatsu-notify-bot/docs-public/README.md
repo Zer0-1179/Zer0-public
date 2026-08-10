@@ -213,27 +213,14 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-09
+### 2026-08-10
 
-#### 構成図をAWS公式ベストプラクティスに準拠させる
+#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
 
-- サービス名を正式名称に統一し、ラベルは2行以内・単語途中で改行しないルールを徹底（「Lambda」→「AWS Lambda」等）
-- 図全体を囲む「AWS Cloud」外枠を新設し、ap-northeast-1リージョン枠をその内側に配置する2階層構造に変更
-- ユーザー指摘で二重内包の冗長性が判明し、CloudFront・ACM(us-east-1)をリージョン外の「エッジ/グローバルサービス」クラスターへ分離。矢印がラベル文字にかぶる問題もmatplotlibの実測境界を使って解消
-- クラスター枠の重なり（`FancyBboxPatch`のpad分を計算に入れ忘れていたのが原因）、Lambda 2つの雑然とした配置もユーザー指摘を受けて修正
-- lp-waitlist LambdaをAPI Gateway・SES送信と一直線に、S3(LP静的サイト)をCloudFrontの真下に配置し直して経路を直線化。ラベル衝突の検証スクリプト自体にオフセット誤りがあった問題も、本番コードと同一条件で再検証する形に修正して解消
-- 「配置がルール化されていない」との指摘を受け、水平座標を3.5間隔の統一グリッドに再編（既存列x=9.5を基準にCloudFront・S3・ACM・SES送信・mail-forwarderを整列）
-- 「文字の下から矢印」の再指摘で検証スクリプト自体の不具合（実描画区間でなく消える断片をチェックしていた）を発見。cf→s3lp等「一直線」の経路が実は出発・到着ノード自身のラベルを貫通していた9箇所にいったん迂回経由点を追加したが、ユーザー確認の結果「自分自身のラベルに矢印がかかるのはOK、直線優先」との意図が判明し撤去（直線に復元）
-- 「矢印はラベル文字の下から出ているように見せてほしい」との指示を全接続に一律適用したところ横方向・斜めの接続まで不自然な迂回線になり、ユーザーから差し戻し指示を受け直線版へ復元。「直線が自ノードのラベルを自然に貫通する接続のみ」という条件に絞り込み、該当5接続（Lambda→SQS、CloudFront→S3、lp-waitlist/stripe-webhook Lambda→DynamoDB、mail-forwarder Lambda→SES送信）だけラベル寄りの始点/終点に変更
-
-#### 構成図の線の交差を解消
-
-- 構成図（`008_architecture.png`）でStripe Webhook関連の線が既存の線と複数箇所で交差していた問題を解消
-- lp-waitlist系統を上トラック、stripe-webhook系統を下トラックに分離し、線分交差・ラベル接触をスクリプトで機械的に検証しながら座標を再設計
-
-#### Lambdaランタイムのバージョン統一
-
-- 全Lambda関数のPythonランタイムがpython3.13とpython3.14で混在していたため、最新のpython3.14に統一
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/008_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
 - 対象は本プロジェクトの6関数（activate-ruleset・bounce-handler・mail-forwarder・collector・lp-waitlist・stripe-webhook）
 - CloudFormationで3スタック（notify-bot・mail-relay・lp-backend）を更新し、全関数がActive/Successfulであることを確認
 
