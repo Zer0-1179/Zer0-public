@@ -309,8 +309,20 @@ def draw():
     # 突き抜けてしまう(2026-08-09、ユーザー指摘で発覚)。この接続だけは
     # 「アイコン下端でちょうど止まる」shrinkB≈35pt(0.55データ単位相当)を
     # 個別に使い、ラベルの手前で確実に止める。
+    # 【2026-08-10追記】default値3ptは上記3接続(apigw→lambda_sw・
+    # lambda_wl→ses_out・lambda_sw→ses_out)には小さすぎ、矢頭がアイコン
+    # 中心近くまで入り込みアイコン画像(zorderが線より前面)の裏に完全に
+    # 隠れて見えなくなっていた(ユーザー指摘で発覚)。lambda_fw→ses_outと
+    # 同じ「アイコン境界でちょうど止まる」考え方に統一し、水平/垂直到達は
+    # 35pt、斜め到達(lambda_sw→ses_out)は正方形境界までの距離が長くなる分
+    # 39ptを個別に使う。
     LABEL_END_EDGES = {('lambda_fw', 'ses_out'), ('apigw', 'lambda_sw'), ('lambda_wl', 'ses_out'), ('lambda_sw', 'ses_out')}
-    LABEL_END_SHRINK_OVERRIDE = {('lambda_fw', 'ses_out'): 35}
+    LABEL_END_SHRINK_OVERRIDE = {
+        ('lambda_fw', 'ses_out'): 35,
+        ('apigw', 'lambda_sw'): 35,
+        ('lambda_wl', 'ses_out'): 35,
+        ('lambda_sw', 'ses_out'): 39,
+    }
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     inv = ax.transData.inverted()
@@ -346,7 +358,7 @@ def draw():
         n_seg = len(pts) - 1
         for i in range(n_seg):
             shrink_a = (0 if use_label_start else SHRINK) if i == 0 else 0
-            shrink_b_val = LABEL_END_SHRINK_OVERRIDE.get((from_id, to_id), 3)
+            shrink_b_val = LABEL_END_SHRINK_OVERRIDE.get((from_id, to_id), 35)
             shrink_b = (shrink_b_val if use_label_end else SHRINK) if i == n_seg - 1 else 0
             ax.annotate(
                 '', xy=pts[i + 1], xytext=pts[i],
