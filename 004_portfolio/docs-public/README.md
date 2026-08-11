@@ -139,17 +139,14 @@ bash scripts/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-11
 
-#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+#### Fableコードレビューで検出した6件を修正
 
-- 構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/004_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源(004には専用のmatplotlib生成スクリプトは元々なかった)
-- クラスター枠にdraw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)を使用。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
-
-#### 001〜008の新しい構成図をポートフォリオ表示用に同期・本番デプロイ
-
-- `src/public/images/`配下の001〜008構成図が2026-05時点(008のみ2026-08-09の中間版)のまま更新されておらず、各プロジェクトで作成したdraw.io版の新しい構成図が本番サイトに反映されていなかったことが判明
-- 8プロジェクト分をPIL(LANCZOS+ADAPTIVE 256色パレット)で圧縮して`src/public/images/`に反映し、`scripts/deploy.sh`でビルド・Lambda更新・S3同期・CloudFrontキャッシュ無効化を実行
-- 日英10ページ+404ページの疎通確認・セキュリティヘッダー確認が全てOKであることをデプロイスクリプトの自動チェックで確認。本番URLから画像を直接取得しローカルファイルとMD5一致することも別途検証し、実際に新しい図が配信されていることを確認済み
+- **middleware.tsの単一障害点を解消**: SSM `GetParameter`呼び出しにtry/catchが無く、SSM側の一時障害・スロットリングが起きると全ページ(ja/en問わず)が500エラーになる作りだった。障害時は古いキャッシュ、無ければ管理者機能のみ無効化(`isAdmin=false`)してリクエスト自体は通すよう修正
+- **deploy.shのLambda環境変数がSITE_URLのみで丸ごと置換される問題を修正**: `update-function-configuration --environment`はマージでなく置換の仕様のため、将来手動追加したenv varが次回デプロイで消える罠があった。既存の環境変数を`get-function-configuration`で取得しSITE_URLだけ上書きしてから渡す方式に変更
+- **sitemap.xmlのlastmodが37日間ハードコードのまま放置されていた問題を修正**: 「デプロイ毎に手動更新」という運用が形骸化し検索エンジンへの更新シグナルが機能していなかった。`astro.config.mjs`の`vite.define`でビルド時刻を`__BUILD_DATE__`として焼き込み、以後は自動更新される
+- **CloudFrontのDefaultCacheBehaviorから未使用のPUT/POST/PATCH/DELETEを削除**: `lambda.mjs`は`app.get`のみでこれらのメソッドのハンドラを持たないため、不要な攻撃面を減らす目的でAllowedMethodsをGET/HEAD/OPTIONSのみに縮小
+- **未使用コンポーネントAvatarPicker.astroを削除**: どこからもimportされていないデッドコードで、かつCSP nonceが未付与の`<script>`タグを持っていた(将来使われるとv3.6と同じCSPブロック不具合が再発するリスクがあった)
+- **cryptobot-stats.astroの古いコメントを修正**: 「Basic認証」という記述がv3.4のトークン方式への移行後も残っており保守者を誤誘導する状態だったため、現行方式を反映
+- 検証: `npm run build`成功→`astro dev`で管理者トークン認証の3パターン(直接描画/Cookie発行/Cookie経由アクセス)・sitemap自動lastmod・保護ページ401を確認→CFn更新(AllowedMethods)→本番デプロイ→本番で同項目を再検証(200/401/lastmod一致)。S3・Lambda Layerに不要リソースなし
