@@ -19,6 +19,8 @@
 | 使用モデル       | Amazon Bedrock **Claude Sonnet 4.6**（`jp.anthropic.claude-sonnet-4-6`） |
 | 月額コスト       | ~$2.7（約410円）                                                         |
 
+> **一時停止:** 定期生成は2027年1月まで停止中です。EventBridgeからの起動はLambdaの冒頭で即時終了するため、Bedrock・S3・SSM・SESは呼び出しません。2027年2月1日（JST）から通常どおり自動再開します。手動実行と`dry_run`は継続して利用できます。
+
 ## アーキテクチャ
 
 ![アーキテクチャ図](../images/005_architecture.png)

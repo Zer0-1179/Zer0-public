@@ -1,12 +1,54 @@
 import os
 import sys
 import json
+import datetime
 
 os.environ.setdefault("SES_SENDER_EMAIL", "test@example.com")
 os.environ.setdefault("SES_RECIPIENT_EMAIL", "test@example.com")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import lambda_function
+
+
+def test_should_skip_scheduled_run_until_resume_month():
+    """2027年1月までのEventBridge定期実行だけを一時停止すること。"""
+    scheduled_event = {"source": "aws.events", "detail-type": "Scheduled Event"}
+
+    assert lambda_function.should_skip_scheduled_run(
+        scheduled_event, datetime.datetime(2026, 8, 15, 21, tzinfo=datetime.timezone.utc)
+    )
+    assert lambda_function.should_skip_scheduled_run(
+        scheduled_event, datetime.datetime(2027, 1, 15, 21, tzinfo=datetime.timezone.utc)
+    )
+    assert not lambda_function.should_skip_scheduled_run(
+        scheduled_event, datetime.datetime(2027, 2, 1, 21, tzinfo=datetime.timezone.utc)
+    )
+
+
+def test_should_not_skip_manual_or_dry_run_invocations():
+    """手動実行・dry_runの検証経路は一時停止中も利用できること。"""
+    now = datetime.datetime(2026, 8, 15, 21, tzinfo=datetime.timezone.utc)
+
+    assert not lambda_function.should_skip_scheduled_run({}, now)
+    assert not lambda_function.should_skip_scheduled_run({"dry_run": True}, now)
+
+
+def test_lambda_handler_returns_before_any_generation_during_pause(monkeypatch):
+    """一時停止中の定期実行は外部I/Oを始める前に終了すること。"""
+    monkeypatch.setattr(lambda_function, "should_skip_scheduled_run", lambda event, now: True)
+
+    def fail_if_called():
+        raise AssertionError("一時停止中にトピック取得が実行されました")
+
+    monkeypatch.setattr(lambda_function, "get_recent_topics", fail_if_called)
+    result = lambda_function.lambda_handler(
+        {"source": "aws.events", "detail-type": "Scheduled Event"}, None
+    )
+    body = json.loads(result["body"])
+
+    assert result["statusCode"] == 200
+    assert body["skipped"] is True
+    assert body["resume_month"] == "2027-02"
 
 
 def _prompt_topic():
