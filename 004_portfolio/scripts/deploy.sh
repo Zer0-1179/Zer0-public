@@ -127,9 +127,25 @@ aws lambda wait function-updated \
   --function-name "$LAMBDA_FUNCTION_NAME" \
   --region "$REGION"
 
+# update-function-configuration --environment は Variables マップを丸ごと置換する仕様
+# （マージではない）。SITE_URL だけを指定すると、コンソール等で手動追加した他のenv varが
+# 次回デプロイで警告なく消える。既存の環境変数を取得しSITE_URLだけ上書きしてから渡す。
+CURRENT_ENV_JSON=$(aws lambda get-function-configuration \
+  --function-name "$LAMBDA_FUNCTION_NAME" \
+  --region "$REGION" \
+  --query "Environment.Variables" \
+  --output json)
+MERGED_ENV_JSON=$(echo "$CURRENT_ENV_JSON" | \
+  SITE_URL="$SITE_URL" python3 -c "
+import json, os, sys
+d = json.load(sys.stdin) or {}
+d['SITE_URL'] = os.environ['SITE_URL']
+print(json.dumps({'Variables': d}))
+")
+
 aws lambda update-function-configuration \
   --function-name "$LAMBDA_FUNCTION_NAME" \
-  --environment "Variables={SITE_URL=${SITE_URL}}" \
+  --environment "$MERGED_ENV_JSON" \
   --region "$REGION" \
   --output text > /dev/null
 

@@ -2,7 +2,8 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
-// 006 CryptoBot の非公開トレード実績ページ。認証は middleware.ts の Basic 認証で行う
+// 006 CryptoBot の非公開トレード実績ページ。認証は middleware.ts のトークン方式
+// （?admin=<トークン> + Cookie、v3.4でBasic認証から移行済み）で行う
 // （このファイル自体には認証ロジックを持たせない）。
 // stats.json / positions.json は 006 Executor Lambda がそれぞれ取引確定のたび・
 // 30分毎のPhase A実行のたびに書き出す非公開S3オブジェクト。

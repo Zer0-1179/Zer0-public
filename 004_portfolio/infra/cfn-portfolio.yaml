@@ -268,14 +268,13 @@ Resources:
           # AWS マネージドポリシー: AllViewerExceptHostHeader
           OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
           ResponseHeadersPolicyId: !Ref PortfolioResponseHeadersPolicy
+          # lambda.mjs は app.get のみでPOST/PUT/PATCH/DELETEハンドラを持たないため、
+          # CloudFrontで許可する必要がない（不要な攻撃面を減らす）。
+          # OPTIONSはCloudFrontの有効な組み合わせ制約上、GET/HEADとセットで残す。
           AllowedMethods:
             - GET
             - HEAD
             - OPTIONS
-            - PUT
-            - POST
-            - PATCH
-            - DELETE
           CachedMethods:
             - GET
             - HEAD
