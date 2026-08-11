@@ -42,6 +42,10 @@ OUTPUT_DIR = os.environ.get(
 S3_BUCKET  = os.environ.get("S3_BUCKET", "zer0-dev-s3")
 S3_PREFIX  = "zenn-mid-articles"
 
+# 定期生成は2027年1月まで停止し、2月1日（JST）から自動再開する。
+# EventBridge以外の手動実行・dry_runは止めず、必要な検証経路を維持する。
+SCHEDULED_RESUME_MONTH = "2027-02"
+
 # SSM: 直近トピック履歴
 SSM_PARAM_PATH      = "/mid-article-bot/recent-topics"
 # 16トピック中、除外しすぎて即リセットにならない範囲で最大限除外する。
@@ -1579,16 +1583,43 @@ bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh
 
 HAIKU_MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 
+
+def should_skip_scheduled_run(event: dict, now: datetime.datetime) -> bool:
+    """再開月より前のEventBridge定期実行だけを判定する。"""
+    return (
+        event.get("source") == "aws.events"
+        and event.get("detail-type") == "Scheduled Event"
+        and now.strftime("%Y-%m") < SCHEDULED_RESUME_MONTH
+    )
+
+
 def lambda_handler(event, context):
+    event = event or {}
     _total_start = time.time()
-    dry_run = bool((event or {}).get("dry_run", False))
+    now       = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
+    today     = now.strftime("%Y-%m-%d")
+
+    if should_skip_scheduled_run(event, now):
+        print(
+            f"[{timestamp}] [SCHEDULED_PAUSE] EventBridge定期実行をスキップします "
+            f"(2027年1月まで停止、{SCHEDULED_RESUME_MONTH}から自動再開)"
+        )
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "EventBridge定期実行を一時停止中です",
+                "skipped": True,
+                "resume_month": SCHEDULED_RESUME_MONTH,
+                "timestamp": timestamp,
+            }, ensure_ascii=False),
+        }
+
+    dry_run = bool(event.get("dry_run", False))
     model_id = HAIKU_MODEL_ID if event.get("test_mode") else BEDROCK_MODEL_ID
     if event.get("test_mode"):
         print(f"[TEST MODE] モデルをHaikuに切り替えました: {model_id}")
 
-    now       = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-    timestamp = now.strftime("%Y%m%d_%H%M%S")
-    today     = now.strftime("%Y-%m-%d")
     if dry_run:
         print(f"[{timestamp}] [DRY_RUN] Zenn中級記事自動生成を開始します（S3保存・メール送信・SSM書き込みをスキップ）")
     else:
