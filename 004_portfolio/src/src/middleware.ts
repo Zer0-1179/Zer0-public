@@ -24,16 +24,23 @@ const ADMIN_COOKIE_MAX_AGE_S = 60 * 60 * 24 * 365; // 365日
 const ssm = new SSMClient({ region: process.env.AWS_REGION || 'ap-northeast-1' });
 let cachedToken: { value: string; fetchedAt: number } | null = null;
 
-async function getExpectedToken(): Promise<string> {
+async function getExpectedToken(): Promise<string | null> {
   if (cachedToken && Date.now() - cachedToken.fetchedAt < AUTH_CACHE_TTL_MS) {
     return cachedToken.value;
   }
-  const result = await ssm.send(
-    new GetParameterCommand({ Name: AUTH_PARAM_NAME, WithDecryption: true })
-  );
-  const value = result.Parameter?.Value ?? '';
-  cachedToken = { value, fetchedAt: Date.now() };
-  return value;
+  try {
+    const result = await ssm.send(
+      new GetParameterCommand({ Name: AUTH_PARAM_NAME, WithDecryption: true })
+    );
+    const value = result.Parameter?.Value ?? '';
+    cachedToken = { value, fetchedAt: Date.now() };
+    return value;
+  } catch {
+    // SSM障害時にここで例外を投げると、全ページ共通ミドルウェアのため
+    // サイト全体が500になってしまう。古いキャッシュがあればそれで凌ぎ、
+    // 無ければ管理者機能のみを無効化してリクエスト自体は通す。
+    return cachedToken?.value ?? null;
+  }
 }
 
 // 長さが異なる場合も比較時間を揃えるため、常に自分自身とのtimingSafeEqualを1回挟む
@@ -68,7 +75,10 @@ function buildCookie(value: string, maxAgeSeconds: number): string {
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const cookies = parseCookies(context.request.headers.get('cookie') || '');
-  const expected = await getExpectedToken();
+  // SSM障害時はgetExpectedTokenがnullを返す。以降のロジックは元々
+  // 空文字を「無効なトークン」として扱っていたため、nullも空文字に正規化して
+  // 型を string に揃える（挙動は変わらず、管理者機能のみ一時的に無効化される）。
+  const expected = (await getExpectedToken()) ?? '';
 
   let isAdmin = !!expected && !!cookies[ADMIN_COOKIE_NAME] && safeCompare(cookies[ADMIN_COOKIE_NAME], expected);
   let setCookie: string | null = null;
