@@ -139,14 +139,10 @@ bash scripts/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-11
+### 2026-08-13
 
-#### Fableコードレビューで検出した6件を修正
+#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
 
-- **middleware.tsの単一障害点を解消**: SSM `GetParameter`呼び出しにtry/catchが無く、SSM側の一時障害・スロットリングが起きると全ページ(ja/en問わず)が500エラーになる作りだった。障害時は古いキャッシュ、無ければ管理者機能のみ無効化(`isAdmin=false`)してリクエスト自体は通すよう修正
-- **deploy.shのLambda環境変数がSITE_URLのみで丸ごと置換される問題を修正**: `update-function-configuration --environment`はマージでなく置換の仕様のため、将来手動追加したenv varが次回デプロイで消える罠があった。既存の環境変数を`get-function-configuration`で取得しSITE_URLだけ上書きしてから渡す方式に変更
-- **sitemap.xmlのlastmodが37日間ハードコードのまま放置されていた問題を修正**: 「デプロイ毎に手動更新」という運用が形骸化し検索エンジンへの更新シグナルが機能していなかった。`astro.config.mjs`の`vite.define`でビルド時刻を`__BUILD_DATE__`として焼き込み、以後は自動更新される
-- **CloudFrontのDefaultCacheBehaviorから未使用のPUT/POST/PATCH/DELETEを削除**: `lambda.mjs`は`app.get`のみでこれらのメソッドのハンドラを持たないため、不要な攻撃面を減らす目的でAllowedMethodsをGET/HEAD/OPTIONSのみに縮小
-- **未使用コンポーネントAvatarPicker.astroを削除**: どこからもimportされていないデッドコードで、かつCSP nonceが未付与の`<script>`タグを持っていた(将来使われるとv3.6と同じCSPブロック不具合が再発するリスクがあった)
-- **cryptobot-stats.astroの古いコメントを修正**: 「Basic認証」という記述がv3.4のトークン方式への移行後も残っており保守者を誤誘導する状態だったため、現行方式を反映
-- 検証: `npm run build`成功→`astro dev`で管理者トークン認証の3パターン(直接描画/Cookie発行/Cookie経由アクセス)・sitemap自動lastmod・保護ページ401を確認→CFn更新(AllowedMethods)→本番デプロイ→本番で同項目を再検証(200/401/lastmod一致)。S3・Lambda Layerに不要リソースなし
+- システム仕様書.mdの「プロジェクトカード7件（001〜007）」表記が008追加後も更新されていなかったため「8件（001〜008）」に修正
+- CloudFrontキャッシュビヘイビア表が`/_astro/*`と`/*`の2行のみで、v3.12で追加した`/images/*`・favicon各種・apple-touch-iconの5ビヘイビアが未反映だったため追記
+- CHANGELOG.mdで「2026-08-02」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置（2026-07-30と08-08の間）に移動

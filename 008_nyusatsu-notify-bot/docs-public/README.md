@@ -72,7 +72,7 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 ## AWSリソース（デプロイ済み）
 
-リソース種別ごとに分けて記載する。全リソースは5つのCloudFormationスタックで管理（詳細は最後の一覧を参照）。
+リソース種別ごとに分けて記載する。全リソースは7つのCloudFormationスタックで管理（詳細は最後の一覧を参照）。
 
 ### Lambda関数（すべてPython 3.14）
 
@@ -157,6 +157,7 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | ------------------------------ | -------------------------------------------- |
 | `zer0-nyusatsu-notify-bot`     | 収集Lambda・DLQ・アラーム                    |
 | `zer0-nyusatsu-ses-domain`     | SES送信ドメイン検証                          |
+| `zer0-nyusatsu-ses-domain-apex` | SES受信用ドメインID（zer0-infra.com、問合せメール転送用） |
 | `zer0-nyusatsu-lp-backend`     | LP登録API・LINE連携・Stripe Webhook          |
 | `zer0-nyusatsu-mail-relay`     | 問合せメール受信転送                         |
 | `zer0-nyusatsu-lp-cert`        | LP用ACM証明書（us-east-1）                   |
@@ -213,16 +214,13 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-13
 
-#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
 
-- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/008_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
-- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
-- 対象は本プロジェクトの6関数（activate-ruleset・bounce-handler・mail-forwarder・collector・lp-waitlist・stripe-webhook）
-- CloudFormationで3スタック（notify-bot・mail-relay・lp-backend）を更新し、全関数がActive/Successfulであることを確認
+- README.mdの「全リソースは5つのCloudFormationスタックで管理」という本文が、直後のスタック一覧表（6件）と矛盾していたため、実際の総数7（ap-northeast-1に6＋us-east-1のlp-certで1）に修正
+- 受信用ドメイン`zer0-infra.com`（apex）のSES EmailIdentityを管理する`zer0-nyusatsu-ses-domain-apex`スタックがREADME/システム仕様書のどちらのスタック一覧にも未記載だったため追加
+- CHANGELOG.mdで「2026-08-10」「2026-08-09」「2026-08-02」の3エントリが逆順のまま先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に並べ替え
 
 ### 2026-07-16
 

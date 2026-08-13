@@ -143,7 +143,7 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 │   ├── cfn-x-poster-zer0-0326.yaml
 │   ├── deploy.sh                       # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda_function.py     # ユニットテスト（36件）
+│       └── test_lambda_function.py     # ユニットテスト（42件）
 ├── scripts/
 │   ├── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
 │   └── generate_diagram.py             # 構成図生成（matplotlib版、2026-08-10以降は未使用）
@@ -167,7 +167,7 @@ bash scripts/test_invoke.sh
 # mode指定（random / trend）
 bash scripts/test_invoke.sh trend
 
-# ユニットテスト（36件）
+# ユニットテスト（42件）
 cd src && python -m pytest tests/ -v
 ```
 
@@ -232,11 +232,10 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-13
 
-#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
 
-- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/003_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
-- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+- システム仕様書.md内でタイムアウトが60s/90sと自己矛盾していたのを90s（実際のLambda設定・CFn）に統一
+- 構成図の説明がZenn/Qiita RSS取得のままだったのを、実際のYahoo!ニュースRSS取得（切替済み）に修正
+- README.mdのユニットテスト件数表記を実測42件（記載は36件のまま古かった）に修正

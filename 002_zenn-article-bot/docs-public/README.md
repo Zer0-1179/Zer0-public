@@ -102,7 +102,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 │   ├── diagram_generator.py  # matplotlib 図生成エンジン
 │   ├── deploy.sh             # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda.py    # ユニットテスト（21件）
+│       └── test_lambda.py    # ユニットテスト（23件）
 ├── scripts/
 │   ├── build_layer.sh        # Lambda Layer ビルド
 │   ├── download_article.sh   # S3 から生成記事をローカルに取得
@@ -128,7 +128,7 @@ DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/
 ## テスト / 動作確認
 
 ```bash
-# ユニットテスト（21件）
+# ユニットテスト（23件）
 cd src && python -m pytest tests/ -v
 
 # Lambda 手動実行（dry_run: S3保存・SES送信・SSM書き込みをスキップし記事生成のみプレビュー）
@@ -155,11 +155,8 @@ bash scripts/download_article.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-13
 
-#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
 
-- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/002_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
-- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+- README.mdのユニットテスト件数表記を実測23件（記載は21件のまま古かった）に修正。コード・AWS実機との整合は他は全て一致確認済み

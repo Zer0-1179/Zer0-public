@@ -58,6 +58,7 @@
 | 使用数管理 | Amazon DynamoDB（`zer0-touring-ratelimit` / `gmaps#{YYYY-MM}` キーで月間 Google Maps 使用数をアトミック管理） |
 | レートリミット | Amazon DynamoDB（`zer0-touring-ratelimit`：IP 別・日別 3回制限 / TTL で翌々日自動削除） |
 | URL短縮・OGP | Amazon DynamoDB（`zer0-touring-share`：6文字ID・30日 TTL / Lambda が OGP HTML + リダイレクトを返す） |
+| コース履歴保存 | Amazon DynamoDB（`zer0-touring-history`：端末ID紐づけ・180日 TTL・最大30件 / `x-device-id`ヘッダーで識別） |
 | 使用回数UI | GET /api/status でトップ画面にドット形式の残回数バッジを表示（管理者モード対応） |
 | ホスティング | Amazon CloudFront + S3（OAC 署名付きアクセス） |
 | 写真（詳細） | Wikipedia REST API（`/api/rest_v1/page/summary/{spot}`）/ 失敗時はグラデーション+🏍️ |
@@ -232,7 +233,9 @@ aws lambda update-function-code --function-name zer0-touring-suggest \
 
 # フロントエンドのみ更新
 cd frontend && npm run build
-aws s3 sync dist/ s3://zer0-touring-s3 --delete
+# stats.jsonはzer0-touring-stats Lambdaが日次生成する動的ファイルでビルド成果物に含まれないため、
+# --deleteで誤って消さないよう必ず--excludeすること（2026-08-09に一度誤削除する事故あり）
+aws s3 sync dist/ s3://zer0-touring-s3 --delete --exclude "stats.json"
 aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 ```
 
@@ -318,6 +321,14 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 OGP メタタグ付き HTML を返しアプリへリダイレクト。SNS シェア時にコース名・目的地・写真がプレビューとして表示される（TTL: 30日）。
 
+### POST /api/history
+
+コース生成結果を端末ID（`x-device-id` ヘッダー）に紐づけて DynamoDB（`zer0-touring-history`）に保存する。1日3回の生成上限で消えてしまう候補コースをあとから見返せるようにする機能。レートリミット対象外、TTL: 180日。
+
+### GET /api/history
+
+端末IDに紐づく履歴一覧を新しい順に最大30件返す。
+
 ## 初回セットアップ
 
 ### Google Maps API キー
@@ -363,9 +374,9 @@ aws logs tail /aws/lambda/zer0-touring-suggest --follow --region ap-northeast-1
 # Google Maps 月間使用カウント確認（DynamoDB管理）
 aws dynamodb get-item --table-name zer0-touring-ratelimit --key '{"pk":{"S":"gmaps#'$(date +%Y-%m)'"}}' --region ap-northeast-1
 
-# フロントエンド再デプロイ（コード変更後）
+# フロントエンド再デプロイ（コード変更後、stats.jsonは--excludeで誤削除を防止）
 cd 007_Zer0_TouringApp/frontend && npm run build && \
-aws s3 sync dist/ s3://zer0-touring-s3 --delete && \
+aws s3 sync dist/ s3://zer0-touring-s3 --delete --exclude "stats.json" && \
 aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 ```
 
@@ -411,11 +422,10 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-13
 
-#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正【重要】
 
-- 構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/007_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源(`scripts/generate_diagram.py`によるmatplotlib生成は現状維持だが更新には使わない)
-- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+- README.mdのデプロイ手順`aws s3 sync`コマンド2箇所に`--exclude "stats.json"`が抜けたままで、この通り実行すると2026-08-09のstats.json誤削除事故が再発するリスクがあったため修正
+- `/api/history`（コース履歴保存機能、v2.7で実装済み・本番稼働中）がREADME/システム仕様書のAPIリファレンス・技術スタック・DynamoDBテーブル一覧のいずれからも欠落していたため追記
+- CHANGELOG.mdで「2026-08-10」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に移動

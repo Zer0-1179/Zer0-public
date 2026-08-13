@@ -46,7 +46,7 @@ EventBridge（毎月1日・15日 21:00 JST）
 | 使用モデル     | Claude Haiku 4.5     | Claude Sonnet 4.6                            |
 | トピック数     | 22種（単一サービス） | 16種（複合アーキテクチャ）                   |
 | 追加セクション | なし                 | コスト最適化・セキュリティ・スケーラビリティ |
-| 月額コスト     | ~$0.16               | ~$2.8                                        |
+| 月額コスト     | ~$0.16               | ~$2.7                                        |
 | Lambda メモリ  | 256MB                | 512MB                                        |
 
 ## 対応トピック（24種）
@@ -96,7 +96,7 @@ EventBridge（毎月1日・15日 21:00 JST）
 │   ├── deploy.sh                     # デプロイスクリプト
 │   ├── cfn-mid-article-generator.yaml
 │   └── tests/
-│       └── test_lambda.py            # ユニットテスト（19件）
+│       └── test_lambda.py            # ユニットテスト（22件）
 ├── docs/                             # 非公開（システム仕様書）
 ├── docs-public/                      # 公開（README・CHANGELOG）
 ├── scripts/                          # 補助スクリプト（Layer構築・テスト実行等）
@@ -120,7 +120,7 @@ DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/
 ## テスト / 動作確認
 
 ```bash
-# ユニットテスト（19件）
+# ユニットテスト（22件）
 cd src && python -m pytest tests/ -v
 
 # Function URL でテスト実行（AWS_IAM 認証）
@@ -142,11 +142,10 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-13
 
-#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
 
-- 構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/005_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源(005には専用のmatplotlib生成スクリプトは元々なく、`src/diagram_generator.py`は記事内図の生成専用)
-- クラスター枠にdraw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)を使用。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+- README.mdのユニットテスト件数表記を実測22件（記載は19件のまま古かった）に修正
+- 月額コストがREADME内で$2.7表記3箇所・$2.8表記1箇所、システム仕様書は$2.8表記と内部・ファイル間で不一致だったため、$2.7（約410円）に統一
+- CHANGELOG.mdで「2026-08-11」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置（2026-08-10と08-13の間）に移動
