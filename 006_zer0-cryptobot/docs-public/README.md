@@ -151,6 +151,7 @@ Executor が実行するたびに証拠金維持率を確認：
 | スケジューリング | Amazon EventBridge Scheduler（2スケジュール） |
 | 状態管理 | AWS SSM Parameter Store（ポジション State・シグナル） |
 | 取引履歴 | Amazon S3（確定損益を 1決済=1オブジェクトで記録・週次集計に使用） |
+| ポジション連携 | Amazon S3（`zer0-cryptobot-stats-s3`：`positions.json`をPhase A毎に上書き。004ポートフォリオの「現在のポジション」表示に使用） |
 | 通知 | Amazon SES（エラー通知・週次レポート） |
 | 信頼性 | Lambda EventInvokeConfig（非同期invoke失敗時にFailureNotifierへ自動通知・リトライは無効化（0回、二重発注防止のため）） |
 | データソース | Binance API（REST）/ python-binance |
@@ -204,8 +205,22 @@ python3 backtest/backtest.py --years 5 --multi  # BTC/ETH/SOL 複数同時
 
 ## 緊急停止
 
+EventBridgeスケジュールを無効化する前に、まずSSMパラメータ`/Zer0/CryptoBot/mode`での切替を検討する（既存ポジションのSL管理を止めずに新規建てだけ止められる。パラメータ未作成・不正値・読込失敗は全て`normal`扱いのfail-safe）。
+
 ```bash
-# EventBridge を無効化してBot停止（ポジションは保持）
+# 新規建てのみ停止（既存ポジションのTP1/SL/トレーリング管理は継続）
+aws ssm put-parameter --name /Zer0/CryptoBot/mode --value pause_entry --type String --overwrite --region ap-northeast-1
+
+# 全処理停止（既存ポジション管理も止まる。ポジションがある状態での長時間停止は非推奨）
+aws ssm put-parameter --name /Zer0/CryptoBot/mode --value halt --type String --overwrite --region ap-northeast-1
+
+# 復帰
+aws ssm put-parameter --name /Zer0/CryptoBot/mode --value normal --type String --overwrite --region ap-northeast-1
+```
+
+それでも停止しない場合はEventBridgeスケジュール自体を無効化する（ポジションは保持されるが、既存ポジションのSL/トレーリング管理も止まる点に注意）。
+
+```bash
 aws scheduler update-schedule --name Zer0-CryptoBot-Schedule \
   --state DISABLED --region ap-northeast-1
 aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
@@ -223,17 +238,10 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-10
+### 2026-08-13
 
-#### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正【重要】
 
-- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/006_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
-- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
-
-#### 週次サマリーメールに「稼働状況」セクションを追加、資金増額進捗をテーブル化
-
-- シグナル0件の週でも「異常ではない、Analyzer/Executorは定期実行を継続しており問題があれば別途アラームメールで通知される」旨をメール冒頭に明記し、Botが止まっているように見える不安を解消
-- 資金増額判断の進捗（累計クローズ数・実勝率・実PF・最大DD）のHTML表示を、他セクションと統一したテーブル形式に変更し読みやすく整理
-- pytest 8件追加・全45件通過を確認。ローカルでメール本文の見た目もレンダリングして確認済み。`bash scripts/deploy.sh`で本番デプロイ済み
+- 緊急停止セクションがEventBridgeスケジュール無効化の旧手順のみで、v4.0で追加した「SSMパラメータ`/Zer0/CryptoBot/mode`でのセーフモード切替（新規建てのみ停止/全処理停止）」が未反映だったため、優先手順として追記
+- システム仕様書のSSMパラメータ一覧表に`mode`パラメータが未掲載だったため追加
+- 技術スタック表に第2S3バケット`zer0-cryptobot-stats-s3`（`positions.json`、004ポートフォリオの「現在のポジション」表示用）が未記載だったため追加

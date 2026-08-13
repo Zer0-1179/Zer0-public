@@ -2,15 +2,6 @@
 
 ※ バージョン番号の付与は2026-07-14に廃止（実質的なバージョン管理をしておらず、詳細な変更履歴はGitで追跡可能なため）。過去分の番号（vX.Y）は見出しに参照用として残している。
 
-## 2026-08-10
-
-### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
-
-- 構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/007_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源(`scripts/generate_diagram.py`によるmatplotlib生成は現状維持だが更新には使わない)
-- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
-
 ## 2026-08-09
 
 ### 目的地天気「取得中...」固着・ナビ起点まわりの修正
@@ -211,3 +202,20 @@
 - `buildMapUrl`と`computeEnrichState`（今回のバグ本体だった状態遷移ロジック）を`course-utils.ts`に切り出しテスト9件を追加（フロント計21件）。`index.astro`側もこの切り出し済み関数を呼ぶよう配線し直し、テストが実コードを保証するようにした
 - `/api/enrich`で目的地ジオコーディングが失敗した回数を追跡するカスタムメトリクス`Zer0Touring/EnrichGeocodeFailed`を追加。Nominatim由来の劣化が本番でどれくらいの頻度で起きているか後から追えるようにした（`Zer0Touring/SuggestCalls`と同じ仕組みを流用、IAM権限変更なし）
 - バックエンドに回帰テスト2件追加（計25件）。本番デプロイ・疎通確認済み
+
+## 2026-08-10
+
+### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+
+- 構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/007_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源(`scripts/generate_diagram.py`によるmatplotlib生成は現状維持だが更新には使わない)
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+
+## 2026-08-13
+
+### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+
+- README.mdのデプロイ手順`aws s3 sync`コマンド2箇所に`--exclude "stats.json"`が抜けたままで、この通り実行すると2026-08-09のstats.json誤削除事故が再発するリスクがあったため`infra/deploy-infra.sh`・システム仕様書と同じ形に修正
+- `/api/history`（コース履歴保存機能、v2.7で実装済み・本番稼働中）がREADME/システム仕様書のAPIリファレンス・技術スタック・DynamoDBテーブル一覧のいずれからも欠落していたため追記
+- 本CHANGELOG.mdで「2026-08-10」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に移動

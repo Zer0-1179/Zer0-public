@@ -114,3 +114,9 @@
 - クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「ap-northeast-1」の「Region」枠(点線)を配置
 - 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
 - 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+
+## 2026-08-13
+
+### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+
+- システム仕様書.mdのIAM権限表・IaC管理リソース表にSNS失敗通知機能（PosterAlarmTopic/PosterAlarmSubscription/PosterEventInvokeConfig、v2.2で実装済み）が未反映だったため追記。コード・AWS実機との整合は他は全て一致確認済み

@@ -2,61 +2,6 @@
 
 ※ バージョン番号の付与は2026-07-14に廃止（実質的なバージョン管理をしておらず、詳細な変更履歴はGitで追跡可能なため）。過去分の番号（vX.Y）は見出しに参照用として残している。
 
-## 2026-08-10
-
-### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
-
-- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/008_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
-- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
-- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
-- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
-
-## 2026-08-09
-
-### 構成図をAWS公式ベストプラクティスに準拠させる
-
-- ユーザー共有のAWS Summit Japan 2025セッション「AWS アーキテクチャ作図入門」（ソラコム松下氏）のチェックリストを参考に、`scripts/generate_diagram.py`を全面的に見直し
-- サービス名を正式名称に統一（「Lambda」→「AWS Lambda」、「SSM」→「AWS Systems Manager」、「SQS」→「Amazon SQS」、「ACM」→「AWS Certificate Manager」等）。ラベルは2行以内・単語途中で改行しないルールを徹底
-- 図全体を囲む「AWS Cloud」外枠（公式AWS Cloudロゴ付き）を新設し、ap-northeast-1リージョン枠をその内側に配置する2階層構造に変更
-- 併せて、EventBridgeノードがap-northeast-1枠からはみ出して配置されていた既存の座標ズレ（今回の見直しで発覚）も修正
-- ユーザー指摘を受け、AWS Cloud・ap-northeast-1の二重内包が実質冗長（両クラスターの内包ノードが完全一致）だった点を是正。CloudFront・ACM（us-east-1発行）はリージョンに属さないグローバル/エッジサービスのため、region枠の外・AWS Cloud内に「エッジ/グローバルサービス」クラスターとして独立させ、region枠との境界を越える接続だけがまたぐ構成に変更
-- 上記の再配置に伴い、S3(LP静的サイト)がEventBridge/Lambdaと矩形重なりを起こす配置ミスを検出・修正。さらに矢印がノードラベルの文字にかぶる問題（ユーザー指摘）を受け、matplotlibの`get_window_extent`でラベルの実測境界を取得し、全経路がラベル文字と交差しない座標になるまで調整
-- ユーザー指摘で「エッジ/グローバルサービス」クラスターとregion枠が重なっていることが判明。原因は`FancyBboxPatch`の`boxstyle='round,pad=0.15'`が指定座標より各辺0.15外側に描画を膨らませる仕様を計算に入れておらず、数値上のギャップ0.7が視覚的には0.4しかなかったこと。パディング分を加味してギャップを1.2に拡大し、CLAUDE.mdの「隣接クラスター間ギャップ0.8以上」を満たすよう修正
-- ユーザー指摘でLambda（lp-waitlist・stripe-webhook）2つの配置が雑然として見える点も改善。API Gatewayからの距離をほぼ揃えた対称配置に変更し、DynamoDBの位置も微調整。交差ゼロ・アイコン非接触は引き続きスクリプトで機械的に検証
-- ユーザー指摘でさらに2点改善: ①lp-waitlist LambdaをAPI Gateway・SES送信と同じy座標に揃え、一直線の水平経路にした ②S3(LP静的サイト)をCloudFrontの真下(同じx座標)に配置し、垂直経路を一直線にした
-- 「矢印は文字の下から始める」ルールの検証に使っていた自作スクリプトに、ラベル位置のアンカーオフセット誤り（本番コードは`y-HALF-0.2`だが検証側は`y-HALF-0.05`を使用）があり、実際にはDynamoDBラベルと交差していたことが発覚。matplotlibの`get_window_extent`を本番コードと同一のオフセットで呼び出す検証スクリプトに作り直し、全ノードラベル・全エッジラベルに対して全経路を再チェックして解消
-- ユーザー指摘「配置の感覚がルール化されておらずバラバラ」を受け、水平座標を3.5間隔（CLAUDE.md規定の最低間隔）の統一グリッドに再編。既存の縦列（ssm/cw/apigw/s3mail、x=9.5）を基準に、CloudFront・S3(LP静的サイト)・ACMをそのグリッドへ整列（CloudFront→S3が一直線に）、SES送信とmail-forwarderも同一列（x=20.0）に揃えて一直線にした。ebのみap-northeast-1枠のパディング制約でグリッド外の例外として残る（コメントで理由を明記）
-- 「文字の下から矢印」指摘の再検証で、検証スクリプトの2回目の不具合（実際に描画される区間ではなく、shrinkA/shrinkBで消える方の断片をチェックしていた）を発見・修正。正しい検証により、cf→s3lpやlambda_fw→ses_out等「一直線に見える」経路の多くが、実は出発・到着ノード自身のラベル文字を貫通していたことが判明し、いったん9箇所に迂回経由点を追加した
-- ユーザーへ確認したところ、「自分自身の送信元・送信先ノードのラベルに矢印がかかるのは問題ない（むしろその文字から矢印が出ているように見えるのが望ましい）。直線を優先し、無関係な他ノードのラベルを横切る場合だけ回避してほしい」という意図が判明。上記9箇所の迂回経由点を撤去し直線に戻した（cf→s3lp、lambda_fw→ses_out等が再び一直線に）。無関係な別ノードのラベルを横切るケース（lambda→ses_outのssm/cw回避等）はそのまま迂回を維持
-- さらに「矢印はラベル文字の下から出ているように見せてほしい」との指示で全接続に一律適用したところ、横方向・斜めの接続まで不自然に長い迂回線になってしまい、ユーザーから差し戻し指示を受けて直線版へ復元
-- 改めて「直線が自ノードのラベル文字を自然に貫通する接続のみ」という条件を確認し、該当する接続だけ始点/終点をラベル寄りにする対応に変更。判定基準は「中心点どうしを直線で結んだ場合に自分自身のラベル矩形を通過するか」で機械的に特定した
-- 初回の機械チェックは直線経路（waypointなし）しか見ておらず、`apigw→lambda_sw`のようにwaypoint経由で最終区間が自ノードのラベルを貫通するケースを見落としていた。waypointを含めた最初/最後の区間で再チェックし、`apigw→lambda_sw`の始点(apigw自身)・終点(lambda_sw自身)双方を追加。なおstripe-webhook Lambda→DynamoDBは着信経路と同じ直下corridorを共有し線が重なってしまうため、自ラベルをわずかに掠める程度のボーダーラインと判断してアイコン基準のまま残した
-- ses_out（Amazon SES送信）は複数接続の収束点で、`lambda_wl→ses_out`（水平、「登録通知」ラベル）・`lambda_sw→ses_out`（斜め）も標準shrinkB=42だと矢頭がアイコン手前の隙間で浮いていたのをユーザー指摘で発見。mail-forwarder→ses_outと同様に隙間を詰め、矢印の向き（xy/xytext指定）はそのまま変更していないことを確認済み。最終的な対象は8箇所
-- 上記のうち`lambda_fw→ses_out`（mail-forwarderがses_outの真下から接続）だけは、隙間を詰めすぎる（shrinkBを縮小しすぎる）とses_out自身の2行ラベル文字をそのまま突き抜けてしまう問題が発生（ユーザー指摘「文字がかぶっている」で発覚）。この接続だけ「アイコン下端でちょうど止まる」shrinkB≈35pt（他は3pt）を個別に設定し、ラベルの手前で確実に止まるよう修正
-
-### 構成図の線の交差を解消
-
-- ユーザーから構成図（`008_architecture.png`）の線が交差して見づらいと指摘を受け、`scripts/generate_diagram.py`のノード座標・経路を全面的に再設計
-- 主な問題は、Stripe Webhook用Lambda（stripe-webhook）まわりの3本の斜線（apigw→lambda_sw、lambda_sw→DynamoDB、lambda_sw→SES送信）が既存のlp-waitlist系統の線と複数箇所で交差していたこと。加えてStripe→API Gatewayの迂回線がCloudWatch Logsのラベル文字を貫通していたことも判明
-- 全エッジの線分交差・アイコン近接をPythonスクリプトで機械的に検証するチェッカーを作成し、交差ゼロ・アイコン/ラベル非接触になるまで座標を反復調整（lp-waitlist系統を上トラック、stripe-webhook系統を下トラックに分離し、それぞれDynamoDB・SES送信への経路を迂回させる設計に変更）
-- 変更はドキュメント用画像のみでAWSリソースの変更を伴わないため、AWSデプロイ・pytestは対象外
-
-### Lambdaランタイムのバージョン統一
-
-- 全Lambda関数のPythonランタイムがpython3.13とpython3.14で混在していたため、最新のpython3.14に統一
-- 対象は本プロジェクトの6関数（activate-ruleset・bounce-handler・mail-forwarder・collector・lp-waitlist・stripe-webhook）で、他プロジェクトは既にpython3.14だった
-- `cfn-nyusatsu-notify-bot.yaml`・`cfn-mail-relay.yaml`・`cfn-lp-backend.yaml`の`Runtime`を変更しCloudFormationで3スタックを更新
-- いずれもLayer未使用（標準ライブラリのみ）のため互換性リスクは低いと判断。全スタックがUPDATE_COMPLETE、全関数がState:Active・LastUpdateStatus:Successfulであることを確認
-- 本番運用中のため実メール転送・Stripe決済処理を伴うinvokeテストは実施せず、CFn更新成功をもって確認完了とした（ユーザー確認済み）
-
-## 2026-08-02
-
-### 神奈川県回答の反映と回答書の非公開化
-
-- 2026-07-24付の神奈川県からの回答受領をREADMEへ反映。「事実上のグリーンライト」とは断定せず、PDL1.0、対象サイト固有規約、出典・加工表示、第三者権利、個別法令の確認が必要と明記
-- 公開同期されていた回答PDFを非公開の`docs/`へ移動。同期処理に公文書回答PDFとWindowsの`Zone.Identifier`を除外する防御規則を追加
-- 東京都への展開は、同都からの回答待ちであることを明記
-
 ## 2026-07-07
 
 ### 企画・事業設計（v0.1）
@@ -280,3 +225,66 @@
 - 007(TouringApp)の`Zer0-touring-lambda-errors`を削除して枠を確保（`apigw-5xx`と機能的にほぼ重複、007のLambdaはAPI Gateway同期呼び出し専用のため未処理例外・タイムアウト・スロットリングはいずれも5xxとして検知可能とFableも同結論）
 - `infra/cfn-lp-backend.yaml`に`zer0-nyusatsu-lp-waitlist-errors-alarm-01`を追加。007側`infra/cfn-touring.yaml`の変更と合わせて両CFnスタックを更新・デプロイ
 - デプロイ後`aws cloudwatch describe-alarms`でアカウント全体のアラーム総数が10個であることを確認。007の本番サイト（`touring.zer0-infra.com`）がHTTP 200で正常応答することも確認
+
+## 2026-08-02
+
+### 神奈川県回答の反映と回答書の非公開化
+
+- 2026-07-24付の神奈川県からの回答受領をREADMEへ反映。「事実上のグリーンライト」とは断定せず、PDL1.0、対象サイト固有規約、出典・加工表示、第三者権利、個別法令の確認が必要と明記
+- 公開同期されていた回答PDFを非公開の`docs/`へ移動。同期処理に公文書回答PDFとWindowsの`Zone.Identifier`を除外する防御規則を追加
+- 東京都への展開は、同都からの回答待ちであることを明記
+
+## 2026-08-09
+
+### 構成図をAWS公式ベストプラクティスに準拠させる
+
+- ユーザー共有のAWS Summit Japan 2025セッション「AWS アーキテクチャ作図入門」（ソラコム松下氏）のチェックリストを参考に、`scripts/generate_diagram.py`を全面的に見直し
+- サービス名を正式名称に統一（「Lambda」→「AWS Lambda」、「SSM」→「AWS Systems Manager」、「SQS」→「Amazon SQS」、「ACM」→「AWS Certificate Manager」等）。ラベルは2行以内・単語途中で改行しないルールを徹底
+- 図全体を囲む「AWS Cloud」外枠（公式AWS Cloudロゴ付き）を新設し、ap-northeast-1リージョン枠をその内側に配置する2階層構造に変更
+- 併せて、EventBridgeノードがap-northeast-1枠からはみ出して配置されていた既存の座標ズレ（今回の見直しで発覚）も修正
+- ユーザー指摘を受け、AWS Cloud・ap-northeast-1の二重内包が実質冗長（両クラスターの内包ノードが完全一致）だった点を是正。CloudFront・ACM（us-east-1発行）はリージョンに属さないグローバル/エッジサービスのため、region枠の外・AWS Cloud内に「エッジ/グローバルサービス」クラスターとして独立させ、region枠との境界を越える接続だけがまたぐ構成に変更
+- 上記の再配置に伴い、S3(LP静的サイト)がEventBridge/Lambdaと矩形重なりを起こす配置ミスを検出・修正。さらに矢印がノードラベルの文字にかぶる問題（ユーザー指摘）を受け、matplotlibの`get_window_extent`でラベルの実測境界を取得し、全経路がラベル文字と交差しない座標になるまで調整
+- ユーザー指摘で「エッジ/グローバルサービス」クラスターとregion枠が重なっていることが判明。原因は`FancyBboxPatch`の`boxstyle='round,pad=0.15'`が指定座標より各辺0.15外側に描画を膨らませる仕様を計算に入れておらず、数値上のギャップ0.7が視覚的には0.4しかなかったこと。パディング分を加味してギャップを1.2に拡大し、CLAUDE.mdの「隣接クラスター間ギャップ0.8以上」を満たすよう修正
+- ユーザー指摘でLambda（lp-waitlist・stripe-webhook）2つの配置が雑然として見える点も改善。API Gatewayからの距離をほぼ揃えた対称配置に変更し、DynamoDBの位置も微調整。交差ゼロ・アイコン非接触は引き続きスクリプトで機械的に検証
+- ユーザー指摘でさらに2点改善: ①lp-waitlist LambdaをAPI Gateway・SES送信と同じy座標に揃え、一直線の水平経路にした ②S3(LP静的サイト)をCloudFrontの真下(同じx座標)に配置し、垂直経路を一直線にした
+- 「矢印は文字の下から始める」ルールの検証に使っていた自作スクリプトに、ラベル位置のアンカーオフセット誤り（本番コードは`y-HALF-0.2`だが検証側は`y-HALF-0.05`を使用）があり、実際にはDynamoDBラベルと交差していたことが発覚。matplotlibの`get_window_extent`を本番コードと同一のオフセットで呼び出す検証スクリプトに作り直し、全ノードラベル・全エッジラベルに対して全経路を再チェックして解消
+- ユーザー指摘「配置の感覚がルール化されておらずバラバラ」を受け、水平座標を3.5間隔（CLAUDE.md規定の最低間隔）の統一グリッドに再編。既存の縦列（ssm/cw/apigw/s3mail、x=9.5）を基準に、CloudFront・S3(LP静的サイト)・ACMをそのグリッドへ整列（CloudFront→S3が一直線に）、SES送信とmail-forwarderも同一列（x=20.0）に揃えて一直線にした。ebのみap-northeast-1枠のパディング制約でグリッド外の例外として残る（コメントで理由を明記）
+- 「文字の下から矢印」指摘の再検証で、検証スクリプトの2回目の不具合（実際に描画される区間ではなく、shrinkA/shrinkBで消える方の断片をチェックしていた）を発見・修正。正しい検証により、cf→s3lpやlambda_fw→ses_out等「一直線に見える」経路の多くが、実は出発・到着ノード自身のラベル文字を貫通していたことが判明し、いったん9箇所に迂回経由点を追加した
+- ユーザーへ確認したところ、「自分自身の送信元・送信先ノードのラベルに矢印がかかるのは問題ない（むしろその文字から矢印が出ているように見えるのが望ましい）。直線を優先し、無関係な他ノードのラベルを横切る場合だけ回避してほしい」という意図が判明。上記9箇所の迂回経由点を撤去し直線に戻した（cf→s3lp、lambda_fw→ses_out等が再び一直線に）。無関係な別ノードのラベルを横切るケース（lambda→ses_outのssm/cw回避等）はそのまま迂回を維持
+- さらに「矢印はラベル文字の下から出ているように見せてほしい」との指示で全接続に一律適用したところ、横方向・斜めの接続まで不自然に長い迂回線になってしまい、ユーザーから差し戻し指示を受けて直線版へ復元
+- 改めて「直線が自ノードのラベル文字を自然に貫通する接続のみ」という条件を確認し、該当する接続だけ始点/終点をラベル寄りにする対応に変更。判定基準は「中心点どうしを直線で結んだ場合に自分自身のラベル矩形を通過するか」で機械的に特定した
+- 初回の機械チェックは直線経路（waypointなし）しか見ておらず、`apigw→lambda_sw`のようにwaypoint経由で最終区間が自ノードのラベルを貫通するケースを見落としていた。waypointを含めた最初/最後の区間で再チェックし、`apigw→lambda_sw`の始点(apigw自身)・終点(lambda_sw自身)双方を追加。なおstripe-webhook Lambda→DynamoDBは着信経路と同じ直下corridorを共有し線が重なってしまうため、自ラベルをわずかに掠める程度のボーダーラインと判断してアイコン基準のまま残した
+- ses_out（Amazon SES送信）は複数接続の収束点で、`lambda_wl→ses_out`（水平、「登録通知」ラベル）・`lambda_sw→ses_out`（斜め）も標準shrinkB=42だと矢頭がアイコン手前の隙間で浮いていたのをユーザー指摘で発見。mail-forwarder→ses_outと同様に隙間を詰め、矢印の向き（xy/xytext指定）はそのまま変更していないことを確認済み。最終的な対象は8箇所
+- 上記のうち`lambda_fw→ses_out`（mail-forwarderがses_outの真下から接続）だけは、隙間を詰めすぎる（shrinkBを縮小しすぎる）とses_out自身の2行ラベル文字をそのまま突き抜けてしまう問題が発生（ユーザー指摘「文字がかぶっている」で発覚）。この接続だけ「アイコン下端でちょうど止まる」shrinkB≈35pt（他は3pt）を個別に設定し、ラベルの手前で確実に止まるよう修正
+
+### 構成図の線の交差を解消
+
+- ユーザーから構成図（`008_architecture.png`）の線が交差して見づらいと指摘を受け、`scripts/generate_diagram.py`のノード座標・経路を全面的に再設計
+- 主な問題は、Stripe Webhook用Lambda（stripe-webhook）まわりの3本の斜線（apigw→lambda_sw、lambda_sw→DynamoDB、lambda_sw→SES送信）が既存のlp-waitlist系統の線と複数箇所で交差していたこと。加えてStripe→API Gatewayの迂回線がCloudWatch Logsのラベル文字を貫通していたことも判明
+- 全エッジの線分交差・アイコン近接をPythonスクリプトで機械的に検証するチェッカーを作成し、交差ゼロ・アイコン/ラベル非接触になるまで座標を反復調整（lp-waitlist系統を上トラック、stripe-webhook系統を下トラックに分離し、それぞれDynamoDB・SES送信への経路を迂回させる設計に変更）
+- 変更はドキュメント用画像のみでAWSリソースの変更を伴わないため、AWSデプロイ・pytestは対象外
+
+### Lambdaランタイムのバージョン統一
+
+- 全Lambda関数のPythonランタイムがpython3.13とpython3.14で混在していたため、最新のpython3.14に統一
+- 対象は本プロジェクトの6関数（activate-ruleset・bounce-handler・mail-forwarder・collector・lp-waitlist・stripe-webhook）で、他プロジェクトは既にpython3.14だった
+- `cfn-nyusatsu-notify-bot.yaml`・`cfn-mail-relay.yaml`・`cfn-lp-backend.yaml`の`Runtime`を変更しCloudFormationで3スタックを更新
+- いずれもLayer未使用（標準ライブラリのみ）のため互換性リスクは低いと判断。全スタックがUPDATE_COMPLETE、全関数がState:Active・LastUpdateStatus:Successfulであることを確認
+- 本番運用中のため実メール転送・Stripe決済処理を伴うinvokeテストは実施せず、CFn更新成功をもって確認完了とした（ユーザー確認済み）
+
+## 2026-08-10
+
+### 構成図をdraw.ioでの手動編集に移行、AWS公式Cloud/Region枠を導入
+
+- matplotlib(`scripts/generate_diagram.py`)での矢印微調整では意図した見た目にならなかったため、構成図をユーザー自身がdraw.io(diagrams.net)で手直しする運用に変更。`images/008_architecture.drawio`を新規作成し、以後はこのファイルが構成図の一次情報源
+- クラスター枠を独自の色付き角丸四角形から、draw.io標準搭載の公式AWS4シェイプ(`shape=mxgraph.aws4.group`)に変更。最外周に「AWS Cloud」(実線)、その内側に「us-east-1」「ap-northeast-1」の2つの「Region」枠(点線)を入れ子で配置
+- 斜め方向の接続のうち他ノードのアイコン・ラベルと交差しうるものを直角配線(`edgeStyle=orthogonalEdgeStyle`)に整理し、線の交差・重なりを解消
+- 変更はドキュメント用画像のみでAWSリソース・コードの変更を伴わないため、AWSデプロイ・pytestは対象外
+
+## 2026-08-13
+
+### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+
+- README.mdの「全リソースは5つのCloudFormationスタックで管理」という本文が、直後のスタック一覧表（6件）と矛盾していたため、実際の総数7（ap-northeast-1に6＋us-east-1のlp-certで1）に修正
+- 受信用ドメイン`zer0-infra.com`（apex）のSES EmailIdentityを管理する`zer0-nyusatsu-ses-domain-apex`スタックがREADME/システム仕様書のどちらのスタック一覧にも未記載だったため追加
+- 本CHANGELOG.mdで「2026-08-10」「2026-08-09」「2026-08-02」の3エントリが逆順のまま先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に並べ替え
