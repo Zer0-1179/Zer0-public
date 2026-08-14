@@ -50,6 +50,9 @@ _OFFICIAL_ICON_MAP: dict[str, str] = {
     'waf':              f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-WAF_64.png',
     # ── Security & Identity ──
     'iam':              f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Identity-and-Access-Management_64.png',
+    # iam_roleはIAMの一種別（Role）で専用アイコンは提供されていないため、公式IAMアイコンを流用する
+    # （旧バンドルアイコンが工事用ヘルメット画像という無関係な代物だったため2026-08-14に修正）
+    'iam_role':         f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Identity-and-Access-Management_64.png',
     'guardduty':        f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_Amazon-GuardDuty_64.png',
     'security_hub':     f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Security-Hub_64.png',
     'shield':           f'{_SVC}/Arch_Security-Identity-Compliance/64/Arch_AWS-Shield_64.png',
