@@ -697,6 +697,14 @@ _TOPIC_FLOWS: dict[str, list[dict]] = {
             "edges": [("S3", "AWS Glue"), ("AWS Glue", "Athena")],
         },
     ],
+    # edge_security: Shield Standardはエッジで自動的にDDoS緩和を行い、CloudFrontが
+    # リクエストを受けた後にWAFが評価する（本文の番号付きフロー説明と一致させた順序）
+    "edge_security": [
+        {
+            "order": ["Shield", "CloudFront", "WAF"],
+            "edges": [("Shield", "CloudFront"), ("CloudFront", "WAF")],
+        },
+    ],
 }
 
 
