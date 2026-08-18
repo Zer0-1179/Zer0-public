@@ -62,7 +62,7 @@ const siteUrl = project.siteUrl;
       </div>
     </section>
 
-    {slug === 'touring-app' && <TouringStatsChart lang="ja" />}
+    {slug === 'touring-app' && Astro.locals.isAdmin && <TouringStatsChart lang="ja" />}
 
     <!-- 実装のポイント -->
     <section class="mb-10">

@@ -54,7 +54,7 @@ const siteUrl = project.siteUrl;
         />
       </div>
     </section>
-    {slug === 'touring-app' && <TouringStatsChart lang="en" />}
+    {slug === 'touring-app' && Astro.locals.isAdmin && <TouringStatsChart lang="en" />}
 
     <section class="mb-10">
       <h2 class="text-accent text-xs uppercase tracking-wider mb-4">Key Implementation Points</h2>
