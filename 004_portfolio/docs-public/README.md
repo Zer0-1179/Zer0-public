@@ -139,10 +139,10 @@ bash scripts/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+#### 007バイクツーリングPWA「利用実績」の管理者限定表示化
 
-- システム仕様書.mdの「プロジェクトカード7件（001〜007）」表記が008追加後も更新されていなかったため「8件（001〜008）」に修正
-- CloudFrontキャッシュビヘイビア表が`/_astro/*`と`/*`の2行のみで、v3.12で追加した`/images/*`・favicon各種・apple-touch-iconの5ビヘイビアが未反映だったため追記
-- CHANGELOG.mdで「2026-08-02」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置（2026-07-30と08-08の間）に移動
+- `touring-app`プロジェクト詳細ページの「利用実績」セクション（`TouringStatsChart.astro`）を、`Astro.locals.isAdmin`判定を追加し管理者限定表示に変更（`pages/ja/projects/[slug].astro`・`pages/en/projects/[slug].astro`両方）。認証機構自体は006 CryptoBot非公開ページと同じ既存の管理者Cookie方式を流用
+- 非公開である旨を明示するバッジを追加。文言・スタイルは`cryptobot-stats.astro`の`Zer0-CryptoBot · 非公開ページ`と統一し`Zer0-TouringApp · 非公開ページ`（英語版は`Zer0-TouringApp · Private page`）とした
+- ビルド確認後`scripts/deploy.sh`で本番デプロイ。非管理者アクセスで「利用実績」が非表示、管理者Cookie保持時のみ表示されることをcurlで実機確認
