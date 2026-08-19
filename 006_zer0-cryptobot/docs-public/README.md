@@ -238,10 +238,10 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正【重要】
+#### 通知/SES送信先メールアドレスの変更
 
-- 緊急停止セクションがEventBridgeスケジュール無効化の旧手順のみで、v4.0で追加した「SSMパラメータ`/Zer0/CryptoBot/mode`でのセーフモード切替（新規建てのみ停止/全処理停止）」が未反映だったため、優先手順として追記
-- システム仕様書のSSMパラメータ一覧表に`mode`パラメータが未掲載だったため追加
-- 技術スタック表に第2S3バケット`zer0-cryptobot-stats-s3`（`positions.json`、004ポートフォリオの「現在のポジション」表示用）が未記載だったため追加
+- SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- SESで新アドレスを検証、CloudWatchアラーム用SNSトピック(`Zer0-CryptoBot-Alarms`)の購読を新アドレスへ切替
+- CFnスタック`zer0-cryptobot`を`update-stack`でパラメータ更新・デプロイ。旧アドレスのSES ID・SNS購読は削除済み

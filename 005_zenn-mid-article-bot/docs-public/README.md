@@ -142,10 +142,10 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+#### 通知/SES送信先メールアドレスの変更
 
-- README.mdのユニットテスト件数表記を実測22件（記載は19件のまま古かった）に修正
-- 月額コストがREADME内で$2.7表記3箇所・$2.8表記1箇所、システム仕様書は$2.8表記と内部・ファイル間で不一致だったため、$2.7（約410円）に統一
-- CHANGELOG.mdで「2026-08-11」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置（2026-08-10と08-13の間）に移動
+- SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- SESで新アドレスを検証、CloudWatchアラーム用SNSトピック(`ZennMidArticleGenerator-DLQ-Alarm`)の購読を新アドレスへ切替
+- CFnスタック`zenn-mid-article-generator`を`update-stack`でパラメータ更新・デプロイ。旧アドレスのSES ID・SNS購読は削除済み

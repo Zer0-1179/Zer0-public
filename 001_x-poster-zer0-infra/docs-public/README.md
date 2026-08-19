@@ -154,8 +154,10 @@ bash src/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+#### 通知メールアドレスの変更
 
-- システム仕様書.mdのIAM権限表・IaC管理リソース表にSNS失敗通知機能（PosterAlarmTopic/PosterAlarmSubscription/PosterEventInvokeConfig、v2.2で実装済み）が未反映だったため追記。コード・AWS実機との整合は他は全て一致確認済み
+- RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- CloudWatchアラーム用SNSトピック(`x-poster-zer0-infra-alarms`)の購読を新アドレスへ切替
+- CFnスタック`x-poster-zer0-infra`を`update-stack`でパラメータ更新・デプロイ

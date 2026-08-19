@@ -206,3 +206,11 @@
 
 - `scripts/render_terminal.py`（記事evidence画像用、2026-08-16〜cmd.exe風デザイン）が実際のAWSアカウントIDを定数としてソースにハードコードしており、公開リポジトリの機密情報スキャンで検出された
 - 特定の数値ではなく12桁の連続数字を汎用的にマスクする正規表現方式に変更し、実アカウントIDをソースから除去（005と同一ファイルを同期）
+
+## 2026-08-19
+
+### 通知/SES送信先メールアドレスの変更
+
+- SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- SESで新アドレスを検証、CloudWatchアラーム用SNSトピック`ZennArticleGenerator-DLQ-Alarm`の購読を新アドレスへ切替（旧アドレスの購読確認後に解除、通知空白期間なし）
+- CFnスタック`zenn-article-generator`を`update-stack`でパラメータ更新・デプロイ

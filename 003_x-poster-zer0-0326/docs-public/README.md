@@ -232,10 +232,10 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+#### 通知メールアドレスの変更
 
-- システム仕様書.md内でタイムアウトが60s/90sと自己矛盾していたのを90s（実際のLambda設定・CFn）に統一
-- 構成図の説明がZenn/Qiita RSS取得のままだったのを、実際のYahoo!ニュースRSS取得（切替済み）に修正
-- README.mdのユニットテスト件数表記を実測42件（記載は36件のまま古かった）に修正
+- RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- CloudWatchアラーム用SNSトピック(`x-poster-zer0-0326-alarms`)の購読を新アドレスへ切替
+- CFnスタック`x-poster-zer0-0326`を`update-stack`でパラメータ更新・デプロイ。`src/deploy.sh`のデフォルト値も追従して修正

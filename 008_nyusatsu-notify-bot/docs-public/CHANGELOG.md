@@ -288,3 +288,11 @@
 - README.mdの「全リソースは5つのCloudFormationスタックで管理」という本文が、直後のスタック一覧表（6件）と矛盾していたため、実際の総数7（ap-northeast-1に6＋us-east-1のlp-certで1）に修正
 - 受信用ドメイン`zer0-infra.com`（apex）のSES EmailIdentityを管理する`zer0-nyusatsu-ses-domain-apex`スタックがREADME/システム仕様書のどちらのスタック一覧にも未記載だったため追加
 - 本CHANGELOG.mdで「2026-08-10」「2026-08-09」「2026-08-02」の3エントリが逆順のまま先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に並べ替え
+
+## 2026-08-19
+
+### 通知メールアドレスの変更
+
+- オーナー通知先(NotifyEmail)を`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- SSMパラメータ`/zer0/008-nyusatsu/notify-email`を更新（`mail_forwarder` Lambdaは実行時にこの値を`ssm:GetParameter`で参照するため即時反映）
+- CFnスタック`zer0-nyusatsu-notify-bot`のNotifyEmailパラメータ更新・デプロイ。`zer0-nyusatsu-mail-relay`もパラメータ型`AWS::SSM::Parameter::Value<String>`の再解決のため再デプロイし、SNS購読(`zer0-nyusatsu-alarm-topic`/`zer0-nyusatsu-mail-relay-alarm-topic`/`zer0-nyusatsu-ses-events-topic`)を新アドレスへ切替

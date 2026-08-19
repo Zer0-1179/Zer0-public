@@ -422,10 +422,10 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正【重要】
+#### 通知メールアドレスの変更
 
-- README.mdのデプロイ手順`aws s3 sync`コマンド2箇所に`--exclude "stats.json"`が抜けたままで、この通り実行すると2026-08-09のstats.json誤削除事故が再発するリスクがあったため修正
-- `/api/history`（コース履歴保存機能、v2.7で実装済み・本番稼働中）がREADME/システム仕様書のAPIリファレンス・技術スタック・DynamoDBテーブル一覧のいずれからも欠落していたため追記
-- CHANGELOG.mdで「2026-08-10」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に移動
+- AlarmEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- CloudWatchアラーム用SNSトピック(`Zer0-touring-alarms`)の購読を新アドレスへ切替
+- CFnスタック`zer0-touring`を`update-stack`でパラメータ更新・デプロイ(`CertificateArn`等は`UsePreviousValue=true`)。旧アドレスのSNS購読は削除済み

@@ -155,8 +155,10 @@ bash scripts/download_article.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+#### 通知/SES送信先メールアドレスの変更
 
-- README.mdのユニットテスト件数表記を実測23件（記載は21件のまま古かった）に修正。コード・AWS実機との整合は他は全て一致確認済み
+- SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- SESで新アドレスを検証、CloudWatchアラーム用SNSトピック(`ZennArticleGenerator-DLQ-Alarm`)の購読を新アドレスへ切替
+- CFnスタック`zenn-article-generator`を`update-stack`でパラメータ更新・デプロイ。旧アドレスのSES ID・SNS購読は削除済み

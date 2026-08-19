@@ -219,3 +219,11 @@
 - README.mdのデプロイ手順`aws s3 sync`コマンド2箇所に`--exclude "stats.json"`が抜けたままで、この通り実行すると2026-08-09のstats.json誤削除事故が再発するリスクがあったため`infra/deploy-infra.sh`・システム仕様書と同じ形に修正
 - `/api/history`（コース履歴保存機能、v2.7で実装済み・本番稼働中）がREADME/システム仕様書のAPIリファレンス・技術スタック・DynamoDBテーブル一覧のいずれからも欠落していたため追記
 - 本CHANGELOG.mdで「2026-08-10」のエントリが先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に移動
+
+## 2026-08-19
+
+### 通知メールアドレスの変更
+
+- AlarmEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- CloudWatchアラーム用SNSトピック`Zer0-touring-alarms`の購読を新アドレスへ切替
+- CFnスタック`zer0-touring`を`update-stack`（`CertificateArn`/`AdminToken`/`EdgeSecret`は`UsePreviousValue=true`）でデプロイ

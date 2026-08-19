@@ -272,3 +272,11 @@
 - 010は構成図のサービス名略称、S3 create-bucketレスポンス差異、S3書き込み待機時間の実測値との乖離（15秒表記→実測約85秒）、DLQ権限失敗時の挙動説明の誤り（サイレント障害ではなく`update-event-source-mapping`が即時エラーになる）を修正
 - 両記事とも実機検証で作成したAWSリソース（SNS/CloudWatch Alarm/Lambda/IAMロール/ロググループ、S3/Kinesis/Lambda/IAMロール/SQS DLQ/ロググループ）は全て削除し、横断確認でゼロ件を確認。コストは実質$0〜数円
 - evidence画像（cmd.exe風、009は7枚・010は11枚）を記事本文に埋め込み、アカウントIDが`${AWS::AccountId}`にマスクされていることを目視確認
+
+## 2026-08-19
+
+### 通知/SES送信先メールアドレスの変更
+
+- SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- SESで新アドレスを検証、CloudWatchアラーム用SNSトピック`ZennMidArticleGenerator-DLQ-Alarm`の購読を新アドレスへ切替
+- CFnスタック`zenn-mid-article-generator`を`update-stack`でパラメータ更新・デプロイ

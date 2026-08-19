@@ -214,24 +214,10 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-13
+### 2026-08-19
 
-#### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
+#### 通知メールアドレスの変更
 
-- README.mdの「全リソースは5つのCloudFormationスタックで管理」という本文が、直後のスタック一覧表（6件）と矛盾していたため、実際の総数7（ap-northeast-1に6＋us-east-1のlp-certで1）に修正
-- 受信用ドメイン`zer0-infra.com`（apex）のSES EmailIdentityを管理する`zer0-nyusatsu-ses-domain-apex`スタックがREADME/システム仕様書のどちらのスタック一覧にも未記載だったため追加
-- CHANGELOG.mdで「2026-08-10」「2026-08-09」「2026-08-02」の3エントリが逆順のまま先頭に誤挿入されていた（プロジェクト共通ルールでは末尾追記）のを、正しい時系列位置に並べ替え
-
-### 2026-07-16
-
-#### 低優先度ドキュメント整備
-
-- `docs_payment_setup.md`への相対リンク切れを修正（README.mdからは`../docs/docs_payment_setup.md`が正しいパスだった）
-- 概要表の通知手段が「メールのみ」のまま古く、LINE通知（購読者選択制）が未反映だったため修正
-- 冒頭のステータス表記・「今後の進め方」を実態に合わせて更新（特商法対応・利用規約・プライバシーポリシーは実装済み、残るは主にStripe Payment Links発行と神奈川県回答待ち）
-
-#### lp_waitlist LambdaのCloudWatchアラーム追加
-
-- 登録・確認・配信停止・LINE連携・Stripe Webhook受付の全APIを処理する中核Lambdaにエラー検知アラームが一つも無いことが判明
-- AWSアカウント全体で無料枠10個中10個が上限のため、007(TouringApp)の`Zer0-touring-lambda-errors`を削除して枠を確保（Fableに削除候補の妥当性を独立検証してもらった上でユーザー承認を得て実施）
-- `zer0-nyusatsu-lp-waitlist-errors-alarm-01`を追加しCFnデプロイ、最終的なアラーム総数が10個であることを確認
+- オーナー通知先(NotifyEmail)を`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
+- SSMパラメータ`/zer0/008-nyusatsu/notify-email`を更新（mail-relayのメール転送先はこの値を実行時に参照するため即時反映）
+- CFnスタック`zer0-nyusatsu-notify-bot`のNotifyEmailパラメータ更新・デプロイ、`zer0-nyusatsu-mail-relay`は再デプロイでSNS購読(`zer0-nyusatsu-alarm-topic`等)を新アドレスへ切替
