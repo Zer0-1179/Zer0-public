@@ -13,7 +13,7 @@ STACK_NAME="x-poster-zer0-0326"
 FUNCTION_NAME="x-poster-zer0-0326"
 BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-jp.anthropic.claude-haiku-4-5-20251001-v1:0}"
 SSM_PREFIX="${SSM_PREFIX:-/ai_bot}"
-RECIPIENT_EMAIL="${RECIPIENT_EMAIL:-sinnjibaby@gmail.com}"
+RECIPIENT_EMAIL="${RECIPIENT_EMAIL:-sj.hatanaka@gmail.com}"
 ZIP_PATH="/tmp/x-poster-zer0-0326_function.zip"
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
