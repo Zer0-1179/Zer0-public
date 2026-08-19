@@ -44,6 +44,7 @@ if (n > 0) labelIdx.add(n - 1);
 const copy = lang === 'ja'
   ? {
       heading: '利用実績',
+      privateBadge: '非公開ページ',
       totalLabel: '累計呼び出し回数',
       unit: '',
       dailyLabel: '日別 提案API呼び出し回数(直近90日)',
@@ -55,6 +56,7 @@ const copy = lang === 'ja'
     }
   : {
       heading: 'Usage',
+      privateBadge: 'Private page',
       totalLabel: 'Total API calls',
       unit: '',
       dailyLabel: 'Daily suggestion API calls (last 90 days)',
@@ -76,7 +78,10 @@ const updatedLabel = hasData
 
 {hasData && (
   <section class="mb-10">
-    <h2 class="text-accent text-xs uppercase tracking-wider mb-4">{copy.heading}</h2>
+    <div class="flex items-center gap-2 mb-4">
+      <h2 class="text-accent text-xs uppercase tracking-wider">{copy.heading}</h2>
+      <span class="text-[10px] tracking-wide uppercase text-accent-light border border-accent-light/40 rounded px-1.5 py-0.5">{copy.privateBadge}</span>
+    </div>
     <div class="bg-navy-800/40 border border-navy-700/40 rounded-lg p-5">
       <div class="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-4">
         <span class="text-3xl font-bold text-white">{stats!.total.toLocaleString()}</span>
