@@ -38,6 +38,35 @@ def mask(s: str) -> str:
     return ACCOUNT_ID_RE.sub(MASK, s)
 
 
+# プロンプト文字幅の概算(データ座標)。フォントサイズ10.5前後のプロポーショナルフォントでの
+# 実測に基づく近似値。カーソル位置計算と共通で使う(render_gifの_draw_windowでも参照)。
+CHAR_W = 0.092
+
+
+def _draw_line(ax, x0, y, kind, text, is_prompt_line, fontsize=10.5):
+    """1行分を、コマンドか出力かが一目で区別できる配色で描画する（2026-08-20改善）。
+    プロンプト部分(C:\\Users\\user>)はシアン太字、コマンド本体は白太字、
+    出力はプロンプト/コマンドより暗いグレーにしてコントラストを強める。"""
+    if kind == "cmd":
+        if is_prompt_line:
+            ax.text(x0, y, CMD_PROMPT, color="#4ec9f0", fontsize=fontsize, ha="left", va="top",
+                    family="Noto Sans CJK JP", zorder=2, parse_math=False, weight="bold")
+            cmd_x0 = x0 + CHAR_W * len(CMD_PROMPT)
+        else:
+            cmd_x0 = x0
+        ax.text(cmd_x0, y, text, color="#ffffff", fontsize=fontsize, ha="left", va="top",
+                family="Noto Sans CJK JP", zorder=2, parse_math=False, weight="bold")
+    elif kind == "comment":
+        ax.text(x0, y, text, color="#7f9a7f", fontsize=fontsize, ha="left", va="top",
+                family="Noto Sans CJK JP", zorder=2, parse_math=False)
+    elif kind == "result":
+        ax.text(x0, y, text, color="#3ddc71", fontsize=fontsize, ha="left", va="top",
+                family="Noto Sans CJK JP", zorder=2, parse_math=False, weight="bold")
+    else:
+        ax.text(x0, y, text, color="#8a8f98", fontsize=fontsize, ha="left", va="top",
+                family="Noto Sans CJK JP", zorder=2, parse_math=False)
+
+
 def _wrap_lines(lines, width_chars):
     """(kind, text)のリストを、1画面行=1要素の(kind, text, is_prompt_line)リストに変換する。
     render()・render_gif()で共通利用。"""
@@ -143,17 +172,7 @@ def render(title, lines, result, out_path, width_chars=100):
     y = fig_h - bar_h - 0.4
     x0 = 0.5
     for kind, text, is_prompt_line in wrapped:
-        if kind == "cmd":
-            # cmd.exeのプロンプトは単色（色分けなし）: C:\Users\user>command
-            line_text = (CMD_PROMPT + text) if is_prompt_line else text
-            ax.text(x0, y, line_text, color="#f2f2f2", fontsize=10.5,
-                    ha="left", va="top", family="Noto Sans CJK JP", zorder=2, parse_math=False)
-        elif kind == "comment":
-            ax.text(x0, y, text, color="#7f9a7f", fontsize=10.5,
-                    ha="left", va="top", family="Noto Sans CJK JP", zorder=2, parse_math=False)
-        else:
-            ax.text(x0, y, text, color="#cccccc", fontsize=10.5,
-                    ha="left", va="top", family="Noto Sans CJK JP", zorder=2, parse_math=False)
+        _draw_line(ax, x0, y, kind, text, is_prompt_line)
         y -= line_h
 
     # result line
@@ -173,12 +192,16 @@ def render(title, lines, result, out_path, width_chars=100):
     print(f"saved {out_path}")
 
 
-def _draw_window(title, visible_lines, cursor_on, fig_w, line_h):
-    """render_gif()の1フレーム分を描画しPIL Imageで返す（renderの窓chromeを流用）。"""
+def _draw_window(title, visible_lines, cursor_on, fig_w, line_h, capacity):
+    """render_gif()の1フレーム分を描画しPIL Imageで返す（renderの窓chromeを流用）。
+
+    capacity: ウィンドウの最大表示行数（固定値）。GIFは全フレームで同一キャンバスサイズ
+    でなければならない（GIF形式は1枚目のキャンバスサイズが全体の基準になり、後続フレームが
+    それより大きいとはみ出た部分が切れる）。そのため、実際に描画する行数
+    （len(visible_lines)）ではなく常にcapacityでfig_hを計算する。"""
     top_pad = 1.15
     bottom_pad = 1.4
-    visible_n = max(len(visible_lines), 1)
-    fig_h = top_pad + bottom_pad + visible_n * line_h + 0.6
+    fig_h = top_pad + bottom_pad + capacity * line_h + 0.6
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
     ax.set_xlim(0, fig_w)
@@ -229,22 +252,17 @@ def _draw_window(title, visible_lines, cursor_on, fig_w, line_h):
 
     y = fig_h - bar_h - 0.4
     x0 = 0.5
-    COLORS = {"cmd": "#f2f2f2", "comment": "#7f9a7f", "out": "#cccccc", "result": "#3ddc71"}
     for kind, text, is_prompt_line in visible_lines:
-        color = COLORS.get(kind, "#cccccc")
-        weight = "bold" if kind == "result" else "normal"
-        line_text = (CMD_PROMPT + text) if (kind == "cmd" and is_prompt_line) else text
-        ax.text(x0, y, line_text, color=color, fontsize=10.5, ha="left", va="top",
-                family="Noto Sans CJK JP", zorder=2, parse_math=False, weight=weight)
+        _draw_line(ax, x0, y, kind, text, is_prompt_line)
         y -= line_h
 
     if cursor_on and visible_lines:
         cursor_kind, cursor_text, cursor_is_prompt = visible_lines[-1]
         prefix = CMD_PROMPT if (cursor_kind == "cmd" and cursor_is_prompt) else ""
-        cursor_x = x0 + 0.092 * (len(prefix) + len(cursor_text))
+        cursor_x = x0 + CHAR_W * (len(prefix) + len(cursor_text))
         cursor_y_top = y + line_h + 0.02
         ax.add_patch(plt.Rectangle((cursor_x, cursor_y_top - line_h * 0.85),
-                                    0.13, line_h * 0.75, facecolor="#f2f2f2", zorder=3))
+                                    0.13, line_h * 0.75, facecolor="#ffffff", zorder=3))
 
     buf = io.BytesIO()
     fig.savefig(buf, dpi=110, facecolor=fig.get_facecolor(), format="png")
@@ -284,7 +302,7 @@ def render_gif(steps, out_path, width_chars=100, visible_lines=20,
     for i in range(1, len(all_lines) + 1):
         window = all_lines[max(0, i - visible_lines):i]
         blink_on = (i % 2 == 0)
-        frames.append(_draw_window(title, window, blink_on, fig_w, line_h))
+        frames.append(_draw_window(title, window, blink_on, fig_w, line_h, capacity=visible_lines))
         is_step_boundary = all_lines[i - 1][0] == "result"
         durations.append(step_pause_ms if is_step_boundary else reveal_ms)
 

@@ -252,22 +252,17 @@ def _draw_window(title, visible_lines, cursor_on, fig_w, line_h, capacity):
 
     y = fig_h - bar_h - 0.4
     x0 = 0.5
-    COLORS = {"cmd": "#f2f2f2", "comment": "#7f9a7f", "out": "#cccccc", "result": "#3ddc71"}
     for kind, text, is_prompt_line in visible_lines:
-        color = COLORS.get(kind, "#cccccc")
-        weight = "bold" if kind == "result" else "normal"
-        line_text = (CMD_PROMPT + text) if (kind == "cmd" and is_prompt_line) else text
-        ax.text(x0, y, line_text, color=color, fontsize=10.5, ha="left", va="top",
-                family="Noto Sans CJK JP", zorder=2, parse_math=False, weight=weight)
+        _draw_line(ax, x0, y, kind, text, is_prompt_line)
         y -= line_h
 
     if cursor_on and visible_lines:
         cursor_kind, cursor_text, cursor_is_prompt = visible_lines[-1]
         prefix = CMD_PROMPT if (cursor_kind == "cmd" and cursor_is_prompt) else ""
-        cursor_x = x0 + 0.092 * (len(prefix) + len(cursor_text))
+        cursor_x = x0 + CHAR_W * (len(prefix) + len(cursor_text))
         cursor_y_top = y + line_h + 0.02
         ax.add_patch(plt.Rectangle((cursor_x, cursor_y_top - line_h * 0.85),
-                                    0.13, line_h * 0.75, facecolor="#f2f2f2", zorder=3))
+                                    0.13, line_h * 0.75, facecolor="#ffffff", zorder=3))
 
     buf = io.BytesIO()
     fig.savefig(buf, dpi=110, facecolor=fig.get_facecolor(), format="png")
@@ -307,7 +302,7 @@ def render_gif(steps, out_path, width_chars=100, visible_lines=20,
     for i in range(1, len(all_lines) + 1):
         window = all_lines[max(0, i - visible_lines):i]
         blink_on = (i % 2 == 0)
-        frames.append(_draw_window(title, window, blink_on, fig_w, line_h))
+        frames.append(_draw_window(title, window, blink_on, fig_w, line_h, capacity=visible_lines))
         is_step_boundary = all_lines[i - 1][0] == "result"
         durations.append(step_pause_ms if is_step_boundary else reveal_ms)
 
