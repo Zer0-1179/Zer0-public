@@ -321,5 +321,11 @@
 
 - サービス数が増えて構成図が横幅固定で見づらいという要望を受け、`src/src/components/ImageLightbox.astro`を新規作成。クリックで全画面オーバーレイ表示、オーバーレイ内画像を再クリックで2倍ズーム、Esc・背景クリック・閉じるボタンのいずれでも閉じられる
 - `pages/ja/projects/[slug].astro`・`pages/en/projects/[slug].astro`両方の「全体構成図」セクションの`<img>`を本コンポーネントに置き換え
-- コンポーネント内`<script>`はAstroにより外部モジュールとしてバンドルされ`script-src 'self'`の範囲で動作するため、既存のCSP nonce方式（`BaseLayout.astro`等の生インラインスクリプト）への追加対応は不要と確認
-- `npm run build`成功を確認後、ヘッドレスChromiumで開く→拡大→再クリックでズーム→Escで閉じるの一連動作とコンソールエラー無しを実機検証。`scripts/deploy.sh`で本番デプロイ
+- `astro dev`では`<script>`が外部モジュールファイルとしてバンドルされるため`script-src 'self'`の範囲で動作しnonce不要に見えたが、これはdevサーバー限定の挙動だった。`npm run build`で確認後にデプロイしたところ本番で拡大が機能せず（下記2件参照）、2回の追加修正を経て解消
+- `npm run build`成功・`astro dev`での動作確認後、`scripts/deploy.sh`で本番デプロイ
+
+### （上記の続報）本番ビルドでライトボックスが動作しない不具合を修正（2件）
+
+- **不具合1: CSP違反でスクリプトがブロック** — `astro build`の本番出力では`ImageLightbox.astro`の`<script>`が小サイズのためインライン化され、`nonce`属性が付与されないコード生成となり`script-src 'self' 'nonce-xxx'`のCSPでブラウザにブロックされていた。devサーバーは常に外部ファイル化するためこの差異に気づけなかった。`BaseLayout.astro`と同じ`<script nonce={Astro.locals.cspNonce}>`に修正
+- **不具合2: nonce付与でTypeScript変換がバイパス** — 上記修正で新たに、`<script nonce={...}>`のように動的属性を持つ`<script>`タグはAstroのTS→JSトランスパイルが行われず、`as HTMLElement`等のTypeScript構文がそのままブラウザへ送られ構文エラーで無効化されていた（既知の落とし穴、`docs-public/README.md`のFAQ等では未記載だが過去のCSP nonce導入作業でも発生した事象と同種）。スクリプト内の型注釈・型アサーションを全て除去しプレーンJSへ書き換え、`node --check`で構文検証してから再ビルド
+- 両修正後、production buildをローカルで起動しヘッドレスChromiumで拡大・ズーム・Escクローズの一連動作とコンソールエラー無し（CSP違反・pageerrorともゼロ件）を確認してから本番デプロイし、実URLのHTMLに`nonce`付き`<script>`かつTypeScript構文が残っていないことを確認
