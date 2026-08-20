@@ -155,10 +155,10 @@ bash scripts/download_article.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-19
+### 2026-08-20
 
-#### 通知/SES送信先メールアドレスの変更
+#### evidence画像レンダラーに複数ステップ結合GIF機能を追加
 
-- SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
-- SESで新アドレスを検証、CloudWatchアラーム用SNSトピック(`ZennArticleGenerator-DLQ-Alarm`)の購読を新アドレスへ切替
-- CFnスタック`zenn-article-generator`を`update-stack`でパラメータ更新・デプロイ。旧アドレスのSES ID・SNS購読は削除済み
+- `render_terminal.py`に`render_gif(steps, out_path)`を新規追加。複数ステップの実行結果を1本のアニメーションGIFに結合し、evidence画像の枚数を削減できるようにした
+- 表示内容（コマンド・出力）は実機で実際に実行した本物であることが前提。アカウントIDマスクも自動適用される
+- 詳細は[CHANGELOG.md](./CHANGELOG.md)参照

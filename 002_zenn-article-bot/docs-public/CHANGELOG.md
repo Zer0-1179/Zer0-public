@@ -214,3 +214,13 @@
 - SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
 - SESで新アドレスを検証、CloudWatchアラーム用SNSトピック`ZennArticleGenerator-DLQ-Alarm`の購読を新アドレスへ切替（旧アドレスの購読確認後に解除、通知空白期間なし）
 - CFnスタック`zenn-article-generator`を`update-stack`でパラメータ更新・デプロイ
+
+## 2026-08-20
+
+### evidence画像レンダラーに複数ステップ結合GIF機能を追加
+
+- ユーザーから「Zennで動画（実際はGIF）を使っている記事を見た、evidence画像もこれにすれば枚数が減る」との提案を受け、`render_terminal.py`に`render_gif(steps, out_path)`を新規追加
+- 既存の`render()`（cmd.exe風・Noto Sans CJK・アカウントIDマスク）と同じ見た目のフレームを複数ステップ分生成し、コマンドが1行ずつ表示されていくアニメーションGIF1本に結合する。ウィンドウの表示行数を超えると古い行が上にスクロールして消える（実ターミナルの挙動を再現）
+- タイピング風の演出は見せ方のみで、表示内容（コマンド・出力）自体は実機で実際に実行した本物であることが前提（捏造不可の原則は静止画と同じ）。アカウントIDマスクも`mask()`を内部で自動適用
+- `render()`との共通ラップ処理を`_wrap_lines()`に切り出してリファクタリング。既存の`render()`呼び出しに影響がないことを回帰確認済み
+- 005側の同一ファイルと同期。CLAUDE.md・AGENTS.mdの検証ルールに「複数ステップはGIF結合を既定にする」旨を追記
