@@ -171,6 +171,16 @@ app.use((req, res, next) => {
 
 app.use(astroMiddleware);
 
+// astro.config.mjsのmode:'middleware'は、Astro標準の「未マッチルートは自動的に
+// src/pages/404.astroを描画する」機能を提供しない（next()を呼ぶだけで終わる）ため、
+// ここまで到達したリクエスト（=Astroが未マッチと判断したもの）を/404へ内部リライトして
+// 明示的に再描画させる。ブラウザ側のURLはそのまま、ステータスは404.astro内の
+// `Astro.response.status = 404` により正しく404になる。
+app.use((req, res, next) => {
+  req.url = '/404';
+  astroMiddleware(req, res, next);
+});
+
 export const handler = serverlessHttp(app, {
   binary: ['application/zip'],
 });
