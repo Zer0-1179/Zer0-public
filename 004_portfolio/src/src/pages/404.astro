@@ -13,6 +13,13 @@ const message = isJa
   : 'The page you are looking for does not exist or may have been moved.';
 const homeLabel = isJa ? 'ホームへ戻る' : 'Back to Home';
 const homeHref = isJa ? '/ja/' : '/en/';
+
+const quickLinks = [
+  { label: isJa ? '実績' : 'Projects', href: `/${lang}/projects/` },
+  { label: isJa ? 'ブログ' : 'Articles', href: `/${lang}/articles/` },
+  { label: isJa ? 'テンプレート' : 'Templates', href: `/${lang}/templates/` },
+  { label: isJa ? 'お問い合わせ' : 'Contact', href: `/${lang}/contact/` },
+];
 ---
 
 <BaseLayout title={title}>
@@ -26,5 +33,19 @@ const homeHref = isJa ? '/ja/' : '/en/';
     >
       ← {homeLabel}
     </a>
+
+    <div class="mt-10 pt-10 border-t border-navy-700/50">
+      <p class="text-slate-500 text-sm mb-4">{isJa ? 'よく見られているページ' : 'Popular pages'}</p>
+      <div class="flex flex-wrap justify-center gap-3">
+        {quickLinks.map((link) => (
+          <a
+            href={link.href}
+            class="px-4 py-2 text-sm text-slate-300 hover:text-accent bg-navy-800/40 hover:bg-navy-800 border border-navy-700/50 hover:border-accent/40 rounded transition-colors"
+          >
+            {link.label}
+          </a>
+        ))}
+      </div>
+    </div>
   </div>
 </BaseLayout>

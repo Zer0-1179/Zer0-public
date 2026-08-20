@@ -21,6 +21,12 @@ const navItems: { key: string; href: string; label?: string }[] = [
 if (Astro.locals.isAdmin) {
   navItems.push({ key: 'nav.cryptobot', href: '/ja/cryptobot-stats/', label: 'CryptoBot実績' });
 }
+
+// ホームは完全一致、それ以外は配下ページ（例: /ja/projects/xxx/）も含めて現在地とみなす
+function isActiveNav(href: string): boolean {
+  if (href === `/${lang}/`) return currentPath === href;
+  return currentPath.startsWith(href);
+}
 ---
 
 <header class="fixed top-0 left-0 right-0 z-50 bg-navy-950/95 backdrop-blur border-b border-navy-700/50">
@@ -35,7 +41,12 @@ if (Astro.locals.isAdmin) {
       {navItems.map(({ key, href, label }) => (
         <a
           href={href}
-          class="px-4 py-2 text-sm text-slate-300 hover:text-accent hover:bg-navy-800 rounded transition-colors"
+          aria-current={isActiveNav(href) ? 'page' : undefined}
+          class={`px-4 py-2 text-sm rounded transition-colors ${
+            isActiveNav(href)
+              ? 'text-accent bg-navy-800/80'
+              : 'text-slate-300 hover:text-accent hover:bg-navy-800'
+          }`}
         >
           {label ?? t(key as any)}
         </a>
@@ -76,7 +87,12 @@ if (Astro.locals.isAdmin) {
       {navItems.map(({ key, href, label }) => (
         <a
           href={href}
-          class="px-4 py-3 text-sm text-slate-300 hover:text-accent hover:bg-navy-800 rounded transition-colors"
+          aria-current={isActiveNav(href) ? 'page' : undefined}
+          class={`px-4 py-3 text-sm rounded transition-colors ${
+            isActiveNav(href)
+              ? 'text-accent bg-navy-800/80'
+              : 'text-slate-300 hover:text-accent hover:bg-navy-800'
+          }`}
         >
           {label ?? t(key as any)}
         </a>

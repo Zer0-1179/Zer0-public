@@ -104,8 +104,11 @@ const websiteJsonLd = {
     <title>{title} | Zer0_Infra</title>
   </head>
   <body class="bg-navy-900 text-slate-100 font-sans antialiased">
+    <a href="#main-content" class="skip-link">
+      {lang === 'ja' ? 'メインコンテンツへスキップ' : 'Skip to main content'}
+    </a>
     <Nav />
-    <main>
+    <main id="main-content" tabindex="-1">
       <slot />
     </main>
     <Footer />
