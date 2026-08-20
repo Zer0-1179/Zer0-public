@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import TouringStatsChart from '../../../components/TouringStatsChart.astro';
+import ImageLightbox from '../../../components/ImageLightbox.astro';
 import { projects, getProjectBySlug } from '../../../data/projects';
 import { useTranslations } from '../../../i18n/utils';
 
@@ -53,12 +54,7 @@ const siteUrl = project.siteUrl;
     <section class="mb-10">
       <h2 class="text-accent text-xs uppercase tracking-wider mb-4">全体構成図</h2>
       <div class="bg-white rounded-lg p-4 border border-navy-700/40">
-        <img
-          src={architecture}
-          alt={`${name} アーキテクチャ図`}
-          class="w-full h-auto rounded"
-          loading="lazy"
-        />
+        <ImageLightbox src={architecture} alt={`${name} アーキテクチャ図`} />
       </div>
     </section>
 

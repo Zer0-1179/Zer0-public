@@ -1,0 +1,92 @@
+---
+interface Props {
+  src: string;
+  alt: string;
+  imgClass?: string;
+}
+
+const { src, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
+---
+
+<button
+  type="button"
+  class="lightbox-trigger block w-full appearance-none border-0 bg-transparent p-0 text-left cursor-zoom-in"
+  data-lightbox-src={src}
+  data-lightbox-alt={alt}
+  aria-label={`${alt}を拡大表示`}
+>
+  <img src={src} alt={alt} class={imgClass} loading="lazy" />
+</button>
+
+<script>
+  function initLightbox() {
+    if ((window as any).__lightboxInited) return;
+    (window as any).__lightboxInited = true;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'lightbox-overlay';
+    overlay.className =
+      'fixed inset-0 z-[9999] hidden items-center justify-center bg-black/90 p-4 cursor-zoom-out';
+    overlay.innerHTML = `
+      <button type="button" id="lightbox-close" aria-label="閉じる"
+        class="absolute top-4 right-4 flex h-10 w-10 items-center justify-center text-3xl leading-none text-white/80 hover:text-white">
+        &times;
+      </button>
+      <p class="absolute top-4 left-4 text-xs text-white/60">クリックで拡大 / 縮小・ESCで閉じる</p>
+      <img id="lightbox-img" src="" alt=""
+        class="max-w-full max-h-full rounded object-contain shadow-2xl transition-transform duration-200 ease-out cursor-zoom-in" />
+    `;
+    document.body.appendChild(overlay);
+
+    const img = overlay.querySelector('#lightbox-img') as HTMLImageElement;
+    const closeBtn = overlay.querySelector('#lightbox-close') as HTMLButtonElement;
+    let zoomed = false;
+
+    function setZoom(next: boolean) {
+      zoomed = next;
+      img.classList.toggle('max-w-none', zoomed);
+      img.classList.toggle('max-h-none', zoomed);
+      img.classList.toggle('scale-[2]', zoomed);
+      img.classList.toggle('cursor-zoom-out', zoomed);
+      img.classList.toggle('cursor-zoom-in', !zoomed);
+    }
+
+    function open(src: string, alt: string) {
+      img.src = src;
+      img.alt = alt;
+      setZoom(false);
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function close() {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+      document.body.style.overflow = '';
+    }
+
+    document.addEventListener('click', (e) => {
+      const trigger = (e.target as HTMLElement)?.closest('.lightbox-trigger') as HTMLElement | null;
+      if (trigger) {
+        e.preventDefault();
+        open(trigger.dataset.lightboxSrc || '', trigger.dataset.lightboxAlt || '');
+      }
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    closeBtn.addEventListener('click', close);
+    img.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setZoom(!zoomed);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !overlay.classList.contains('hidden')) close();
+    });
+  }
+
+  initLightbox();
+</script>
