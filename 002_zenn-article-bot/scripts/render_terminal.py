@@ -272,7 +272,7 @@ def _draw_window(title, visible_lines, cursor_on, fig_w, line_h, capacity):
 
 
 def render_gif(steps, out_path, width_chars=100, visible_lines=20,
-                reveal_ms=90, step_pause_ms=1100, final_hold_ms=2200):
+                reveal_ms=90, step_pause_ms=1800, final_hold_ms=4000):
     """複数ステップ（各ステップ=1コマンド実行の実機検証記録）を1本のアニメーションGIFに
     まとめる。エビデンス画像の枚数を減らす目的（2026-08-20追加）。
 
