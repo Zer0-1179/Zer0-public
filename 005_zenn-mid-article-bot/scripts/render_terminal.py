@@ -287,6 +287,7 @@ def render_gif(steps, out_path, width_chars=100, visible_lines=20,
               「止まっているのではなく動いている」ことが伝わるようにする（2026-08-20追加）
     """
     all_lines = []
+    pause_points = set()  # 1-based index i: all_lines[:i]を表示した状態で点滅停止する
     for step in steps:
         all_lines.extend(_wrap_lines(step["lines"], width_chars))
         result_lines = textwrap.wrap(
@@ -295,6 +296,9 @@ def render_gif(steps, out_path, width_chars=100, visible_lines=20,
         for rl in result_lines:
             all_lines.append(("result", rl, False))
         all_lines.append(("out", "", False))  # ステップ間の空行
+        # 停止はこの空行まで表示してから行う（結果行の直後で止めるとカーソルが
+        # 結果テキストの末尾に重なって見えるため、必ず空行の次の位置で止める）
+        pause_points.add(len(all_lines))
 
     title = steps[0]["title"] if len(steps) == 1 else f"{steps[0]['title']} 〜 全{len(steps)}ステップ"
 
@@ -311,9 +315,8 @@ def render_gif(steps, out_path, width_chars=100, visible_lines=20,
 
     for i in range(1, len(all_lines) + 1):
         window = all_lines[max(0, i - visible_lines):i]
-        is_step_boundary = all_lines[i - 1][0] == "result"
         is_final = (i == len(all_lines))
-        if is_step_boundary or is_final:
+        if i in pause_points or is_final:
             frames.append(_draw_window(title, window, False, fig_w, line_h, capacity=visible_lines))
             durations.append(reveal_ms)
             add_blink_hold(window, final_hold_ms if is_final else step_pause_ms)
