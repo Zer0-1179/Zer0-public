@@ -18,7 +18,7 @@ const { src, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
   <img src={src} alt={alt} class={imgClass} loading="lazy" />
 </button>
 
-<script>
+<script nonce={Astro.locals.cspNonce}>
   function initLightbox() {
     if ((window as any).__lightboxInited) return;
     (window as any).__lightboxInited = true;
