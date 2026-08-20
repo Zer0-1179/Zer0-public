@@ -30,6 +30,7 @@ interface StatsPoint {
   reason: string;
   pnl_jpy: number;
   cumulative_pnl_jpy: number;
+  position_id?: string | null;
 }
 interface StatsPayload {
   generated_at: string;
@@ -97,9 +98,27 @@ const fmtPrice = (v: number | null | undefined) => (v == null ? '—' : v.toLoca
 const fmtJST = (iso: string) => new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 
 const points = stats?.points ?? [];
-const winCount = points.filter((p) => p.pnl_jpy >= 0).length;
-const lossCount = points.length - winCount;
-const winRate = points.length > 0 ? ((winCount / points.length) * 100).toFixed(1) : null;
+
+// 勝率・決済ポジション数はポジション単位で集計する（006 weekly_summary Lambdaの
+// summarize_trades()と同じロジック）。1ポジションはTP1部分利確＋最終決済の2レコードに
+// 分かれることがあり、レコード単位でカウントすると「正味は勝ちポジションなのに片方が
+// 小幅マイナス」なケースが1勝1敗に水増しされ、勝率が実態より低く出てしまう（2026-08-20修正）。
+// TP1部分利確はポジション継続中の部分決済のため、それ以外の理由が付いたレコードが
+// あって初めてそのポジションは「クローズ済み」として勝敗判定の対象にする。
+const NON_CLOSING_REASONS = new Set(['TP1部分利確']);
+const positionAgg = new Map<string, { pnl: number; closed: boolean }>();
+points.forEach((p, i) => {
+  const pid = p.position_id ?? `_solo_${i}`;
+  const agg = positionAgg.get(pid) ?? { pnl: 0, closed: false };
+  agg.pnl += p.pnl_jpy;
+  if (!NON_CLOSING_REASONS.has(p.reason)) agg.closed = true;
+  positionAgg.set(pid, agg);
+});
+const closedPositions = [...positionAgg.values()].filter((p) => p.closed);
+const winCount = closedPositions.filter((p) => p.pnl > 0).length;
+const lossCount = closedPositions.length - winCount;
+const winRate = closedPositions.length > 0 ? ((winCount / closedPositions.length) * 100).toFixed(1) : null;
+const positionCount = closedPositions.length;
 
 // 最大ドローダウン（累積損益カーブのピークからの最大下落幅）。基準0円を起点に含める。
 let peak = 0;
@@ -261,8 +280,8 @@ const xLabels =
             </div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
-            <div class="text-xs text-slate-400 mb-1">トレード数</div>
-            <div class="text-xl font-bold text-white">{stats!.trade_count}件</div>
+            <div class="text-xs text-slate-400 mb-1">決済ポジション数</div>
+            <div class="text-xl font-bold text-white">{positionCount}件</div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">勝率</div>

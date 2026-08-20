@@ -20,8 +20,12 @@ TRADES_BUCKET     = os.environ.get("TRADES_BUCKET", "zer0-dev-s3")
 # 集計側は prefix を list_objects して各オブジェクトを読む。
 TRADES_KEY_PREFIX = "cryptobot/trades/"
 
-# ポジションを閉じる決済理由（TP1部分利確はポジション継続中の部分決済）
-CLOSING_REASONS = ("トレーリングSL", "SL（TP1後）", "損切り（SL約定）", "損切り（残30%成行）", "緊急決済")
+# ポジションを閉じない決済理由はTP1部分利確のみ（ポジション継続中の部分決済）。
+# それ以外の理由文字列は全てポジションを閉じたとみなす。理由の列挙をクローズ側で
+# 保守すると、新しい決済経路（緊急決済の派生パターン・手動決済の事後記録等）を
+# 追加/変更するたびに更新漏れが起きやすい（実際に「手動決済（トレーリング中）」が
+# 抜けており、2026-07-21分の2ポジションが勝率・PF・増額判断の集計から欠落していた）。
+NON_CLOSING_REASONS = ("TP1部分利確",)
 
 PAIR_LABELS   = {"btc_jpy": "BTC/JPY", "eth_jpy": "ETH/JPY", "sol_jpy": "SOL/JPY"}
 SIDE_LABELS   = {"long": "ロング", "short": "ショート"}
@@ -84,7 +88,7 @@ def summarize_trades(trades: list[dict], now: datetime) -> dict:
         pid = t.get("position_id") or f"_solo_{i}"
         p = positions.setdefault(pid, {"pnl": 0.0, "closed": False})
         p["pnl"] += t["pnl_jpy"]
-        if t.get("reason") in CLOSING_REASONS:
+        if t.get("reason") not in NON_CLOSING_REASONS:
             p["closed"] = True
 
     closed  = [p["pnl"] for p in positions.values() if p["closed"]]
