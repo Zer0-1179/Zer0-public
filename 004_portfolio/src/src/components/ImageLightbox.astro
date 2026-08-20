@@ -20,8 +20,8 @@ const { src, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
 
 <script nonce={Astro.locals.cspNonce}>
   function initLightbox() {
-    if ((window as any).__lightboxInited) return;
-    (window as any).__lightboxInited = true;
+    if (window.__lightboxInited) return;
+    window.__lightboxInited = true;
 
     const overlay = document.createElement('div');
     overlay.id = 'lightbox-overlay';
@@ -38,11 +38,11 @@ const { src, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
     `;
     document.body.appendChild(overlay);
 
-    const img = overlay.querySelector('#lightbox-img') as HTMLImageElement;
-    const closeBtn = overlay.querySelector('#lightbox-close') as HTMLButtonElement;
+    const img = overlay.querySelector('#lightbox-img');
+    const closeBtn = overlay.querySelector('#lightbox-close');
     let zoomed = false;
 
-    function setZoom(next: boolean) {
+    function setZoom(next) {
       zoomed = next;
       img.classList.toggle('max-w-none', zoomed);
       img.classList.toggle('max-h-none', zoomed);
@@ -51,7 +51,7 @@ const { src, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
       img.classList.toggle('cursor-zoom-in', !zoomed);
     }
 
-    function open(src: string, alt: string) {
+    function open(src, alt) {
       img.src = src;
       img.alt = alt;
       setZoom(false);
@@ -67,7 +67,7 @@ const { src, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
     }
 
     document.addEventListener('click', (e) => {
-      const trigger = (e.target as HTMLElement)?.closest('.lightbox-trigger') as HTMLElement | null;
+      const trigger = e.target?.closest('.lightbox-trigger');
       if (trigger) {
         e.preventDefault();
         open(trigger.dataset.lightboxSrc || '', trigger.dataset.lightboxAlt || '');
