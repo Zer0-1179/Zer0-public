@@ -329,3 +329,10 @@
 - **不具合1: CSP違反でスクリプトがブロック** — `astro build`の本番出力では`ImageLightbox.astro`の`<script>`が小サイズのためインライン化され、`nonce`属性が付与されないコード生成となり`script-src 'self' 'nonce-xxx'`のCSPでブラウザにブロックされていた。devサーバーは常に外部ファイル化するためこの差異に気づけなかった。`BaseLayout.astro`と同じ`<script nonce={Astro.locals.cspNonce}>`に修正
 - **不具合2: nonce付与でTypeScript変換がバイパス** — 上記修正で新たに、`<script nonce={...}>`のように動的属性を持つ`<script>`タグはAstroのTS→JSトランスパイルが行われず、`as HTMLElement`等のTypeScript構文がそのままブラウザへ送られ構文エラーで無効化されていた（既知の落とし穴、`docs-public/README.md`のFAQ等では未記載だが過去のCSP nonce導入作業でも発生した事象と同種）。スクリプト内の型注釈・型アサーションを全て除去しプレーンJSへ書き換え、`node --check`で構文検証してから再ビルド
 - 両修正後、production buildをローカルで起動しヘッドレスChromiumで拡大・ズーム・Escクローズの一連動作とコンソールエラー無し（CSP違反・pageerrorともゼロ件）を確認してから本番デプロイし、実URLのHTMLに`nonce`付き`<script>`かつTypeScript構文が残っていないことを確認
+
+### ライトボックスをクリック式2段階ズームからホイールズーム+ドラッグパン方式に変更
+
+- クリックで2倍固定ズームする方式だと「同じ位置しか拡大できず他の部分が見えない」というユーザー指摘を受け、`overlay`要素への`wheel`イベントで`e.deltaY`から連続的にスケール（1〜5倍）を算出する方式に変更。画像には`translate(Xpx, Ypx) scale(S)`をJSから直接styleで付与（Tailwind固定クラスでは連続値を表現できないため）
+- 拡大時（scale > 1）は画像を`pointerdown`→`pointermove`→`pointerup`でドラッグしてパン（移動）できるよう追加。中心からのはみ出し量を`img.offsetWidth/Height`とoverlayサイズから計算しクランプすることで、画面外に出過ぎないようにした
+- 案内テキストを「スクロールで拡大・縮小 / ドラッグで移動・ESCで閉じる」に更新。閉じた際はズーム・パンともリセットされ次回開いた時は等倍から始まる
+- 最初からプレーンJS（`var`宣言・型注釈なし）で実装し`node --check`で構文検証。production buildをローカル起動し、ヘッドレスChromiumで`page.mouse.wheel`によるズームイン/アウト・`page.mouse`によるドラッグパンの実測値（CSS transformのmatrix値）とコンソールエラー無しを確認してから本番デプロイ
