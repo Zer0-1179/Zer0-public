@@ -316,3 +316,10 @@
 - 006側Executor Lambdaの`update_stats_json()`が`stats.json`の各レコードに`position_id`を含めるよう修正（006のCHANGELOG参照）した上で、astro側は006 weekly_summaryと同じロジックで`position_id`単位に正味損益を集計し直すよう変更。TP1部分利確のみでまだ最終決済が無いポジションは勝敗未確定として除外する
 - 表示ラベル「トレード数」（決済レコード数、実態と乖離しやすい）を「決済ポジション数」に変更
 - 既存の`stats.json`を同ロジックで再生成し`position_id`を遡って補完。`npm run build`でビルドエラーがないことを確認後`scripts/deploy.sh`で本番デプロイし、非公開ページの実データで「決済ポジション数10件・勝率90.0%（9勝1敗）」が正しく表示されることを確認
+
+### プロジェクト詳細ページの構成図にライトボックス（拡大縮小）機能を追加
+
+- サービス数が増えて構成図が横幅固定で見づらいという要望を受け、`src/src/components/ImageLightbox.astro`を新規作成。クリックで全画面オーバーレイ表示、オーバーレイ内画像を再クリックで2倍ズーム、Esc・背景クリック・閉じるボタンのいずれでも閉じられる
+- `pages/ja/projects/[slug].astro`・`pages/en/projects/[slug].astro`両方の「全体構成図」セクションの`<img>`を本コンポーネントに置き換え
+- コンポーネント内`<script>`はAstroにより外部モジュールとしてバンドルされ`script-src 'self'`の範囲で動作するため、既存のCSP nonce方式（`BaseLayout.astro`等の生インラインスクリプト）への追加対応は不要と確認
+- `npm run build`成功を確認後、ヘッドレスChromiumで開く→拡大→再クリックでズーム→Escで閉じるの一連動作とコンソールエラー無しを実機検証。`scripts/deploy.sh`で本番デプロイ
