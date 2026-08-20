@@ -238,10 +238,14 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-19
+### 2026-08-20
 
-#### 通知/SES送信先メールアドレスの変更
+#### 週次サマリーの増額判断集計から手動決済ポジションが漏れていたバグを修正
 
-- SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
-- SESで新アドレスを検証、CloudWatchアラーム用SNSトピック(`Zer0-CryptoBot-Alarms`)の購読を新アドレスへ切替
-- CFnスタック`zer0-cryptobot`を`update-stack`でパラメータ更新・デプロイ。旧アドレスのSES ID・SNS購読は削除済み
+- `weekly_summary`のクローズ判定ロジックを許可リスト方式(`CLOSING_REASONS`)から否定リスト方式(`NON_CLOSING_REASONS`、TP1部分利確以外は全てクローズ扱い)に変更。手動決済で閉じた2ポジションが集計から欠落していた不具合を解消し、累計クローズ数が7件→10件（正しい値）に修正された
+- pytest 3件追加、`Zer0-CryptoBot-WeeklySummary`Lambdaのコードのみ直接デプロイ
+
+#### 004ポートフォリオ非公開実績ページの勝率表示バグを修正
+
+- `stats.json`にレコードごとの`position_id`を出力するようExecutor Lambdaを修正し、004側がポジション単位で正しく勝率を再計算できるようにした（詳細は004のCHANGELOG参照）
+- 修正後、実データで勝率90.0%(9勝1敗・累計10ポジション)が正しく表示されることを確認

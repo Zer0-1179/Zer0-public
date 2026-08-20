@@ -307,3 +307,12 @@
 - `touring-app`プロジェクト詳細ページの「利用実績」セクション（`TouringStatsChart.astro`）を、`Astro.locals.isAdmin`判定を追加し管理者限定表示に変更（`pages/ja/projects/[slug].astro`・`pages/en/projects/[slug].astro`両方）。認証機構自体は006 CryptoBot非公開ページと同じ既存の管理者Cookie方式を流用
 - 非公開である旨を明示するバッジを追加。文言・スタイルは`cryptobot-stats.astro`の`Zer0-CryptoBot · 非公開ページ`と統一し`Zer0-TouringApp · 非公開ページ`（英語版は`Zer0-TouringApp · Private page`）とした
 - ビルド確認後`scripts/deploy.sh`で本番デプロイ。非管理者アクセスで「利用実績」が非表示、管理者Cookie保持時のみ表示されることをcurlで実機確認
+
+## 2026-08-20
+
+### CryptoBot非公開実績ページの勝率表示バグを修正
+
+- `cryptobot-stats.astro`が`stats.json`の決済レコード単位（TP1部分利確とトレーリングSL/損切りを別々の1件）で勝率を計算しており、正味は勝ちポジションでも片方のレコードが小幅マイナスだと1勝1敗に水増しされ、勝率が実態より低く表示される不具合があった
+- 006側Executor Lambdaの`update_stats_json()`が`stats.json`の各レコードに`position_id`を含めるよう修正（006のCHANGELOG参照）した上で、astro側は006 weekly_summaryと同じロジックで`position_id`単位に正味損益を集計し直すよう変更。TP1部分利確のみでまだ最終決済が無いポジションは勝敗未確定として除外する
+- 表示ラベル「トレード数」（決済レコード数、実態と乖離しやすい）を「決済ポジション数」に変更
+- 既存の`stats.json`を同ロジックで再生成し`position_id`を遡って補完。`npm run build`でビルドエラーがないことを確認後`scripts/deploy.sh`で本番デプロイし、非公開ページの実データで「決済ポジション数10件・勝率90.0%（9勝1敗）」が正しく表示されることを確認

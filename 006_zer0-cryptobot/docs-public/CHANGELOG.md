@@ -222,3 +222,19 @@
 - SenderEmail/RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
 - SESで新アドレスを検証、CloudWatchアラーム用SNSトピック`Zer0-CryptoBot-Alarms`の購読を新アドレスへ切替
 - CFnスタック`zer0-cryptobot`を`update-stack`でパラメータ更新・デプロイ
+
+## 2026-08-20
+
+### 週次サマリーの増額判断集計から手動決済ポジションが漏れていたバグを修正
+
+- `weekly_summary`の`CLOSING_REASONS`（ポジションのクローズを判定する理由文字列の許可リスト）に、2026-07-21の手動決済インシデント時に事後記録した理由「手動決済（トレーリング中）」が含まれておらず、該当2ポジションが勝率・PF・累計クローズ数・資金増額判断レポートの集計から丸ごと欠落していた
+- 許可リストを維持する方式は新しい決済経路や事後の手動記録が増えるたびに更新漏れが起きやすいため、「TP1部分利確以外は全てクローズ扱い」という否定リスト方式（`NON_CLOSING_REASONS`）に変更し、未知の理由文字列にも耐えるようにした
+- 修正後、累計クローズ済みポジション数は7件→10件（実際の値）に、勝率も正しく再集計されるようになった
+- pytest 3件を新規追加（TP1+クローズの正味集計・手動決済理由での回帰確認・TP1のみの未クローズポジションの除外）し、全49件通過を確認。`Zer0-CryptoBot-WeeklySummary`Lambdaのコードのみを直接`update-function-code`でデプロイ（CFnスタック・他Lambdaは変更なし）
+
+### 004ポートフォリオ非公開実績ページの勝率表示バグを修正
+
+- `cryptobot-stats.astro`が`stats.json`の決済レコード単位（TP1部分利確とトレーリングSL/損切りを別々の1件）で勝率を計算していたため、正味は勝ちポジションでも片方のレコードが小幅マイナスだと1勝1敗に水増しされ、勝率が実態より低く表示されていた
+- Executor Lambdaの`update_stats_json()`が`stats.json`の各レコードに`position_id`を含めるよう修正し、astro側は006 weekly_summaryと同じロジック（`position_id`単位で正味損益を集計し、TP1部分利確のみのポジションは勝敗未確定として除外）で勝率を再計算するよう変更
+- 表示ラベル「トレード数」（決済レコード数、実態と乖離しやすい）を「決済ポジション数」に変更
+- 既存の`stats.json`（20レコード）を同ロジックで再生成し`position_id`を遡って補完。pytest 1件追加（`update_stats_json`が`position_id`を書き込むことの回帰確認）、`npm run build`でastroのビルドエラーがないことを確認、`bash scripts/deploy.sh`で本番デプロイ後、非公開ページの実データで「決済ポジション数10件・勝率90.0%（9勝1敗）」が正しく表示されることを確認
