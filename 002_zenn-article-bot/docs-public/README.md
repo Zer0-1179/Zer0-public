@@ -161,4 +161,5 @@ bash scripts/download_article.sh
 
 - `render_terminal.py`に`render_gif(steps, out_path)`を新規追加。複数ステップの実行結果を1本のアニメーションGIFに結合し、evidence画像の枚数を削減できるようにした
 - 表示内容（コマンド・出力）は実機で実際に実行した本物であることが前提。アカウントIDマスクも自動適用される
+- 同日、画面欠け（GIFキャンバスサイズ計算バグ）・コマンド/出力の配色区別しづらい問題も発見・修正済み
 - 詳細は[CHANGELOG.md](./CHANGELOG.md)参照
