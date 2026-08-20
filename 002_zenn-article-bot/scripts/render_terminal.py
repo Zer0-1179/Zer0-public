@@ -272,7 +272,7 @@ def _draw_window(title, visible_lines, cursor_on, fig_w, line_h, capacity):
 
 
 def render_gif(steps, out_path, width_chars=100, visible_lines=20,
-                reveal_ms=90, step_pause_ms=1800, final_hold_ms=4000):
+                reveal_ms=90, step_pause_ms=1800, final_hold_ms=4000, blink_ms=500):
     """複数ステップ（各ステップ=1コマンド実行の実機検証記録）を1本のアニメーションGIFに
     まとめる。エビデンス画像の枚数を減らす目的（2026-08-20追加）。
 
@@ -282,6 +282,9 @@ def render_gif(steps, out_path, width_chars=100, visible_lines=20,
            （タイプ演出・スクロールはあくまで見せ方の演出で、内容の捏造ではない）。
     out_path: 出力するGIFファイルパス
     visible_lines: ウィンドウに同時表示する行数。超えると古い行が上にスクロールして消える
+    blink_ms: 停止中（ステップ区切り・最終停止）にカーソルを点滅させる周期。
+              静止画1枚を長時間表示するのではなく、点滅フレームを繰り返して
+              「止まっているのではなく動いている」ことが伝わるようにする（2026-08-20追加）
     """
     all_lines = []
     for step in steps:
@@ -299,15 +302,25 @@ def render_gif(steps, out_path, width_chars=100, visible_lines=20,
     fig_w = 13.5
     line_h = 0.30
 
+    def add_blink_hold(window, hold_ms):
+        """指定時間ぶん、カーソルを点滅させ続けるフレーム群を追加する。"""
+        n = max(2, round(hold_ms / blink_ms))
+        for k in range(n):
+            frames.append(_draw_window(title, window, k % 2 == 0, fig_w, line_h, capacity=visible_lines))
+            durations.append(blink_ms)
+
     for i in range(1, len(all_lines) + 1):
         window = all_lines[max(0, i - visible_lines):i]
-        blink_on = (i % 2 == 0)
-        frames.append(_draw_window(title, window, blink_on, fig_w, line_h, capacity=visible_lines))
         is_step_boundary = all_lines[i - 1][0] == "result"
-        durations.append(step_pause_ms if is_step_boundary else reveal_ms)
-
-    if frames:
-        durations[-1] = final_hold_ms
+        is_final = (i == len(all_lines))
+        if is_step_boundary or is_final:
+            frames.append(_draw_window(title, window, False, fig_w, line_h, capacity=visible_lines))
+            durations.append(reveal_ms)
+            add_blink_hold(window, final_hold_ms if is_final else step_pause_ms)
+        else:
+            blink_on = (i % 2 == 0)
+            frames.append(_draw_window(title, window, blink_on, fig_w, line_h, capacity=visible_lines))
+            durations.append(reveal_ms)
 
     frames[0].save(
         out_path, save_all=True, append_images=frames[1:],
