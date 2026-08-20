@@ -145,18 +145,18 @@ Executor が実行するたびに証拠金維持率を確認：
 
 ## 技術スタック
 
-| レイヤー | 技術 |
-| --- | --- |
-| 実行基盤 | AWS Lambda（Python 3.14）× 4関数 |
-| スケジューリング | Amazon EventBridge Scheduler（2スケジュール） |
-| 状態管理 | AWS SSM Parameter Store（ポジション State・シグナル） |
-| 取引履歴 | Amazon S3（確定損益を 1決済=1オブジェクトで記録・週次集計に使用） |
-| ポジション連携 | Amazon S3（`zer0-cryptobot-stats-s3`：`positions.json`をPhase A毎に上書き。004ポートフォリオの「現在のポジション」表示に使用） |
-| 通知 | Amazon SES（エラー通知・週次レポート） |
-| 信頼性 | Lambda EventInvokeConfig（非同期invoke失敗時にFailureNotifierへ自動通知・リトライは無効化（0回、二重発注防止のため）） |
-| データソース | Binance API（REST）/ python-binance |
-| 取引所 API | bitbank API（python-bitbankcc） |
-| IaC | CloudFormation（22リソース全管理） |
+| レイヤー         | 技術                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 実行基盤         | AWS Lambda（Python 3.14）× 4関数                                                                                               |
+| スケジューリング | Amazon EventBridge Scheduler（2スケジュール）                                                                                  |
+| 状態管理         | AWS SSM Parameter Store（ポジション State・シグナル）                                                                          |
+| 取引履歴         | Amazon S3（確定損益を 1決済=1オブジェクトで記録・週次集計に使用）                                                              |
+| ポジション連携   | Amazon S3（`zer0-cryptobot-stats-s3`：`positions.json`をPhase A毎に上書き。004ポートフォリオの「現在のポジション」表示に使用） |
+| 通知             | Amazon SES（エラー通知・週次レポート）                                                                                         |
+| 信頼性           | Lambda EventInvokeConfig（非同期invoke失敗時にFailureNotifierへ自動通知・リトライは無効化（0回、二重発注防止のため））         |
+| データソース     | Binance API（REST）/ python-binance                                                                                            |
+| 取引所 API       | bitbank API（python-bitbankcc）                                                                                                |
+| IaC              | CloudFormation（22リソース全管理）                                                                                             |
 
 ## ディレクトリ構成
 
