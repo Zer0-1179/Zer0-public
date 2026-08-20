@@ -139,10 +139,10 @@ bash scripts/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-19
+### 2026-08-20
 
-#### 007バイクツーリングPWA「利用実績」の管理者限定表示化
+#### CryptoBot非公開実績ページの勝率表示バグを修正
 
-- `touring-app`プロジェクト詳細ページの「利用実績」セクション（`TouringStatsChart.astro`）を、`Astro.locals.isAdmin`判定を追加し管理者限定表示に変更（`pages/ja/projects/[slug].astro`・`pages/en/projects/[slug].astro`両方）。認証機構自体は006 CryptoBot非公開ページと同じ既存の管理者Cookie方式を流用
-- 非公開である旨を明示するバッジを追加。文言・スタイルは`cryptobot-stats.astro`の`Zer0-CryptoBot · 非公開ページ`と統一し`Zer0-TouringApp · 非公開ページ`（英語版は`Zer0-TouringApp · Private page`）とした
-- ビルド確認後`scripts/deploy.sh`で本番デプロイ。非管理者アクセスで「利用実績」が非表示、管理者Cookie保持時のみ表示されることをcurlで実機確認
+- `cryptobot-stats.astro`が決済レコード単位（TP1部分利確とトレーリングSL/損切りを別々の1件）で勝率を計算しており、正味は勝ちポジションでも小幅マイナスのレコードで1勝1敗に水増しされ、勝率が実態より低く表示される不具合があった
+- 006側`stats.json`に`position_id`が出力されるよう修正した上で、astro側もポジション単位で正味損益を再集計するよう変更。表示ラベル「トレード数」も実態に合わせ「決済ポジション数」に変更
+- 本番デプロイ後、実データで「決済ポジション数10件・勝率90.0%（9勝1敗）」が正しく表示されることを確認
