@@ -183,6 +183,26 @@ def test_update_stats_json_builds_cumulative_equity_curve(executor, monkeypatch)
     assert payload["points"][-1]["cumulative_pnl_jpy"] == 254.1
 
 
+def test_update_stats_json_includes_position_id(executor, monkeypatch):
+    """position_idが無いとportfolio側がポジション単位で勝率を再集計できず、
+    レコード単位（TP1部分利確とクローズが別カウント）にフォールバックして
+    勝率が実態より低く出てしまうバグの再発防止（2026-08-20発見・修正）。"""
+    monkeypatch.setattr(executor, "STATS_BUCKET", "zer0-cryptobot-stats-s3")
+    trades = [
+        {"ts": "2026-06-23T17:45:18+09:00", "pair": "eth_jpy", "direction": "short",
+         "reason": "TP1部分利確", "pnl_jpy": 41.4, "position_id": "eth_jpy-123"},
+        {"ts": "2026-06-24T21:00:10+09:00", "pair": "eth_jpy", "direction": "short",
+         "reason": "トレーリングSL", "pnl_jpy": -2.6, "position_id": "eth_jpy-123"},
+    ]
+    monkeypatch.setattr(executor, "_load_all_trades", MagicMock(return_value=trades))
+    monkeypatch.setattr(executor._s3, "put_object", MagicMock())
+
+    executor.update_stats_json()
+
+    payload = json.loads(executor._s3.put_object.call_args.kwargs["Body"])
+    assert all(p["position_id"] == "eth_jpy-123" for p in payload["points"])
+
+
 def test_record_trade_calls_update_stats_json_on_success(executor, monkeypatch):
     monkeypatch.setattr(executor._s3, "put_object", MagicMock())
     mock_update = MagicMock()

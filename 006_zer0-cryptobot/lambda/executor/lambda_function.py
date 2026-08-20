@@ -264,6 +264,7 @@ def update_stats_json():
             "reason":             t["reason"],
             "pnl_jpy":            t["pnl_jpy"],
             "cumulative_pnl_jpy": round(cum, 1),
+            "position_id":        t.get("position_id"),
         })
     payload = {
         "generated_at":  datetime.now(JST).isoformat(timespec="seconds"),
