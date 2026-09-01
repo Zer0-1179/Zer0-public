@@ -33,7 +33,7 @@ set -euo pipefail
 EXECUTOR="Zer0-CryptoBot-Executor"
 REGION="ap-northeast-1"
 LOG_GROUP="/aws/lambda/${EXECUTOR}"
-SSM_STATE="/Zer0/CryptoBot/state"
+SSM_STATE="/cryptobot/state"
 OUTPUT_FILE="/tmp/cryptobot_test_result.json"
 
 MODE="${1:-empty}"

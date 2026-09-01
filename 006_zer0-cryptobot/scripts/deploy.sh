@@ -140,7 +140,7 @@ echo "  aws logs tail /aws/lambda/Zer0-CryptoBot-Analyzer --since 10m --region $
 echo "  aws logs tail /aws/lambda/Zer0-CryptoBot-Executor --since 10m --region ${REGION}"
 echo ""
 echo "  SSM state 確認:"
-echo "  aws ssm get-parameter --name '/Zer0/CryptoBot/state' --region ${REGION}"
+echo "  aws ssm get-parameter --name '/cryptobot/state' --region ${REGION}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "スケジュール: 毎日 0/4/8/12/16/20 時（UTC）= JST +9h"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

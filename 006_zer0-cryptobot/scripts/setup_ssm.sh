@@ -16,8 +16,7 @@ if [ -f "$APIKEY_FILE" ]; then
   # ファイルフォーマット: 2行目がAPIキー、5行目がシークレット
   API_KEY=$(sed -n '2p' "$APIKEY_FILE" | tr -d '[:space:]')
   API_SECRET=$(sed -n '5p' "$APIKEY_FILE" | tr -d '[:space:]')
-  echo "  APIキー: ${API_KEY:0:8}..."
-  echo "  シークレット: ${API_SECRET:0:8}..."
+  echo "  API認証情報を読み込みました。"
 else
   # ファイルがない場合は手動入力
   echo "bitbank APIキーを入力してください:"
@@ -29,32 +28,32 @@ fi
 echo ""
 echo "[1/3] API Key を SSM に登録中..."
 aws ssm put-parameter \
-  --name "/Zer0/CryptoBot/bitbank/api_key" \
+  --name "/cryptobot/bitbank/api_key" \
   --value "${API_KEY}" \
   --type SecureString \
   --overwrite \
   --region "${REGION}" > /dev/null
-echo "  OK: /Zer0/CryptoBot/bitbank/api_key"
+echo "  OK: /cryptobot/bitbank/api_key"
 
 echo ""
 echo "[2/3] API Secret を SSM に登録中..."
 aws ssm put-parameter \
-  --name "/Zer0/CryptoBot/bitbank/api_secret" \
+  --name "/cryptobot/bitbank/api_secret" \
   --value "${API_SECRET}" \
   --type SecureString \
   --overwrite \
   --region "${REGION}" > /dev/null
-echo "  OK: /Zer0/CryptoBot/bitbank/api_secret"
+echo "  OK: /cryptobot/bitbank/api_secret"
 
 echo ""
 echo "[3/3] 初期 state を SSM に登録中..."
 aws ssm put-parameter \
-  --name "/Zer0/CryptoBot/state" \
+  --name "/cryptobot/state" \
   --value '{"positions":{}}' \
   --type String \
   --overwrite \
   --region "${REGION}" > /dev/null
-echo "  OK: /Zer0/CryptoBot/state"
+echo "  OK: /cryptobot/state"
 
 echo ""
 echo "=============================="
@@ -64,9 +63,9 @@ echo ""
 echo "登録されたパラメータ:"
 aws ssm get-parameters \
   --names \
-    "/Zer0/CryptoBot/bitbank/api_key" \
-    "/Zer0/CryptoBot/bitbank/api_secret" \
-    "/Zer0/CryptoBot/state" \
+    "/cryptobot/bitbank/api_key" \
+    "/cryptobot/bitbank/api_secret" \
+    "/cryptobot/state" \
   --region "${REGION}" \
   --query "Parameters[*].{Name:Name,Type:Type}" \
   --output table

@@ -1025,15 +1025,39 @@
         82:'にわか大雨',85:'にわか雪',86:'にわか大雪',95:'雷雨',96:'雷雨',99:'激しい雷雨',
       };
       const DIST = [
-        { label:'近距離コース', icon:'🌿', cls:'dist-near', bgCls:'ch-near', phGrad:'linear-gradient(160deg,#051a0c,#184e24)' },
-        { label:'中距離コース', icon:'🌊', cls:'dist-mid',  bgCls:'ch-mid',  phGrad:'linear-gradient(160deg,#04101e,#0f2e56)' },
-        { label:'長距離コース', icon:'🏔', cls:'dist-far',  bgCls:'ch-far',  phGrad:'linear-gradient(160deg,#150422,#5e1480)' },
+        { difficulty:'初級', label:'初心者コース', range:'往復20〜70km', icon:'🌿', cls:'dist-near', bgCls:'ch-near', phGrad:'linear-gradient(160deg,#051a0c,#184e24)' },
+        { difficulty:'中級', label:'中級者コース', range:'往復80〜150km', icon:'🌊', cls:'dist-mid',  bgCls:'ch-mid',  phGrad:'linear-gradient(160deg,#04101e,#0f2e56)' },
+        { difficulty:'上級', label:'上級者コース', range:'往復160〜250km', icon:'🏔', cls:'dist-far',  bgCls:'ch-far',  phGrad:'linear-gradient(160deg,#150422,#5e1480)' },
       ];
       const ROAD = { '峠道':'🏔','山道':'🏔','高速道路':'🛣','国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊' };
-      const SPOT = { '道の駅':'🏪','温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
+      const SPOT = { '道の駅':'🏪','温泉':'♨️','銭湯':'♨️','日帰り温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
 
       let courses     = [];
       let userLat     = null, userLon = null;
+
+      function getCourseProfile(course, fallbackIdx) {
+        const profile = DIST.find(d => d.difficulty === course.difficulty) ?? DIST[fallbackIdx] ?? DIST[0];
+        const total = Number(course.total_distance_km ?? course.round_trip_distance_km ?? course.distance_km);
+        const rangeMatched = course.distance_range_matched !== false;
+        return { ...profile, total: Number.isFinite(total) ? Math.round(total) : 0, rangeMatched };
+      }
+
+      function loadRecentPlaces() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem('touring-recent-places') || '[]');
+          return Array.isArray(parsed) ? parsed.filter(p => typeof p === 'string').slice(0, 18) : [];
+        } catch (_) { return []; }
+      }
+
+      function saveRecentPlaces(courseList) {
+        const places = [];
+        courseList.forEach(c => {
+          if (c.destination) places.push(c.destination);
+          [...(c.outbound_spots ?? []), ...(c.return_spots ?? [])].forEach(s => { if (s?.name) places.push(s.name); });
+        });
+        const unique = [...new Set([...places, ...loadRecentPlaces()].map(p => String(p).trim()).filter(Boolean))].slice(0, 18);
+        try { localStorage.setItem('touring-recent-places', JSON.stringify(unique)); } catch (_) {}
+      }
       let weatherMeta = { icon:'☀️', score:5, label:'絶好の日和！', temp:'--' };
       let currentSlide = 0;
       let sliderListenerAdded = false;
@@ -1148,7 +1172,9 @@
       }
 
       function renderSlider(data) {
-        courses = [...data.courses].sort((a,b)=>(a.distance_km??0)-(b.distance_km??0)).slice(0,3);
+        courses = [...data.courses]
+          .sort((a, b) => DIST.findIndex(d => d.difficulty === a.difficulty) - DIST.findIndex(d => d.difficulty === b.difficulty))
+          .slice(0, 3);
         currentSlide = 0;
         shortUrlCache = {};
 
@@ -1156,7 +1182,7 @@
         const dotsEl = document.getElementById('slider-dots');
 
         vp.innerHTML = courses.map((c,i) => {
-          const d = DIST[i];
+          const d = getCourseProfile(c, i);
           const firstSpot = (c.outbound_spots ?? c.rest_spots ?? [])[0];
           const routeLine = firstSpot
             ? `📍 現在地 → ${escHtml(firstSpot.name)} → ${escHtml(c.destination)}`
@@ -1179,7 +1205,7 @@
                 </div>
                 <span class="card-header-icon">🏍️</span>
                 <div class="card-header-badges">
-                  <span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>
+                  <span class="dist-tag ${d.cls}">${d.icon} ${d.rangeMatched ? d.label : '距離条件外'}</span>
                   ${destWeatherBadge}
                 </div>
               </div>
@@ -1188,7 +1214,7 @@
                 <p class="route-summary">${routeLine}</p>
                 ${tagsHtml?`<div class="course-tags">${tagsHtml}</div>`:''}
                 <div class="card-info-row">
-                  <span>🛣 ${c.distance_km}km</span>
+                  <span>🛣 往復${c.distance_verified ? '実測' : '目安'} ${d.total}km</span>
                   <span class="card-info-sep">·</span>
                   <span>⏱ 片道${fmtHours(c.duration_hours)}</span>
                   <span class="card-info-sep">·</span>
@@ -1287,18 +1313,23 @@
         L.marker(originLL).addTo(detailMapLayerGroup).bindPopup('現在地');
         L.marker(destLL).addTo(detailMapLayerGroup).bindPopup(c.destination || '目的地');
 
-        const waypoints = [...(c.outbound_spots ?? []), ...(c.return_spots ?? [])]
+        const outboundWaypoints = (c.outbound_waypoints ?? [])
           .filter(s => s.lat !== undefined && s.lon !== undefined);
+        const returnWaypoints = (c.return_waypoints ?? [])
+          .filter(s => s.lat !== undefined && s.lon !== undefined);
+        const waypoints = [...outboundWaypoints, ...returnWaypoints];
         waypoints.forEach(s => {
           L.circleMarker([s.lat, s.lon], { radius: 5, color: '#f97316', weight: 2, fillOpacity: 0.9 })
             .addTo(detailMapLayerGroup).bindPopup(escHtml(s.name));
         });
 
-        detailMap.fitBounds(L.latLngBounds([originLL, destLL]).pad(0.2));
+        const loopPoints = [originLL, ...outboundWaypoints.map(s => [s.lat, s.lon]), destLL,
+          ...returnWaypoints.map(s => [s.lat, s.lon]), originLL];
+        detailMap.fitBounds(L.latLngBounds(loopPoints).pad(0.2));
 
         try {
           detailMapRouteAbort = new AbortController();
-          const coords = `${userLon},${userLat};${c.dest_lon},${c.dest_lat}`;
+          const coords = loopPoints.map(([lat, lon]) => `${lon},${lat}`).join(';');
           const res = await fetch(
             `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,
             { signal: AbortSignal.any([detailMapRouteAbort.signal, AbortSignal.timeout(6000)]) }
@@ -1314,7 +1345,7 @@
         } catch (e) {
           if (e.name !== 'AbortError') {
             // ルート取得失敗時は直線で代替表示（劣化しても地図自体は見られるようにする）
-            L.polyline([originLL, destLL], { color: '#f97316', weight: 3, opacity: 0.6, dashArray: '6 6' }).addTo(detailMapLayerGroup);
+            L.polyline(loopPoints, { color: '#f97316', weight: 3, opacity: 0.6, dashArray: '6 6' }).addTo(detailMapLayerGroup);
           }
         }
       }
@@ -1326,7 +1357,7 @@
         if(detailEl) detailEl.scrollTop=0;
 
         const c=courses[idx];
-        const d=DIST[c._distIdx??idx];
+        const d=getCourseProfile(c, c._distIdx??idx);
 
         // コースナビ（前後ボタン・インジケーター）
         const navEl=document.getElementById('detail-nav');
@@ -1344,13 +1375,14 @@
         dimg.classList.remove('loaded');dimg.src='';
         loadPhoto(c.photo_spot,dimg);
         document.getElementById('detail-tags').innerHTML=
-          `<span class="dist-tag ${d.cls}">${d.icon} ${d.label}</span>`;
+          `<span class="dist-tag ${d.cls}">${d.icon} ${d.rangeMatched ? `${d.label}・${d.range}` : '距離条件外'}</span>`;
         document.getElementById('detail-name').textContent=c.name;
-        const rh=c.return_hours??c.duration_hours;
+        const outboundHours=Number(c.duration_hours) || 0;
+        const rh=Number(c.return_hours ?? outboundHours) || outboundHours;
         document.getElementById('detail-meta').innerHTML=
-          `<span class="meta-pill-lg">🛣 ${c.distance_km}km</span>`+
-          `<span class="meta-pill-lg">⏱ 片道 ${fmtHours(c.duration_hours)}</span>`+
-          `<span class="meta-pill-lg">🔄 往復 ${fmtHours(c.duration_hours+rh)}</span>`+
+          `<span class="meta-pill-lg">🛣 往復${c.distance_verified ? '実測' : '目安'} ${d.total}km</span>`+
+          `<span class="meta-pill-lg">⏱ 片道 ${fmtHours(outboundHours)}</span>`+
+          `<span class="meta-pill-lg">🔄 往復 ${fmtHours(outboundHours+rh)}</span>`+
           `<span class="meta-pill-lg">🏁 ${escHtml(c.destination)}</span>`;
         document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${escHtml(h)}</li>`).join('');
         document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${escHtml(r)}</span>`).join('');
@@ -1364,6 +1396,7 @@
         document.getElementById('detail-outbound-section').style.display = outboundSpots.length ? '' : 'none';
         document.getElementById('detail-return-section').style.display   = returnSpots.length   ? '' : 'none';
         document.getElementById('detail-info').innerHTML=[
+          c.distance_verified && !d.rangeMatched ? `<div class="info-chip info-caution"><span>↩️</span><span>実測距離が目標帯を外れました。別コースをおすすめします。</span></div>`:'',
           c.return_note?`<div class="info-chip info-return"><span>🔄</span><span>帰路: ${escHtml(c.return_note)}</span></div>`:'',
           c.caution    ?`<div class="info-chip info-caution"><span>⚠️</span><span>${escHtml(c.caution)}</span></div>`:'',
           c.best_season?`<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${escHtml(c.best_season)}</span></div>`:'',
@@ -1416,7 +1449,7 @@
         renderRouteMap(c);
 
         document.getElementById('detail-map-btn').href=buildMapUrl(c);
-        const shareText=`【${c.name}】を走ってきました！\n距離: ${c.distance_km}km / 片道${fmtHours(c.duration_hours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
+        const shareText=`【${c.name}】を走ってきました！\n往復${c.distance_verified ? '実測' : '目安'}: ${d.total}km / 往路${fmtHours(outboundHours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
         // X share: 詳細画面を開いた時点では /api/share を呼ばず、クリック時にのみ短縮URLを取得する
         // （以前は openDetail のたびに自動でPOSTしており、無認証エンドポイントへの
         //  不要な書き込みが積み重なる原因になっていた）
@@ -1430,7 +1463,7 @@
             window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText),'_blank','noopener');
           });
         };
-        const sd={name:c.name,distance_km:c.distance_km,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,outbound_spots:outboundSpots,return_spots:returnSpots,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
+        const sd={name:c.name,distance_km:c.distance_km,total_distance_km:c.total_distance_km,distance_range_km:c.distance_range_km,distance_range_matched:c.distance_range_matched,distance_verified:c.distance_verified,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,outbound_spots:outboundSpots,return_spots:returnSpots,outbound_waypoints:c.outbound_waypoints,return_waypoints:c.return_waypoints,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
         try{
           const b64=btoa(encodeURIComponent(JSON.stringify(sd)));
           const inDetail=document.getElementById('screen-detail').classList.contains('active');
@@ -1465,6 +1498,8 @@
           const state = computeEnrichState(data.course);
           c._enriched = state.enriched;
           c._enrichFailed = state.enrichFailed;
+          // 詳細だけでなく一覧カードも実測距離・帯域ラベルへ更新する。
+          renderSlider({ courses });
           // 開いたまま待っている間に他のコースへ移動していたら再描画しない
           if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
             openDetail(idx);
@@ -1589,12 +1624,15 @@
           const prefs = Array.from(selectedPrefs);
           const reqBody = {latitude:lat,longitude:lon,temperature,weather_condition:weatherCondition};
           if (prefs.length > 0) reqBody.preferences = prefs;
+          const excludedPlaces = loadRecentPlaces();
+          if (excludedPlaces.length > 0) reqBody.excluded_places = excludedPlaces;
           const res=await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:apiHeaders(),body:JSON.stringify(reqBody)});
           if(!res.ok){const err=new Error();err.status=res.status;throw err;}
           const data=await res.json();
           setStep('step-ai','done');
 
           renderSlider(data);
+          saveRecentPlaces(courses);
           courses.forEach(saveHistory);
           showScreen('screen-results');
           initSlider();
@@ -1639,12 +1677,15 @@
           const prefs = Array.from(selectedPrefs);
           const reqBody = {latitude:userLat, longitude:userLon, temperature, weather_condition:weatherCondition};
           if (prefs.length > 0) reqBody.preferences = prefs;
+          const excludedPlaces = loadRecentPlaces();
+          if (excludedPlaces.length > 0) reqBody.excluded_places = excludedPlaces;
           const res = await fetch(`${API_BASE}/api/suggest`,{method:'POST',headers:apiHeaders(),body:JSON.stringify(reqBody)});
           if(!res.ok){const err=new Error();err.status=res.status;throw err;}
           const data = await res.json();
           setStep('step-ai','done');
 
           renderSlider(data);
+          saveRecentPlaces(courses);
           courses.forEach(saveHistory);
           showScreen('screen-results');
           initSlider();

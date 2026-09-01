@@ -1,8 +1,25 @@
 """weekly_summary Lambda の稼働状況メッセージ・資金増額進捗の整形ロジックのテスト。
 SES/S3/SSM等のAWS呼び出しを伴わない純粋関数のみを対象にする。"""
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 NOW = datetime(2026, 8, 20, tzinfo=timezone.utc)
+
+
+def test_namespace_validation_reads_only_state(weekly, monkeypatch):
+    get_ssm = MagicMock(return_value='{"positions": {}}')
+    monkeypatch.setattr(weekly, "get_ssm", get_ssm)
+    monkeypatch.setattr(weekly, "get_current_price", MagicMock())
+    monkeypatch.setattr(weekly, "load_trades", MagicMock())
+    monkeypatch.setattr(weekly, "boto3", MagicMock())
+
+    result = weekly.lambda_handler({"action": "validate_ssm_namespace"}, MagicMock())
+
+    assert result == {"statusCode": 200, "body": '{"valid": true}'}
+    assert get_ssm.call_args_list == [((weekly.SSM_STATE,), {})]
+    assert not weekly.get_current_price.called
+    assert not weekly.load_trades.called
+    assert not weekly.boto3.client.called
 
 
 def _stats(weekly_count=0, closed_count=0, win_rate=None, pf=None, max_dd_jpy=0.0,

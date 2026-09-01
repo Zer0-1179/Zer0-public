@@ -4,6 +4,7 @@
 # 使い方:
 #   通常デプロイ:     bash deploy.sh
 #   DRY RUN確認:      bash deploy.sh --dry-run
+#   SSR Lambdaのみ:   bash deploy.sh --lambda-only
 #
 # 前提条件:
 #   - インフラ構築済み: cd infra && bash deploy-infra.sh
@@ -91,18 +92,20 @@ echo "[2/6] Lambda パッケージ作成中..."
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-# lambda.mjs + dist/server/ + package.json をコピー
+# lambda.mjs + dist/server/ + lockfile をコピー
 cp "${SRC_DIR}/lambda.mjs" "$TMPDIR/"
 mkdir -p "$TMPDIR/dist"
 cp -r "${SRC_DIR}/dist/server" "$TMPDIR/dist/"
 cp "${SRC_DIR}/package.json" "$TMPDIR/"
+cp "${SRC_DIR}/package-lock.json" "$TMPDIR/"
 
-# 本番依存のみインストール
+# ロックファイルどおりに本番依存だけをインストールする。SSRの限定反映で
+# 依存の最新版を混入させないため、npm installは使わない。
 cd "$TMPDIR"
-npm install --production --ignore-scripts --silent
+npm ci --omit=dev --ignore-scripts --silent
 
 # zip 作成
-ZIP_PATH="${SCRIPT_DIR}/lambda-deployment.zip"
+ZIP_PATH="${TMPDIR}/lambda-deployment.zip"
 zip -r "$ZIP_PATH" . > /dev/null
 ZIP_SIZE=$(du -sh "$ZIP_PATH" | cut -f1)
 echo "  ✓ zip 作成完了 (${ZIP_SIZE})"
@@ -126,6 +129,14 @@ aws lambda update-function-code \
 aws lambda wait function-updated \
   --function-name "$LAMBDA_FUNCTION_NAME" \
   --region "$REGION"
+
+# SSM参照先のようなSSRコードだけを安全に反映する用途では、Lambda環境変数、
+# 静的アセット削除、CloudFront無効化、公開リポジトリ同期を行わない。
+# これらは別の明示作業とする。
+if [ "$MODE" = "--lambda-only" ]; then
+  echo "=== SSR Lambdaのみ更新完了 ==="
+  exit 0
+fi
 
 # update-function-configuration --environment は Variables マップを丸ごと置換する仕様
 # （マージではない）。SITE_URL だけを指定すると、コンソール等で手動追加した他のenv varが

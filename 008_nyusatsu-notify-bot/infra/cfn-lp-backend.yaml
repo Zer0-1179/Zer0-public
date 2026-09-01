@@ -44,6 +44,12 @@ Parameters:
       - 14
       - 30
     Description: Lambda実行ログの保持日数
+  WaitlistCodeVersion:
+    Type: String
+    Description: lambda/lp_waitlist.zipのS3バージョンID
+  StripeWebhookCodeVersion:
+    Type: String
+    Description: lambda/stripe_webhook.zipのS3バージョンID
 
 # -----------------------------------------------
 # Resources
@@ -72,67 +78,6 @@ Resources:
       KeySchema:
         - AttributeName: email
           KeyType: HASH
-
-  # 収集Lambda(別スタック)が配信メールのList-Unsubscribeヘッダーを組み立てる際に
-  # 参照するAPIベースURL。このスタックがWaitlistApiのドメインを唯一知っているため、
-  # ここでSSMパラメータとして公開し、収集Lambda側は読み取り専用で参照する。
-  UnsubscribeBaseUrlParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/unsubscribe-base-url
-      Type: String
-      Value: !Sub "https://${WaitlistApi}.execute-api.${AWS::Region}.amazonaws.com"
-      Description: Nyusatsu Notify Bot waitlist API base URL (for List-Unsubscribe links)
-
-  # Stripe Webhook署名シークレット(v0.19)。値はリテラルのプレースホルダーで固定し、
-  # CFn Parameter経由にはしない。Stripeダッシュボードでwebhook作成後(本テンプレート
-  # デプロイでAPIエンドポイントが確定してから)に発行される値のため、デプロイ前には
-  # 実際の値を持ちえない(鶏と卵)。デプロイ後にユーザーから値を受け取り
-  # `aws ssm put-parameter --overwrite`で直接更新する。このテンプレートで本行の
-  # リテラル値を将来変更しない限りこの資源は再デプロイの差分対象にならないため、
-  # CLIで設定した実際の値がCFn再デプロイで巻き戻されることはない。
-  StripeWebhookSecretParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/stripe-webhook-secret
-      Type: String
-      Value: "REPLACE_AFTER_STRIPE_WEBHOOK_SETUP"
-      Description: Stripe webhook signing secret (whsec_...) for signature verification
-
-  # LINE Messaging API認証情報(v0.28)。Stripe webhook secretと同じくリテラルの
-  # プレースホルダーで固定し、ユーザーがLINE Developersコンソールでチャネルを
-  # 作成した後にCLIで`--overwrite`更新する(鶏と卵の関係、値は再デプロイで
-  # 巻き戻らない)。チャネルアクセストークン・シークレットも含め全てType: String
-  # (AWS::SSM::Parameterはネイティブでは SecureString をサポートしないため。
-  # SecureString化するには AWS::SecretsManager::Secret かカスタムリソースが
-  # 必要で、個人運営の小規模プロジェクトでは運用コストに見合わないと判断し
-  # Stripe webhook secretと同じくStringのまま運用している。Lambda側の
-  # get_param(decrypt=True)は将来手動でSecureStringへ切り替えても壊れないよう
-  # 用意済み、Fable指摘2026-07-14)。LIFF IDはそもそも秘匿情報ではない
-  # (LP側JSに埋め込むため公開前提)。
-  LineChannelAccessTokenParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/line-channel-access-token
-      Type: String
-      Value: "REPLACE_AFTER_LINE_SETUP"
-      Description: LINE Messaging API channel access token for push messages
-
-  LineChannelSecretParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/line-channel-secret
-      Type: String
-      Value: "REPLACE_AFTER_LINE_SETUP"
-      Description: LINE Messaging API channel secret for webhook signature verification
-
-  LineLiffIdParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/line-liff-id
-      Type: String
-      Value: "REPLACE_AFTER_LINE_SETUP"
-      Description: LINE LIFF app ID used to build the friend-add/link URL on the LP
 
   WaitlistLogGroup:
     Type: AWS::Logs::LogGroup
@@ -174,12 +119,12 @@ Resources:
                 Action:
                   - ssm:GetParameter
                 Resource:
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/notify-email
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/ses-sender
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/hmac-secret
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${LineChannelAccessTokenParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${LineChannelSecretParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${LineLiffIdParameter}
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/ses-sender
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/hmac-secret
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-channel-access-token
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-channel-secret
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-liff-id
               - Effect: Allow
                 Action:
                   - dynamodb:Scan
@@ -205,24 +150,19 @@ Resources:
       Environment:
         Variables:
           WAITLIST_TABLE_NAME: !Ref WaitlistTable
-          NOTIFY_EMAIL_PARAM_NAME: /zer0/008-nyusatsu/notify-email
-          SES_SENDER_PARAM_NAME: /zer0/008-nyusatsu/ses-sender
-          HMAC_SECRET_PARAM_NAME: /zer0/008-nyusatsu/hmac-secret
+          NOTIFY_EMAIL_PARAM_NAME: /nyusatsu/notify-email
+          SES_SENDER_PARAM_NAME: /nyusatsu/ses-sender
+          HMAC_SECRET_PARAM_NAME: /nyusatsu/hmac-secret
           SES_CONFIGURATION_SET_NAME: zer0-nyusatsu-config-set
           MATCH_HISTORY_TABLE_NAME: zer0-nyusatsu-match-history
           ALLOWED_ORIGIN: !Ref AllowedOrigin
-          LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME: !Ref LineChannelAccessTokenParameter
-          LINE_CHANNEL_SECRET_PARAM_NAME: !Ref LineChannelSecretParameter
-          LINE_LIFF_ID_PARAM_NAME: !Ref LineLiffIdParameter
+          LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME: /nyusatsu/line-channel-access-token
+          LINE_CHANNEL_SECRET_PARAM_NAME: /nyusatsu/line-channel-secret
+          LINE_LIFF_ID_PARAM_NAME: /nyusatsu/line-liff-id
       Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              # Placeholder (Handler does not match this file, so this
-              # never actually executes). Real code is deployed via
-              # `aws lambda update-function-code` per CLAUDE.md rule
-              # (no SAM, no S3 build artifact) before this function is
-              # invoked by any real trigger.
-              return {"statusCode": 200, "body": "placeholder"}
+        S3Bucket: !ImportValue zer0-nyusatsu-lambda-artifacts-bucket-name
+        S3Key: lambda/lp_waitlist.zip
+        S3ObjectVersion: !Ref WaitlistCodeVersion
     DependsOn:
       - WaitlistLogGroup
 
@@ -357,9 +297,9 @@ Resources:
                 Action:
                   - ssm:GetParameter
                 Resource:
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${StripeWebhookSecretParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/notify-email
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/ses-sender
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/stripe-webhook-secret-secure
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/ses-sender
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -378,19 +318,15 @@ Resources:
       Environment:
         Variables:
           WAITLIST_TABLE_NAME: !Ref WaitlistTable
-          STRIPE_WEBHOOK_SECRET_PARAM_NAME: !Ref StripeWebhookSecretParameter
-          NOTIFY_EMAIL_PARAM_NAME: /zer0/008-nyusatsu/notify-email
-          SES_SENDER_PARAM_NAME: /zer0/008-nyusatsu/ses-sender
+          # 値はCloudFormationで管理しない。事前に作成したStandard SecureStringだけを参照する。
+          STRIPE_WEBHOOK_SECRET_PARAM_NAME: /nyusatsu/stripe-webhook-secret-secure
+          NOTIFY_EMAIL_PARAM_NAME: /nyusatsu/notify-email
+          SES_SENDER_PARAM_NAME: /nyusatsu/ses-sender
           SES_CONFIGURATION_SET_NAME: zer0-nyusatsu-config-set
       Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              # Placeholder (Handler does not match this file, so this
-              # never actually executes). Real code is deployed via
-              # `aws lambda update-function-code` per CLAUDE.md rule
-              # (no SAM, no S3 build artifact) before this function is
-              # invoked by any real trigger.
-              return {"statusCode": 200, "body": "placeholder"}
+        S3Bucket: !ImportValue zer0-nyusatsu-lambda-artifacts-bucket-name
+        S3Key: lambda/stripe_webhook.zip
+        S3ObjectVersion: !Ref StripeWebhookCodeVersion
     DependsOn:
       - StripeWebhookLogGroup
 

@@ -44,7 +44,7 @@ cd /root/Zer0/004_portfolio/infra && bash deploy-infra.sh
 
 ```bash
 # トークン取得
-aws ssm get-parameter --name /Zer0/Portfolio/cryptobot-stats-auth \
+aws ssm get-parameter --name /portfolio/cryptobot-stats-auth \
   --with-decryption --region ap-northeast-1 --query Parameter.Value --output text
 ```
 

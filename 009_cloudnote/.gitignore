@@ -1,0 +1,17 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+
+# Build and test artifacts
+node_modules/
+dist/
+.astro/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.zip
+
+# Excel is the evidence ledger's source of truth. Do not publish its raw data.
+evidence/source/*
+!evidence/source/README.md

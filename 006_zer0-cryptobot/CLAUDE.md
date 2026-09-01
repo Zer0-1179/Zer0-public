@@ -26,17 +26,17 @@ bash scripts/setup_ssm.sh
 
 ## 緊急停止・一時停止（v4.0〜）
 
-EventBridgeスケジュールを無効化する前に、まずSSMパラメータ`/Zer0/CryptoBot/mode`での切替を検討すること。既存ポジションのSL管理を止めずに新規建てだけ止められる。
+EventBridgeスケジュールを無効化する前に、まずSSMパラメータ`/cryptobot/mode`での切替を検討すること。既存ポジションのSL管理を止めずに新規建てだけ止められる。
 
 ```bash
 # 新規建てのみ停止（既存ポジションのTP1/SL/トレーリング管理は継続）
-aws ssm put-parameter --name /Zer0/CryptoBot/mode --value pause_entry --type String --overwrite --region ap-northeast-1
+aws ssm put-parameter --name /cryptobot/mode --value pause_entry --type String --overwrite --region ap-northeast-1
 
 # 全処理停止（既存ポジション管理も止まる。ポジションがある状態での長時間停止は非推奨）
-aws ssm put-parameter --name /Zer0/CryptoBot/mode --value halt --type String --overwrite --region ap-northeast-1
+aws ssm put-parameter --name /cryptobot/mode --value halt --type String --overwrite --region ap-northeast-1
 
 # 復帰
-aws ssm put-parameter --name /Zer0/CryptoBot/mode --value normal --type String --overwrite --region ap-northeast-1
+aws ssm put-parameter --name /cryptobot/mode --value normal --type String --overwrite --region ap-northeast-1
 ```
 
 パラメータ未作成・不正値・読込失敗は全て`normal`扱い（fail-safe）。
@@ -44,3 +44,9 @@ aws ssm put-parameter --name /Zer0/CryptoBot/mode --value normal --type String -
 ## スタック名
 
 - メインスタック: `zer0-cryptobot`（ap-northeast-1）
+
+## SSM名前空間移行中の安全規則
+
+- 正式パスは`/cryptobot/`配下とする。切替は`infra/cfn-cryptobot-ssm-access.yaml`の専用スタックで行い、メインスタックを移行手段に使わない。
+- 専用スタックが`Committed=true`になるまで、通常の`bash scripts/deploy.sh`および`infra/cfn-cryptobot.yaml`を使う本番更新は禁止する。新パス未作成のままメインスタックが環境変数を更新すると、Executorの安全な旧パス互換を失うためである。
+- 切替時は旧modeを`halt`、旧stateの`positions`を空、Analyzer/Executorスケジュールを短時間無効化した状態でのみ実行する。切替後は副作用のない`validate_ssm_namespace`イベントでExecutorとWeeklySummaryを確認し、旧modeは`halt`のまま残す。

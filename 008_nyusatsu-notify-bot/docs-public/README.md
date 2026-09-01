@@ -63,12 +63,12 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 ## ビジネスモデル
 
-| 項目 | 内容 |
-| --- | --- |
-| 提供形態 | メールによる定期通知 |
-| 料金 | 月額3,000円（予定）。セルフサーブ帯での検討を経て確定（未確定要素あり・現在は無料テスト運用） |
-| 決済 | Stripe Payment Links を利用予定（[docs_payment_setup.md](../docs/docs_payment_setup.md)参照）。自前の決済システムは開発しない |
-| 収集元 | 横浜市発注情報（パイロット）。将来的にエリア拡大を検討 |
+| 項目     | 内容                                                                                                                                |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 提供形態 | メールによる定期通知                                                                                                                |
+| 料金     | 月額3,000円（予定）。セルフサーブ帯での検討を経て確定（未確定要素あり・現在は無料テスト運用）                                       |
+| 決済     | Stripe Payment Links を利用予定（[docs_payment_setup.md](../docs/setup/docs_payment_setup.md)参照）。自前の決済システムは開発しない |
+| 収集元   | 横浜市発注情報（パイロット）。将来的にエリア拡大を検討                                                                              |
 
 ## AWSリソース（デプロイ済み）
 
@@ -147,9 +147,9 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | --------------------------------- | ---------------------------------------- |
 | `zer0-nyusatsu-daily-schedule`   | `cron(0 21 * * ? *)` = 毎日6:00 JST      |
 
-### SSM Parameter（`/zer0/008-nyusatsu/` 配下）
+### SSM Parameter（`/nyusatsu/` 配下）
 
-`notify-email` / `ses-sender` / `keywords` / `hmac-secret` / `unsubscribe-base-url` / `payment-required` / `stripe-webhook-secret` / `line-channel-access-token` / `line-channel-secret` / `line-liff-id`
+`notify-email` / `ses-sender` / `keywords` / `hmac-secret` / `unsubscribe-base-url` / `payment-required` / `stripe-webhook-secret-secure` / `line-channel-access-token` / `line-channel-secret` / `line-liff-id`
 
 ### CloudFormationスタック一覧
 
@@ -162,6 +162,9 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | `zer0-nyusatsu-mail-relay`     | 問合せメール受信転送                         |
 | `zer0-nyusatsu-lp-cert`        | LP用ACM証明書（us-east-1）                   |
 | `zer0-nyusatsu-lp-hosting`     | LP配信（S3+CloudFront）                      |
+| `zer0-nyusatsu-lambda-artifacts` | Lambdaコード用のバージョン付きS3 artifact   |
+| `nyusatsu-lambda-code-deployment` | 既存5 Lambdaのコード更新専用                |
+| `nyusatsu-ssm`                  | 正規`/nyusatsu/`設定値とSecureString検証のCloudFormation管理 |
 
 ## ランディングページ（LP）・事前登録
 
@@ -203,7 +206,7 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 課金開始前必須だった法務対応（特商法表記・利用規約・プライバシーポリシー）は実装済み。特商法の所在地・電話番号は消費者庁Q&amp;Aに基づき「開示請求があれば開示」方式を採用し、バーチャルオフィス契約は不要と判断した。LINE通知（メール/LINE選択制）も実装・実機検証済み。
 
-1. **Stripe決済連携**（[docs_payment_setup.md](../docs/docs_payment_setup.md)）— アカウント開設・KYCは完了済み。Payment Links発行とWebhookエンドポイント設定が残タスク（ユーザー自身の作業）
+1. **Stripe決済連携**（[docs_payment_setup.md](../docs/setup/docs_payment_setup.md)）— アカウント開設・KYCは完了済み。Payment Links発行とWebhookエンドポイント設定が残タスク（ユーザー自身の作業）
 2. **神奈川県回答に沿った利用条件の反映**: 2026-07-24付で本回答を受領済み。明確な禁止規定は示されなかったが、個別の商用利用承認ではない。公共データ利用規約（PDL1.0）、対象サイト固有の規約、出典・加工表示、第三者権利、個別法令を確認してから対象自治体を拡大する
 3. 流量計測を継続し、価格・対象エリアを最終判断（現状は横浜市単体・キーワード10語）
 4. 複数自治体への拡大: 神奈川県回答と各利用条件を満たす設計を確認後、「かながわ電子入札共同システム」経由の一括対応を検討する。東京都は同都からの回答を待つ。横浜市単体では公告が週1回のため通知頻度に構造的な上限がある
@@ -218,6 +221,15 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 #### 通知メールアドレスの変更
 
-- オーナー通知先(NotifyEmail)を`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
-- SSMパラメータ`/zer0/008-nyusatsu/notify-email`を更新（mail-relayのメール転送先はこの値を実行時に参照するため即時反映）
+- オーナー通知先(NotifyEmail)を旧アドレスから現行アドレスへ変更（個人メールアドレスは記録しない）
+- SSMパラメータ`/nyusatsu/notify-email`を更新（mail-relayのメール転送先はこの値を実行時に参照するため即時反映）
 - CFnスタック`zer0-nyusatsu-notify-bot`のNotifyEmailパラメータ更新・デプロイ、`zer0-nyusatsu-mail-relay`は再デプロイでSNS購読(`zer0-nyusatsu-alarm-topic`等)を新アドレスへ切替
+
+### 2026-08-27
+
+#### 運用安全性と個人情報ログの是正
+
+- 購読登録、配信、バウンス処理のCloudWatch Logsからメールアドレスを除外する実装へ更新
+- LambdaコードをCloudFormation管理のVersioning有効S3 artifactへ切り替えるローカル実装を追加し、反映漏れを防ぐ本番反映手順を整備
+- Stripe Webhook署名シークレットの移行方針を、CloudFormationの置換競合を避ける安全な段階方式へ更新
+- Lambda artifact用S3バケットと5 Lambdaのバージョン付きZIPを作成。アプリケーション本体CFNの想定外差分は実行せず、更新専用CFNスタックから既存5 Lambdaのコードを1関数ずつ無停止反映した

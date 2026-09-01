@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Grants Nyusatsu Lambdas access to the normalized SSM namespace.
+
+Resources:
+  CollectorSsmReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: nyusatsu-collector-ssm-read-policy
+      Description: Read normalized Nyusatsu SSM parameters required by the collector Lambda.
+      Roles:
+        - zer0-nyusatsu-collector-role
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/ses-sender
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/keywords
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/hmac-secret
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/unsubscribe-base-url
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/payment-required
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-channel-access-token
+
+  WaitlistSsmReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: nyusatsu-waitlist-ssm-read-policy
+      Description: Read normalized Nyusatsu SSM parameters required by the waitlist Lambda.
+      Roles:
+        - zer0-nyusatsu-lp-waitlist-role
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/ses-sender
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/hmac-secret
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-channel-access-token
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-channel-secret
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-liff-id
+
+  StripeWebhookSsmReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: nyusatsu-stripe-webhook-ssm-read-policy
+      Description: Read normalized Nyusatsu SSM parameters required by the Stripe webhook Lambda.
+      Roles:
+        - zer0-nyusatsu-stripe-webhook-role
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/stripe-webhook-secret-secure
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/ses-sender
+
+  MailForwarderSsmReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: nyusatsu-mail-forwarder-ssm-read-policy
+      Description: Read the normalized Nyusatsu notification email parameter.
+      Roles:
+        - zer0-nyusatsu-mail-forwarder-role
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email

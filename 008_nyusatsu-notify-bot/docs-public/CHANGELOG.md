@@ -81,7 +81,7 @@
 ### キーワード拡充（v0.12）
 
 - 既存4語（清掃・美化・害虫防除・ねずみ防除）に消防用設備点検・造園・緑地・街路樹・除草・設備保守点検の6語を追加し計10語に
-- SSMパラメータ（`/zer0/008-nyusatsu/keywords`）とCFnテンプレートのDefault値を更新し、実行して正常動作を確認
+- SSMパラメータ（キーワード設定）とCFnテンプレートのDefault値を更新し、実行して正常動作を確認
 
 ## 2026-07-10
 
@@ -293,6 +293,56 @@
 
 ### 通知メールアドレスの変更
 
-- オーナー通知先(NotifyEmail)を`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
-- SSMパラメータ`/zer0/008-nyusatsu/notify-email`を更新（`mail_forwarder` Lambdaは実行時にこの値を`ssm:GetParameter`で参照するため即時反映）
+- オーナー通知先(NotifyEmail)を旧アドレスから現行アドレスへ変更（個人メールアドレスは記録しない）
+- SSMパラメータ（通知先メール）を更新（`mail_forwarder` Lambdaは実行時にこの値を`ssm:GetParameter`で参照するため即時反映）
 - CFnスタック`zer0-nyusatsu-notify-bot`のNotifyEmailパラメータ更新・デプロイ。`zer0-nyusatsu-mail-relay`もパラメータ型`AWS::SSM::Parameter::Value<String>`の再解決のため再デプロイし、SNS購読(`zer0-nyusatsu-alarm-topic`/`zer0-nyusatsu-mail-relay-alarm-topic`/`zer0-nyusatsu-ses-events-topic`)を新アドレスへ切替
+
+## 2026-08-27
+
+### SSMパラメータ名前空間を`/nyusatsu/`へ移行
+
+- 専用CloudFormationスタックで、稼働中の4 Lambdaが正規化後の`/nyusatsu/`パスだけを参照するよう切替。旧パスと新パスの値一致、およびLambda設定を値を出さずに検証した
+- 切替完了後、不要になった旧名前空間配下の11パラメータを、対象を固定した別のCloudFormationカスタムリソースで削除した
+- 削除後に旧11件が存在しないこと、新10件と4 Lambdaの新パス参照が維持されていることを確認した
+
+### 移行専用CFNスタックの撤去完了
+
+- 移行・cleanup専用のCloudFormationスタックを削除し、一時Lambda、IAM Role、CloudWatch Logsを撤去した
+- `/nyusatsu/`配下の10パラメータと恒久SSM参照ポリシーは維持され、値を出さずに存在を再確認した
+
+### 運用安全性と個人情報ログの是正
+
+- 購読登録、配信、バウンス処理のCloudWatch Logsからメールアドレスを除外し、送信失敗時も例外本文を記録しない実装へ変更
+- Versioning有効S3のLambda artifactをCloudFormationの`S3ObjectVersion`で参照するローカルソースへ変更した。本番反映は独立レビュー・費用承認後に行う
+- LPデプロイスクリプトに対象バケット・必須値・未解決プレースホルダー・同期差分の事前検証を追加し、更新がない場合はCloudFront invalidationを実行しないようにした
+- Stripe Webhook署名シークレットの旧移行手順を廃止し、CloudFormationの置換競合を起こさない段階的な所有権移行方針へ更新
+
+### アーティファクト基盤の作成と本番反映の安全停止
+
+- Versioning有効・SSE-S3・公開アクセス遮断・TLS拒否ポリシーを持つLambda artifact用S3バケットをCloudFormationで作成し、5 LambdaのZIPをバージョン付きで配置
+- アプリケーションスタックのChange Setに想定外の変更が混在したため、実行せず削除。Lambda、API、EventBridge、SNS、SSM値、Stripe設定は変更していない
+- 本体スタックの過去ドリフトを回避するため、既存5 Lambdaのコードだけをバージョン付きS3 artifactへ更新する専用CloudFormationスタックを追加
+
+### 5 Lambdaコード更新の完了
+
+- 独立レビュー済みの単独Change Setで、bounce-handler、collector、lp-waitlist、stripe-webhook、mail-forwarderを1関数ずつ無停止更新した
+- 各更新後に専用CFNスタックの`UPDATE_COMPLETE`と対象Lambdaの`Active`・`LastUpdateStatus=Successful`を確認した。API、EventBridge、SNS、SSM値、DynamoDB、Stripe設定には変更なし
+- 明示承認後、対象4関数の旧CloudWatchログストリームを削除し、各ロググループの残存ストリームが0件であることを確認した
+
+### 正規SSM設定値のCloudFormation所有化
+
+- 正規`/nyusatsu/`配下の9件の`String`を、既存値を変更せず専用`nyusatsu-ssm`スタックへImportした。各リソースは削除・置換とも`Retain`とし、9件すべてのドリフトが`IN_SYNC`であることを確認した
+- 稼働中4 Lambdaが正規パスだけを参照し続けることを、値を取得せず確認した
+- Stripe Webhook署名用の`SecureString`は、値をCloudFormationへ保持しない方針のため今回のnative Import対象外とした。採用型検証リソースは別段階で追加する
+
+### Stripe署名用SecureStringのCloudFormation統制
+
+- 値を読み取らない採用型カスタムリソースを`nyusatsu-ssm`スタックへ追加し、署名用`SecureString`の存在・型・Tier・DataType・タグを検証した
+- 検証Lambdaは`GetParameter`・更新・削除権限を持たず、必要なメタデータ・タグ参照だけを許可した。値・Stripe設定・決済・Webhook送信には触れていない
+- 専用スタックは`UPDATE_COMPLETE`。native管理対象と検証Lambda/IAM/ロググループはドリフト`IN_SYNC`であることを確認した
+
+### 旧SSM論理ID整理の安全停止
+
+- 削除済み旧パスを記録するアプリ本体スタックの論理IDを整理するため、対象SSMだけへ`Retain`を加えるChange Setを作成して検査した
+- メイン側にはAlarm・Lambda・EventBridge・SNS、LP側にはAlarm・Lambda・API Gatewayの想定外差分が混在したため、いずれも実行せずChange Setを削除した
+- 実リソース、稼働Lambda、正規`/nyusatsu/`パラメータ、SSM所有スタックへの影響はない。旧論理IDの削除は、アプリ本体の過去ドリフトを解消する別作業として保留する

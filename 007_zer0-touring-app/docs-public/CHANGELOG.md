@@ -227,3 +227,39 @@
 - AlarmEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
 - CloudWatchアラーム用SNSトピック`Zer0-touring-alarms`の購読を新アドレスへ切替
 - CFnスタック`zer0-touring`を`update-stack`（`CertificateArn`/`AdminToken`/`EdgeSecret`は`UsePreviousValue=true`）でデプロイ
+
+## 2026-08-27
+
+### SSM名前空間の正規化と旧パラメータ削除
+
+- CloudFront→API Gateway間の共有シークレットの運用参照先を`/touring/edge_secret`へ統一
+- 専用CloudFormation cleanupスタックで旧SSMパラメータを削除。新SecureString、Lambda、CloudFrontの共有認証ヘッダーを値非表示で確認し、CloudFront経由APIは200、直APIは403となることを実機確認
+- 完了済みの移行・削除用CFNテンプレートを作業領域から削除し、通常運用では正規化済みパスのみを管理
+
+### 移行専用CFNスタックの撤去完了
+
+- 移行・cleanup専用のCloudFormationスタックを削除し、一時Lambda、IAM Role、CloudWatch Logsを撤去した
+- `/touring/edge_secret`とCloudFront・Lambdaの既存認証構成は維持され、値を出さずに存在を再確認した
+
+## 2026-08-31
+
+### 利用実績の日次更新停止を修正
+
+- EventBridge Scheduler実行ロールの信頼条件を、AWS仕様に従い個別スケジュールARNではなく`default`スケジュールグループARNに修正。Schedulerがロールを引き受けられず統計Lambdaを起動できなかった不具合を解消
+- `stats.json`は`no-store`で書き出し、CloudFrontにも同ファイル専用のキャッシュ無効ビヘイビアを追加。004のSSRが日次集計結果を古い配信キャッシュから読まないようにした
+- `stats_handler`の回帰テストに`Cache-Control`検証を追加
+
+### ツーリングコースの距離・スポット品質を修正
+
+- コース距離を片道の曖昧な値ではなく往復合計へ統一。初級20〜70km・中級80〜150km・上級160〜250kmをAI提案時と実道路距離取得後の両方で検査し、詳細画面では「往復目安」から「往復実測」へ更新する
+- 既存のGoogle Maps Directions API 1リクエストを往復ループ（現在地→行きスポット→目的地→帰りスポット→現在地）に変更し、追加のDirections API呼び出しなしで往路・復路を含む実距離を取得するようにした。失敗時は同じ往復点列をOSRMへ渡す
+- 観光地・道の駅・温泉・日帰り温泉・銭湯を表示用スポットと地図／ナビ用の座標検証済みスポットに分離。ジオコード失敗・経路外判定でも提案そのものを画面から消さないようにした
+- 目的地と全立ち寄りスポットをNFKC正規化して同一提案内で重複排除し、端末内の直近18地点を次回のAI提案から除外するようにした
+
+### 提案・詳細取得の入力検証と品質保証を強化
+
+- Solの独立レビューで判明した、公開`/api/enrich`の無制限外部API呼び出しを修正。IP別・日別9回（提案3回×3コース）に制限し、目的地・経由地点・座標の構造検証を外部API呼び出し前に行うようにした
+- AI出力は初級・中級・上級の正確に3件すべてが距離帯、各コースの観光地／展望台、3コース全体の道の駅と温泉・日帰り温泉・銭湯、目的地を含む全地点の重複なしを満たす場合だけ返す。欠損・重複・帯域外を成功応答として表示しないようにした
+- 詳細取得前のGoogleマップナビから未検証のAI地点名を除外し、座標検証済みwaypointだけを使用。詳細地図のOSRM経路も往復の経由順と一致させ、実測後は一覧カードの距離・ラベルも更新するようにした
+- スポットのNominatim再試行を廃止し、段階別の残時間ガードを追加。初級の安全・距離条件が「峠道」「ガッツリ走る」より常に優先されるプロンプトへ修正した
+- DynamoDB障害時も`/api/enrich`だけはレート制限をfail-closedで扱い、外部APIの無制限呼び出しを防ぐようにした

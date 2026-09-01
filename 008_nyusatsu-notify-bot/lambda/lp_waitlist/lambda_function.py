@@ -503,8 +503,8 @@ def _line_pending_response(email: str, via_email: bool = False) -> dict:
         try:
             sender_email = _get_param(SES_SENDER_PARAM_NAME)
             send_line_link_email(email, liff_url, sender_email)
-        except Exception:
-            logger.warning("line link email failed for %s", email, exc_info=True)
+        except Exception as exc:
+            logger.warning("line link email failed; error_type=%s", type(exc).__name__)
         return _json_response(200, {"status": "line_pending"})
     return _json_response(200, {"status": "line_pending", "liff_url": liff_url})
 
@@ -577,8 +577,8 @@ def handle_register(event):
             # (handle_line_link側でunsubscribed状態は理由を問わず復活させない
             # ガードが既にあるため、liff_urlを発行しても実害はない、v0.28)。
             logger.info(
-                "registration blocked for suppressed address %s (reason=%s)",
-                email, existing.get("unsubscribed_reason"),
+                "registration blocked for a suppressed address (reason=%s)",
+                existing.get("unsubscribed_reason"),
             )
             if channel == "line":
                 return _line_pending_response(email, via_email=True)
@@ -590,7 +590,7 @@ def handle_register(event):
         # 再登録はメール送信を伴わないためクールダウン対象外(下のchannel分岐後に処理)。
         last_sent = int(existing.get("last_confirm_sent_at", 0))
         if channel == "email" and now_ts - last_sent < CONFIRMATION_RESEND_COOLDOWN_SEC:
-            logger.info("confirmation resend suppressed for %s (cooldown)", email)
+            logger.info("confirmation resend suppressed by cooldown")
             return _json_response(200, {"status": "registered"})
 
         update_expr = "SET #s = :pending, last_confirm_sent_at = :t, channel = :channel"
@@ -619,8 +619,8 @@ def handle_register(event):
         token = make_token(email, "confirm")
         confirm_url = f"{_base_url(event)}/confirm?email={urllib.parse.quote(email)}&token={token}"
         send_confirmation_email(email, confirm_url, sender_email)
-    except Exception:
-        logger.warning("confirmation email failed for %s", email, exc_info=True)
+    except Exception as exc:
+        logger.warning("confirmation email failed; error_type=%s", type(exc).__name__)
 
     return _json_response(200, {"status": "registered"})
 
@@ -662,8 +662,8 @@ def handle_line_link(event):
         )
         try:
             notify_owner_confirmed(email)
-        except Exception:
-            logger.warning("owner confirm notification failed for %s (line)", email, exc_info=True)
+        except Exception as exc:
+            logger.warning("owner confirm notification failed (line); error_type=%s", type(exc).__name__)
         try:
             send_line_push(
                 line_user_id,
@@ -671,8 +671,8 @@ def handle_line_link(event):
                 "横浜市の入札公告に対象案件があれば、このアカウントからお知らせします。\n"
                 f"配信停止はこのアカウントをブロックするか、{INQUIRY_EMAIL} までご連絡ください。",
             )
-        except Exception:
-            logger.warning("line welcome push failed for %s", email, exc_info=True)
+        except Exception as exc:
+            logger.warning("line welcome push failed; error_type=%s", type(exc).__name__)
 
     return _json_response(200, {"status": "linked"})
 
@@ -712,7 +712,7 @@ def handle_line_webhook(event):
                     ExpressionAttributeNames={"#s": "status"},
                     ExpressionAttributeValues={":u": "unsubscribed", ":t": int(time.time()), ":r": "line_block"},
                 )
-                logger.info("unsubscribed %s due to LINE unfollow", item["email"])
+                logger.info("unsubscribed a recipient due to LINE unfollow")
             if "LastEvaluatedKey" not in resp:
                 break
             scan_kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
@@ -751,15 +751,15 @@ def handle_confirm(event):
         )
         try:
             notify_owner_confirmed(email)
-        except Exception:
-            logger.warning("owner confirm notification failed for %s", email, exc_info=True)
+        except Exception as exc:
+            logger.warning("owner confirm notification failed; error_type=%s", type(exc).__name__)
         try:
             sender_email = _get_param(SES_SENDER_PARAM_NAME)
             unsubscribe_token = make_token(email, "unsubscribe")
             unsubscribe_url = f"{_base_url(event)}/unsubscribe?email={urllib.parse.quote(email)}&token={unsubscribe_token}"
             send_welcome_email(email, sender_email, unsubscribe_url)
-        except Exception:
-            logger.warning("welcome email failed for %s", email, exc_info=True)
+        except Exception as exc:
+            logger.warning("welcome email failed; error_type=%s", type(exc).__name__)
 
     return _html_response(
         200,
@@ -817,7 +817,7 @@ def handle_unsubscribe(event, method: str):
         # 未登録アドレス(トークンはHMAC検証済みだがwaitlistに存在しない)。
         # update_itemはアップサートのため、条件なしだと不完全な幽霊レコードが
         # 新規作成されてしまう。既に「登録なし」なので何もせず成功扱いにする。
-        logger.info("unsubscribe requested for unregistered address %s, ignoring", email)
+        logger.info("unsubscribe requested for an unregistered address; ignoring")
     return _html_response(200, _page("配信を停止しました", "ご利用ありがとうございました。配信を停止しました。"))
 
 

@@ -124,6 +124,53 @@ def test_mode_halt_skips_everything(executor, monkeypatch):
     assert not executor.reconcile_positions.called
 
 
+def test_namespace_validation_reads_only_configured_ssm_values(executor, monkeypatch):
+    """切替検証イベントは取引・保存・通知を一切実行しない。"""
+    calls = []
+
+    def fake_get_ssm(name, decrypt=False):
+        calls.append((name, decrypt))
+        values = {
+            executor.SSM_MODE: "halt",
+            executor.SSM_API_KEY: "key",
+            executor.SSM_API_SECRET: "secret",
+            executor.SSM_STATE: '{"positions": {}}',
+        }
+        return values[name]
+
+    monkeypatch.setattr(executor, "get_ssm", fake_get_ssm)
+    monkeypatch.setattr(executor, "BitbankClient", MagicMock())
+    monkeypatch.setattr(executor, "save_state", MagicMock())
+    monkeypatch.setattr(executor, "send_email", MagicMock())
+    monkeypatch.setattr(executor, "reconcile_positions", MagicMock())
+
+    result = executor.lambda_handler({"action": "validate_ssm_namespace"}, MagicMock())
+
+    assert result == {"statusCode": 200, "body": '{"valid": true}'}
+    assert calls == [
+        (executor.SSM_MODE, False),
+        (executor.SSM_API_KEY, True),
+        (executor.SSM_API_SECRET, True),
+        (executor.SSM_STATE, False),
+    ]
+    assert not executor.BitbankClient.called
+    assert not executor.save_state.called
+    assert not executor.send_email.called
+    assert not executor.reconcile_positions.called
+
+
+def test_namespace_validation_rejects_non_halt_mode(executor, monkeypatch):
+    get_ssm = MagicMock(return_value="normal")
+    monkeypatch.setattr(executor, "get_ssm", get_ssm)
+    monkeypatch.setattr(executor, "BitbankClient", MagicMock())
+
+    result = executor.lambda_handler({"action": "validate_ssm_namespace"}, MagicMock())
+
+    assert result == {"statusCode": 409, "body": '{"valid": false}'}
+    assert get_ssm.call_args_list == [((executor.SSM_MODE,), {"decrypt": False})]
+    assert not executor.BitbankClient.called
+
+
 def test_mode_pause_entry_runs_phase_a_skips_phase_b(executor, monkeypatch):
     _patch_lambda_handler_deps(executor, monkeypatch, "pause_entry")
     result = executor.lambda_handler({"signals": [{"pair": "btc_jpy"}]}, MagicMock())

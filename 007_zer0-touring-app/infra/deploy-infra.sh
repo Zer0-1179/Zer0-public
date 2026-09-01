@@ -59,18 +59,17 @@ if aws cloudformation describe-stacks --stack-name "$CERT_STACK" --region us-eas
 fi
 
 # EdgeSecret: CloudFront→API Gateway間の直接アクセス遮断用の共有シークレット。
-# 未作成なら生成してSSM SecureStringに保存し、以後は同じ値を再利用する
-# （再デプロイのたびに値が変わるとCloudFrontとLambda間で不整合が起きるため）。
-EDGE_SECRET_PARAM="/Zer0/Touring/edge_secret"
-if aws ssm get-parameter --name "$EDGE_SECRET_PARAM" --region "$REGION" --with-decryption &>/dev/null; then
-  EDGE_SECRET=$(aws ssm get-parameter --name "$EDGE_SECRET_PARAM" \
-    --region "$REGION" --with-decryption --query "Parameter.Value" --output text)
-else
-  EDGE_SECRET=$(openssl rand -hex 32)
-  aws ssm put-parameter --name "$EDGE_SECRET_PARAM" --type SecureString \
-    --value "$EDGE_SECRET" --region "$REGION" > /dev/null
-  echo "  ✓ EdgeSecret を新規生成し SSM に保存: $EDGE_SECRET_PARAM"
+# この値は専用CloudFormation移行スタックが作成するSecureStringだけを使う。
+# 旧パラメータを読んで新しい値を生成すると、CloudFrontとLambdaの共有値を
+# 意図せず変更するため、未作成ならデプロイを中断する。
+EDGE_SECRET_PARAM="/touring/edge_secret"
+if ! aws ssm get-parameter --name "$EDGE_SECRET_PARAM" --region "$REGION" --with-decryption &>/dev/null; then
+  echo "ERROR: required SecureString is missing: $EDGE_SECRET_PARAM" >&2
+  echo "Deploy cfn-ssm-namespace-migration.yaml before deploying this stack." >&2
+  exit 1
 fi
+EDGE_SECRET=$(aws ssm get-parameter --name "$EDGE_SECRET_PARAM" \
+  --region "$REGION" --with-decryption --query "Parameter.Value" --output text)
 
 # AlarmEmail: Lambdaエラー・高レイテンシ・API Gateway 5xx発生時の通知先。
 # 環境変数 ALARM_EMAIL が未設定なら空のまま（アラーム未設定でスキップ）。

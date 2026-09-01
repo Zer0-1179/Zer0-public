@@ -205,17 +205,17 @@ python3 backtest/backtest.py --years 5 --multi  # BTC/ETH/SOL 複数同時
 
 ## 緊急停止
 
-EventBridgeスケジュールを無効化する前に、まずSSMパラメータ`/Zer0/CryptoBot/mode`での切替を検討する（既存ポジションのSL管理を止めずに新規建てだけ止められる。パラメータ未作成・不正値・読込失敗は全て`normal`扱いのfail-safe）。
+EventBridgeスケジュールを無効化する前に、まずSSMパラメータ`/cryptobot/mode`での切替を検討する（既存ポジションのSL管理を止めずに新規建てだけ止められる。パラメータ未作成・不正値・読込失敗は全て`normal`扱いのfail-safe）。
 
 ```bash
 # 新規建てのみ停止（既存ポジションのTP1/SL/トレーリング管理は継続）
-aws ssm put-parameter --name /Zer0/CryptoBot/mode --value pause_entry --type String --overwrite --region ap-northeast-1
+aws ssm put-parameter --name /cryptobot/mode --value pause_entry --type String --overwrite --region ap-northeast-1
 
 # 全処理停止（既存ポジション管理も止まる。ポジションがある状態での長時間停止は非推奨）
-aws ssm put-parameter --name /Zer0/CryptoBot/mode --value halt --type String --overwrite --region ap-northeast-1
+aws ssm put-parameter --name /cryptobot/mode --value halt --type String --overwrite --region ap-northeast-1
 
 # 復帰
-aws ssm put-parameter --name /Zer0/CryptoBot/mode --value normal --type String --overwrite --region ap-northeast-1
+aws ssm put-parameter --name /cryptobot/mode --value normal --type String --overwrite --region ap-northeast-1
 ```
 
 それでも停止しない場合はEventBridgeスケジュール自体を無効化する（ポジションは保持されるが、既存ポジションのSL/トレーリング管理も止まる点に注意）。

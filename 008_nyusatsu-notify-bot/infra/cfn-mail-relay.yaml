@@ -28,8 +28,11 @@ Parameters:
     Description: Lambda実行ログの保持日数
   NotifyEmail:
     Type: AWS::SSM::Parameter::Value<String>
-    Default: /zer0/008-nyusatsu/notify-email
+    Default: /nyusatsu/notify-email
     Description: 転送Lambda異常時のアラーム通知を受け取るメールアドレス(メインスタックが作成するSSMパラメータの値を参照)
+  MailForwarderCodeVersion:
+    Type: String
+    Description: lambda/mail_forwarder.zipのS3バージョンID
 
 # -----------------------------------------------
 # Resources
@@ -144,7 +147,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/notify-email
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email
               - Effect: Allow
                 Action:
                   - ses:SendRawEmail
@@ -166,17 +169,12 @@ Resources:
       MemorySize: 128
       Environment:
         Variables:
-          NOTIFY_EMAIL_PARAM_NAME: /zer0/008-nyusatsu/notify-email
+          NOTIFY_EMAIL_PARAM_NAME: /nyusatsu/notify-email
           FORWARD_FROM_ADDRESS: !Ref ForwardFromAddress
       Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              # Placeholder (Handler does not match this file, so this
-              # never actually executes). Real code is deployed via
-              # `aws lambda update-function-code` per CLAUDE.md rule
-              # (no SAM, no S3 build artifact) before this function is
-              # invoked by any real trigger.
-              return {"statusCode": 200, "body": "placeholder"}
+        S3Bucket: !ImportValue zer0-nyusatsu-lambda-artifacts-bucket-name
+        S3Key: lambda/mail_forwarder.zip
+        S3ObjectVersion: !Ref MailForwarderCodeVersion
     DependsOn:
       - ForwarderLogGroup
 
@@ -197,7 +195,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub "arn:aws:s3:::zer0-nyusatsu-mail-s3"
+      SourceArn: "arn:aws:s3:::zer0-nyusatsu-mail-s3"
 
   # SNS Topic for CloudWatch Alarm notifications (this stack's own, self-contained).
   # ForwarderDLQ滞留アラームの通知先。
@@ -214,10 +212,8 @@ Resources:
       Endpoint: !Ref NotifyEmail
 
   # CloudWatch Alarm for ForwarderDLQ message buildup.
-  # ForwarderDLQにメッセージが1件以上滞留したら発報する。CFnのZipFileプレースホルダー+
-  # 手動update-function-codeという2段階デプロイ方式のため、反映漏れで転送Lambdaが
-  # 機能しなくなっても本アラーム以外に検知手段がない(2026-07-10 Fableレビュー指摘、
-  # v0.9で実際に発生した障害の再発検知用)。
+  # ForwarderDLQにメッセージが1件以上滞留したら発報する。メール転送失敗を検知し、
+  # 利用者に影響が及ぶ前に再処理できるようにする(2026-07-10 Fableレビュー指摘)。
   ForwarderDlqAlarm01:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -311,8 +307,8 @@ Resources:
       MemorySize: 128
       Code:
         # CloudFormationがスタック作成中に同期的にこの関数を呼び出し応答を
-        # 待つため、placeholder+update-function-codeの2段構成にはできない
-        # (プレースホルダのままだと応答が来ずスタックが長時間ハングする)。
+        # 待つため、空のプレースホルダーを後から差し替える方式にはできない
+        # (応答が来ずスタックが長時間ハングする)。
         # そのため実コードをここに直接埋め込む。
         ZipFile: |
           import json

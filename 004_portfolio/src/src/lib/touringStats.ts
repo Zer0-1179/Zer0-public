@@ -1,17 +1,14 @@
 // 007バイクツーリングPWAの利用実績(stats.json)を取得するヘルパー。
-// Astroのフロントマターはリクエストごとに再実行されるため、ここでモジュール
-// スコープにキャッシュを持たせる(Lambda実行環境がウォームな間は保持され、
-// 004のSSRからCloudFront経由で毎リクエスト外部fetchするのを避ける)。
+// Astroのフロントマターはリクエストごとに再実行されるため、SSR応答ごとに
+// 取得する。利用実績は運用データなので、ウォームしたLambdaのモジュール
+// スコープへ保持して古い値を表示しない。
 const STATS_URL = 'https://touring.zer0-infra.com/stats.json';
-const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export type TouringStats = {
   history: { date: string; count: number }[];
   total: number;
   updatedAt: string;
 };
-
-let cache: { data: TouringStats | null; expiresAt: number } | null = null;
 
 function isValidStats(data: unknown): data is TouringStats {
   if (!data || typeof data !== 'object') return false;
@@ -24,22 +21,20 @@ function isValidStats(data: unknown): data is TouringStats {
 }
 
 export async function getTouringStats(): Promise<TouringStats | null> {
-  if (cache && cache.expiresAt > Date.now()) return cache.data;
-
-  let data: TouringStats | null = null;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(STATS_URL, { signal: controller.signal });
+    const res = await fetch(STATS_URL, {
+      signal: controller.signal,
+      cache: 'no-store',
+    });
     clearTimeout(timeout);
     if (res.ok) {
       const json = await res.json();
-      if (isValidStats(json)) data = json;
+      if (isValidStats(json)) return json;
     }
   } catch {
-    data = null;
+    // 統計取得失敗は通常ページのSSRを失敗させず、グラフだけを非表示にする。
   }
-
-  cache = { data, expiresAt: Date.now() + CACHE_TTL_MS };
-  return data;
+  return null;
 }

@@ -16,7 +16,7 @@ import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 // ?admin=off でCookie削除。SSM SecureStringはトークン文字列そのものを保持する
 // （旧Basic認証時代の "user:pass" 形式から移行済み）。
 const PRIVATE_PATH_PREFIX = '/ja/cryptobot-stats';
-const AUTH_PARAM_NAME = '/Zer0/Portfolio/cryptobot-stats-auth';
+const AUTH_PARAM_NAME = '/portfolio/cryptobot-stats-auth';
 const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
 const ADMIN_COOKIE_NAME = 'admin_auth';
 const ADMIN_COOKIE_MAX_AGE_S = 60 * 60 * 24 * 365; // 365日
