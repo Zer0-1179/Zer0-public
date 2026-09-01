@@ -26,7 +26,7 @@ os.environ.setdefault("HMAC_SECRET_PARAM_NAME", "/test/hmac-secret")
 os.environ.setdefault("UNSUBSCRIBE_BASE_URL_PARAM_NAME", "/test/unsubscribe-base-url")
 os.environ.setdefault("SES_CONFIGURATION_SET_NAME", "test-config-set")
 os.environ.setdefault("FORWARD_FROM_ADDRESS", "relay@example.com")
-os.environ.setdefault("STRIPE_WEBHOOK_SECRET_PARAM_NAME", "/test/stripe-webhook-secret")
+os.environ.setdefault("STRIPE_WEBHOOK_SECRET_PARAM_NAME", "/test/stripe-webhook-secret-secure")
 os.environ.setdefault("PAYMENT_REQUIRED_PARAM_NAME", "/test/payment-required")
 os.environ.setdefault("LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME", "/test/line-channel-access-token")
 os.environ.setdefault("LINE_CHANNEL_SECRET_PARAM_NAME", "/test/line-channel-secret")
@@ -82,7 +82,11 @@ _ssm.put_parameter(Name="/test/sender", Value="sender@example.com", Type="String
 _ssm.put_parameter(Name="/test/notify-email", Value="owner@example.com", Type="String")
 _ssm.put_parameter(Name="/test/unsubscribe-base-url", Value="https://example.com", Type="String")
 _ssm.put_parameter(Name="/test/keywords", Value="清掃,美化", Type="String")
-_ssm.put_parameter(Name="/test/stripe-webhook-secret", Value="whsec_test_secret", Type="String")
+_ssm.put_parameter(
+    Name="/test/stripe-webhook-secret-secure",
+    Value="whsec_test_secret",
+    Type="SecureString",
+)
 _ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String")
 _ssm.put_parameter(Name="/test/line-channel-access-token", Value="test-line-access-token", Type="SecureString")
 _ssm.put_parameter(Name="/test/line-channel-secret", Value="test-line-channel-secret", Type="SecureString")

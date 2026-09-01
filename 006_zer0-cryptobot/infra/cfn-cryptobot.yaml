@@ -47,11 +47,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - ssm:GetParameter
-                Resource:
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/*"
-              - Effect: Allow
-                Action:
                   - ses:SendEmail
                 Resource:
                   - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
@@ -81,12 +76,20 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # Keep the normalized paths in the primary stack so a later
+              # main-stack update preserves the runtime's required access.
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
-                  - ssm:PutParameter
                 Resource:
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/bitbank/api_key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/bitbank/api_secret"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/state"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/mode"
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/state"
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -253,6 +256,10 @@ Resources:
           ENABLE_FORCE_TEST: !Ref EnableForceTest
           TRADES_BUCKET: !Ref TradesBucket
           STATS_BUCKET: !Ref CryptoBotStatsBucket
+          SSM_API_KEY_PARAM_NAME: /cryptobot/bitbank/api_key
+          SSM_API_SECRET_PARAM_NAME: /cryptobot/bitbank/api_secret
+          SSM_STATE_PARAM_NAME: /cryptobot/state
+          SSM_MODE_PARAM_NAME: /cryptobot/mode
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -409,7 +416,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: ssm:GetParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/CryptoBot/state"
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/state"
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -450,6 +457,7 @@ Resources:
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
           TRADES_BUCKET: !Ref TradesBucket
+          SSM_STATE_PARAM_NAME: /cryptobot/state
       Code:
         ZipFile: |
           def lambda_handler(event, context):

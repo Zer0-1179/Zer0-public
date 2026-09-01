@@ -310,11 +310,10 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
-              ArnLike:
-                # スケジュール名を完全一致させるとCreateSchedule時のassume role事前検証
-                # （スケジュールARNが未確定な時点で行われる）に失敗するため、
-                # defaultグループ単位のワイルドカードでconfused deputy対策を維持する
-                aws:SourceArn: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/*"
+                # EventBridge Schedulerの実行ロール信頼条件は、個々のスケジュールではなく
+                # スケジュールグループARNで制限する。schedule ARNを指定するとSchedulerが
+                # AssumeRoleできず、ENABLEDでもターゲットを起動できない。
+                aws:SourceArn: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule-group/default"
       Policies:
         - PolicyName: InvokeStatsLambda
           PolicyDocument:
@@ -525,6 +524,17 @@ Resources:
           Compress: true
         # /api/* → API Gateway（キャッシュ無効・POST 転送）
         CacheBehaviors:
+          # 004ポートフォリオのSSRが利用実績をリクエストごとに読むため、日次更新する
+          # 統計JSONだけは通常の静的アセットと分離してCloudFrontキャッシュを無効化する。
+          - PathPattern: /stats.json
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            # AWS マネージドポリシー: CachingDisabled
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            ResponseHeadersPolicyId: !Ref TouringResponseHeadersPolicy
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            Compress: true
           - PathPattern: /s/*
             TargetOriginId: ApiGatewayOrigin
             ViewerProtocolPolicy: redirect-to-https

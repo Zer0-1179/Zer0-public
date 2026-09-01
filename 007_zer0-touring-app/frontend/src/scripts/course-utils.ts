@@ -40,6 +40,7 @@ interface CourseLike {
   dest_lat?: number;
   dest_lon?: number;
   outbound_spots?: SpotLike[];
+  outbound_waypoints?: SpotLike[];
   rest_spots?: SpotLike[];
 }
 
@@ -49,9 +50,11 @@ export function buildMapUrl(c: CourseLike, userLat: number | null, userLon: numb
   const dest = c.dest_lat != null && c.dest_lon != null
     ? `${c.dest_lat},${c.dest_lon}`
     : encodeURIComponent(c.destination);
-  const spots = (c.outbound_spots ?? c.rest_spots ?? []).map((s) =>
-    s.lat != null && s.lon != null ? `${s.lat},${s.lon}` : encodeURIComponent(s.name)
-  );
+  // AIの表示用スポットは座標検証失敗でも残すが、ナビには絶対に渡さない。
+  // enrich前は目的地直行にして、誤ジオコードによる大迂回を防ぐ。
+  const spots = (c.outbound_waypoints ?? [])
+    .filter((s) => s.lat != null && s.lon != null)
+    .map((s) => `${s.lat},${s.lon}`);
   const hasOrigin = userLat != null && userLon != null;
   const coord = hasOrigin ? `${userLat.toFixed(6)},${userLon.toFixed(6)}` : '';
   const op = hasOrigin ? `&origin=${coord}` : '';

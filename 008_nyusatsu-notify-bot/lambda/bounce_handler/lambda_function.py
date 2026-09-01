@@ -13,6 +13,31 @@ dynamodb = boto3.resource("dynamodb")
 
 TABLE_NAME = os.environ["WAITLIST_TABLE_NAME"]
 
+# SESが定義する分類値だけをログへ残す。SNSメッセージに想定外の文字列が来ても、
+# 宛先・診断文などの外部入力をCloudWatchへ転記しない。
+KNOWN_BOUNCE_SUBTYPES = frozenset(
+    {
+        "Undetermined",
+        "General",
+        "NoEmail",
+        "MailboxFull",
+        "MessageTooLarge",
+        "ContentRejected",
+        "AttachmentRejected",
+        "Suppressed",
+        "OnAccountSuppressionList",
+        "OnTenantSuppressionList",
+        "EmailValidationSuppressed",
+        "CustomTimeoutExceeded",
+    }
+)
+
+
+def safe_bounce_subtype(bounce: dict) -> str:
+    """Return an allowlisted SES bounce subtype for safe operational logs."""
+    subtype = bounce.get("bounceSubType")
+    return subtype if isinstance(subtype, str) and subtype in KNOWN_BOUNCE_SUBTYPES else "Other"
+
 
 def mark_unsubscribed(email: str, reason: str) -> None:
     """reason: "bounce" または "complaint"。handle_registerがこの理由を見て、
@@ -33,7 +58,7 @@ def mark_unsubscribed(email: str, reason: str) -> None:
         # waitlist未登録アドレス(例: SSMのオーナー通知先)のバウンス・苦情。
         # update_itemはアップサートのため、条件なしだと不完全な幽霊レコードが
         # 新規作成されてしまう。登録されていないので何もしない。
-        logger.info("%s for unregistered address %s, ignoring", reason, email)
+        logger.info("%s for an unregistered address; ignoring", reason)
 
 
 def lambda_handler(event, context):
@@ -52,18 +77,31 @@ def lambda_handler(event, context):
             for r in recipients:
                 email = r.get("emailAddress", "")
                 if email:
-                    logger.warning("complaint received, unsubscribing %s", email)
+                    logger.warning("complaint received; unsubscribing recipient")
                     mark_unsubscribed(email, reason="complaint")
 
         elif notification_type == "Bounce":
             bounce = message.get("bounce", {})
+            bounce_type = bounce.get("bounceType")
             # Permanentバウンス(アドレス不存在等)のみ配信停止する。Transient
             # (メールボックス満杯等の一時的な不着)は次回配信でも再送されうるため対象外。
-            if bounce.get("bounceType") == "Permanent":
+            if bounce_type == "Permanent":
                 for r in bounce.get("bouncedRecipients", []):
                     email = r.get("emailAddress", "")
                     if email:
-                        logger.warning("permanent bounce, unsubscribing %s", email)
+                        logger.warning("permanent bounce; unsubscribing recipient")
                         mark_unsubscribed(email, reason="bounce")
+            elif bounce_type == "Transient":
+                # 宛先やSESの診断文は個人情報・外部由来文字列を含み得るため記録しない。
+                # bounceSubTypeだけを残せば、次回の一時的不達を安全に原因分類できる。
+                logger.info(
+                    "transient bounce received; preserving subscription; subtype=%s",
+                    safe_bounce_subtype(bounce),
+                )
+            else:
+                logger.warning(
+                    "unclassified bounce received; preserving subscription; subtype=%s",
+                    safe_bounce_subtype(bounce),
+                )
 
     return {"statusCode": 200, "body": "processed"}

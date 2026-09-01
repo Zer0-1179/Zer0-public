@@ -5,6 +5,8 @@
 import email as email_lib
 from unittest import mock
 
+import pytest
+
 MATCHES = [
     {
         "title": "清掃業務委託", "contract_no": "1", "method": "一般競争入札", "dept": "総務課",
@@ -143,7 +145,7 @@ def test_send_email_list_unsubscribe_has_no_mailto(collector):
     assert "unsubscribe?email=" in list_unsub
 
 
-def test_send_notification_partial_failure_reports_had_failure(collector, make_context):
+def test_send_notification_partial_failure_reports_had_failure(collector, make_context, caplog):
     """#1の修正確認: 一部宛先への送信失敗はhad_failure=Trueとして呼び出し元に伝播する
     (v0.8まではLambda全体を失敗させリトライ/DLQ/アラームに繋がっていた安全網の復元)。"""
     with mock.patch.object(collector, "fetch_case_detail", return_value={}), \
@@ -158,6 +160,8 @@ def test_send_notification_partial_failure_reports_had_failure(collector, make_c
     assert fully_sent is False
     assert had_failure is True
     assert m_send.call_count == 2
+    assert "a@example.com" not in caplog.text
+    assert "b@example.com" not in caplog.text
 
 
 def test_send_notification_sorts_by_deadline_ascending(collector, make_context):
@@ -297,6 +301,19 @@ def test_send_weekly_digest_pending_uses_period_label(collector):
     assert body.startswith("直近の集計期間は")
 
 
+def test_send_weekly_digest_failure_does_not_log_recipient_or_raise(collector, caplog):
+    """週次送信失敗は個人情報を残さず、他の購読者処理を継続する。"""
+    with mock.patch.object(
+        collector,
+        "get_all_recipients",
+        return_value=[{"email": "weekly-recipient@example.com", "channel": "email", "line_user_id": None}],
+    ), mock.patch.object(collector, "send_email_with_unsubscribe", side_effect=RuntimeError("test failure")):
+        collector.send_weekly_digest(0, 10, 1)
+
+    assert "weekly-recipient@example.com" not in caplog.text
+    assert "RuntimeError" in caplog.text
+
+
 def test_get_active_subscribers_ignores_payment_status_by_default(collector):
     """PAYMENT_REQUIRED_PARAM_NAMEが"false"(デフォルト)の間は、payment_statusに
     関わらずstatus=activeなら通知対象に含める(既存の無料テスト購読者への配信を
@@ -310,6 +327,18 @@ def test_get_active_subscribers_ignores_payment_status_by_default(collector):
     emails = {s["email"] for s in collector.get_active_subscribers()}
 
     assert emails == {"free@example.com", "paid@example.com"}
+
+
+def test_get_active_subscribers_excludes_reserved_e2e_test_addresses(collector):
+    """Stripe E2E用の予約済みexample.com宛はactiveでもSES送信対象にしない。"""
+    table = collector.dynamodb.Table("test-waitlist")
+    table.put_item(Item={"email": "subscriber@example.com", "status": "active", "registered_at": 1})
+    table.put_item(Item={"email": "nyusatsu-e2e-test@example.com", "status": "active", "registered_at": 1})
+    table.put_item(Item={"email": "stripe-e2e-test@example.com", "status": "active", "registered_at": 1})
+
+    emails = {subscriber["email"] for subscriber in collector.get_active_subscribers()}
+
+    assert emails == {"subscriber@example.com"}
 
 
 def test_get_active_subscribers_requires_paid_when_payment_required(collector):
@@ -328,6 +357,48 @@ def test_get_active_subscribers_requires_paid_when_payment_required(collector):
         subscribers = collector.get_active_subscribers()
 
         assert [s["email"] for s in subscribers] == ["paid@example.com"]
+    finally:
+        ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String", Overwrite=True)
+        collector._param_cache.pop("/test/payment-required", None)
+
+
+def test_get_active_subscribers_reloads_payment_required_on_each_invoke(collector):
+    """同一warm環境相当でも、課金必須化と緊急rollbackを即時反映する。"""
+    ssm = __import__("boto3").client("ssm", region_name="ap-northeast-1")
+    table = collector.dynamodb.Table("test-waitlist")
+    table.put_item(Item={"email": "free@example.com", "status": "active", "registered_at": 1})
+    table.put_item(
+        Item={"email": "paid@example.com", "status": "active", "payment_status": "paid", "registered_at": 1}
+    )
+
+    try:
+        ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String", Overwrite=True)
+        initial = {subscriber["email"] for subscriber in collector.get_active_subscribers()}
+
+        ssm.put_parameter(Name="/test/payment-required", Value="true", Type="String", Overwrite=True)
+        enabled = {subscriber["email"] for subscriber in collector.get_active_subscribers()}
+
+        ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String", Overwrite=True)
+        rolled_back = {subscriber["email"] for subscriber in collector.get_active_subscribers()}
+
+        assert initial == {"free@example.com", "paid@example.com"}
+        assert enabled == {"paid@example.com"}
+        assert rolled_back == {"free@example.com", "paid@example.com"}
+    finally:
+        ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String", Overwrite=True)
+        collector._param_cache.pop("/test/payment-required", None)
+
+
+def test_get_active_subscribers_fails_closed_for_invalid_payment_required(collector):
+    """課金必須フラグの異常値で無料利用者へ配信してはならない。"""
+    ssm = __import__("boto3").client("ssm", region_name="ap-northeast-1")
+    try:
+        ssm.put_parameter(
+            Name="/test/payment-required", Value="invalid", Type="String", Overwrite=True
+        )
+
+        with pytest.raises(ValueError, match="invalid payment-required configuration"):
+            collector.get_active_subscribers()
     finally:
         ssm.put_parameter(Name="/test/payment-required", Value="false", Type="String", Overwrite=True)
         collector._param_cache.pop("/test/payment-required", None)

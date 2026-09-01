@@ -113,13 +113,14 @@ def test_confirm_does_not_reactivate_unsubscribed(lp_waitlist):
     assert m_welcome.call_count == 0
 
 
-def test_unsubscribe_unregistered_address_creates_no_ghost_record(lp_waitlist):
+def test_unsubscribe_unregistered_address_creates_no_ghost_record(lp_waitlist, caplog):
     """#8の修正確認: 未登録アドレスへの配信停止操作は幽霊レコードを作らない。"""
     token = lp_waitlist.make_token("ghost@example.com", "unsubscribe")
     resp = lp_waitlist.handle_unsubscribe(
         fake_event("/unsubscribe", "POST", query={"email": "ghost@example.com", "token": token}), "POST"
     )
     assert resp["statusCode"] == 200
+    assert "ghost@example.com" not in caplog.text
     item = lp_waitlist.dynamodb.Table("test-waitlist").get_item(Key={"email": "ghost@example.com"}).get("Item")
     assert item is None
 

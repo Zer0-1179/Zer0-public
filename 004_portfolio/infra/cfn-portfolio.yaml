@@ -110,10 +110,20 @@ Resources:
                     s3:prefix:
                       - "stats.json"
                       - "positions.json"
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Zer0/Portfolio/cryptobot-stats-auth"
+  PortfolioSsmReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: portfolio-ssm-namespace-read-policy
+      Description: Read access to the Portfolio SSM namespace
+      Roles:
+        - !Ref LambdaExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/portfolio/cryptobot-stats-auth"
 
   # ── Lambda 関数（Astro SSR） ───────────────────────────────────
   PortfolioLambdaFunction:

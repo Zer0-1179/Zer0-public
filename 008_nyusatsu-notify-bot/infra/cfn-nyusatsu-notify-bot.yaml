@@ -15,15 +15,6 @@ Metadata:
           default: 通知設定
         Parameters:
           - NotifyEmail
-          - SesSenderEmail
-      - Label:
-          default: 収集設定
-        Parameters:
-          - Keywords
-      - Label:
-          default: セキュリティ設定
-        Parameters:
-          - HmacSecret
       - Label:
           default: ログ設定
         Parameters:
@@ -31,35 +22,18 @@ Metadata:
     ParameterLabels:
       NotifyEmail:
         default: 通知先メールアドレス
-      SesSenderEmail:
-        default: SES送信元メールアドレス（検証済みである必要あり）
-      Keywords:
-        default: 抽出キーワード（カンマ区切り）
-      HmacSecret:
-        default: 確認・配信停止リンク署名用の秘密鍵
       LogRetentionDays:
         default: CloudWatch Logs保持日数
 
 # -----------------------------------------------
 # Parameters
-# デプロイ時にメールアドレス・キーワード・ログ保持日数を指定する。
-# NotifyEmail/SesSenderEmailは個人情報のためデフォルト値を持たせず、必ず明示指定させる。
+# 通知先は専用SSMスタックの値を参照し、アプリケーションスタックはSSMを所有しない。
 # -----------------------------------------------
 Parameters:
   NotifyEmail:
-    Type: String
-    Description: 入札情報の通知を受け取るメールアドレス
-  SesSenderEmail:
-    Type: String
-    Description: SESで検証済みの送信元メールアドレス
-  Keywords:
-    Type: String
-    Default: "清掃,美化,害虫防除,ねずみ防除,消防用設備点検,造園,緑地,街路樹,除草,設備保守点検,建物管理"
-    Description: 案件名に含まれていれば通知対象とするキーワード（カンマ区切り）
-  HmacSecret:
-    Type: String
-    NoEcho: true
-    Description: 登録確認・配信停止リンクの署名に使うランダム文字列（32文字以上推奨、デプロイ時に生成して指定）
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /nyusatsu/notify-email
+    Description: 専用SSMスタックが管理する通知先メールアドレス
   LogRetentionDays:
     Type: Number
     Default: 14
@@ -68,6 +42,12 @@ Parameters:
       - 14
       - 30
     Description: Lambda実行ログの保持日数
+  BounceHandlerCodeVersion:
+    Type: String
+    Description: lambda/bounce_handler.zipのS3バージョンID
+  CollectorCodeVersion:
+    Type: String
+    Description: lambda/collector.zipのS3バージョンID
 
 # -----------------------------------------------
 # Resources
@@ -80,6 +60,7 @@ Resources:
   ProcessedKokokuTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: zer0-nyusatsu-processed-kokoku
       BillingMode: PAY_PER_REQUEST
@@ -93,6 +74,7 @@ Resources:
   WeeklyStatsTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: zer0-nyusatsu-weekly-stats
       BillingMode: PAY_PER_REQUEST
@@ -109,6 +91,7 @@ Resources:
   MatchHistoryTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: zer0-nyusatsu-match-history
       BillingMode: PAY_PER_REQUEST
@@ -125,52 +108,6 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
-
-  NotifyEmailParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/notify-email
-      Type: String
-      Value: !Ref NotifyEmail
-      Description: Nyusatsu Notify Bot notification recipient email
-
-  SesSenderParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/ses-sender
-      Type: String
-      Value: !Ref SesSenderEmail
-      Description: Nyusatsu Notify Bot SES verified sender email
-
-  KeywordsParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/keywords
-      Type: String
-      Value: !Ref Keywords
-      Description: Nyusatsu Notify Bot filter keywords (comma separated)
-
-  HmacSecretParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/hmac-secret
-      Type: String
-      Value: !Ref HmacSecret
-      Description: Nyusatsu Notify Bot HMAC secret for confirm/unsubscribe link signing
-
-  # 課金必須化の手動切替フラグ(v0.19)。値はリテラル("false")で固定し、CFn
-  # Parameter経由にはしない。ユーザーがStripe Payment Links公開後、既存の無料
-  # テスト購読者への案内を終えたタイミングで`aws ssm put-parameter --overwrite`
-  # により直接"true"へ切り替える運用のため。このテンプレートで本行を将来
-  # 変更しない限り、この資源に対する再デプロイの差分は発生せず、CLIで切り替えた
-  # 値がCFn再デプロイで"false"に巻き戻されることはない。
-  PaymentRequiredParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /zer0/008-nyusatsu/payment-required
-      Type: String
-      Value: "false"
-      Description: Whether collector requires Stripe payment_status=paid to send notifications
 
   # SES Configuration Set(B-3). collector/lp_waitlist両Lambdaの送信メールに
   # 付与し、バウンス・苦情の発生をSNS経由で検知できるようにする。
@@ -260,11 +197,9 @@ Resources:
         Variables:
           WAITLIST_TABLE_NAME: zer0-nyusatsu-lp-waitlist
       Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              # Placeholder. Deployed via `aws lambda update-function-code`
-              # per CLAUDE.md rule (no SAM, no S3 build artifact).
-              return {"statusCode": 200, "body": "placeholder"}
+        S3Bucket: !ImportValue zer0-nyusatsu-lambda-artifacts-bucket-name
+        S3Key: lambda/bounce_handler.zip
+        S3ObjectVersion: !Ref BounceHandlerCodeVersion
     DependsOn:
       - BounceHandlerLogGroup
 
@@ -403,13 +338,13 @@ Resources:
                 Action:
                   - ssm:GetParameter
                 Resource:
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NotifyEmailParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SesSenderParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${KeywordsParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacSecretParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/unsubscribe-base-url
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PaymentRequiredParameter}
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/zer0/008-nyusatsu/line-channel-access-token
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/notify-email
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/ses-sender
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/keywords
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/hmac-secret
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/unsubscribe-base-url
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/payment-required
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/line-channel-access-token
               - Effect: Allow
                 Action:
                   - ses:SendEmail
@@ -436,22 +371,20 @@ Resources:
         Variables:
           PROCESSED_TABLE_NAME: !Ref ProcessedKokokuTable
           WEEKLY_STATS_TABLE_NAME: !Ref WeeklyStatsTable
-          NOTIFY_EMAIL_PARAM_NAME: !Ref NotifyEmailParameter
-          SES_SENDER_PARAM_NAME: !Ref SesSenderParameter
-          KEYWORDS_PARAM_NAME: !Ref KeywordsParameter
-          HMAC_SECRET_PARAM_NAME: !Ref HmacSecretParameter
-          UNSUBSCRIBE_BASE_URL_PARAM_NAME: /zer0/008-nyusatsu/unsubscribe-base-url
+          NOTIFY_EMAIL_PARAM_NAME: /nyusatsu/notify-email
+          SES_SENDER_PARAM_NAME: /nyusatsu/ses-sender
+          KEYWORDS_PARAM_NAME: /nyusatsu/keywords
+          HMAC_SECRET_PARAM_NAME: /nyusatsu/hmac-secret
+          UNSUBSCRIBE_BASE_URL_PARAM_NAME: /nyusatsu/unsubscribe-base-url
           WAITLIST_TABLE_NAME: zer0-nyusatsu-lp-waitlist
           SES_CONFIGURATION_SET_NAME: !Ref SesConfigurationSet
           MATCH_HISTORY_TABLE_NAME: !Ref MatchHistoryTable
-          PAYMENT_REQUIRED_PARAM_NAME: !Ref PaymentRequiredParameter
-          LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME: /zer0/008-nyusatsu/line-channel-access-token
+          PAYMENT_REQUIRED_PARAM_NAME: /nyusatsu/payment-required
+          LINE_CHANNEL_ACCESS_TOKEN_PARAM_NAME: /nyusatsu/line-channel-access-token
       Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              # Placeholder. Deployed via `aws lambda update-function-code`
-              # per CLAUDE.md rule (no SAM, no S3 build artifact).
-              return {"statusCode": 200, "body": "placeholder"}
+        S3Bucket: !ImportValue zer0-nyusatsu-lambda-artifacts-bucket-name
+        S3Key: lambda/collector.zip
+        S3ObjectVersion: !Ref CollectorCodeVersion
     DependsOn:
       - CollectorLogGroup
 

@@ -133,6 +133,7 @@ bash scripts/deploy.sh
 | S3 バケット | zer0-portfolio-s3                                       |
 | Lambda      | Zer0-portfolio-ssr                                      |
 | API Gateway | Zer0-portfolio-api                                      |
+| SSM Parameter Store | `/portfolio/cryptobot-stats-auth`（SecureString、CryptoBot実績ページの管理者認証値） |
 | ACM 証明書  | us-east-1（www.zer0-infra.com）                         |
 
 ## 変更履歴

@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Grants CryptoBot permanent access to the normalized SSM namespace.
+
+Resources:
+  ExecutorNormalizedSsmPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: cryptobot-executor-normalized-ssm-policy
+      Description: Grants Executor only the normalized CryptoBot SSM paths.
+      Roles:
+        - Zer0-CryptoBot-ExecutorRole-ap-northeast-1
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/bitbank/api_key
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/bitbank/api_secret
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/state
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/mode
+          - Effect: Allow
+            Action:
+              - ssm:PutParameter
+            Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/state
+
+  WeeklySummaryNormalizedSsmPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: cryptobot-weekly-summary-normalized-ssm-policy
+      Description: Grants WeeklySummary read access to the normalized CryptoBot state path.
+      Roles:
+        - Zer0-CryptoBot-WeeklySummaryRole-ap-northeast-1
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/state

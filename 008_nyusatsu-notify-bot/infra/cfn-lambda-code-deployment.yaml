@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Nyusatsu single Lambda code deployment custom resource
+
+Parameters:
+  DeploymentTarget:
+    Type: String
+    AllowedValues:
+      - zer0-nyusatsu-bounce-handler
+      - zer0-nyusatsu-collector
+      - zer0-nyusatsu-lp-waitlist
+      - zer0-nyusatsu-stripe-webhook
+      - zer0-nyusatsu-mail-forwarder
+    Description: Existing Lambda function to update in this Change Set
+  ArtifactVersion:
+    Type: String
+    MinLength: 1
+    Description: Approved S3 object version for the selected Lambda artifact
+
+Conditions:
+  IsBounceHandler: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-bounce-handler]
+  IsCollector: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-collector]
+  IsWaitlist: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-lp-waitlist]
+  IsStripeWebhook: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-stripe-webhook]
+
+Resources:
+  CodeDeploymentLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /aws/lambda/nyusatsu-code-deployment
+      RetentionInDays: 14
+
+  CodeDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: nyusatsu-code-deployment-role
+      Description: Deploys one approved Nyusatsu Lambda artifact per CloudFormation Change Set
+      Tags:
+        - Key: Project
+          Value: nyusatsu
+        - Key: ManagedBy
+          Value: cloudformation
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: deploy-one-versioned-lambda-artifact
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:UpdateFunctionCode
+                  - lambda:GetFunctionConfiguration
+                Resource:
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:zer0-nyusatsu-bounce-handler
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:zer0-nyusatsu-collector
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:zer0-nyusatsu-lp-waitlist
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:zer0-nyusatsu-stripe-webhook
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:zer0-nyusatsu-mail-forwarder
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource:
+                  Fn::Sub:
+                    - arn:aws:s3:::${ArtifactBucket}/lambda/*
+                    - ArtifactBucket:
+                        Fn::ImportValue: zer0-nyusatsu-lambda-artifacts-bucket-name
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CodeDeploymentLogGroup.Arn
+
+  CodeDeploymentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: nyusatsu-code-deployment
+      Description: Deploys one approved versioned Lambda artifact for Nyusatsu
+      Tags:
+        - Key: Project
+          Value: nyusatsu
+        - Key: ManagedBy
+          Value: cloudformation
+      Runtime: python3.14
+      Handler: index.lambda_handler
+      Role: !GetAtt CodeDeploymentRole.Arn
+      Timeout: 300
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import time
+          import urllib.request
+
+          def physical_id(event):
+              return f"{event['StackId']}/{event['LogicalResourceId']}"
+
+          def put_response(event, context, status, data=None):
+              body = {
+                  "Status": status,
+                  "PhysicalResourceId": event.get("PhysicalResourceId", physical_id(event)),
+                  "StackId": event["StackId"],
+                  "RequestId": event["RequestId"],
+                  "LogicalResourceId": event["LogicalResourceId"],
+              }
+              if event["RequestType"] != "Delete":
+                  body["NoEcho"] = True
+                  body["Data"] = data or {}
+              if status == "FAILED":
+                  body["Reason"] = (data or {}).get("Reason", "ProviderError")
+              encoded = json.dumps(body).encode("utf-8")
+              request = urllib.request.Request(
+                  event["ResponseURL"],
+                  data=encoded,
+                  method="PUT",
+                  headers={"content-type": "", "content-length": str(len(encoded))},
+              )
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(request, timeout=20):
+                          return
+                  except Exception:
+                      if attempt == 2:
+                          raise
+                      time.sleep(1)
+
+          def lambda_handler(event, context):
+              try:
+                  if event["RequestType"] == "Delete":
+                      put_response(event, context, "SUCCESS")
+                      return
+                  props = event["ResourceProperties"]
+                  function_name = props["FunctionName"]
+                  client = boto3.client("lambda")
+                  before = client.get_function_configuration(FunctionName=function_name)
+                  update = client.update_function_code(
+                      FunctionName=function_name,
+                      S3Bucket=props["ArtifactBucket"],
+                      S3Key=props["ArtifactKey"],
+                      S3ObjectVersion=props["ArtifactVersion"],
+                      RevisionId=before["RevisionId"],
+                  )
+                  expected_sha256 = update["CodeSha256"]
+                  for _ in range(120):
+                      current = client.get_function_configuration(FunctionName=function_name)
+                      if current.get("LastUpdateStatus") == "Successful":
+                          if current.get("CodeSha256") != expected_sha256:
+                              raise RuntimeError("CodeDigestMismatch")
+                          put_response(event, context, "SUCCESS", {"Result": "deployed"})
+                          return
+                      if current.get("LastUpdateStatus") == "Failed":
+                          raise RuntimeError("LambdaUpdateFailed")
+                      time.sleep(2)
+                  raise TimeoutError("LambdaUpdateTimedOut")
+              except Exception as error:
+                  try:
+                      put_response(event, context, "FAILED", {"Reason": type(error).__name__})
+                  except Exception:
+                      pass
+
+    DependsOn:
+      - CodeDeploymentLogGroup
+
+  TargetCodeDeployment:
+    Type: Custom::NyusatsuLambdaCodeDeployment
+    Properties:
+      ServiceToken: !GetAtt CodeDeploymentFunction.Arn
+      ServiceTimeout: 360
+      FunctionName: !Ref DeploymentTarget
+      ArtifactBucket:
+        Fn::ImportValue: zer0-nyusatsu-lambda-artifacts-bucket-name
+      ArtifactKey: !If
+        - IsBounceHandler
+        - lambda/bounce_handler.zip
+        - !If
+          - IsCollector
+          - lambda/collector.zip
+          - !If
+            - IsWaitlist
+            - lambda/lp_waitlist.zip
+            - !If
+              - IsStripeWebhook
+              - lambda/stripe_webhook.zip
+              - lambda/mail_forwarder.zip
+      ArtifactVersion: !Ref ArtifactVersion

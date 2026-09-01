@@ -28,15 +28,15 @@ MAX_PER_SIDE    = 2   # ロング・ショートそれぞれの最大同時保�
 CANCEL_AFTER_S  = 86400         # 未約定注文キャンセルまでの秒数（24時間）
 BITBANK_PUB     = "https://public.bitbank.cc"
 BITBANK_REST    = "https://api.bitbank.cc/v1"
-SSM_API_KEY     = "/Zer0/CryptoBot/bitbank/api_key"
-SSM_API_SECRET  = "/Zer0/CryptoBot/bitbank/api_secret"
-SSM_STATE       = "/Zer0/CryptoBot/state"
-SSM_MODE        = "/Zer0/CryptoBot/mode"
+SSM_API_KEY     = os.environ.get("SSM_API_KEY_PARAM_NAME", "/cryptobot/bitbank/api_key")
+SSM_API_SECRET  = os.environ.get("SSM_API_SECRET_PARAM_NAME", "/cryptobot/bitbank/api_secret")
+SSM_STATE       = os.environ.get("SSM_STATE_PARAM_NAME", "/cryptobot/state")
+SSM_MODE        = os.environ.get("SSM_MODE_PARAM_NAME", "/cryptobot/mode")
 
 # セーフモード: normal（通常）/ pause_entry（新規建てのみ停止、既存ポジション管理は継続）
 # / halt（全処理停止）。パラメータ未作成・不正値・読み込み失敗はすべて normal 扱い
 # （SSM障害時に既存ポジションのSL管理まで止まる方が危険なため、fail-safeはnormal側に倒す）。
-# 切替: aws ssm put-parameter --name /Zer0/CryptoBot/mode --value halt --type String --overwrite
+# 切替: aws ssm put-parameter --name /cryptobot/mode --value halt --type String --overwrite
 BOT_MODE_NORMAL       = "normal"
 BOT_MODE_PAUSE_ENTRY  = "pause_entry"
 BOT_MODE_HALT         = "halt"
@@ -1356,6 +1356,20 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
 
 # ── メイン ────────────────────────────────────────────────────────────────────
 def lambda_handler(event, context):
+    if event.get("action") == "validate_ssm_namespace":
+        # This path is deliberately side-effect free: it validates only the
+        # configured SSM reads and JSON shape while mode=halt blocks trading.
+        try:
+            if get_ssm(SSM_MODE, decrypt=False).strip() != BOT_MODE_HALT:
+                return {"statusCode": 409, "body": json.dumps({"valid": False})}
+            api_key = get_ssm(SSM_API_KEY, decrypt=True)
+            api_secret = get_ssm(SSM_API_SECRET, decrypt=True)
+            state = json.loads(get_ssm(SSM_STATE, decrypt=False))
+            valid = bool(api_key and api_secret and isinstance(state.get("positions"), dict))
+            return {"statusCode": 200 if valid else 500, "body": json.dumps({"valid": valid})}
+        except Exception:
+            return {"statusCode": 500, "body": json.dumps({"valid": False})}
+
     log(f"Executor 開始 signals={event.get('signals', [])}")
     signals = event.get("signals", [])
 

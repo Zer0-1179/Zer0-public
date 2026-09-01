@@ -130,7 +130,7 @@
 
 ### セーフモード・キルスイッチ追加（v4.0）
 
-- SSMパラメータ`/Zer0/CryptoBot/mode`（normal/pause_entry/halt）でExecutorの挙動を切替
+- SSMパラメータ（normal/pause_entry/halt）でExecutorの挙動を切替
 - pause_entryは新規建てのみ停止、haltは全処理停止。未作成・不正値・読込失敗はnormal扱い（fail-safe）
 - 本番でhalt→normalの実動作確認済み
 
@@ -211,7 +211,7 @@
 
 ### 8プロジェクト横断のREADME/システム仕様書 記載漏れ監査・修正
 
-- 緊急停止セクションがEventBridgeスケジュール無効化の旧手順のみで、v4.0で追加した「SSMパラメータ`/Zer0/CryptoBot/mode`でのセーフモード切替（新規建てのみ停止/全処理停止）」が未反映だったため、優先手順として追記（README/システム仕様書両方）
+- 緊急停止セクションがEventBridgeスケジュール無効化の旧手順のみで、v4.0で追加した「SSMパラメータでのセーフモード切替（新規建てのみ停止/全処理停止）」が未反映だったため、優先手順として追記（README/システム仕様書両方）
 - システム仕様書のSSMパラメータ一覧表に`mode`パラメータが未掲載だったため追加
 - 技術スタック表に第2S3バケット`zer0-cryptobot-stats-s3`（`positions.json`、004ポートフォリオの「現在のポジション」表示用）が未記載だったため追加
 
@@ -238,3 +238,16 @@
 - Executor Lambdaの`update_stats_json()`が`stats.json`の各レコードに`position_id`を含めるよう修正し、astro側は006 weekly_summaryと同じロジック（`position_id`単位で正味損益を集計し、TP1部分利確のみのポジションは勝敗未確定として除外）で勝率を再計算するよう変更
 - 表示ラベル「トレード数」（決済レコード数、実態と乖離しやすい）を「決済ポジション数」に変更
 - 既存の`stats.json`（20レコード）を同ロジックで再生成し`position_id`を遡って補完。pytest 1件追加（`update_stats_json`が`position_id`を書き込むことの回帰確認）、`npm run build`でastroのビルドエラーがないことを確認、`bash scripts/deploy.sh`で本番デプロイ後、非公開ページの実データで「決済ポジション数10件・勝率90.0%（9勝1敗）」が正しく表示されることを確認
+
+## 2026-08-27
+
+### SSM名前空間の正規化と旧パラメータ削除
+
+- Executor・週次サマリー・運用スクリプト・本番CFNの参照先を`/cryptobot/*`へ統一し、SSM登録スクリプトから認証情報の一部を表示していた処理も削除
+- 専用CloudFormation cleanupスタックで旧SSMの認証情報・state・modeの4パラメータを削除。新4パラメータ、Lambdaの新参照、両スケジュール有効を値非表示で確認
+- 完了済みの移行・削除用CFN、限定コードデプロイスクリプト、関連テストを作業領域から削除。恒久SSM権限CFNは正規化済みパスの最小ポリシーだけを維持
+
+### 移行専用CFNスタックの撤去完了
+
+- 移行・cleanup・mode復元専用のCloudFormationスタックを削除し、一時Lambda、IAM Role、CloudWatch Logsを撤去した
+- `/cryptobot/bitbank/*`、`/cryptobot/state`、`/cryptobot/mode`と恒久SSM参照ポリシーは維持され、値を出さずに存在を再確認した

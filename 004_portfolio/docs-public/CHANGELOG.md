@@ -346,3 +346,23 @@
 - **404ページのクイックリンク**: `404.astro`に「よく見られているページ」として実績・ブログ・テンプレート・お問い合わせへのリンクを追加
 - **本番限定の潜在バグを発見・修正**: 上記404改善の検証中、本番（Lambda経由）では`astro.config.mjs`の`mode:'middleware'`によりAstro標準の「未マッチルートを自動的に404.astroへフォールバックする」機能が働かず、`lambda.mjs`のExpressが素の「Cannot GET」を返していたことが判明（`/404/`への直接アクセスでは正しく描画されるため見落とされていた）。`lambda.mjs`に最終フォールバックミドルウェアを追加し、未マッチリクエストを`/404`へ内部リライトして`astroMiddleware`を再実行するよう修正。この不具合は今回の404改善以前から存在しており、実質的に本番で一度もカスタム404ページが表示されたことがなかったと考えられる
 - 検証は`node --check`構文チェック、production buildのヘッドレスChromium実機検証（ナビハイライト・フォーカスリング・スキップリンク・404表示）に加え、`lambda.mjs`の`handler`をAPI Gateway v2形式のモックイベントで直接呼び出すテストスクリプトで404フォールバック修正を確認。本番デプロイ後、実URLで404ページの正しい描画を再確認
+
+## 2026-08-27
+
+### SSM名前空間の正規化と旧パラメータ削除
+
+- 管理者トークンの参照先を`/portfolio/cryptobot-stats-auth`へ統一し、運用手順も更新
+- 専用CloudFormation cleanupスタックで旧SSMパラメータを削除。新SecureString、SSR Lambda、恒久SSM Read Policyが正常であることを値非表示で確認
+- 完了済みの移行・削除用CFNテンプレートを作業領域から削除し、通常運用では正規化済みパスのみを管理
+
+### 移行専用CFNスタックの撤去完了
+
+- 移行・cleanup専用のCloudFormationスタックを削除し、一時Lambda、IAM Role、CloudWatch Logsを撤去した
+- 恒久のSSM参照ポリシーと`/portfolio/cryptobot-stats-auth`は維持され、値を出さずに存在を再確認した
+
+## 2026-08-31
+
+### 007ツーリング利用実績のSSR更新を即時化
+
+- `lib/touringStats.ts`のLambda実行環境内5分キャッシュを廃止し、管理者向け利用実績グラフはSSRリクエストごとに`stats.json`を`no-store`で取得するよう変更
+- 統計取得に失敗した場合は通常ページのSSRを失敗させず、従来どおりグラフだけを非表示にする

@@ -30,6 +30,10 @@ INQUIRY_EMAIL = "nyusatsu@zer0-infra.com"
 # Lambdaの残り実行時間がこの値を下回ったら、未処理の号を翌日の実行に持ち越す
 # (mark_processed前に打ち切ることで、送信済みメールの重複送信を防ぐ)
 TIME_BUDGET_MARGIN_MS = 60000
+# Stripe E2Eでのみ使う予約済みダミーアドレス。支払いWebhookがactive状態を作っても、
+# 実在しない宛先へのSES送信・バウンスを防ぐため配信対象から除外する。
+E2E_TEST_EMAIL_PREFIXES = ("nyusatsu-e2e-", "stripe-e2e-")
+E2E_TEST_EMAIL_DOMAIN = "@example.com"
 
 # 詳細ページ取得時のjavascript関数名→job値の対応（一覧ページのリンク文字列から実測して判明）
 DETAIL_JOB_MAP = {
@@ -359,12 +363,14 @@ def mark_notified(kokoku_no: int, email: str) -> None:
 _param_cache: dict[str, str] = {}
 
 
-def get_param(name: str, decrypt: bool = False) -> str:
-    """1回のLambda実行内で同じパラメータを繰り返し取得しないようキャッシュする
+def get_param(name: str, decrypt: bool = False, use_cache: bool = True) -> str:
+    """warm環境内で同じパラメータを繰り返し取得しないようキャッシュする
     (購読者数×号数に比例してSSM呼び出しが線形増加していたため、レビュー2026-07-11)。
     lp_waitlist Lambdaの_param_cacheと同じ方式。decrypt引数はlp_waitlist側と
     シグネチャを揃えるため用意(現状は全パラメータがString型のため未使用だが、
     将来手動でSecureStringへ切り替えられても壊れないようにする、Fable指摘2026-07-14)。"""
+    if not use_cache:
+        return ssm.get_parameter(Name=name, WithDecryption=decrypt)["Parameter"]["Value"]
     if name not in _param_cache:
         _param_cache[name] = ssm.get_parameter(Name=name, WithDecryption=decrypt)["Parameter"]["Value"]
     return _param_cache[name]
@@ -396,8 +402,18 @@ def get_active_subscribers() -> list[dict]:
     status=activeのみで配信し、既存の無料テスト購読者への配信は変えない(課金必須化は
     ユーザーがこのSSM値を切り替えたタイミングで発効する)。
     戻り値は{"email":..., "channel":"email"|"line", "line_user_id":...(channel=lineのみ)}
-    のリスト(v0.28、LINE通知対応でメールアドレスのみのリストから拡張)。"""
-    payment_required = get_param(os.environ["PAYMENT_REQUIRED_PARAM_NAME"]).strip().lower() == "true"
+    のリスト(v0.28、LINE通知対応でメールアドレスのみのリストから拡張)。
+    予約済み`*-e2e-...@example.com`はStripe E2E専用で実在しないため、active状態でも
+    通知対象に含めない。"""
+    # This is an operational safety switch.  Read it on every invocation so a
+    # charge-launch change and an emergency rollback take effect immediately
+    # even in a warm Lambda environment.
+    payment_required_value = get_param(
+        os.environ["PAYMENT_REQUIRED_PARAM_NAME"], use_cache=False
+    ).strip().lower()
+    if payment_required_value not in {"true", "false"}:
+        raise ValueError("invalid payment-required configuration")
+    payment_required = payment_required_value == "true"
     table = dynamodb.Table(os.environ["WAITLIST_TABLE_NAME"])
     subscribers: list[dict] = []
     filter_expr = Attr("status").eq("active")
@@ -407,9 +423,18 @@ def get_active_subscribers() -> list[dict]:
     while True:
         resp = table.scan(**scan_kwargs)
         for item in resp.get("Items", []):
+            email = item["email"]
+            normalized_email = email.strip().lower()
+            if (
+                normalized_email.endswith(E2E_TEST_EMAIL_DOMAIN)
+                and normalized_email.startswith(E2E_TEST_EMAIL_PREFIXES)
+            ):
+                # Payment LinkのE2EではWebhookがactiveを作る。DynamoDB上の状態を
+                # 変えず、配信経路だけから除外して試験の状態遷移を壊さない。
+                continue
             # channel未設定の旧レコードは全て"email"扱い(後方互換)。
             subscribers.append({
-                "email": item["email"],
+                "email": email,
                 "channel": item.get("channel", "email"),
                 "line_user_id": item.get("line_user_id"),
             })
@@ -620,12 +645,16 @@ def send_notification(kokoku_no: int, matches: list[dict], context) -> tuple[boo
             else:
                 send_email_with_unsubscribe(sender, recipient["email"], subject, body, html_content=html_content)
             mark_notified(kokoku_no, recipient["email"])
-        except Exception:
+        except Exception as exc:
             # v0.8まではses.send_email失敗がLambda全体を失敗させDLQ/アラームに
             # 繋がっていたが、v0.10の宛先ごとの個別送信でこの安全網が消失していた。
             # ここでは握りつぶさずhad_failureを立て、呼び出し元でLambda呼び出し
             # 自体を失敗させることでリトライ・DLQ・アラームに再度繋げる。
-            logger.error("notification failed for %s, kokoku_no=%s", recipient["email"], kokoku_no, exc_info=True)
+            logger.error(
+                "notification failed for kokoku_no=%s; error_type=%s",
+                kokoku_no,
+                type(exc).__name__,
+            )
             had_failure = True
 
     return not had_failure, had_failure
@@ -709,8 +738,8 @@ def send_weekly_digest(total_matches: int, total_cases_checked: int, days_run: i
                 send_line_push(recipient["line_user_id"], f"【{SERVICE_NAME}】週次稼働レポート\n\n{body}")
             else:
                 send_email_with_unsubscribe(sender, recipient["email"], f"【{SERVICE_NAME}】週次稼働レポート", body)
-        except Exception:
-            logger.warning("weekly digest failed for %s", recipient["email"], exc_info=True)
+        except Exception as exc:
+            logger.warning("weekly digest failed; error_type=%s", type(exc).__name__)
 
 
 def lambda_handler(event, context):

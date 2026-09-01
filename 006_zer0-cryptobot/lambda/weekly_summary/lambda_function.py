@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 
 JST = timezone(timedelta(hours=9))
 BITBANK_PUB   = "https://public.bitbank.cc"
-SSM_STATE     = "/Zer0/CryptoBot/state"
+SSM_STATE     = os.environ.get("SSM_STATE_PARAM_NAME", "/cryptobot/state")
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT = os.environ["SES_RECIPIENT_EMAIL"]
 AWS_REGION    = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
@@ -252,6 +252,16 @@ def build_position_info(pair: str, pos: dict) -> dict:
 
 
 def lambda_handler(event, context):
+    if event.get("action") == "validate_ssm_namespace":
+        # Namespace cutover validation must not fetch market data, read S3, or
+        # send a weekly email. It only proves the configured state path works.
+        try:
+            state = json.loads(get_ssm(SSM_STATE))
+            valid = isinstance(state, dict) and isinstance(state.get("positions"), dict)
+            return {"statusCode": 200 if valid else 500, "body": json.dumps({"valid": valid})}
+        except Exception:
+            return {"statusCode": 500, "body": json.dumps({"valid": False})}
+
     now = datetime.now(JST)
     timestamp = now.strftime("%Y-%m-%d %H:%M JST")
 

@@ -87,10 +87,21 @@ describe('buildMapUrl', () => {
     expect(url).toContain(`destination=${encodeURIComponent('箱根')}`);
   });
 
-  it('outbound_spotsを%7C区切りのwaypointsにする', () => {
+  it('未検証のoutbound_spotsをナビwaypointsに渡さない', () => {
     const c = { ...dest, outbound_spots: [{ name: '道の駅A', lat: 35.5, lon: 139.5 }] };
     const url = buildMapUrl(c, 35.68, 139.76);
+    expect(url).not.toContain('waypoints=');
+  });
+
+  it('座標検証済みoutbound_waypointsを表示用スポットより優先する', () => {
+    const c = {
+      ...dest,
+      outbound_spots: [{ name: '表示のみの場所' }],
+      outbound_waypoints: [{ name: '道の駅A', lat: 35.5, lon: 139.5 }],
+    };
+    const url = buildMapUrl(c, 35.68, 139.76);
     expect(url).toContain('waypoints=35.5,139.5');
+    expect(url).not.toContain(encodeURIComponent('表示のみの場所'));
   });
 });
 
