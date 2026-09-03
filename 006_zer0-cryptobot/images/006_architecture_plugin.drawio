@@ -1,11 +1,11 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="1195" dy="719" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1450" math="0" shadow="0">
+    <mxGraphModel dx="2020" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1450" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="title-group" connectable="0" parent="1" style="group;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="83" width="1000" x="50" y="30" as="geometry" />
+          <mxGeometry height="83" width="1000" x="320" y="160" as="geometry" />
         </mxCell>
         <mxCell id="title-text" parent="title-group" style="text;html=1;resizable=1;points=[];autosize=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=30;fontStyle=1;fontFamily=Helvetica;" value="Zer0 CryptoBot" vertex="1">
           <mxGeometry height="42" width="700" as="geometry" />
@@ -16,125 +16,114 @@
         <mxCell id="title-separator" parent="title-group" style="line;strokeWidth=2;html=1;fontSize=14;strokeColor=#FF9900;fontFamily=Helvetica;" value="" vertex="1">
           <mxGeometry height="10" width="990" x="5" y="70" as="geometry" />
         </mxCell>
-
         <mxCell id="aws-cloud" parent="1" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud;strokeColor=light-dark(#232F3E,#E4F0FF);fillColor=light-dark(#232F3E0D,#232F3E0D);fillStyle=auto;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;fontFamily=Helvetica;" value="&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;AWS Cloud&lt;/font&gt;" vertex="1">
-          <mxGeometry height="1045" width="1750" x="170" y="145" as="geometry" />
+          <mxGeometry height="716" width="1600" x="320" y="284" as="geometry" />
         </mxCell>
         <mxCell id="g-cwlogs" parent="aws-cloud" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Management &amp; Governance" vertex="1">
-          <mxGeometry height="120" width="120" x="1590" y="30" as="geometry" />
+          <mxGeometry height="120" width="120" x="639" y="76" as="geometry" />
         </mxCell>
         <mxCell id="svc-cwlogs" parent="g-cwlogs" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;fontFamily=Helvetica;shadow=1;" value="Amazon CloudWatch&lt;div&gt;&lt;i&gt;Logs&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="region-1" parent="1" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=14;fontStyle=1;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_region;strokeColor=#00A4A6;fillColor=light-dark(#0C7B7D0D,#0C7B7D0D);fillStyle=auto;verticalAlign=top;align=left;spacingLeft=30;fontColor=#00A4A6;dashed=1;container=0;pointerEvents=0;collapsible=0;recursiveResize=0;fontFamily=Helvetica;" value="ap-northeast-1" vertex="1">
-          <mxGeometry height="845" width="1670" x="210" y="305" as="geometry" />
+          <mxGeometry height="638" width="1520" x="360" y="322" as="geometry" />
         </mxCell>
-
         <mxCell id="g-eventbridge" parent="1" style="fillColor=#E8EAF6;strokeColor=#3949AB;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#3949AB;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Application Integration" vertex="1">
-          <mxGeometry height="120" width="120" x="670" y="345" as="geometry" />
+          <mxGeometry height="120" width="120" x="680" y="360" as="geometry" />
         </mxCell>
         <mxCell id="svc-eventbridge" parent="g-eventbridge" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#3949AB;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eventbridge;fontFamily=Helvetica;shadow=1;" value="Amazon EventBridge Scheduler&lt;div&gt;&lt;i&gt;Analyzer4h/Executor30分/週次&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="g-analyzer" parent="1" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Compute" vertex="1">
-          <mxGeometry height="120" width="120" x="250" y="560" as="geometry" />
+          <mxGeometry height="120" width="120" x="400" y="560" as="geometry" />
         </mxCell>
         <mxCell id="svc-analyzer" parent="g-analyzer" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;fontFamily=Helvetica;shadow=1;" value="AWS Lambda&lt;div&gt;&lt;i&gt;Analyzer&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="g-executor" parent="1" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Compute" vertex="1">
-          <mxGeometry height="120" width="120" x="670" y="560" as="geometry" />
+          <mxGeometry height="120" width="120" x="680" y="560" as="geometry" />
         </mxCell>
         <mxCell id="svc-executor" parent="g-executor" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;fontFamily=Helvetica;shadow=1;" value="AWS Lambda&lt;div&gt;&lt;i&gt;Executor&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="g-failnotif" parent="1" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Compute" vertex="1">
-          <mxGeometry height="120" width="120" x="1090" y="560" as="geometry" />
+          <mxGeometry height="120" width="120" x="960" y="560" as="geometry" />
         </mxCell>
         <mxCell id="svc-failnotif" parent="g-failnotif" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;fontFamily=Helvetica;shadow=1;" value="AWS Lambda&lt;div&gt;&lt;i&gt;FailureNotifier&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="g-weeklysum" parent="1" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Compute" vertex="1">
-          <mxGeometry height="120" width="120" x="1510" y="560" as="geometry" />
+          <mxGeometry height="120" width="120" x="1240" y="560" as="geometry" />
         </mxCell>
         <mxCell id="svc-weeklysum" parent="g-weeklysum" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;fontFamily=Helvetica;shadow=1;" value="AWS Lambda&lt;div&gt;&lt;i&gt;WeeklySummary&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="g-ssm" parent="1" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Management &amp; Governance" vertex="1">
-          <mxGeometry height="120" width="120" x="460" y="775" as="geometry" />
+          <mxGeometry height="120" width="120" x="680" y="800" as="geometry" />
         </mxCell>
         <mxCell id="svc-ssm" parent="g-ssm" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.systems_manager;fontFamily=Helvetica;shadow=1;" value="AWS Systems Manager&lt;div&gt;&lt;i&gt;Parameter Store(シグナル・State)&lt;/i&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
+          <mxGeometry height="48" width="48" x="36" y="36" as="geometry" />
         </mxCell>
-
         <mxCell id="g-s3" parent="1" style="fillColor=#E8F5E9;strokeColor=#3F8624;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#3F8624;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Storage" vertex="1">
-          <mxGeometry height="120" width="120" x="1300" y="775" as="geometry" />
+          <mxGeometry height="120" width="120" x="1240" y="800" as="geometry" />
         </mxCell>
         <mxCell id="svc-s3" parent="g-s3" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#3F8624;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;fontFamily=Helvetica;shadow=1;" value="Amazon S3&lt;div&gt;&lt;i&gt;取引履歴(確定損益)&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="g-ses" parent="1" style="fillColor=#FFF8E1;strokeColor=#F9A825;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#F9A825;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Business Applications" vertex="1">
-          <mxGeometry height="120" width="120" x="1090" y="990" as="geometry" />
+          <mxGeometry height="120" width="120" x="960" y="800" as="geometry" />
         </mxCell>
-        <mxCell id="svc-ses" parent="g-ses" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#F9A825;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ses;fontFamily=Helvetica;shadow=1;" value="Amazon SES&lt;div&gt;&lt;i&gt;エラー/週次レポート&lt;/i&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
+        <mxCell id="lQ7nqDBEh_TF96LIOaV7-1" parent="g-ses" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#DD344C;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.simple_email_service;" value="&lt;div&gt;Amazon SES&lt;/div&gt;&lt;div&gt;エラー/週次レポート&lt;/div&gt;" vertex="1">
+          <mxGeometry height="50" width="50" x="34" y="35" as="geometry" />
         </mxCell>
-
         <mxCell id="g-cwalarm" parent="1" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Management &amp; Governance" vertex="1">
-          <mxGeometry height="120" width="120" x="1720" y="775" as="geometry" />
+          <mxGeometry height="120" width="120" x="1520" y="560" as="geometry" />
         </mxCell>
         <mxCell id="svc-cwalarm" parent="g-cwalarm" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;fontFamily=Helvetica;shadow=1;" value="Amazon CloudWatch&lt;div&gt;&lt;i&gt;Alarm(Errors/Heartbeat)&lt;/i&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
+          <mxGeometry height="48" width="48" x="36" y="36" as="geometry" />
         </mxCell>
-
         <mxCell id="g-sns" parent="1" style="fillColor=#E8EAF6;strokeColor=#3949AB;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#3949AB;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Application Integration" vertex="1">
-          <mxGeometry height="120" width="120" x="1720" y="990" as="geometry" />
+          <mxGeometry height="120" width="120" x="1520" y="800" as="geometry" />
         </mxCell>
         <mxCell id="svc-sns" parent="g-sns" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#3949AB;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.sns;fontFamily=Helvetica;shadow=1;" value="Amazon SNS&lt;div&gt;&lt;i&gt;Zer0-CryptoBot-Alarms&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="30" as="geometry" />
         </mxCell>
-
         <mxCell id="ext-binance" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fontColor=#666666;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;" value="Binance API" vertex="1">
-          <mxGeometry height="140" width="140" x="-10" y="540" as="geometry" />
+          <mxGeometry height="140" width="140" x="140" y="360" as="geometry" />
         </mxCell>
         <mxCell id="ext-binance-icon" parent="ext-binance" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#666666;fillColor=#666666;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt1;fontFamily=Helvetica;" value="&lt;div&gt;&lt;i&gt;4時間足OHLCV・出来高&lt;/i&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="44" width="44" x="48" y="26" as="geometry" />
+          <mxGeometry height="44" width="44" x="48" y="48" as="geometry" />
         </mxCell>
-
         <mxCell id="ext-bitbank" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fontColor=#666666;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;" value="bitbank API" vertex="1">
-          <mxGeometry height="140" width="140" x="-10" y="700" as="geometry" />
+          <mxGeometry height="140" width="140" x="140" y="790" as="geometry" />
         </mxCell>
         <mxCell id="ext-bitbank-icon" parent="ext-bitbank" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#666666;fillColor=#666666;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt1;fontFamily=Helvetica;" value="&lt;div&gt;&lt;i&gt;新規注文/TP/&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;トレーリングSL&lt;/i&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="44" width="44" x="48" y="26" as="geometry" />
+          <mxGeometry height="44" width="44" x="48" y="48" as="geometry" />
         </mxCell>
-
         <mxCell id="ext-email" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fontColor=#666666;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;" value="通知先メール" vertex="1">
-          <mxGeometry height="140" width="140" x="1400" y="1230" as="geometry" />
+          <mxGeometry height="140" width="140" x="2000" y="880" as="geometry" />
         </mxCell>
         <mxCell id="ext-email-icon" parent="ext-email" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#666666;fillColor=#666666;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.users;fontFamily=Helvetica;" value="&lt;div&gt;&lt;i&gt;エラー/週次レポート/アラーム&lt;/i&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="44" width="44" x="48" y="26" as="geometry" />
+          <mxGeometry height="44" width="44" x="48" y="48" as="geometry" />
         </mxCell>
-
         <mxCell id="step-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="1" vertex="1">
           <mxGeometry height="28" width="28" x="780" y="470" as="geometry" />
         </mxCell>
         <mxCell id="e-eventbridge-analyzer" edge="1" parent="1" source="svc-eventbridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-analyzer">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="730" y="512" />
-              <mxPoint x="310" y="512" />
+              <mxPoint x="740" y="520" />
+              <mxPoint x="460" y="520" />
             </Array>
           </mxGeometry>
         </mxCell>
         <mxCell id="e-eventbridge-executor" edge="1" parent="1" source="svc-eventbridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-executor">
           <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-eventbridge-label" connectable="0" parent="e-eventbridge-executor" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="スケジュール起動(3種)" vertex="1">
+          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="e-eventbridge-weeklysum" edge="1" parent="1" source="svc-eventbridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-weeklysum">
           <mxGeometry relative="1" as="geometry">
@@ -144,12 +133,6 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-eventbridge-label" connectable="0" parent="e-eventbridge-executor" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="スケジュール起動(3種)" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
-          </mxGeometry>
-        </mxCell>
-
         <mxCell id="step-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="2" vertex="1">
           <mxGeometry height="28" width="28" x="130" y="620" as="geometry" />
         </mxCell>
@@ -169,7 +152,6 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
           <mxGeometry height="28" width="28" x="630" y="600" as="geometry" />
         </mxCell>
@@ -212,7 +194,6 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
           <mxGeometry height="28" width="28" x="1460" y="600" as="geometry" />
         </mxCell>
@@ -229,12 +210,13 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-weeklysum-ses" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ses">
+        <mxCell id="e-weeklysum-ses" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1570" y="1050" />
               <mxPoint x="1210" y="1050" />
             </Array>
+            <mxPoint x="1174" y="1044.0000000000005" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="e-weeklysum-ses-label" connectable="0" parent="e-weeklysum-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="週次損益レポート(含み損益+確定損益)" vertex="1">
@@ -242,7 +224,6 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-
         <mxCell id="e-executor-failnotif" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-failnotif">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -251,19 +232,21 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-failnotif-ses" edge="1" parent="1" source="svc-failnotif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-ses">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="e-failnotif-ses" edge="1" parent="1" source="svc-failnotif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1150" y="1020" as="targetPoint" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="e-failnotif-ses-label" connectable="0" parent="e-failnotif-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="エラーメール" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-
-        <mxCell id="e-ses-email" edge="1" parent="1" source="svc-ses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email-icon">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="e-ses-email" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email-icon">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1150" y="1068" as="sourcePoint" />
+          </mxGeometry>
         </mxCell>
-
         <mxCell id="e-cwalarm-sns" edge="1" parent="1" source="svc-cwalarm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-sns">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -275,66 +258,65 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-
         <mxCell id="legend-outer" connectable="0" parent="1" style="group" value="" vertex="1">
-          <mxGeometry height="700" width="500" x="1970" y="150" as="geometry" />
+          <mxGeometry height="558" width="500" x="2000" y="280" as="geometry" />
         </mxCell>
         <mxCell id="legend-bg" parent="legend-outer" style="verticalLabelPosition=bottom;verticalAlign=top;html=1;shape=mxgraph.basic.rect;fillColor2=none;strokeWidth=1;size=20;indent=5;fillColor=light-dark(#EDF3FF,#305363);strokeColor=#6c8ebf;" value="" vertex="1">
-          <mxGeometry height="700" width="500" as="geometry" />
+          <mxGeometry height="558" width="500" as="geometry" />
         </mxCell>
         <mxCell id="legend-container" connectable="0" parent="legend-outer" style="group" value="" vertex="1">
-          <mxGeometry height="660" width="460" x="20" y="20" as="geometry" />
+          <mxGeometry height="542.0583692307691" width="460" x="20" y="15.941630769230766" as="geometry" />
         </mxCell>
         <mxCell id="step-1-legend" connectable="0" parent="legend-container" style="group;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="60" width="450" as="geometry" />
+          <mxGeometry height="49.278033566433564" width="450" as="geometry" />
         </mxCell>
         <mxCell id="step-1-badge-legend" parent="step-1-legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;labelBackgroundColor=none;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="1" vertex="1">
-          <mxGeometry height="38" width="40" y="2" as="geometry" />
+          <mxGeometry height="31.20942125874126" width="40" y="1.6426011188811185" as="geometry" />
         </mxCell>
         <mxCell id="step-1-desc-legend" parent="step-1-legend" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;スケジュール起動&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0,0,0), rgb(255,255,255));&quot;&gt;&lt;b&gt;&lt;font style=&quot;font-size: 15px;&quot;&gt;-&lt;/font&gt; &lt;/b&gt;EventBridge SchedulerがAnalyzer(4時間毎)/Executor(30分毎)/WeeklySummary(週次)を起動&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="60" width="398" x="52" as="geometry" />
+          <mxGeometry height="49.278033566433564" width="398" x="52" as="geometry" />
         </mxCell>
         <mxCell id="step-2-legend" connectable="0" parent="legend-container" style="group;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="76" width="450" y="76" as="geometry" />
+          <mxGeometry height="62.41884251748252" width="450" y="62.41884251748252" as="geometry" />
         </mxCell>
         <mxCell id="step-2-badge-legend" parent="step-2-legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;labelBackgroundColor=none;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="2" vertex="1">
-          <mxGeometry height="38" width="40" y="2" as="geometry" />
+          <mxGeometry height="31.20942125874126" width="40" y="1.6426011188811187" as="geometry" />
         </mxCell>
         <mxCell id="step-2-desc-legend" parent="step-2-legend" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;市場分析&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0,0,0), rgb(255,255,255));&quot;&gt;&lt;b&gt;&lt;font style=&quot;font-size: 15px;&quot;&gt;-&lt;/font&gt; &lt;/b&gt;AnalyzerがBinanceから4時間足OHLCV・出来高を取得し、BTC 200EMA+Supertrend転換+出来高スパイクでシグナルを判定&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="76" width="398" x="52" as="geometry" />
+          <mxGeometry height="62.41884251748252" width="398" x="52" as="geometry" />
         </mxCell>
         <mxCell id="step-3-legend" connectable="0" parent="legend-container" style="group;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="92" width="450" y="168" as="geometry" />
+          <mxGeometry height="75.55965146853146" width="450" y="137.97849398601397" as="geometry" />
         </mxCell>
         <mxCell id="step-3-badge-legend" parent="step-3-legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;labelBackgroundColor=none;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="3" vertex="1">
-          <mxGeometry height="38" width="40" y="2" as="geometry" />
+          <mxGeometry height="31.20942125874125" width="40" y="1.6426011188811183" as="geometry" />
         </mxCell>
         <mxCell id="step-3-desc-legend" parent="step-3-legend" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;発注執行&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0,0,0), rgb(255,255,255));&quot;&gt;&lt;b&gt;&lt;font style=&quot;font-size: 15px;&quot;&gt;-&lt;/font&gt; &lt;/b&gt;ExecutorがSSMのシグナルを読み込みbitbankで新規注文・TP・トレーリングSLを更新、証拠金維持率が危険水準なら自動成行決済&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="92" width="398" x="52" as="geometry" />
+          <mxGeometry height="75.55965146853146" width="398" x="52" as="geometry" />
         </mxCell>
         <mxCell id="step-4-legend" connectable="0" parent="legend-container" style="group;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="76" width="450" y="276" as="geometry" />
+          <mxGeometry height="62.41884251748252" width="450" y="226.67895440559437" as="geometry" />
         </mxCell>
         <mxCell id="step-4-badge-legend" parent="step-4-legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;labelBackgroundColor=none;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="4" vertex="1">
-          <mxGeometry height="38" width="40" y="2" as="geometry" />
+          <mxGeometry height="31.20942125874126" width="40" y="1.6426011188811187" as="geometry" />
         </mxCell>
         <mxCell id="step-4-desc-legend" parent="step-4-legend" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;週次レポート&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0,0,0), rgb(255,255,255));&quot;&gt;&lt;b&gt;&lt;font style=&quot;font-size: 15px;&quot;&gt;-&lt;/font&gt; &lt;/b&gt;WeeklySummaryがS3の取引履歴から実現損益・勝率・PFを集計しSESで週次レポートを送信&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="76" width="398" x="52" as="geometry" />
+          <mxGeometry height="62.41884251748252" width="398" x="52" as="geometry" />
         </mxCell>
-        <mxCell id="legend-aux-note" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;FailureNotifierはExecutor非同期呼び出し失敗時のOnFailure先(SES経由でエラーメール)。CloudWatch Alarm(Executor Errors/Heartbeat)→SNSはLambdaメトリクス監視チェーン。Amazon CloudWatch Logsは全Lambdaの実行ログ出力先(リージョン外に配置、矢印は省略)。&lt;/i&gt;" vertex="1">
-          <mxGeometry height="90" width="450" y="360" as="geometry" />
-        </mxCell>
-        <mxCell id="legend-line-group" parent="legend-container" style="group;fontFamily=Helvetica;fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;" value="" vertex="1">
-          <mxGeometry height="90" width="440" y="460" as="geometry" />
+        <mxCell id="legend-line-group" parent="legend-outer" style="group;fontFamily=Helvetica;fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;" value="" vertex="1">
+          <mxGeometry height="90" width="440" x="20" y="429.999888111888" as="geometry" />
         </mxCell>
         <mxCell id="legend-line-bg" parent="legend-line-group" style="fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;" value="" vertex="1">
           <mxGeometry height="90" width="440" as="geometry" />
         </mxCell>
         <mxCell id="legend-line-title" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;fontStyle=1;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="Line Styles" vertex="1">
-          <mxGeometry height="25" width="200" x="10" y="5" as="geometry" />
+          <mxGeometry height="20.53251398601398" width="200" x="10" y="4.106502797202797" as="geometry" />
         </mxCell>
         <mxCell id="legend-line-desc" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;- - - アニメーション線&lt;/b&gt;: 市場分析〜発注〜週次レポートの主要フロー(SVGエクスポート時も流れて表示される)&lt;/div&gt;&lt;div&gt;&lt;b&gt;—— Solid&lt;/b&gt;: 失敗通知・アラーム監視等の補助的な経路&lt;/div&gt;" vertex="1">
-          <mxGeometry height="50" width="420" x="10" y="32" as="geometry" />
+          <mxGeometry height="41.06502797202796" width="420" x="10" y="26.281617902097896" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-aux-note" parent="legend-outer" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;FailureNotifierはExecutor非同期呼び出し失敗時のOnFailure先(SES経由でエラーメール)。CloudWatch Alarm(Executor Errors/Heartbeat)→SNSはLambdaメトリクス監視チェーン。Amazon CloudWatch Logsは全Lambdaの実行ログ出力先(リージョン外に配置、矢印は省略)。&lt;/i&gt;" vertex="1">
+          <mxGeometry height="73.91705034965034" width="450" x="20" y="319.9998321678321" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
