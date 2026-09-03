@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="1664" dy="989" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2100" pageHeight="1250" background="#FFFFFF" math="0" shadow="0">
+    <mxGraphModel dx="1414" dy="841" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2100" pageHeight="1250" background="#FFFFFF" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -89,18 +89,18 @@
           <mxGeometry height="44" width="44" x="48" y="38" as="geometry" />
         </mxCell>
         <mxCell id="step-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="1" vertex="1">
-          <mxGeometry height="28" width="28" x="600" y="360" as="geometry" />
+          <mxGeometry height="28" width="28" x="610" y="410" as="geometry" />
         </mxCell>
         <mxCell id="e-eventbridge-lambda" edge="1" parent="1" source="svc-eventbridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-lambda">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e-eventbridge-lambda-label" connectable="0" parent="e-eventbridge-lambda" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="スケジュール起動" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint x="4" y="3" as="offset" />
+            <mxPoint x="24" y="8" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="step-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="2" vertex="1">
-          <mxGeometry height="28" width="28" x="290" y="520" as="geometry" />
+          <mxGeometry height="28" width="28" x="240" y="520" as="geometry" />
         </mxCell>
         <mxCell id="e-lambda-kokoku" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="ext-kokoku">
           <mxGeometry relative="1" as="geometry">
@@ -112,11 +112,11 @@
         </mxCell>
         <mxCell id="e-lambda-kokoku-label" connectable="0" parent="e-lambda-kokoku" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="公告一覧→未処理号の案件一覧→詳細取得" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
+            <mxPoint x="-216" y="34" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
-          <mxGeometry height="28" width="28" x="690" y="530" as="geometry" />
+          <mxGeometry height="28" width="28" x="610" y="520" as="geometry" />
         </mxCell>
         <mxCell id="e-lambda-dynamodb" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="g-dynamodb">
           <mxGeometry relative="1" as="geometry">
@@ -126,13 +126,13 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-lambda-dynamodb-label" connectable="0" parent="e-lambda-dynamodb" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="重複チェック・マッチ記録(60日TTL)・処理済み記録" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
+        <mxCell id="hlmU6L7trdGwPPfaYgn1-4" connectable="0" parent="e-lambda-dynamodb" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;重複チェック・マッチ記録(60日TTL)・処理済み記録&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.7366" y="-2" as="geometry">
+            <mxPoint x="42" y="1" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
-          <mxGeometry height="28" width="28" x="900" y="530" as="geometry" />
+          <mxGeometry height="28" width="28" x="240" y="730" as="geometry" />
         </mxCell>
         <mxCell id="e-lambda-ses" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="g-ses">
           <mxGeometry relative="1" as="geometry">
@@ -143,11 +143,6 @@
             <mxPoint x="940" y="590" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-lambda-ses-label" connectable="0" parent="e-lambda-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="運営者+active購読者へ個別送信" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
-          </mxGeometry>
-        </mxCell>
         <mxCell id="e-ses-email" edge="1" parent="1" source="g-ses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;dashed=1;flowAnimation=1;strokeWidth=2;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="ext-email">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
@@ -155,6 +150,11 @@
               <mxPoint x="290" y="720" />
             </Array>
             <mxPoint x="940" y="638" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hlmU6L7trdGwPPfaYgn1-3" connectable="0" parent="e-ses-email" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;運営者+active購読者へ個別送信&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.8416" as="geometry">
+            <mxPoint x="76" y="25" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="e-lambda-sqs" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="g-sqs">
@@ -167,7 +167,7 @@
         </mxCell>
         <mxCell id="e-lambda-sqs-label" connectable="0" parent="e-lambda-sqs" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="非同期呼び出し失敗時のみ(DLQ)" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
+            <mxPoint x="265" y="-4" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="e-ses-sns" edge="1" parent="1" source="g-ses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="g-sns">
@@ -177,6 +177,11 @@
         </mxCell>
         <mxCell id="e-ses-sns-label" connectable="0" parent="e-ses-sns" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="Configuration Setイベント" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
+            <mxPoint x="-298" y="77" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hlmU6L7trdGwPPfaYgn1-2" connectable="0" parent="e-ses-sns" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;Permanentバウンス/苦情アドレスをunsubscribedに更新&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.3895" y="-2" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
@@ -188,13 +193,8 @@
             <Array as="points">
               <mxPoint x="1150" y="700" />
               <mxPoint x="850" y="700" />
-              <mxPoint x="850" y="614" />
+              <mxPoint x="850" y="620" />
             </Array>
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="e-bouncehandler-dynamodb-label" connectable="0" parent="e-bouncehandler-dynamodb" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="Permanentバウンス/苦情アドレスをunsubscribedに更新" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="legend-outer" connectable="0" parent="1" style="group" value="" vertex="1">
