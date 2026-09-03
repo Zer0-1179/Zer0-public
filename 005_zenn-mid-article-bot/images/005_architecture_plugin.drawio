@@ -102,7 +102,7 @@
         </mxCell>
 
         <mxCell id="step-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="1" vertex="1">
-          <mxGeometry height="28" width="28" x="600" y="375" as="geometry" />
+          <mxGeometry height="28" width="28" x="590" y="390" as="geometry" />
         </mxCell>
         <mxCell id="e-eventbridge-lambda" edge="1" parent="1" source="svc-eventbridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-lambda">
           <mxGeometry relative="1" as="geometry" />
@@ -114,7 +114,7 @@
         </mxCell>
 
         <mxCell id="step-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="2" vertex="1">
-          <mxGeometry height="28" width="28" x="230" y="520" as="geometry" />
+          <mxGeometry height="28" width="28" x="270" y="522" as="geometry" />
         </mxCell>
         <mxCell id="e-lambda-bedrock" edge="1" parent="1" source="svc-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-bedrock">
           <mxGeometry relative="1" as="geometry">
@@ -131,7 +131,7 @@
         </mxCell>
 
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
-          <mxGeometry height="28" width="28" x="650" y="520" as="geometry" />
+          <mxGeometry height="28" width="28" x="690" y="522" as="geometry" />
         </mxCell>
         <mxCell id="e-lambda-s3" edge="1" parent="1" source="svc-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-s3">
           <mxGeometry relative="1" as="geometry">
@@ -148,7 +148,7 @@
         </mxCell>
 
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
-          <mxGeometry height="28" width="28" x="860" y="520" as="geometry" />
+          <mxGeometry height="28" width="28" x="900" y="522" as="geometry" />
         </mxCell>
         <mxCell id="e-lambda-ses" edge="1" parent="1" source="svc-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ses">
           <mxGeometry relative="1" as="geometry">

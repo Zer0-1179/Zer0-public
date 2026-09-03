@@ -130,7 +130,7 @@
         </mxCell>
 
         <mxCell id="step-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="1" vertex="1">
-          <mxGeometry height="28" width="28" x="230" y="380" as="geometry" />
+          <mxGeometry height="28" width="28" x="420" y="390" as="geometry" />
         </mxCell>
         <mxCell id="e-users-cloudfront" edge="1" parent="1" source="ext-users-icon" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-cloudfront">
           <mxGeometry relative="1" as="geometry" />
@@ -167,7 +167,7 @@
         </mxCell>
 
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
-          <mxGeometry height="28" width="28" x="800" y="735" as="geometry" />
+          <mxGeometry height="28" width="28" x="760" y="750" as="geometry" />
         </mxCell>
         <mxCell id="e-apigw-lambda" edge="1" parent="1" source="svc-apigw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-lambda-suggest">
           <mxGeometry relative="1" as="geometry" />
@@ -179,7 +179,7 @@
         </mxCell>
 
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
-          <mxGeometry height="28" width="28" x="600" y="950" as="geometry" />
+          <mxGeometry height="28" width="28" x="560" y="970" as="geometry" />
         </mxCell>
         <mxCell id="e-lambdasuggest-bedrock" edge="1" parent="1" source="svc-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-bedrock">
           <mxGeometry relative="1" as="geometry" />
