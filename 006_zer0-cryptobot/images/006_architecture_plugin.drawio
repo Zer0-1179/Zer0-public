@@ -128,8 +128,8 @@
         <mxCell id="e-eventbridge-weeklysum" edge="1" parent="1" source="svc-eventbridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-weeklysum">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="730" y="512" />
-              <mxPoint x="1570" y="512" />
+              <mxPoint x="740" y="520" />
+              <mxPoint x="1300" y="520" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -137,13 +137,18 @@
           <mxGeometry height="28" width="28" x="130" y="620" as="geometry" />
         </mxCell>
         <mxCell id="e-analyzer-binance" edge="1" parent="1" source="svc-analyzer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="ext-binance-icon">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="350" y="620" />
+              <mxPoint x="350" y="430" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e-analyzer-ssm" edge="1" parent="1" source="svc-analyzer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ssm">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="310" y="727" />
-              <mxPoint x="520" y="727" />
+              <mxPoint x="460" y="740" />
+              <mxPoint x="740" y="740" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -155,24 +160,19 @@
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
           <mxGeometry height="28" width="28" x="630" y="600" as="geometry" />
         </mxCell>
-        <mxCell id="e-executor-ssm" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ssm">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="730" y="727" />
-              <mxPoint x="640" y="727" />
-            </Array>
-          </mxGeometry>
+        <mxCell id="e-executor-ssm" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ssm">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e-executor-ssm-label" connectable="0" parent="e-executor-ssm" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="シグナル・State読み込み→更新" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-executor-bitbank" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="ext-bitbank-icon">
+        <mxCell id="e-executor-bitbank" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="ext-bitbank-icon">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="730" y="727" />
-              <mxPoint x="130" y="727" />
+              <mxPoint x="600" y="620" />
+              <mxPoint x="600" y="860" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -181,11 +181,11 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-executor-s3" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-s3">
+        <mxCell id="e-executor-s3" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-s3">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="730" y="727" />
-              <mxPoint x="1360" y="727" />
+              <mxPoint x="740" y="740" />
+              <mxPoint x="1240" y="740" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -197,26 +197,20 @@
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
           <mxGeometry height="28" width="28" x="1460" y="600" as="geometry" />
         </mxCell>
-        <mxCell id="e-weeklysum-s3" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-s3">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="1570" y="727" />
-              <mxPoint x="1450" y="727" />
-            </Array>
-          </mxGeometry>
+        <mxCell id="e-weeklysum-s3" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-s3">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e-weeklysum-s3-label" connectable="0" parent="e-weeklysum-s3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="実現損益・勝率・PFを集計" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-weeklysum-ses" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;">
+        <mxCell id="e-weeklysum-ses" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ses">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1570" y="1050" />
-              <mxPoint x="1210" y="1050" />
+              <mxPoint x="1300" y="740" />
+              <mxPoint x="1020" y="740" />
             </Array>
-            <mxPoint x="1174" y="1044.0000000000005" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="e-weeklysum-ses-label" connectable="0" parent="e-weeklysum-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="週次損益レポート(含み損益+確定損益)" vertex="1">
@@ -232,26 +226,32 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-failnotif-ses" edge="1" parent="1" source="svc-failnotif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1150" y="1020" as="targetPoint" />
-          </mxGeometry>
+        <mxCell id="e-failnotif-ses" edge="1" parent="1" source="svc-failnotif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-ses">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e-failnotif-ses-label" connectable="0" parent="e-failnotif-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="エラーメール" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-ses-email" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email-icon">
+        <mxCell id="e-ses-email" edge="1" parent="1" source="svc-ses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email-icon">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1150" y="1068" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="1020" y="960" />
+              <mxPoint x="2000" y="960" />
+            </Array>
           </mxGeometry>
         </mxCell>
         <mxCell id="e-cwalarm-sns" edge="1" parent="1" source="svc-cwalarm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-sns">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e-sns-email" edge="1" parent="1" source="svc-sns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email-icon">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="e-sns-email" edge="1" parent="1" source="svc-sns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email-icon">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1580" y="980" />
+              <mxPoint x="2000" y="980" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e-sns-email-label" connectable="0" parent="e-sns-email" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="アラームメール通知" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
