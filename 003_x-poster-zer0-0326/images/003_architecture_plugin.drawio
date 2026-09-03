@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="3664" dy="989" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="4020" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -20,7 +20,7 @@
           <mxGeometry height="516" width="920" x="200" y="284" as="geometry" />
         </mxCell>
         <mxCell id="g-cwlogs" parent="aws-cloud" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Management &amp; Governance" vertex="1">
-          <mxGeometry height="120" width="130" x="700" y="61" as="geometry" />
+          <mxGeometry height="120" width="130" x="677" y="62" as="geometry" />
         </mxCell>
         <mxCell id="svc-cwlogs" parent="g-cwlogs" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;fontFamily=Helvetica;shadow=1;" value="Amazon CloudWatch&lt;div&gt;&lt;i&gt;Logs&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="40.851063829787236" width="40.851063829787236" x="42.714285714285715" y="39.148936170212764" as="geometry" />
