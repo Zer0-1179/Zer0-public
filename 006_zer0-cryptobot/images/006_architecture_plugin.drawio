@@ -123,7 +123,7 @@
         </mxCell>
 
         <mxCell id="step-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="1" vertex="1">
-          <mxGeometry height="28" width="28" x="800" y="480" as="geometry" />
+          <mxGeometry height="28" width="28" x="780" y="470" as="geometry" />
         </mxCell>
         <mxCell id="e-eventbridge-analyzer" edge="1" parent="1" source="svc-eventbridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-analyzer">
           <mxGeometry relative="1" as="geometry">
@@ -171,7 +171,7 @@
         </mxCell>
 
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
-          <mxGeometry height="28" width="28" x="550" y="620" as="geometry" />
+          <mxGeometry height="28" width="28" x="630" y="600" as="geometry" />
         </mxCell>
         <mxCell id="e-executor-ssm" edge="1" parent="1" source="svc-executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ssm">
           <mxGeometry relative="1" as="geometry">
@@ -214,7 +214,7 @@
         </mxCell>
 
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
-          <mxGeometry height="28" width="28" x="1400" y="620" as="geometry" />
+          <mxGeometry height="28" width="28" x="1460" y="600" as="geometry" />
         </mxCell>
         <mxCell id="e-weeklysum-s3" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-s3">
           <mxGeometry relative="1" as="geometry">
