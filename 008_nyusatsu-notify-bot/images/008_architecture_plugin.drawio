@@ -176,8 +176,8 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="e-ses-sns-label" connectable="0" parent="e-ses-sns" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="Configuration Setイベント" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint x="-298" y="77" as="offset" />
+          <mxGeometry relative="1" x="-0.7" y="-12" as="geometry">
+            <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hlmU6L7trdGwPPfaYgn1-2" connectable="0" parent="e-ses-sns" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;Permanentバウンス/苦情アドレスをunsubscribedに更新&lt;/span&gt;" vertex="1">
@@ -254,7 +254,7 @@
         <mxCell id="legend-line-title" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;fontStyle=1;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="Line Styles" vertex="1">
           <mxGeometry height="23.501136363636366" width="200" x="10" y="4.700227272727274" as="geometry" />
         </mxCell>
-        <mxCell id="legend-line-desc" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;- - - アニメーション線&lt;/b&gt;: 収集〜個別送信の主要フロー(SVGエクスポート時も流れて表示される)&lt;/div&gt;&lt;div&gt;&lt;b&gt;—— Solid&lt;/b&gt;: DLQ・バウンス処理等の補助的な経路&lt;/div&gt;" vertex="1">
+        <mxCell id="legend-line-desc" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;- - - アニメーション線&lt;/b&gt;: 収集〜個別送信の主要フロー&lt;/div&gt;&lt;div&gt;(SVGエクスポート時も流れて表示される)&lt;/div&gt;&lt;div&gt;&lt;b&gt;—— Solid&lt;/b&gt;: DLQ・バウンス処理等の補助的な経路&lt;/div&gt;" vertex="1">
           <mxGeometry height="47.00227272727273" width="420" x="10" y="30.081454545454548" as="geometry" />
         </mxCell>
       </root>
