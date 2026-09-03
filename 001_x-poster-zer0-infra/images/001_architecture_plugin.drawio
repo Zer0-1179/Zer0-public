@@ -108,7 +108,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="g1-2q_kGgshUWw4frmjJ-6" connectable="0" parent="e-lambda-bedrock" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;本文投稿→URLをリプライで追加&lt;/span&gt;" vertex="1">
+        <mxCell id="g1-2q_kGgshUWw4frmjJ-6" connectable="0" parent="e-lambda-bedrock" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;Converse API(生成→事実検証の2段階)&lt;/span&gt;" vertex="1">
           <mxGeometry relative="1" x="0.8395" y="1" as="geometry">
             <mxPoint x="-1" as="offset" />
           </mxGeometry>
@@ -122,6 +122,11 @@
               <mxPoint x="740" y="512" />
               <mxPoint x="1260" y="512" />
             </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-lambda-xapi-label" connectable="0" parent="e-lambda-xapi" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="本文投稿→URLをリプライで追加" vertex="1">
+          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
+            <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="e-lambda-ssm" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="g-ssm">
