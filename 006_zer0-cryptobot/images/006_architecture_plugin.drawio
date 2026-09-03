@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="2020" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1450" math="0" shadow="0">
+    <mxGraphModel dx="1414" dy="841" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1450" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -141,7 +141,7 @@
             <mxPoint x="436" y="614" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-analyzer-ssm" edge="1" parent="1" source="g-analyzer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="svc-ssm">
+        <mxCell id="e-analyzer-ssm" edge="1" parent="1" source="g-analyzer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="g-ssm">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="460" y="720" />
@@ -200,19 +200,19 @@
         </mxCell>
         <mxCell id="ti-jYIbT52EcFqXWzuMq-2" connectable="0" parent="e-weeklysum-s3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;実現損益・勝率・PFを集計&lt;/span&gt;" vertex="1">
           <mxGeometry relative="1" x="-0.1667" y="2" as="geometry">
-            <mxPoint x="68" y="-218" as="offset" />
+            <mxPoint x="78" y="-206" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-weeklysum-ses" edge="1" parent="1" source="svc-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="lQ7nqDBEh_TF96LIOaV7-1">
+        <mxCell id="e-weeklysum-ses" edge="1" parent="1" source="g-weeklysum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="g-ses">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1300" y="740" />
-              <mxPoint x="1020" y="740" />
+              <mxPoint x="1300" y="720" />
+              <mxPoint x="1020" y="720" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-weeklysum-ses-label" connectable="0" parent="e-weeklysum-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="週次損益レポート(含み損益+確定損益)" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
+        <mxCell id="vB_TElO3YplQC6mIY5aa-2" connectable="0" parent="e-weeklysum-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;週次損益レポート(含み損益+確定損益)&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.915" y="2" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
@@ -221,22 +221,21 @@
         </mxCell>
         <mxCell id="e-executor-failnotif-label" connectable="0" parent="e-executor-failnotif" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="非同期呼び出し失敗時のみ(OnFailure)" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
+            <mxPoint x="10" y="-4" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-failnotif-ses" edge="1" parent="1" source="svc-failnotif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="lQ7nqDBEh_TF96LIOaV7-1">
+        <mxCell id="e-failnotif-ses" edge="1" parent="1" source="g-failnotif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="g-ses">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e-failnotif-ses-label" connectable="0" parent="e-failnotif-ses" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="エラーメール" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint as="offset" />
+            <mxPoint x="52" y="-34" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-ses-email" edge="1" parent="1" source="lQ7nqDBEh_TF96LIOaV7-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email-icon">
+        <mxCell id="e-ses-email" edge="1" parent="1" source="g-ses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-email">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1020" y="960" />
-              <mxPoint x="1800" y="960" />
+              <mxPoint x="1020" y="983" />
             </Array>
           </mxGeometry>
         </mxCell>
