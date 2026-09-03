@@ -1,11 +1,11 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="1178" dy="701" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1350" background="#FFFFFF" math="0" shadow="0">
+    <mxGraphModel dx="1414" dy="841" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1350" background="#FFFFFF" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="title-group" connectable="0" parent="1" style="group;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="83" width="1000" x="50" y="30" as="geometry" />
+          <mxGeometry height="83" width="1000" x="360" y="160" as="geometry" />
         </mxCell>
         <mxCell id="title-text" parent="title-group" style="text;html=1;resizable=1;points=[];autosize=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=30;fontStyle=1;fontFamily=Helvetica;" value="バイクツーリングPWA" vertex="1">
           <mxGeometry height="42" width="700" as="geometry" />
@@ -145,10 +145,15 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
-          <mxGeometry height="28" width="28" x="1140" y="690" as="geometry" />
+          <mxGeometry height="28" width="28" x="1140" y="686" as="geometry" />
         </mxCell>
         <mxCell id="e-lambdasuggest-bedrock" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="g-bedrock">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="960" y="720" />
+              <mxPoint x="1180" y="720" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e-lambdasuggest-ssm" edge="1" parent="1" source="svc-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-ssm">
           <mxGeometry relative="1" as="geometry" />
