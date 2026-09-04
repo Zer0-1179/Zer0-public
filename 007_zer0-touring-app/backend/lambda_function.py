@@ -69,7 +69,6 @@ COURSE_PROFILES = (
 )
 SPOT_TYPES = {"道の駅", "温泉", "日帰り温泉", "銭湯", "展望台", "カフェ", "食事処", "観光地", "ガソリンスタンド"}
 TOURIST_SPOT_TYPES = {"展望台", "観光地"}
-RETURN_SPOT_TYPES = {"道の駅", "温泉", "日帰り温泉", "銭湯"}
 EXCLUDED_PLACE_RE = re.compile(r"^[A-Za-z0-9ぁ-んァ-ヶ一-龠々ー・（）()\- ]{1,60}$")
 
 # Nominatim は 1req/sec の制限があるためロックで直列化
@@ -326,7 +325,12 @@ def normalize_courses(courses, excluded_places=()):
         outbound_spots = _normalize_spots(
             course.get("outbound_spots") or course.get("rest_spots"), all_place_keys, 1, 2, TOURIST_SPOT_TYPES
         )
-        return_spots = _normalize_spots(course.get("return_spots"), all_place_keys, 1, 1, RETURN_SPOT_TYPES)
+        # return_spotsの温泉・日帰り温泉・銭湯必須は「3コース全体で最低1箇所」というプロンプト条件
+        # （後段のall_spotsチェックで担保）であり、コース単位の必須条件ではない。ここをRETURN_SPOT_TYPES
+        # にすると「各コースのreturn_spotが必ずこの4種でなければならない」という誤った制約になり、
+        # AIが妥当な「食事処」「観光地」等を選ぶだけで/api/suggest全体が却下されていた
+        # （2026-09-05発見）。コース単位ではSPOT_TYPES全体を許容し、型検証のみ行う。
+        return_spots = _normalize_spots(course.get("return_spots"), all_place_keys, 1, 1, SPOT_TYPES)
         if outbound_spots is None or return_spots is None:
             return []
         course["outbound_spots"] = outbound_spots
@@ -856,7 +860,10 @@ def _handle_share_get(short_id):
         parts.append(" ".join(tags[:3]))
     og_desc = html_module.escape(" · ".join(parts) if parts else "AIが提案する日帰りバイクツーリングコース")
 
-    redirect = f"{SITE_URL}/?course={course_b64}"
+    # course_b64は標準base64（+ /を含みうる）なのでURLエンコードせず埋め込むと、
+    # フロント側のURLSearchParams.get('course')が仕様上「+」を半角スペースにデコードして
+    # atobが壊れ、共有リンクが無言で開けなくなる（2026-09-05発見）。
+    redirect = f"{SITE_URL}/?course={urllib.parse.quote(course_b64, safe='')}"
     # og:image の Wikimedia URL はクローラーがそのまま取得できるため CSP 不要
     html = f"""<!DOCTYPE html>
 <html lang="ja">
