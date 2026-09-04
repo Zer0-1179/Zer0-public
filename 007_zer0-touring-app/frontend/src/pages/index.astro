@@ -993,17 +993,28 @@
       const API_BASE = import.meta.env.PUBLIC_API_URL ?? '';
 
       // localStorage に adminToken があれば全リクエストに付与
+      let memoryDeviceId = null;
       function getDeviceId() {
-        let id = localStorage.getItem('deviceId');
-        if (!id) {
-          id = crypto.randomUUID();
-          localStorage.setItem('deviceId', id);
+        try {
+          let id = localStorage.getItem('deviceId');
+          if (!id) {
+            id = crypto.randomUUID();
+            localStorage.setItem('deviceId', id);
+          }
+          return id;
+        } catch (_) {
+          // Safari「すべてのCookieをブロック」等localStorageが例外を投げる環境でも、
+          // ここで無防備にthrowするとapiHeaders()経由で/api/suggest自体が発火せず
+          // コース生成が全滅してしまうため、ページ内だけで使い回す一時IDにフォールバックする
+          // （2026-09-05修正）。
+          if (!memoryDeviceId) memoryDeviceId = crypto.randomUUID();
+          return memoryDeviceId;
         }
-        return id;
       }
 
       function apiHeaders(extra = {}) {
-        const token = localStorage.getItem('adminToken') ?? '';
+        let token = '';
+        try { token = localStorage.getItem('adminToken') ?? ''; } catch (_) {}
         const h = { 'Content-Type': 'application/json', 'X-Device-Id': getDeviceId(), ...extra };
         if (token) h['X-Admin-Token'] = token;
         return h;
@@ -1176,12 +1187,18 @@
         }, { passive: true });
       }
 
-      function renderSlider(data) {
+      // opts.preserveState=true は「裏で完了したenrichの結果を一覧カードへ反映するだけ」の
+      // 呼び出し用。ユーザーが今見ているスライド位置・共有URLキャッシュを勝手にリセット/破棄すると、
+      // スワイプ中にドット表示が1枚目へ巻き戻ったり、共有済みURLキャッシュが消えて再共有時に
+      // 不要な/api/share POSTが発生したりする不具合があったため区別する（2026-09-05修正）。
+      function renderSlider(data, opts = {}) {
         courses = [...data.courses]
           .sort((a, b) => DIST.findIndex(d => d.difficulty === a.difficulty) - DIST.findIndex(d => d.difficulty === b.difficulty))
           .slice(0, 3);
-        currentSlide = 0;
-        shortUrlCache = {};
+        if (!opts.preserveState) {
+          currentSlide = 0;
+          shortUrlCache = {};
+        }
 
         const vp     = document.getElementById('card-viewport');
         const dotsEl = document.getElementById('slider-dots');
@@ -1260,12 +1277,16 @@
 
         // ドット
         dotsEl.innerHTML = courses.map((_,i)=>
-          `<button class="dot${i===0?' active':''}" data-i="${i}" aria-label="コース${i+1}"></button>`
+          `<button class="dot${i===currentSlide?' active':''}" data-i="${i}" aria-label="コース${i+1}"></button>`
         ).join('');
         dotsEl.querySelectorAll('.dot').forEach(dot=>{
           dot.addEventListener('click',()=>goTo(+dot.dataset.i));
         });
-        // ← initSlider() は showScreen() の後に呼ぶ
+        // ← initSlider() は showScreen() の後に呼ぶ（preserveState時はスライダー初期化不要のため
+        //   代わりにスクロール位置だけcurrentSlideへ合わせ直す）
+        if (opts.preserveState) {
+          vp.scrollLeft = currentSlide * vp.clientWidth;
+        }
       }
 
       /* ── スクリーン ── */
@@ -1286,17 +1307,24 @@
         else ic.textContent=SICONS[id];
       }
 
+      let photoRequestSeq = 0;
+      // 詳細画面の写真は同一DOM要素(#detail-img)を使い回すため、前/次ボタンを素早く連打すると
+      // 後発のfetchが先に解決し、その後で前のコースの写真が古い結果で上書きしてしまうことがあった。
+      // 呼び出しごとの通し番号をimgElに刻み、解決時に最新の呼び出しでなければ適用しない（2026-09-05修正）。
       async function loadPhoto(spot,imgEl){
         if(!imgEl||!spot)return;
+        const seq = ++photoRequestSeq;
+        imgEl._photoSeq = seq;
         try{
           const res=await fetch('https://ja.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(spot));
           const data=await res.json();
+          if(imgEl._photoSeq !== seq) return;
           const src=data.thumbnail?.source;
           if(!src)return;
           imgEl.onload=()=>imgEl.classList.add('loaded');
           imgEl.onerror=()=>{imgEl.src='';imgEl.classList.remove('loaded');};
           imgEl.src=src.replace(/\/\d+px-/,'/1280px-');
-        }catch(_){imgEl.src='';}
+        }catch(_){if(imgEl._photoSeq === seq) imgEl.src='';}
       }
 
       // ロジック本体は course-utils.ts の buildMapUrl（テスト済み）に切り出し、
@@ -1333,7 +1361,7 @@
         const originLL = [userLat, userLon];
         const destLL   = [c.dest_lat, c.dest_lon];
         L.marker(originLL).addTo(detailMapLayerGroup).bindPopup('現在地');
-        L.marker(destLL).addTo(detailMapLayerGroup).bindPopup(c.destination || '目的地');
+        L.marker(destLL).addTo(detailMapLayerGroup).bindPopup(escHtml(c.destination || '目的地'));
 
         const outboundWaypoints = (c.outbound_waypoints ?? [])
           .filter(s => s.lat !== undefined && s.lon !== undefined);
@@ -1504,9 +1532,14 @@
         const sd={name:c.name,distance_km:c.distance_km,total_distance_km:c.total_distance_km,distance_range_km:c.distance_range_km,distance_range_matched:c.distance_range_matched,distance_verified:c.distance_verified,duration_hours:c.duration_hours,destination:c.destination,highlights:c.highlights,road_types:c.road_types,outbound_spots:outboundSpots,return_spots:returnSpots,outbound_waypoints:c.outbound_waypoints,return_waypoints:c.return_waypoints,caution:c.caution,best_season:c.best_season,photo_spot:c.photo_spot,return_note:c.return_note,return_hours:c.return_hours,tags:c.tags,difficulty:c.difficulty,dest_lat:c.dest_lat,dest_lon:c.dest_lon,dest_temp:c.dest_temp,dest_weather_code:c.dest_weather_code,_distIdx:idx};
         try{
           const b64=btoa(encodeURIComponent(JSON.stringify(sd)));
+          // btoaは標準base64（+ /を含みうる）を返す。URLエンコードせず埋め込むと、
+          // 自分自身のURLSearchParams.get('course')が仕様上+を半角スペースにデコードして
+          // atobが壊れることがあるため、クエリに埋める前にencodeURIComponentする
+          // （バックエンドの共有リンクで見つかったのと同種のバグ、2026-09-05修正）。
+          const urlSafeB64=encodeURIComponent(b64);
           const inDetail=document.getElementById('screen-detail').classList.contains('active');
-          if(inDetail) history.replaceState({course:b64},'','?course='+b64);
-          else         history.pushState({course:b64},'','?course='+b64);
+          if(inDetail) history.replaceState({course:b64},'','?course='+urlSafeB64);
+          else         history.pushState({course:b64},'','?course='+urlSafeB64);
         }catch(_){}
         showScreen('screen-detail');
         // 詳細画面を開くたびにバイクアニメーションを先頭から再スタート
@@ -1527,7 +1560,18 @@
         const c = courses[idx];
         if (!c || c._enriched) return;
         if (c._enrichPromise) { await c._enrichPromise; return; }
-        if (userLat === null || userLon === null) return;
+        if (userLat === null || userLon === null) {
+          // GPS/手動検索を一度も行わずに履歴・共有リンクから開いた場合、enrichしようがない。
+          // 状態未設定のままreturnすると「取得中...」表示が永久に固まるため、断念済み状態にする
+          // （2026-08-09に一度解消したのと同種の固着バグの再発、2026-09-05修正）。
+          const state = computeEnrichState(null);
+          c._enriched = state.enriched;
+          c._enrichFailed = state.enrichFailed;
+          if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
+            openDetail(idx);
+          }
+          return;
+        }
         c._enriching = true;
         c._enrichPromise = (async () => {
         try {
@@ -1544,7 +1588,7 @@
           c._enriched = state.enriched;
           c._enrichFailed = state.enrichFailed;
           // 詳細だけでなく一覧カードも実測距離・帯域ラベルへ更新する。
-          renderSlider({ courses });
+          renderSlider({ courses }, { preserveState: true });
           // 開いたまま待っている間に他のコースへ移動していたら再描画しない
           if (detailCourseIdx === idx && document.getElementById('screen-detail').classList.contains('active')) {
             openDetail(idx);
@@ -1751,12 +1795,22 @@
         }
       }
 
-      function backFromDetail() {
-        history.pushState({},'',location.pathname);
+      // 詳細画面を離れて一覧/履歴へ戻る際の画面切り替え本体。
+      // pushStateは含まない（popstateから呼ぶ場合はブラウザが既に履歴を1つ消費済みのため、
+      // ここでさらにpushStateすると戻る操作1回に対しJS側が余分に履歴を積み増してしまい、
+      // 「戻る」を2回押さないとアプリを完全に離脱できなくなる不具合があった。2026-09-05修正）。
+      function leaveDetailScreen() {
         if (detailReturnScreen === 'screen-history') { showScreen('screen-history'); return; }
         const vp=document.getElementById('card-viewport');
         if(vp && vp.children.length > 0){ showScreen('screen-results'); }
         else { showScreen('screen-idle'); }
+      }
+
+      // 「戻る」ボタンから呼ぶ用: クリックはブラウザ履歴を自動で消費しないため、
+      // 明示的にpushStateしてからleaveDetailScreen()で画面を切り替える。
+      function backFromDetail() {
+        history.pushState({},'',location.pathname);
+        leaveDetailScreen();
       }
 
       // 履歴一覧の読み込み・表示
@@ -1820,7 +1874,7 @@
       // ブラウザ・iOS ネイティブ戻るジェスチャー対応
       window.addEventListener('popstate', () => {
         if (document.getElementById('screen-detail').classList.contains('active')) {
-          backFromDetail();
+          leaveDetailScreen();
         }
       });
       document.getElementById('btn-error-retry').addEventListener('click',()=>{

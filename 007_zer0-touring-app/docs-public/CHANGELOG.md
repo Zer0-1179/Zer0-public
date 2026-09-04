@@ -283,3 +283,15 @@
 - ユーザーがGoogleマップで目的地「奥多摩湖」を検索した際に「見つかりません」と表示されたスクリーンショットの提供を受け調査。当初は本番`/api/enrich`への直接呼び出しでNominatimが正しい座標（緯度35.7774299・経度139.0102062）を返すことを確認しアプリ側に不具合なしと判断したが、ユーザーから「Googleマップでナビ開始」ボタンから開いた直後に同じ現象が再現すると報告があり再調査
 - 真因判明: 詳細画面・一覧カードの「Googleマップでナビ開始」ボタンは、座標取得（enrich）が非同期で完了する前でもクリック可能なままだった。enrich未完了のうちにクリックすると`dest_lat`/`dest_lon`が無いため`buildMapUrl`が座標でなくテキスト名にフォールバックし、湖・峠等の自然地名でGoogleマップ側のテキスト検索が失敗していた。一覧カードのボタンは詳細画面を一度も開いていないと常にこの状態で、確実に再現する不具合だった
 - 両ボタンをクリック時にenrich完了（または断念）まで待ってから座標付きURLで開く方式に変更。`enrichCourseDetail`の実行中Promiseをコースオブジェクトにキャッシュし、複数箇所からの呼び出しで二重フェッチしないようにした
+
+### Fableモデルによる徹底コードレビューで発見した不具合7件を修正
+
+- ユーザーから「他にバグがないか徹底的に調査して」と依頼を受け、Fable（`claude-fable-5`）サブエージェントでバックエンド・フロントエンドをそれぞれ独立レビュー。報告された8件のうち7件を実コード読解・本番API検証で裏取りし確認、1件（getDeviceId/apiHeadersのlocalStorage例外未処理）は発生条件未検証のまま念のため対応
+- [HIGH] return_spots（帰りの立ち寄り先）の温泉・日帰り温泉・銭湯必須は、プロンプトでは「3コース全体で最低1箇所」という条件だったが、実装は`_normalize_spots(...,1,1,RETURN_SPOT_TYPES)`でコース単位に強制していた。AIが妥当な「食事処」「観光地」等をどれか1コースのreturn_spotに選ぶだけで`normalize_courses`が[]を返し`/api/suggest`全体が500で失敗、レートリミット消費後のため1日3回の生成枠を無駄にしていた。コース単位ではSPOT_TYPES全体を許容する形に修正し、未使用になった`RETURN_SPOT_TYPES`定数を削除。回帰テスト2件追加（バックエンド計37件）
+- [HIGH] 目的地マーカーのLeaflet `bindPopup(c.destination)`がescHtml未適用だった（同じ関数内の立ち寄りスポット用マーカーは適用済み）。Leafletの`bindPopup(string)`はデフォルトでinnerHTML解釈するため、細工した`destination`文字列を含む`?course=`共有リンクを介したXSSが理論上可能だった。escHtmlを適用して修正
+- [HIGH] `enrichCourseDetail`は`userLat`/`userLon`がnull（GPS/手動検索を一度も行わずに履歴・共有リンクから詳細画面を開いた場合）のとき、`c._enriched`/`c._enrichFailed`を設定せずreturnしていたため、目的地天気ウィジェットが「取得中...」のまま永久に固着していた。2026-08-09に一度解消したのと同種の固着バグの再発。null時も終端状態（取得できませんでした）へ遷移するよう修正
+- [MEDIUM] 共有リンク（`/s/{id}`）・自身の`?course=`URL双方で、base64（標準アルファベット、`+` `/`を含みうる）をURLエンコードせずクエリへ埋め込んでいた。`URLSearchParams.get()`は仕様上`+`を半角スペースへデコードするため、base64に`+`が含まれると`atob`が例外を投げ、`catch(_){}`で無言のまま共有リンクが開けなくなっていた。バックエンド（`urllib.parse.quote`）・フロントエンド（`encodeURIComponent`）双方に対策を追加。バックエンド回帰テスト1件追加
+- [MEDIUM] ブラウザ・iOSの「戻る」操作（`popstate`）とアプリの「戻る」ボタンの両方が同じ`backFromDetail()`を呼んでおり、`popstate`側でも重ねて`history.pushState()`していたため、戻る操作1回に対しJS側が余分に履歴を積み増し、アプリを完全に離脱するのに余分な操作が必要になっていた。画面切り替え本体を`leaveDetailScreen()`として分離し、`pushState`は明示的なボタン操作からのみ行うよう修正
+- [MEDIUM] 詳細画面の写真は共有DOM要素（`#detail-img`）を使い回しており、前/次ボタンを素早く連打すると後発のfetchが先に解決した場合に前のコースの写真が古い結果で上書きされうる競合状態があった。呼び出しごとの通し番号をDOM要素に刻み、最新の呼び出しでなければ結果を適用しないよう修正
+- [MEDIUM] 一覧画面表示中に裏で完了した別コースのenrichが`renderSlider({courses})`を無条件に呼び、閲覧中のスライド位置（`currentSlide`）・共有URLキャッシュ（`shortUrlCache`）を毎回リセットしてカードDOM全体を再構築していた。ドット表示の巻き戻りや、共有済みURLキャッシュ消失による`/api/share`への不要な再POSTを引き起こしうる状態だった。バックグラウンド更新時は状態を保持する`preserveState`オプションを追加
+- [LOW] `getDeviceId`/`apiHeaders`が`localStorage`アクセスに無防備で、姉妹関数`loadRecentPlaces`/`saveRecentPlaces`と異なりtry/catchが無かった。Safari「すべてのCookieをブロック」等の環境で例外が投げられるとコース生成自体が起動しなくなりうるため、防御的なtry/catchとページ内限定のフォールバックIDを追加
