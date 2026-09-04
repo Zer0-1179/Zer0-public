@@ -1236,8 +1236,25 @@
         // ボタンイベント
         vp.querySelectorAll('.course-card').forEach(card => {
           card.querySelector('.card-btn-detail').addEventListener('click',()=>{detailReturnScreen='screen-results';openDetail(+card.dataset.idx);});
-          card.querySelector('.card-btn-nav').addEventListener('click',()=>{
-            window.open(buildMapUrl(courses[+card.dataset.idx]), '_blank', 'noopener,noreferrer');
+          card.querySelector('.card-btn-nav').addEventListener('click',(ev)=>{
+            const idx = +card.dataset.idx;
+            const course = courses[idx];
+            // 一覧カードから直接開く場合、詳細画面をまだ開いておらずenrichが一度も
+            // 走っていないことが多い。座標なしのままだと自然地名でGoogleマップの
+            // テキスト検索が失敗することがあるため、ここでもenrich完了を待つ。
+            if (course._enriched || course._enrichFailed) {
+              window.open(buildMapUrl(course), '_blank', 'noopener,noreferrer');
+              return;
+            }
+            const btn = ev.currentTarget;
+            const originalText = btn.textContent;
+            btn.textContent = '確認中...';
+            btn.disabled = true;
+            enrichCourseDetail(idx).finally(() => {
+              btn.textContent = originalText;
+              btn.disabled = false;
+              window.open(buildMapUrl(courses[idx]), '_blank', 'noopener,noreferrer');
+            });
           });
         });
 
@@ -1453,7 +1470,23 @@
 
         renderRouteMap(c);
 
-        document.getElementById('detail-map-btn').href=buildMapUrl(c);
+        const mapBtn = document.getElementById('detail-map-btn');
+        mapBtn.href = buildMapUrl(c);
+        // 座標(dest_lat/lon)がまだ無いままGoogleマップへ渡すと、湖・峠等の自然地名で
+        // テキスト検索が「見つかりません」になることがあるため、enrich完了（または断念）まで
+        // クリックを一旦保留して最新の座標付きURLで開く（2026-09-05対応）。
+        mapBtn.onclick = (ev) => {
+          const course = courses[idx];
+          if (course._enriched || course._enrichFailed) return;
+          ev.preventDefault();
+          const btn = ev.currentTarget;
+          const originalText = btn.textContent;
+          btn.textContent = '📍 目的地を確認中...';
+          enrichCourseDetail(idx).finally(() => {
+            btn.textContent = originalText;
+            window.open(buildMapUrl(courses[idx]), '_blank', 'noopener,noreferrer');
+          });
+        };
         const shareText=`【${c.name}】を走ってきました！\n往復${c.distance_verified ? '実測' : '目安'}: ${d.total}km / 往路${fmtHours(outboundHours)}\n目的地: ${c.destination}\n#ツーリング #バイク`;
         // X share: 詳細画面を開いた時点では /api/share を呼ばず、クリック時にのみ短縮URLを取得する
         // （以前は openDetail のたびに自動でPOSTしており、無認証エンドポイントへの
@@ -1486,10 +1519,17 @@
       // 二段階レスポンスの後段: 詳細画面を開いたコースだけ、距離・スポット座標・
       // 目的地天気の精密なデータを非同期取得する（/api/suggestを高速化した分、
       // ここで初めて正確な値を取りに行く）。取得できたら詳細画面を再描画して反映する。
+      // 実行中のPromiseを c._enrichPromise にキャッシュし、ナビボタン側からも
+      // 「取得中ならそれを待ってから開く」形で二重フェッチなしに合流できるようにする
+      // （enrich未完了のまま座標なしテキストでGoogleマップへ渡ると、湖・峠等の自然地名で
+      //  「見つかりません」になる不具合があったため、2026-09-05に対応）。
       async function enrichCourseDetail(idx) {
         const c = courses[idx];
-        if (!c || c._enriched || c._enriching || userLat === null || userLon === null) return;
+        if (!c || c._enriched) return;
+        if (c._enrichPromise) { await c._enrichPromise; return; }
+        if (userLat === null || userLon === null) return;
         c._enriching = true;
+        c._enrichPromise = (async () => {
         try {
           const res = await fetch(`${API_BASE}/api/enrich`, {
             method: 'POST',
@@ -1520,6 +1560,9 @@
         } finally {
           c._enriching = false;
         }
+        })();
+        await c._enrichPromise;
+        c._enrichPromise = null;
       }
 
       async function getShareUrl(idx){
