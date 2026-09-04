@@ -172,6 +172,23 @@ def test_normalize_courses_requires_three_valid_unique_profiles(module):
     assert module.normalize_courses(courses) == []
 
 
+def test_normalize_courses_allows_non_onsen_return_spot_per_course(module):
+    """return_spotsの温泉・日帰り温泉・銭湯必須は「3コース全体で最低1箇所」というプロンプト条件で
+    あり、コース単体の必須条件ではない。以前はコース単位でRETURN_SPOT_TYPESを強制していたため、
+    AIが妥当な「食事処」等を選ぶだけで却下されていた不具合の再発防止（2026-09-05修正）。"""
+    courses = valid_courses()
+    courses[0]["return_spots"] = [{"name": "テスト食事処", "type": "食事処"}]
+    normalized = module.normalize_courses(courses)
+    assert len(normalized) == 3
+    assert normalized[0]["return_spots"][0]["type"] == "食事処"
+
+    # 3コース全体で温泉・日帰り温泉・銭湯が1件もなければ従来どおり却下されること
+    courses = valid_courses()
+    for course in courses:
+        course["return_spots"] = [{"name": course["destination"] + "食事処", "type": "食事処"}]
+    assert module.normalize_courses(courses) == []
+
+
 def test_normalize_courses_converts_duration_strings_to_numbers(module):
     raw_courses = valid_courses()
     raw_courses[0]["duration_hours"] = "1.2"
@@ -255,6 +272,27 @@ def test_history_get_returns_items_newest_first(module):
     assert items[0]["name"] == "コースA"
     assert items[0]["created_at"] == "2026-07-03T00:00:00"  # sk末尾のsuffixは含まない
     assert module.dynamodb.query.call_args.kwargs["ScanIndexForward"] is False
+
+
+# ── 共有リンク（URL短縮 + OGP） ────────────────────────────────────────
+
+def test_share_get_url_encodes_course_b64_with_plus_and_slash(module):
+    """course_b64は標準base64で+ /を含みうる。URLエンコードせず埋め込むと、フロントの
+    URLSearchParams.get('course')が仕様上+を半角スペースにデコードしatobが壊れ、共有リンクが
+    無言で開けなくなる不具合の再発防止（2026-09-05修正）。"""
+    module.dynamodb.get_item = MagicMock(return_value={"Item": {
+        "name": {"S": "テストコース"},
+        "destination": {"S": "箱根"},
+        "duration": {"S": "2"},
+        "photo_url": {"S": ""},
+        "tags": {"S": "[]"},
+        "course_b64": {"S": "abc+def/ghi="},
+    }})
+    resp = module._handle_share_get("abc123")
+    assert resp["statusCode"] == 200
+    body = resp["body"]
+    assert "course=abc%2Bdef%2Fghi%3D" in body
+    assert "course=abc+def/ghi=" not in body
 
 
 # ── 二段階レスポンス（/api/suggest 高速化 + /api/enrich） ─────────────────
