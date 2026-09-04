@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 def valid_course(destination="箱根", outbound="テスト展望台", returning="テスト銭湯"):
     return {
-        "name": "テストコース", "destination": destination, "total_distance_km": 50,
+        "name": "テストコース", "destination": destination, "total_distance_km": 40,
         "duration_hours": 1.0, "return_hours": 1.0,
         "outbound_spots": [{"name": outbound, "type": "展望台"}],
         "return_spots": [{"name": returning, "type": "銭湯"}],
@@ -19,7 +19,7 @@ def valid_courses():
     first = valid_course()
     first["outbound_spots"].append({"name": "道の駅 テスト", "type": "道の駅"})
     second = valid_course("伊豆", "伊豆展望台", "伊豆温泉")
-    second["total_distance_km"] = 120
+    second["total_distance_km"] = 70
     third = valid_course("奥多摩", "奥多摩展望台", "奥多摩温泉")
     third["total_distance_km"] = 200
     return [first, second, third]
@@ -145,7 +145,7 @@ def test_normalize_courses_requires_three_valid_unique_profiles(module):
     normalized = module.normalize_courses(courses)
 
     assert [course["difficulty"] for course in normalized] == ["初級", "中級", "上級"]
-    assert [course["total_distance_km"] for course in normalized] == [50, 120, 200]
+    assert [course["total_distance_km"] for course in normalized] == [40, 70, 200]
     assert all(course["distance_range_matched"] for course in normalized)
 
     courses[1]["destination"] = "道の駅 テスト"

@@ -1025,9 +1025,9 @@
         82:'にわか大雨',85:'にわか雪',86:'にわか大雪',95:'雷雨',96:'雷雨',99:'激しい雷雨',
       };
       const DIST = [
-        { difficulty:'初級', label:'初心者コース', range:'往復20〜70km', icon:'🌿', cls:'dist-near', bgCls:'ch-near', phGrad:'linear-gradient(160deg,#051a0c,#184e24)' },
-        { difficulty:'中級', label:'中級者コース', range:'往復80〜150km', icon:'🌊', cls:'dist-mid',  bgCls:'ch-mid',  phGrad:'linear-gradient(160deg,#04101e,#0f2e56)' },
-        { difficulty:'上級', label:'上級者コース', range:'往復160〜250km', icon:'🏔', cls:'dist-far',  bgCls:'ch-far',  phGrad:'linear-gradient(160deg,#150422,#5e1480)' },
+        { difficulty:'初級', label:'初心者コース', range:'往復20〜49km', icon:'🌿', cls:'dist-near', bgCls:'ch-near', phGrad:'linear-gradient(160deg,#051a0c,#184e24)' },
+        { difficulty:'中級', label:'中級者コース', range:'往復50〜99km', icon:'🌊', cls:'dist-mid',  bgCls:'ch-mid',  phGrad:'linear-gradient(160deg,#04101e,#0f2e56)' },
+        { difficulty:'上級', label:'上級者コース', range:'往復100km〜', icon:'🏔', cls:'dist-far',  bgCls:'ch-far',  phGrad:'linear-gradient(160deg,#150422,#5e1480)' },
       ];
       const ROAD = { '峠道':'🏔','山道':'🏔','高速道路':'🛣','国道':'🚗','一般道':'🚗','県道':'🛤','海岸線':'🌊' };
       const SPOT = { '道の駅':'🏪','温泉':'♨️','銭湯':'♨️','日帰り温泉':'♨️','展望台':'🔭','カフェ':'☕','食事処':'🍜','観光地':'📸','ガソリンスタンド':'⛽' };
@@ -1042,10 +1042,15 @@
         return { ...profile, total: Number.isFinite(total) ? Math.round(total) : 0, rangeMatched };
       }
 
+      // 1回の生成で目的地+スポットが最大12件程度増えるため、18件のままだと2回の
+      // 再検索で最初の除外対象が押し出され同じコースが再提案されてしまう
+      // （2026-09-04ユーザー報告で発覚）。60件（約5回分）に拡張し反復を抑える。
+      const MAX_RECENT_PLACES = 60;
+
       function loadRecentPlaces() {
         try {
           const parsed = JSON.parse(localStorage.getItem('touring-recent-places') || '[]');
-          return Array.isArray(parsed) ? parsed.filter(p => typeof p === 'string').slice(0, 18) : [];
+          return Array.isArray(parsed) ? parsed.filter(p => typeof p === 'string').slice(0, MAX_RECENT_PLACES) : [];
         } catch (_) { return []; }
       }
 
@@ -1055,7 +1060,7 @@
           if (c.destination) places.push(c.destination);
           [...(c.outbound_spots ?? []), ...(c.return_spots ?? [])].forEach(s => { if (s?.name) places.push(s.name); });
         });
-        const unique = [...new Set([...places, ...loadRecentPlaces()].map(p => String(p).trim()).filter(Boolean))].slice(0, 18);
+        const unique = [...new Set([...places, ...loadRecentPlaces()].map(p => String(p).trim()).filter(Boolean))].slice(0, MAX_RECENT_PLACES);
         try { localStorage.setItem('touring-recent-places', JSON.stringify(unique)); } catch (_) {}
       }
       let weatherMeta = { icon:'☀️', score:5, label:'絶好の日和！', temp:'--' };
