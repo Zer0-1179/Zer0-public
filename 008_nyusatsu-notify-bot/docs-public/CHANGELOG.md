@@ -346,3 +346,13 @@
 - 削除済み旧パスを記録するアプリ本体スタックの論理IDを整理するため、対象SSMだけへ`Retain`を加えるChange Setを作成して検査した
 - メイン側にはAlarm・Lambda・EventBridge・SNS、LP側にはAlarm・Lambda・API Gatewayの想定外差分が混在したため、いずれも実行せずChange Setを削除した
 - 実リソース、稼働Lambda、正規`/nyusatsu/`パラメータ、SSM所有スタックへの影響はない。旧論理IDの削除は、アプリ本体の過去ドリフトを解消する別作業として保留する
+
+## 2026-09-05
+
+### 構成図をdraw.io「プラグイン様式」に更新
+
+- README.md・システム仕様書.mdの構成図埋め込みを`008_architecture.png`から`008_architecture_plugin_flowdot.svg`に変更（主要フローのみ図示、LP/Stripe決済・メール転送は別スタックのため意図的に省略）
+- システム仕様書.md内の構成図相対リンクが`docs/specifications/`からの1階層分不足しており実際には壊れていたことも同時に発見・修正（`../images/`→`../../images/`）
+- 新しい構成図は`008_architecture_plugin.drawio`（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル付き）から作成・レビュー済み（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
+- 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/008_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
+- 旧`008_architecture.drawio`/`008_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）

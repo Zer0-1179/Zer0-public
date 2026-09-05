@@ -366,3 +366,12 @@
 
 - `lib/touringStats.ts`のLambda実行環境内5分キャッシュを廃止し、管理者向け利用実績グラフはSSRリクエストごとに`stats.json`を`no-store`で取得するよう変更
 - 統計取得に失敗した場合は通常ページのSSRを失敗させず、従来どおりグラフだけを非表示にする
+
+## 2026-09-05
+
+### 001〜003・005〜008の構成図を新様式（draw.ioプラグイン様式）に一括更新
+
+- 各プロジェクトの`{番号}_architecture_plugin_flowdot.svg`（2026-09-03〜05にdraw.io「AWS Diagramプラグイン」様式で新規作成・レビュー済み。サービスカテゴリ別グルーピング・番号バッジ・凡例パネル・アニメーション点線フロー付き）を、headless Chromiumでスクリーンショット後、PIL（LANCZOS圧縮+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し`src/public/images/{番号}_architecture.png`へ上書き（001/002/003/005/006/007/008の7件、旧ファイルは2026-08-10時点の古いバージョンだった）
+- SVGを直接ラスタライズする際、cairosvgはdraw.io特有のシェイプ記法で一部アーティファクトが出たため、忠実度の高いheadless Chromiumのスクリーンショットに切り替えて対応
+- `bash scripts/deploy.sh`で本番デプロイ後、7件全ての本番URLの画像とローカルファイルのMD5一致を確認済み
+- 004自体の構成図（`004_architecture.png`）は対象外（別系統のため変更なし）

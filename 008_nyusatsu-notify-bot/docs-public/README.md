@@ -217,19 +217,9 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-19
+### 2026-09-05
 
-#### 通知メールアドレスの変更
+#### 構成図をdraw.io「プラグイン様式」に更新
 
-- オーナー通知先(NotifyEmail)を旧アドレスから現行アドレスへ変更（個人メールアドレスは記録しない）
-- SSMパラメータ`/nyusatsu/notify-email`を更新（mail-relayのメール転送先はこの値を実行時に参照するため即時反映）
-- CFnスタック`zer0-nyusatsu-notify-bot`のNotifyEmailパラメータ更新・デプロイ、`zer0-nyusatsu-mail-relay`は再デプロイでSNS購読(`zer0-nyusatsu-alarm-topic`等)を新アドレスへ切替
-
-### 2026-08-27
-
-#### 運用安全性と個人情報ログの是正
-
-- 購読登録、配信、バウンス処理のCloudWatch Logsからメールアドレスを除外する実装へ更新
-- LambdaコードをCloudFormation管理のVersioning有効S3 artifactへ切り替えるローカル実装を追加し、反映漏れを防ぐ本番反映手順を整備
-- Stripe Webhook署名シークレットの移行方針を、CloudFormationの置換競合を避ける安全な段階方式へ更新
-- Lambda artifact用S3バケットと5 Lambdaのバージョン付きZIPを作成。アプリケーション本体CFNの想定外差分は実行せず、更新専用CFNスタックから既存5 Lambdaのコードを1関数ずつ無停止反映した
+- 構成図の参照先を`008_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`008_architecture_plugin_flowdot.svg`に変更（主要フローのみ図示、LP/Stripe決済・メール転送は別スタックのため意図的に省略）
+- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）
