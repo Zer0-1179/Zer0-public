@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="1414" dy="841" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1450" math="0" shadow="0" background="#FFFFFF">
+    <mxGraphModel dx="2020" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1450" background="#FFFFFF" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -151,7 +151,7 @@
         </mxCell>
         <mxCell id="e-analyzer-ssm-label" connectable="0" parent="e-analyzer-ssm" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="市場分析:BTC 200EMA+Supertrend転換→シグナル書き込み" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint x="-366" y="-112" as="offset" />
+            <mxPoint x="-355" y="-109" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
@@ -313,7 +313,7 @@
         <mxCell id="legend-line-desc" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;- - - アニメーション線&lt;/b&gt;: 市場分析〜発注〜週次レポートの主要フロー(SVGエクスポート時も流れて表示される)&lt;/div&gt;&lt;div&gt;&lt;b&gt;—— Solid&lt;/b&gt;: 失敗通知・アラーム監視等の補助的な経路&lt;/div&gt;" vertex="1">
           <mxGeometry height="41.06502797202796" width="420" x="10" y="26.281617902097896" as="geometry" />
         </mxCell>
-        <mxCell id="legend-aux-note" parent="legend-outer" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;FailureNotifierはExecutor非同期呼び出し失敗時のOnFailure先(SES経由でエラーメール)。CloudWatch Alarm(Executor Errors/Heartbeat)→SNSはLambdaメトリクス監視チェーン。Amazon CloudWatch Logsは全Lambdaの実行ログ出力先(リージョン外に配置、矢印は省略)。&lt;/i&gt;" vertex="1">
+        <mxCell id="legend-aux-note" parent="legend-outer" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;FailureNotifierはExecutor非同期呼び出し失敗時のOnFailure先(SES経由でエラーメール)。&lt;/i&gt;&lt;div&gt;&lt;i&gt;&lt;br&gt;&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;CloudWatch Alarm(Executor Errors/Heartbeat)→SNSはLambdaメトリクス監視チェーン。Amazon CloudWatch Logsは全Lambdaの実行ログ出力先(矢印は省略)。&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="73.91705034965034" width="450" x="20" y="319.9998321678321" as="geometry" />
         </mxCell>
       </root>

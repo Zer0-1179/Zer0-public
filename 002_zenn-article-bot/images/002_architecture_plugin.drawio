@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="2020" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2100" pageHeight="1400" math="0" shadow="0" background="#FFFFFF">
+    <mxGraphModel dx="1768" dy="1051" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2100" pageHeight="1400" background="#FFFFFF" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -20,7 +20,7 @@
           <mxGeometry height="676" width="1120" x="160" y="284" as="geometry" />
         </mxCell>
         <mxCell id="g-cwlogs" parent="aws-cloud" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Management &amp; Governance" vertex="1">
-          <mxGeometry height="120" width="120" x="740" y="61" as="geometry" />
+          <mxGeometry height="120" width="120" x="720" y="61" as="geometry" />
         </mxCell>
         <mxCell id="svc-cwlogs" parent="g-cwlogs" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;fontFamily=Helvetica;shadow=1;" value="Amazon CloudWatch&lt;div&gt;&lt;i&gt;Logs&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="36" as="geometry" />
@@ -242,11 +242,11 @@
         <mxCell id="step-4-desc-legend" parent="step-4-legend" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;完了メール通知&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0,0,0), rgb(255,255,255));&quot;&gt;&lt;b&gt;&lt;font style=&quot;font-size: 15px;&quot;&gt;-&lt;/font&gt; &lt;/b&gt;SESがタイトル・見出し一覧・コスト概算を含むメールを送信&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="73.39428571428572" width="398" x="52" as="geometry" />
         </mxCell>
-        <mxCell id="legend-aux-note" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;Systems Managerは補助経路(トピック・切り口履歴)。SQS→CloudWatch Alarm→SNSはLambda非同期呼び出し失敗時のみのDLQ監視チェーン。Amazon CloudWatch LogsはLambda(ZennArticleGenerator)の実行ログ出力先(リージョン外に配置、矢印は省略)。&lt;/i&gt;" vertex="1">
+        <mxCell id="legend-aux-note" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;Systems Managerは補助経路(トピック・切り口履歴)。SQS→CloudWatch Alarm→SNSはLambda非同期呼び出し失敗時のみのDLQ監視チェーン。&lt;/i&gt;&lt;div&gt;&lt;i&gt;&lt;br&gt;&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Amazon CloudWatch LogsはLambda(ZennArticleGenerator)の実行ログ出力先(矢印は省略)。&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="72.42857142857143" width="450" y="332.2057142857143" as="geometry" />
         </mxCell>
-        <mxCell id="legend-line-group" parent="legend-container" style="group;fontFamily=Helvetica;fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;" value="" vertex="1">
-          <mxGeometry height="86.91428571428571" width="440" y="415.25714285714287" as="geometry" />
+        <mxCell id="legend-line-group" parent="legend-outer" style="group;fontFamily=Helvetica;fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;" value="" vertex="1">
+          <mxGeometry height="86.91428571428571" width="440" x="30" y="470.00142857142856" as="geometry" />
         </mxCell>
         <mxCell id="legend-line-bg" parent="legend-line-group" style="fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;" value="" vertex="1">
           <mxGeometry height="86.91428571428571" width="440" as="geometry" />

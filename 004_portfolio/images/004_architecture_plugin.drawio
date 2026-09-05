@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="3364" dy="989" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1100" math="0" shadow="0" background="#FFFFFF">
+    <mxGraphModel dx="3271" dy="934" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1100" background="#FFFFFF" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -105,9 +105,9 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-cloudfront-apigw-label" connectable="0" parent="e-cloudfront-apigw" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="/*: 動的ページ" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint x="120" y="10" as="offset" />
+        <mxCell id="vIEy1t1pTZ3NAau2aWAK-1" connectable="0" parent="e-cloudfront-apigw" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;/*: 動的ページ&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.8208" as="geometry">
+            <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="e-apigw-lambda" edge="1" parent="1" source="g-apigw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="g-lambda">
@@ -158,7 +158,7 @@
         <mxCell id="step-4-desc-legend" parent="step-4-legend" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;SSRレンダリング&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0,0,0), rgb(255,255,255));&quot;&gt;&lt;b&gt;&lt;font style=&quot;font-size: 15px;&quot;&gt;-&lt;/font&gt; &lt;/b&gt;LambdaがAstro SSRを実行、リクエスト時にZenn/note RSSを並列取得してHTMLを生成&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="71.44345454545454" width="398" x="52" as="geometry" />
         </mxCell>
-        <mxCell id="legend-aux-note" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;Amazon CloudWatch LogsはLambdaの実行ログ出力先(リージョン外に配置、矢印は省略)。&lt;/i&gt;" vertex="1">
+        <mxCell id="legend-aux-note" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;Amazon CloudWatch LogsはLambdaの実行ログ出力先(矢印は省略)。&lt;/i&gt;" vertex="1">
           <mxGeometry height="42.30204545454546" width="450" y="323.3756363636363" as="geometry" />
         </mxCell>
         <mxCell id="legend-line-group" parent="legend-container" style="group;fontFamily=Helvetica;fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;" value="" vertex="1">
@@ -170,7 +170,7 @@
         <mxCell id="legend-line-title" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=14;fontStyle=1;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="Line Styles" vertex="1">
           <mxGeometry height="23.501136363636366" width="200" x="10" y="4.700227272727274" as="geometry" />
         </mxCell>
-        <mxCell id="legend-line-desc" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;- - - アニメーション線&lt;/b&gt;: アクセス〜レンダリングの主要フロー(SVGエクスポート時も流れて表示される)&lt;/div&gt;" vertex="1">
+        <mxCell id="legend-line-desc" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;- - - アニメーション線&lt;/b&gt;: アクセス〜レンダリングの主要フロー&lt;/div&gt;&lt;div&gt;(SVGエクスポート時も流れて表示される)&lt;/div&gt;" vertex="1">
           <mxGeometry height="47.00227272727273" width="420" x="10" y="30.081454545454548" as="geometry" />
         </mxCell>
         <mxCell id="AwdYved6b948T5VhJU04-3" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryPerimeter=0;" target="ext-rss-icon" value="">
