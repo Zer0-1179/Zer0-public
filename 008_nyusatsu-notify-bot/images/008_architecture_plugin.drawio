@@ -141,7 +141,7 @@
         </mxCell>
         <mxCell id="e-lambda-ssm-label" connectable="0" parent="e-lambda-ssm" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="設定値取得(送信元・キーワード等)" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint x="-126" y="34" as="offset" />
+            <mxPoint x="-90" y="-5" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="step-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="4" vertex="1">
@@ -180,7 +180,7 @@
         </mxCell>
         <mxCell id="e-lambda-sqs-label" connectable="0" parent="e-lambda-sqs" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="非同期呼び出し失敗時のみ(DLQ)" vertex="1">
           <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint x="265" y="-4" as="offset" />
+            <mxPoint x="264" y="-4" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="e-ses-sns" edge="1" parent="1" source="g-ses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" target="g-sns">
@@ -196,12 +196,11 @@
         <mxCell id="e-sns-bouncehandler" edge="1" parent="1" source="svc-sns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-lambda-bounce">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e-bouncehandler-dynamodb" edge="1" parent="1" source="g-lambda-bounce" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="svc-dynamodb">
+        <mxCell id="e-bouncehandler-dynamodb" edge="1" parent="1" source="g-lambda-bounce" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeWidth=2;" target="g-dynamodb">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1150" y="700" />
-              <mxPoint x="850" y="700" />
-              <mxPoint x="850" y="620" />
+              <mxPoint x="1150.07" y="940.07" />
+              <mxPoint x="730.07" y="940.07" />
             </Array>
           </mxGeometry>
         </mxCell>
