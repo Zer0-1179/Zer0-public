@@ -228,3 +228,18 @@
 - ユーザーの要望で表示時間も調整: ステップ結果の表示後の停止を1.1秒→1.8秒、全ステップ完了後の最終停止を2.2秒→4秒に延長（`step_pause_ms`/`final_hold_ms`の既定値変更）
 - 停止中もカーソルが点滅し続けるよう変更（`add_blink_hold()`、周期500ms既定）。従来は停止時間ぶん1枚の静止フレームを長時間表示していたが、動きが感じられず「止まっているように見える」との指摘を受けて改善
 - **同日発覚・修正**: ステップ区切りの点滅停止が、結果行を表示した直後（空行が表示される前）の状態で始まっていたため、点滅カーソルが結果テキストの末尾に重なって見える不具合があった。停止判定を「空行まで表示し終えた状態」に変更（`pause_points`で管理）し、必ず何もない行の上で点滅するよう修正
+
+## 2026-09-05
+
+### メール通知の迷惑メール判定を修正、送信元をドメインアドレスへ切替
+
+- 送信元(`SenderEmail`)が個人Gmailアドレス(`sj.hatanaka@gmail.com`)のままだったため、宛先(同じGmail)から自己スプーフィングとして迷惑メール判定されていた問題を修正
+- 送信元をSES上でDKIM署名済みのドメインアドレス`zenn-bot@info.zer0-infra.com`に変更。IAMポリシーのResource ARNも、個別メールアドレス単位から`SenderEmail`のドメイン部分（`!Select`/`!Split`で導出）を参照する方式に変更し、ドメイン検証済みSES identityへの`ses:SendEmail`権限に切り替えた
+- CFnスタック`zenn-article-generator`を`update-stack`で更新、IAMシミュレーションで新しい権限が正しく機能することを確認済み
+
+### 構成図をdraw.io「プラグイン様式」に更新
+
+- README.md・システム仕様書.mdの構成図埋め込みを`002_architecture.png`から`002_architecture_plugin_flowdot.svg`に変更
+- 新しい構成図は`002_architecture_plugin.drawio`（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル付き）から作成・レビュー済み（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
+- 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/002_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
+- 旧`002_architecture.drawio`/`002_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）
