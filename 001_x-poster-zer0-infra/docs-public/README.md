@@ -20,7 +20,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](../images/001_architecture.png)
+![アーキテクチャ図](../images/001_architecture_plugin_flowdot.svg)
 
 ```text
 EventBridge ルール（月・木 20:00 JST）
@@ -88,8 +88,8 @@ RSS の概要150文字だけを根拠に生成すると、対応リージョン�
 │   ├── cfn-x-poster-zer0-infra.yaml
 │   └── deploy.sh                   # デプロイスクリプト
 └── images/
-    ├── 001_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
-    └── 001_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
+    ├── 001_architecture_plugin.drawio        # 構成図（draw.ioで手動編集する一次情報源）
+    └── 001_architecture_plugin_flowdot.svg   # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -154,10 +154,9 @@ bash src/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-19
+### 2026-09-05
 
-#### 通知メールアドレスの変更
+#### 構成図をdraw.io「プラグイン様式」に更新
 
-- RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
-- CloudWatchアラーム用SNSトピック(`x-poster-zer0-infra-alarms`)の購読を新アドレスへ切替
-- CFnスタック`x-poster-zer0-infra`を`update-stack`でパラメータ更新・デプロイ
+- 構成図の参照先を`001_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`001_architecture_plugin_flowdot.svg`に変更
+- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）

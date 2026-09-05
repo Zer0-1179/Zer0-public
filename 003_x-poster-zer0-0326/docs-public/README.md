@@ -21,7 +21,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](../images/003_architecture.png)
+![アーキテクチャ図](../images/003_architecture_plugin_flowdot.svg)
 
 ```text
 EventBridge Scheduler（月・木 20:00 JST / 日曜 10:00 JST・リトライ0回）
@@ -148,8 +148,8 @@ Fableの評価で「現在のXでハッシュタグはリーチを生まずBot�
 │   ├── test_invoke.sh                  # テストスクリプト（dry_runペイロード対応）
 │   └── generate_diagram.py             # 構成図生成（matplotlib版、2026-08-10以降は未使用）
 └── images/
-    ├── 003_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
-    └── 003_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
+    ├── 003_architecture_plugin.drawio        # 構成図（draw.ioで手動編集する一次情報源）
+    └── 003_architecture_plugin_flowdot.svg   # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -232,10 +232,9 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-19
+### 2026-09-05
 
-#### 通知メールアドレスの変更
+#### 構成図をdraw.io「プラグイン様式」に更新
 
-- RecipientEmailを`sinnjibaby@gmail.com`から`sj.hatanaka@gmail.com`に変更
-- CloudWatchアラーム用SNSトピック(`x-poster-zer0-0326-alarms`)の購読を新アドレスへ切替
-- CFnスタック`x-poster-zer0-0326`を`update-stack`でパラメータ更新・デプロイ。`src/deploy.sh`のデフォルト値も追従して修正
+- 構成図の参照先を`003_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`003_architecture_plugin_flowdot.svg`に変更
+- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）
