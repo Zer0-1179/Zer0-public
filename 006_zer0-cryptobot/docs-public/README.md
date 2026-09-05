@@ -21,7 +21,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](../images/006_architecture.png)
+![アーキテクチャ図](../images/006_architecture_plugin_flowdot.svg)
 
 ```text
 EventBridge Scheduler（Analyzer: 4時間毎 / Executor: 30分毎）
@@ -178,8 +178,8 @@ Executor が実行するたびに証拠金維持率を確認：
 ├── infra/
 │   └── cfn-cryptobot.yaml
 └── images/
-    ├── 006_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
-    └── 006_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
+    ├── 006_architecture_plugin.drawio        # 構成図（draw.ioで手動編集する一次情報源）
+    └── 006_architecture_plugin_flowdot.svg   # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -238,14 +238,15 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-20
+### 2026-09-05
 
-#### 週次サマリーの増額判断集計から手動決済ポジションが漏れていたバグを修正
+#### メール通知の迷惑メール判定を修正、送信元をドメインアドレスへ切替
 
-- `weekly_summary`のクローズ判定ロジックを許可リスト方式(`CLOSING_REASONS`)から否定リスト方式(`NON_CLOSING_REASONS`、TP1部分利確以外は全てクローズ扱い)に変更。手動決済で閉じた2ポジションが集計から欠落していた不具合を解消し、累計クローズ数が7件→10件（正しい値）に修正された
-- pytest 3件追加、`Zer0-CryptoBot-WeeklySummary`Lambdaのコードのみ直接デプロイ
+- 送信元(`SenderEmail`)が個人Gmailアドレスのままだったため、宛先(同じGmail)から自己スプーフィングとして迷惑メール判定されていた問題を修正
+- 送信元をSES上でDKIM署名済みのドメインアドレス`cryptobot@info.zer0-infra.com`に変更。IAMポリシーのResource ARNも`SenderEmail`のドメイン部分から導出する方式に変更
+- 現在アクティブなBTC/JPYロングポジション・稼働モード(`normal`)に影響がないことを確認した上でCFnスタックを更新
 
-#### 004ポートフォリオ非公開実績ページの勝率表示バグを修正
+#### 構成図をdraw.io「プラグイン様式」に更新
 
-- `stats.json`にレコードごとの`position_id`を出力するようExecutor Lambdaを修正し、004側がポジション単位で正しく勝率を再計算できるようにした（詳細は004のCHANGELOG参照）
-- 修正後、実データで勝率90.0%(9勝1敗・累計10ポジション)が正しく表示されることを確認
+- 構成図の参照先を`006_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`006_architecture_plugin_flowdot.svg`に変更
+- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）

@@ -16,7 +16,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](../images/008_architecture.png)
+![アーキテクチャ図](../images/008_architecture_plugin_flowdot.svg)
 
 ```text
 EventBridge（毎日6:00 JST）

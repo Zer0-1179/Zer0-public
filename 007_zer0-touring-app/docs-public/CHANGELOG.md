@@ -295,3 +295,12 @@
 - [MEDIUM] 詳細画面の写真は共有DOM要素（`#detail-img`）を使い回しており、前/次ボタンを素早く連打すると後発のfetchが先に解決した場合に前のコースの写真が古い結果で上書きされうる競合状態があった。呼び出しごとの通し番号をDOM要素に刻み、最新の呼び出しでなければ結果を適用しないよう修正
 - [MEDIUM] 一覧画面表示中に裏で完了した別コースのenrichが`renderSlider({courses})`を無条件に呼び、閲覧中のスライド位置（`currentSlide`）・共有URLキャッシュ（`shortUrlCache`）を毎回リセットしてカードDOM全体を再構築していた。ドット表示の巻き戻りや、共有済みURLキャッシュ消失による`/api/share`への不要な再POSTを引き起こしうる状態だった。バックグラウンド更新時は状態を保持する`preserveState`オプションを追加
 - [LOW] `getDeviceId`/`apiHeaders`が`localStorage`アクセスに無防備で、姉妹関数`loadRecentPlaces`/`saveRecentPlaces`と異なりtry/catchが無かった。Safari「すべてのCookieをブロック」等の環境で例外が投げられるとコース生成自体が起動しなくなりうるため、防御的なtry/catchとページ内限定のフォールバックIDを追加
+
+## 2026-09-05（2）
+
+### 構成図をdraw.io「プラグイン様式」に更新
+
+- README.md・システム仕様書.mdの構成図埋め込みを`007_architecture.png`から`007_architecture_plugin_flowdot.svg`に変更
+- 新しい構成図は既存`007_architecture.drawio`と同じリソース配置に合わせて全面リビルドしたもの（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
+- 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/007_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
+- 旧`007_architecture.drawio`/`007_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）

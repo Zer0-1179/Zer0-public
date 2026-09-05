@@ -26,7 +26,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](../images/007_architecture.png)
+![アーキテクチャ図](../images/007_architecture_plugin_flowdot.svg)
 
 ```text
 [スマホ/PC ブラウザ]
@@ -224,8 +224,8 @@ SNS にシェア → /s/abc123 → Lambda が OGP HTML 返却 → SNS クロー�
 ├── scripts/
 │   └── generate_diagram.py      # アーキテクチャ図生成（matplotlib版、2026-08-10以降は未使用）
 └── images/
-    ├── 007_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
-    └── 007_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
+    ├── 007_architecture_plugin.drawio        # 構成図（draw.ioで手動編集する一次情報源）
+    └── 007_architecture_plugin_flowdot.svg   # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 ## デプロイ
@@ -455,3 +455,9 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 - 詳細画面で前/次ボタンを素早く連打すると、後から解決した写真取得が先に表示していたコースの写真を上書きしてしまう競合状態を修正（呼び出しごとの通し番号で判定）
 - 一覧画面を見ている間に裏で完了した別コースのenrichが、閲覧中のスライド位置・共有URLキャッシュを無条件にリセットしていた不具合を修正。バックグラウンド更新時は状態を保持するオプションを追加
 - `localStorage`アクセス失敗時（Safari「すべてのCookieをブロック」等）に例外を投げ、コース生成自体が起動しなくなる箇所に防御的な`try/catch`を追加
+
+#### 構成図をdraw.io「プラグイン様式」に更新
+
+- 構成図の参照先を`007_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`007_architecture_plugin_flowdot.svg`に変更
+- 新しい構成図は既存`007_architecture.drawio`と同じリソース配置に合わせて全面リビルドしたもの（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
+- 004ポートフォリオサイトの`projects.ts`が参照する画像もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み

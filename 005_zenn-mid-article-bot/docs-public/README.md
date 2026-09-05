@@ -23,7 +23,7 @@
 
 ## アーキテクチャ
 
-![アーキテクチャ図](../images/005_architecture.png)
+![アーキテクチャ図](../images/005_architecture_plugin_flowdot.svg)
 
 ```text
 EventBridge（毎月1日・15日 21:00 JST）
@@ -101,8 +101,8 @@ EventBridge（毎月1日・15日 21:00 JST）
 ├── docs-public/                      # 公開（README・CHANGELOG）
 ├── scripts/                          # 補助スクリプト（Layer構築・テスト実行等）
 └── images/
-    ├── 005_architecture.drawio  # 構成図（draw.ioで手動編集する一次情報源）
-    └── 005_architecture.png     # 上記からエクスポートした画像（本ドキュメントで表示）
+    ├── 005_architecture_plugin.drawio        # 構成図（draw.ioで手動編集する一次情報源）
+    └── 005_architecture_plugin_flowdot.svg   # 上記からエクスポートした画像（本ドキュメントで表示）
 ```
 
 > **Note**: `src/fonts/NotoSansCJK-Regular.ttc`（図解PNGの日本語描画用フォント、約19MB）はファイルサイズの都合上このリポジトリには含まれていません。ローカルでデプロイする場合は [Noto Sans CJK](https://github.com/notofonts/noto-cjk) から取得し `src/fonts/` に配置してください。
@@ -142,11 +142,15 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-08-20
+### 2026-09-05
 
-#### evidence画像レンダラーに複数ステップ結合GIF機能を追加
+#### メール通知の迷惑メール判定を修正、送信元をドメインアドレスへ切替
 
-- `render_terminal.py`に`render_gif(steps, out_path)`を新規追加。複数ステップの実行結果を1本のアニメーションGIFに結合し、evidence画像の枚数を削減できるようにした
-- 表示内容（コマンド・出力）は実機で実際に実行した本物であることが前提。アカウントIDマスクも自動適用される
-- 同日、画面欠け（GIFキャンバスサイズ計算バグ）・コマンド/出力の配色区別しづらい問題も発見・修正済み
+- 送信元(`SenderEmail`)が個人Gmailアドレスのままだったため、宛先(同じGmail)から自己スプーフィングとして迷惑メール判定されていた問題を修正
+- 送信元をSES上でDKIM署名済みのドメインアドレス`zenn-mid-bot@info.zer0-infra.com`に変更。IAMポリシーのResource ARNも`SenderEmail`のドメイン部分から導出する方式に変更
+
+#### 構成図をdraw.io「プラグイン様式」に更新
+
+- 構成図の参照先を`005_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`005_architecture_plugin_flowdot.svg`に変更
+- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）
 - 詳細は[CHANGELOG.md](./CHANGELOG.md)参照
