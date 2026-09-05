@@ -7,7 +7,13 @@ Description: >
 Parameters:
   SenderEmail:
     Type: String
-    Description: SES verified sender email address
+    Description: >-
+      Sender email address. Must be an address under a domain-verified SES identity
+      (e.g. notify@info.zer0-infra.com) - the IAM policy grants ses:SendEmail on the
+      identity for the domain part of this value. Do NOT use a personal @gmail.com etc.
+      address here: sending "From: you@gmail.com" via SES to the same @gmail.com inbox
+      fails SPF (gmail.com's SPF only allows Google's own servers) and gets flagged as
+      spoofing, landing in spam.
   RecipientEmail:
     Type: String
     Description: Notification recipient email address
@@ -49,7 +55,9 @@ Resources:
                 Action:
                   - ses:SendEmail
                 Resource:
-                  - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+                  - !Sub
+                    - "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+                    - SenderDomain: !Select [1, !Split ["@", !Ref SenderEmail]]
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
@@ -94,7 +102,9 @@ Resources:
                 Action:
                   - ses:SendEmail
                 Resource:
-                  - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+                  - !Sub
+                    - "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+                    - SenderDomain: !Select [1, !Split ["@", !Ref SenderEmail]]
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
@@ -147,7 +157,9 @@ Resources:
                 Action:
                   - ses:SendEmail
                 Resource:
-                  - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+                  - !Sub
+                    - "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+                    - SenderDomain: !Select [1, !Split ["@", !Ref SenderEmail]]
 
   # ── IAM ロール: EventBridge Scheduler → Analyzer ─────────────────────────
   SchedulerRole:
@@ -420,7 +432,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - ses:SendEmail
-                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}"
+                Resource: !Sub
+                  - "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+                  - SenderDomain: !Select [1, !Split ["@", !Ref SenderEmail]]
               - Effect: Allow
                 Action:
                   - s3:GetObject
