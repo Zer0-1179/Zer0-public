@@ -10,6 +10,7 @@ export type Project = {
   pointsJa: string[];
   pointsEn: string[];
   architecture: string;
+  architectureSvg: string;
   githubUrl?: string;
   siteUrl?: string;
   tags: string[];
@@ -42,6 +43,7 @@ export const projects: Project[] = [
       'Added a thread-format Tips post type (thread_tips) to drive saves and follows',
     ],
     architecture: '/images/001_architecture.png',
+    architectureSvg: '/images/001_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/001_x-poster-zer0-infra',
     tags: ['Serverless', 'Bedrock', 'EventBridge', 'X API'],
     services: ['Lambda', 'Amazon Bedrock', 'EventBridge', 'SSM Parameter Store', 'CloudFormation'],
@@ -71,6 +73,7 @@ export const projects: Project[] = [
       'Sends completion notification via SES; fully automated from generation to S3 upload',
     ],
     architecture: '/images/002_architecture.png',
+    architectureSvg: '/images/002_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/002_zenn-article-bot',
     tags: ['CloudFormation', 'Bedrock', 'S3', 'SES', 'matplotlib'],
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'CloudFormation'],
@@ -100,6 +103,7 @@ export const projects: Project[] = [
       'Per-category prompt design maintains a consistent author persona for followers',
     ],
     architecture: '/images/003_architecture.png',
+    architectureSvg: '/images/003_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/003_x-poster-zer0-0326',
     tags: ['Serverless', 'Bedrock', 'EventBridge', 'X API'],
     services: ['Lambda', 'Amazon Bedrock', 'EventBridge Scheduler', 'SSM Parameter Store', 'CloudFormation'],
@@ -129,6 +133,7 @@ export const projects: Project[] = [
       'Single codebase manages both Japanese and English via i18n routing',
     ],
     architecture: '/images/004_architecture.png',
+    architectureSvg: '/images/004_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/004_portfolio',
     tags: ['Astro', 'SSR', 'CloudFront', 'Lambda'],
     services: ['Lambda', 'API Gateway', 'CloudFront', 'S3', 'CloudFormation'],
@@ -158,6 +163,7 @@ export const projects: Project[] = [
       'Fully decoupled from bot 002 to allow independent model and prompt tuning per audience',
     ],
     architecture: '/images/005_architecture.png',
+    architectureSvg: '/images/005_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/005_zenn-mid-article-bot',
     tags: ['CloudFormation', 'Bedrock', 'S3', 'SES', 'matplotlib'],
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'CloudFormation'],
@@ -187,6 +193,7 @@ export const projects: Project[] = [
       'Monitors margin ratio every 30 min with auto emergency-close; 24h cancel, order-verify retry, and SSM state enable unattended operation',
     ],
     architecture: '/images/006_architecture.png',
+    architectureSvg: '/images/006_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/006_zer0-cryptobot',
     tags: ['Trading Bot', 'Binance', 'bitbank', 'Supertrend'],
     services: ['Lambda', 'EventBridge Scheduler', 'SSM Parameter Store', 'SES', 'SQS', 'CloudFormation'],
@@ -216,6 +223,7 @@ export const projects: Project[] = [
       'URL shortening + OGP via Lambda /s/{id} for SNS previews; DynamoDB IP-based rate limiting; Nominatim waypoint geocoding with direction filter',
     ],
     architecture: '/images/007_architecture.png',
+    architectureSvg: '/images/007_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/007_zer0-touring-app',
     siteUrl: 'https://touring.zer0-infra.com',
     tags: ['PWA', 'Bedrock', 'Astro', 'GPS'],
@@ -246,6 +254,7 @@ export const projects: Project[] = [
       'Daily crawler scans the Yokohama city bid site, filters matches against 11 cleaning/maintenance keywords, and enriches notifications with eligibility and deadline details pulled from detail pages',
     ],
     architecture: '/images/008_architecture.png',
+    architectureSvg: '/images/008_architecture.svg',
     githubUrl: 'https://github.com/Zer0-1179/Zer0-public/tree/main/008_nyusatsu-notify-bot',
     siteUrl: 'https://nyusatsu.zer0-infra.com',
     tags: ['Subscription', 'LINE API', 'Stripe', 'SES'],

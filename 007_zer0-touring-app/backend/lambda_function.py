@@ -705,6 +705,17 @@ def reverse_geocode_place(lat, lon):
 
 DEST_ROAD_DETOUR_FACTOR = 1.3  # 日本の道路網は直線距離よりおおむね1.2〜1.4倍程度長くなる目安
 DEST_BAND_TOLERANCE = 1.5      # 帯域は「中央付近を狙う」目安であり厳密な境界ではないための余裕
+ANCHOR_MAX_DRIFT_KM = 15       # プロンプトの「半径5km以内」指示（_format_anchor_section）に対し、
+# 実在ランドマーク検索・Geocoding APIの解釈揺れを許容するバッファ込みの検証上限（指示値の3倍）。
+# 2026-09-06発見: 中級アンカー「小ケ谷」（現在地から直線約42km）に対し、AIが「奥多摩湖
+# （小ケ谷周辺）」という名目上アンカー名を含む destination を提案したが、Google Geocodingは
+# 「奥多摩湖」という有名地名の座標（アンカーから直線約41km、5km以内どころか帯域の許容誤差を
+# 大きく超える）を返した。この destination は現在地からの直線距離（54km）だけで見ると
+# 中級・上級いずれの帯域チェックも通過してしまい（_destination_distance_plausibleが
+# 現在地からのマクロな距離帯しか検証しておらず、アンカー地点そのものへの近さを一切
+# 検証していなかったため）、実測往復168kmという帯域超過が確定するまで誰にも検知されなかった。
+# アンカーの本来の目的（実在地名で地理的なブレを抑える）を担保するため、destinationの
+# 実座標がアンカー座標からどれだけ離れているかも別途検証する。
 DEST_CHECK_MIN_REMAINING_MS = 16000  # 目的地ジオコーディング(約4秒)+再試行分のBedrock(約9秒)+余裕
 DEST_CHECK_FINAL_MIN_REMAINING_MS = 6000  # 最終試行はリトライしないため、チェック自体(3コース分、約4秒)+応答余裕のみ確保できればよい
 
@@ -845,7 +856,13 @@ def _destination_distance_plausible(course, origin_lat, origin_lon, anchor=None)
     「真鶴岬」（実際は現在地から直線約75km）を検索した結果、直線4kmしか離れていない
     渋谷区内の無関係な場所が返り、上級コースなのに実測往復17kmになる事故が発生。
     上限チェックは「遠すぎないか」しか見ておらず、この種の異常な近さは素通りしていた）。
-    上限と対称に、帯域の最小往復距離を基準にした下限を設ける。"""
+    上限と対称に、帯域の最小往復距離を基準にした下限を設ける。
+
+    さらに、anchorに実在地名（name）がある場合は、destinationがそのアンカー名と完全一致
+    しなくても、実座標がアンカー座標からANCHOR_MAX_DRIFT_KM以内かを検証する。現在地からの
+    マクロな距離帯チェックだけでは、AIがアンカー名を修飾語として文字列に含めつつ全く別の
+    （現在地からの距離だけ帯域内に収まる）有名地名を実際の目的地に選ぶケースを検知できない
+    （2026-09-06発見、詳細はANCHOR_MAX_DRIFT_KMのコメント参照）。"""
     dest_name = str(course.get("destination", "")).strip()
     distance_range = course.get("distance_range_km") or {}
     profile_max = distance_range.get("max")
@@ -862,11 +879,17 @@ def _destination_distance_plausible(course, origin_lat, origin_lon, anchor=None)
     straight_km = _haversine_km(origin_lat, origin_lon, lat, lon)
     limit_km = profile_max * DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)
     min_limit_km = (profile_min / DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)) if profile_min else 0
-    ok = min_limit_km <= straight_km <= limit_km
-    if not ok:
+    if not (min_limit_km <= straight_km <= limit_km):
         print(f"[suggest] destination distance out of band: {dest_name} straight={straight_km:.0f}km "
               f"expected={min_limit_km:.0f}-{limit_km:.0f}km")
-    return ok
+        return False
+    if anchor and anchor.get("name") and anchor.get("lat") is not None and anchor.get("lon") is not None:
+        anchor_drift_km = _haversine_km(anchor["lat"], anchor["lon"], lat, lon)
+        if anchor_drift_km > ANCHOR_MAX_DRIFT_KM:
+            print(f"[suggest] destination drifted from anchor: {dest_name} anchor={anchor['name']} "
+                  f"drift={anchor_drift_km:.0f}km (max {ANCHOR_MAX_DRIFT_KM}km)")
+            return False
+    return True
 
 
 def osrm_route(waypoints):
