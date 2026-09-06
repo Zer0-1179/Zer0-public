@@ -297,10 +297,12 @@ def test_share_get_url_encodes_course_b64_with_plus_and_slash(module):
 
 # ── 二段階レスポンス（/api/suggest 高速化 + /api/enrich） ─────────────────
 
-def test_suggest_returns_without_calling_enrich(module, monkeypatch):
-    """/api/suggest はBedrock結果をそのまま返し、enrich_courseを呼ばないこと
-    （呼ぶと3コース分のNominatim直列ジオコーディングでLambda Timeoutに近づく）。"""
+def test_suggest_returns_without_calling_enrich(module, mock_context, monkeypatch):
+    """/api/suggest はBedrock結果をそのまま返し、enrich_course（座標検証・実道路距離・天気取得を
+    伴う重い処理）は呼ばないこと。目的地の距離感チェック用に軽量なジオコーディングのみ行う
+    （3コース分・時間予算がある場合のみ、リトライは最初の1回のみ）。"""
     monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.6, 139.6)))
     mock_enrich = MagicMock()
     monkeypatch.setattr(module, "enrich_course", mock_enrich)
     monkeypatch.setattr(module.bedrock, "invoke_model", MagicMock(return_value={"body": MagicMock(read=lambda: json.dumps({
@@ -309,7 +311,7 @@ def test_suggest_returns_without_calling_enrich(module, monkeypatch):
     event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
              "headers": {"x-forwarded-for": "1.2.3.4"},
              "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
-    resp = module.lambda_handler(event, MagicMock())
+    resp = module.lambda_handler(event, mock_context)
     assert resp["statusCode"] == 200
     assert not mock_enrich.called
     data = json.loads(resp["body"])
@@ -321,12 +323,13 @@ def test_suggest_returns_without_calling_enrich(module, monkeypatch):
     assert kwargs["MetricData"][0]["MetricName"] == module.STATS_METRIC_NAME
 
 
-def test_suggest_retries_once_when_ai_response_invalid(module, monkeypatch):
+def test_suggest_retries_once_when_ai_response_invalid(module, mock_context, monkeypatch):
     """Bedrockが規約違反の出力（例: 初級コースに観光地/展望台を含めない）を返しても、
     同一リクエスト内で1回だけ再試行し、2回目が正しければユーザーには成功を返すこと
     （2026-09-06: 連続失敗でユーザーがエラー画面を見た事故の再発防止）。"""
     monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
     monkeypatch.setattr(module, "enrich_course", MagicMock())
+    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.6, 139.6)))
 
     invalid_courses = valid_courses()
     invalid_courses[0]["outbound_spots"] = [{"name": "道の駅 テスト", "type": "道の駅"}]  # 観光地/展望台なし
@@ -342,7 +345,38 @@ def test_suggest_retries_once_when_ai_response_invalid(module, monkeypatch):
     event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
              "headers": {"x-forwarded-for": "1.2.3.4"},
              "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
-    resp = module.lambda_handler(event, MagicMock())
+    resp = module.lambda_handler(event, mock_context)
+
+    assert mock_invoke.call_count == 2
+    assert resp["statusCode"] == 200
+    data = json.loads(resp["body"])
+    assert data["courses"][0]["name"] == "テストコース"
+
+
+def test_suggest_retries_when_destination_too_far_for_band(module, mock_context, monkeypatch):
+    """AIが「初級」のつもりで提案した目的地が、実際には現在地から遠く離れた場所
+    （直線距離だけでも往復が帯域上限を大きく超えると分かる場所）だった場合、
+    最初の試行に限り作り直すこと（2026-09-06: 初級コースが実測往復270kmだった事例の再発防止）。"""
+    monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())
+
+    far_courses = valid_courses()
+    # 初級(往復20〜49km)の目的地が、直線距離だけで100km以上離れている想定
+    geocode = MagicMock(side_effect=[(36.9, 140.9), (35.2, 139.0), (35.2, 139.0), (35.2, 139.0)])
+    monkeypatch.setattr(module, "nominatim_geocode", geocode)
+
+    def make_response(courses):
+        return {"body": MagicMock(read=lambda: json.dumps({
+            "content": [{"text": json.dumps({"courses": courses}, ensure_ascii=False)}]
+        }).encode())}
+
+    mock_invoke = MagicMock(side_effect=[make_response(far_courses), make_response(valid_courses())])
+    monkeypatch.setattr(module.bedrock, "invoke_model", mock_invoke)
+
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
+             "headers": {"x-forwarded-for": "1.2.3.4"},
+             "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
+    resp = module.lambda_handler(event, mock_context)
 
     assert mock_invoke.call_count == 2
     assert resp["statusCode"] == 200
