@@ -441,10 +441,13 @@ def test_build_anchor_section_uses_reverse_geocoded_place_name(module, monkeypat
     """アンカーは座標の説明文だけでなく、逆ジオコーディングで確定させた実在地名を
     プロンプトに埋め込むこと（2026-09-06発見: 座標・方角・距離の説明だけでは、AIが
     その制約を無視して大きく離れた実在地名を選ぶ頻度が高いことが本番検証で判明したため、
-    「地名そのものをそのまま使わせる」方式に強化した）。"""
+    「地名そのものをそのまま使わせる」方式に強化した）。
+    ただし上級は_ANCHOR_REVERSE_GEOCODE_DIFFICULTIESの対象外（Duration実測26〜28秒と
+    Lambda30秒制約への余裕が乏しかったため、逆ジオコーディングを初級・中級の2帯域に絞って
+    時間予算を節約する方針に変更、2026-09-06追加）のため、地名は初級・中級の2箇所にのみ現れる。"""
     monkeypatch.setattr(module, "nominatim_reverse", MagicMock(return_value="テスト市テスト町"))
     section = module._build_anchor_section(35.6, 139.6)
-    assert section.count("テスト市テスト町") == 3  # 3帯域すべてで採用されること
+    assert section.count("テスト市テスト町") == 2  # 初級・中級の2帯域のみ採用されること
     assert "そのまま採用すること" in section
 
 
@@ -488,9 +491,10 @@ def test_suggest_prompt_includes_anchor_section(module, mock_context, monkeypatc
 
 
 def test_suggest_computes_anchor_once_per_request_not_per_attempt(module, mock_context, monkeypatch):
-    """目的地アンカーは逆ジオコーディングを3回（3帯域分）伴うため、Bedrockへの再試行のたびに
-    作り直すとLambda30秒制約への時間コストが倍になってしまう。1リクエストにつき1回だけ
-    算出し、再試行時は同じアンカーを再提示するだけにすること（2026-09-06追加）。"""
+    """目的地アンカーは逆ジオコーディングを伴うため（初級・中級の2帯域分。上級は時間予算
+    節約のため対象外、2026-09-06追加）、Bedrockへの再試行のたびに作り直すとLambda30秒
+    制約への時間コストが倍になってしまう。1リクエストにつき1回だけ算出し、再試行時は
+    同じアンカーを再提示するだけにすること。"""
     monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
     monkeypatch.setattr(module, "enrich_course", MagicMock())
     monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.6, 139.6)))
@@ -514,7 +518,7 @@ def test_suggest_computes_anchor_once_per_request_not_per_attempt(module, mock_c
     resp = module.lambda_handler(event, mock_context)
 
     assert mock_invoke.call_count == 2  # Bedrockは2回呼ばれるが
-    assert reverse_mock.call_count == 3  # アンカーの逆ジオコーディングは3帯域分の1回きり
+    assert reverse_mock.call_count == 2  # アンカーの逆ジオコーディングは対象2帯域分の1回きり
     assert resp["statusCode"] == 200
 
 
