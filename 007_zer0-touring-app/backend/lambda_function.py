@@ -662,9 +662,18 @@ def _destination_distance_plausible(course, origin_lat, origin_lon, anchor=None)
     改めて検証する意味がない。目的地アンカー導入後にNominatim呼び出しが往復2回分
     （逆ジオコーディング3回＋このチェック）に増え、Lambda30秒制約に対して実測
     Duration26〜28秒・まれに500エラーとなる事例を確認したため、このケースだけでも
-    ネットワーク呼び出しを省いて時間予算を確保する（2026-09-06追加）。"""
+    ネットワーク呼び出しを省いて時間予算を確保する（2026-09-06追加）。
+
+    上限（遠すぎ）だけでなく下限（近すぎ）も検査する。Nominatimの無料枠検索は
+    地名によっては全く無関係な近隣の地点に誤マッチすることがあり（2026-09-06発見:
+    「真鶴岬」（実際は現在地から直線約75km）を検索した結果、直線4kmしか離れていない
+    渋谷区内の無関係な場所が返り、上級コースなのに実測往復17kmになる事故が発生。
+    上限チェックは「遠すぎないか」しか見ておらず、この種の異常な近さは素通りしていた）。
+    上限と対称に、帯域の最小往復距離を基準にした下限を設ける。"""
     dest_name = str(course.get("destination", "")).strip()
-    profile_max = (course.get("distance_range_km") or {}).get("max")
+    distance_range = course.get("distance_range_km") or {}
+    profile_max = distance_range.get("max")
+    profile_min = distance_range.get("min")
     if not dest_name or not profile_max:
         return True
     if anchor and anchor.get("name") and _spot_key(dest_name) == _spot_key(anchor["name"]):
@@ -676,9 +685,11 @@ def _destination_distance_plausible(course, origin_lat, origin_lon, anchor=None)
         return False
     straight_km = _haversine_km(origin_lat, origin_lon, lat, lon)
     limit_km = profile_max * DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)
-    ok = straight_km <= limit_km
+    min_limit_km = (profile_min / DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)) if profile_min else 0
+    ok = min_limit_km <= straight_km <= limit_km
     if not ok:
-        print(f"[suggest] destination too far for band: {dest_name} straight={straight_km:.0f}km limit={limit_km:.0f}km")
+        print(f"[suggest] destination distance out of band: {dest_name} straight={straight_km:.0f}km "
+              f"expected={min_limit_km:.0f}-{limit_km:.0f}km")
     return ok
 
 

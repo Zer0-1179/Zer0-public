@@ -384,6 +384,39 @@ def test_suggest_retries_when_destination_too_far_for_band(module, mock_context,
     assert data["courses"][0]["name"] == "テストコース"
 
 
+def test_suggest_retries_when_destination_too_close_for_band(module, mock_context, monkeypatch):
+    """上級（往復100〜300km）のつもりで提案した目的地が、Nominatimの誤マッチで現在地から
+    直線わずか数kmの無関係な場所に解決された場合、最初の試行に限り作り直すこと。
+    以前は「遠すぎないか」の上限しか検査しておらず、この種の異常な近さは素通りしていた
+    （2026-09-06発見: 「真鶴岬」（実際は現在地から直線約75km）の検索結果が渋谷区内の
+    無関係な地点（直線4km）に誤マッチし、上級コースなのに実測往復17kmになる事故で判明）。"""
+    monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())
+
+    close_courses = valid_courses()
+    # 初級・中級は許容範囲内、上級(3コース目)の目的地だけが直線4kmしか離れていない想定
+    geocode = MagicMock(side_effect=[(35.834, 139.6), (36.0, 139.9), (35.62, 139.62), (35.834, 139.6), (36.0, 139.9), (35.9, 140.5)])
+    monkeypatch.setattr(module, "nominatim_geocode", geocode)
+
+    def make_response(courses):
+        return {"body": MagicMock(read=lambda: json.dumps({
+            "content": [{"text": json.dumps({"courses": courses}, ensure_ascii=False)}]
+        }).encode())}
+
+    mock_invoke = MagicMock(side_effect=[make_response(close_courses), make_response(valid_courses())])
+    monkeypatch.setattr(module.bedrock, "invoke_model", mock_invoke)
+
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
+             "headers": {"x-forwarded-for": "1.2.3.4"},
+             "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
+    resp = module.lambda_handler(event, mock_context)
+
+    assert mock_invoke.call_count == 2
+    assert resp["statusCode"] == 200
+    data = json.loads(resp["body"])
+    assert data["courses"][0]["name"] == "テストコース"
+
+
 def test_suggest_retries_when_destination_geocode_fails(module, mock_context, monkeypatch):
     """目的地のジオコーディングが失敗した場合（0件ヒット・タイムアウト・遠すぎて
     nominatim_geocode内部の安全上限で弾かれた等）、距離が「わからない」として許容せず
@@ -465,7 +498,9 @@ def test_suggest_prompt_includes_anchor_section(module, mock_context, monkeypatc
     大きく外れる事例が複数発生したため、具体的なアンカー地点で誘導する対策）。"""
     monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
     monkeypatch.setattr(module, "enrich_course", MagicMock())
-    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.6, 139.6)))
+    # 全帯域（初級・中級・上級）の距離妥当性チェック（上限・下限とも）を通過する、
+    # 現在地から直線約26km離れた座標を返す（3帯域の許容範囲が重なる区間）。
+    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.834, 139.6)))
 
     captured_prompts = []
 
