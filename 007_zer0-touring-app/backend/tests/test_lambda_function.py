@@ -321,6 +321,35 @@ def test_suggest_returns_without_calling_enrich(module, monkeypatch):
     assert kwargs["MetricData"][0]["MetricName"] == module.STATS_METRIC_NAME
 
 
+def test_suggest_retries_once_when_ai_response_invalid(module, monkeypatch):
+    """Bedrockが規約違反の出力（例: 初級コースに観光地/展望台を含めない）を返しても、
+    同一リクエスト内で1回だけ再試行し、2回目が正しければユーザーには成功を返すこと
+    （2026-09-06: 連続失敗でユーザーがエラー画面を見た事故の再発防止）。"""
+    monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())
+
+    invalid_courses = valid_courses()
+    invalid_courses[0]["outbound_spots"] = [{"name": "道の駅 テスト", "type": "道の駅"}]  # 観光地/展望台なし
+
+    def make_response(courses):
+        return {"body": MagicMock(read=lambda: json.dumps({
+            "content": [{"text": json.dumps({"courses": courses}, ensure_ascii=False)}]
+        }).encode())}
+
+    mock_invoke = MagicMock(side_effect=[make_response(invalid_courses), make_response(valid_courses())])
+    monkeypatch.setattr(module.bedrock, "invoke_model", mock_invoke)
+
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
+             "headers": {"x-forwarded-for": "1.2.3.4"},
+             "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
+    resp = module.lambda_handler(event, MagicMock())
+
+    assert mock_invoke.call_count == 2
+    assert resp["statusCode"] == 200
+    data = json.loads(resp["body"])
+    assert data["courses"][0]["name"] == "テストコース"
+
+
 def test_enrich_post_updates_course_and_returns_it(module, monkeypatch):
     monkeypatch.setattr(module, "check_and_reserve_gmaps", MagicMock(return_value=False))
 

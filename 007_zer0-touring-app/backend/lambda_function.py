@@ -174,6 +174,7 @@ PROMPT_TEMPLATE = """あなたはバイクツーリングの専門家です。
     "difficulty": "初級",
     "road_types": ["国道", "県道"],
     "outbound_spots": [
+      {{"name": "○○展望台", "type": "展望台"}},
       {{"name": "道の駅 ○○", "type": "道の駅"}}
     ],
     "return_spots": [
@@ -1120,62 +1121,73 @@ def lambda_handler(event, context):
     if is_admin:
         print(f"[rate-limit] admin bypass ({client_ip})")
 
-    seed = random.randint(100000, 999999)
     if preferences:
         pref_lines = '\n'.join(f'- {PREF_PROMPTS[p]}' for p in preferences)
         preferences_section = f"\n\nユーザーの希望スタイル（初級の安全条件・距離帯より優先しない）:\n{pref_lines}"
     else:
         preferences_section = ""
     excluded_places_section = json.dumps(excluded_places, ensure_ascii=False)
-    prompt = PROMPT_TEMPLATE.format(
-        lat=lat,
-        lon=lon,
-        weather=weather,
-        temp=temp,
-        seed=seed,
-        preferences_section=preferences_section,
-        excluded_places_section=excluded_places_section,
-    )
 
-    try:
-        response = bedrock.invoke_model(
-            modelId=BEDROCK_MODEL_ID,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 2048,
-                "temperature": 1.0,
-                "messages": [{"role": "user", "content": prompt}],
-            }),
+    # Bedrockはプロンプトの必須条件（例: 初級コースに観光地/展望台を最低1箇所含める）に
+    # 従わない出力を稀に返す。1回の生成は約9秒・Timeout=30秒のため、同一リクエスト内で
+    # 1回だけ再試行してからユーザーにエラーを返す（2026-09-06発見: 連続失敗が実発生）。
+    courses = None
+    text = ""
+    for attempt in range(2):
+        seed = random.randint(100000, 999999)
+        prompt = PROMPT_TEMPLATE.format(
+            lat=lat,
+            lon=lon,
+            weather=weather,
+            temp=temp,
+            seed=seed,
+            preferences_section=preferences_section,
+            excluded_places_section=excluded_places_section,
         )
-        result = json.loads(response["body"].read())
-        text = result["content"][0]["text"]
-        usage = result.get("usage", {})
-        print(f"[Bedrock] in={usage.get('input_tokens', 0)}, out={usage.get('output_tokens', 0)}")
-    except Exception as e:
-        print(f"[ERROR] Bedrock: {e}")
-        return {
-            "statusCode": 500,
-            "headers": cors,
-            "body": json.dumps({"error": "AI service error"}),
-        }
 
-    try:
-        json_match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not json_match:
-            raise ValueError("No JSON found in response")
-        data = json.loads(json_match.group())
-        courses = normalize_courses(data["courses"], excluded_places)
-        if len(courses) != len(COURSE_PROFILES):
-            raise ValueError("AI response did not meet all course requirements")
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        print(f"[ERROR] Parse: {e}\nRaw: {text}")
-        return {
-            "statusCode": 500,
-            "headers": cors,
-            "body": json.dumps({"error": "Failed to parse AI response"}),
-        }
+        try:
+            response = bedrock.invoke_model(
+                modelId=BEDROCK_MODEL_ID,
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 2048,
+                    "temperature": 1.0,
+                    "messages": [{"role": "user", "content": prompt}],
+                }),
+            )
+            result = json.loads(response["body"].read())
+            text = result["content"][0]["text"]
+            usage = result.get("usage", {})
+            print(f"[Bedrock] in={usage.get('input_tokens', 0)}, out={usage.get('output_tokens', 0)}")
+        except Exception as e:
+            print(f"[ERROR] Bedrock (attempt {attempt + 1}): {e}")
+            if attempt == 1:
+                return {
+                    "statusCode": 500,
+                    "headers": cors,
+                    "body": json.dumps({"error": "AI service error"}),
+                }
+            continue
+
+        try:
+            json_match = re.search(r"\{.*\}", text, re.DOTALL)
+            if not json_match:
+                raise ValueError("No JSON found in response")
+            data = json.loads(json_match.group())
+            courses = normalize_courses(data["courses"], excluded_places)
+            if len(courses) != len(COURSE_PROFILES):
+                raise ValueError("AI response did not meet all course requirements")
+            break
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print(f"[ERROR] Parse (attempt {attempt + 1}): {e}\nRaw: {text}")
+            if attempt == 1:
+                return {
+                    "statusCode": 500,
+                    "headers": cors,
+                    "body": json.dumps({"error": "Failed to parse AI response"}),
+                }
 
     # 二段階レスポンス: 距離・スポット座標・目的地天気の実データ取得（enrich_course）は
     # ここでは行わず、AI推定値のままここで即座に返す。実データ取得はフロントが詳細画面を
