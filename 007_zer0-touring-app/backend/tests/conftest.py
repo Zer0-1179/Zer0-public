@@ -27,6 +27,10 @@ def module():
     })
     lf.cloudwatch.put_metric_data = MagicMock()
     lf.s3.put_object = MagicMock()
+    # _build_anchor_section（/api/suggest の目的地アンカー生成、2026-09-06追加）が呼ぶ
+    # 逆ジオコーディング。実ネットワーク呼び出しを避けるため既定でダミー地名を返すようにし、
+    # 個別テストは必要に応じて上書きする。
+    lf.nominatim_reverse = MagicMock(return_value="テストアンカー地名")
     return lf
 
 

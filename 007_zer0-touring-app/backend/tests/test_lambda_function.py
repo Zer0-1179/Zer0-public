@@ -437,6 +437,26 @@ def test_build_anchor_section_lists_all_three_bands_with_distinct_distances(modu
     assert module._ANCHOR_STRAIGHT_KM["初級"] < module._ANCHOR_STRAIGHT_KM["中級"] < module._ANCHOR_STRAIGHT_KM["上級"]
 
 
+def test_build_anchor_section_uses_reverse_geocoded_place_name(module, monkeypatch):
+    """アンカーは座標の説明文だけでなく、逆ジオコーディングで確定させた実在地名を
+    プロンプトに埋め込むこと（2026-09-06発見: 座標・方角・距離の説明だけでは、AIが
+    その制約を無視して大きく離れた実在地名を選ぶ頻度が高いことが本番検証で判明したため、
+    「地名そのものをそのまま使わせる」方式に強化した）。"""
+    monkeypatch.setattr(module, "nominatim_reverse", MagicMock(return_value="テスト市テスト町"))
+    section = module._build_anchor_section(35.6, 139.6)
+    assert section.count("テスト市テスト町") == 3  # 3帯域すべてで採用されること
+    assert "そのまま採用すること" in section
+
+
+def test_build_anchor_section_falls_back_to_direction_when_reverse_geocode_fails(module, monkeypatch):
+    """逆ジオコーディングが失敗する地点（海上等）では、地名の代わりに方角・距離の
+    説明文にフォールバックすること（地名なしでも生成自体は継続できるようにする）。"""
+    monkeypatch.setattr(module, "nominatim_reverse", MagicMock(return_value=None))
+    section = module._build_anchor_section(35.6, 139.6)
+    assert "実在する地名" in section
+    assert "そのまま採用すること" not in section
+
+
 def test_suggest_prompt_includes_anchor_section(module, mock_context, monkeypatch):
     """/api/suggest が実際にBedrockへ渡すプロンプトに目的地アンカー（方角・距離）の
     説明文が含まれること（2026-09-06追加: 距離帯の抽象指示だけではAIの地理感覚が
@@ -465,6 +485,62 @@ def test_suggest_prompt_includes_anchor_section(module, mock_context, monkeypatc
     assert len(captured_prompts) == 1
     assert "目的地アンカー" in captured_prompts[0]
     assert "初級" in captured_prompts[0] and "中級" in captured_prompts[0] and "上級" in captured_prompts[0]
+
+
+def test_suggest_computes_anchor_once_per_request_not_per_attempt(module, mock_context, monkeypatch):
+    """目的地アンカーは逆ジオコーディングを3回（3帯域分）伴うため、Bedrockへの再試行のたびに
+    作り直すとLambda30秒制約への時間コストが倍になってしまう。1リクエストにつき1回だけ
+    算出し、再試行時は同じアンカーを再提示するだけにすること（2026-09-06追加）。"""
+    monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())
+    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.6, 139.6)))
+    reverse_mock = MagicMock(return_value="テストアンカー地名")
+    monkeypatch.setattr(module, "nominatim_reverse", reverse_mock)
+
+    invalid_courses = valid_courses()
+    invalid_courses[0]["outbound_spots"] = [{"name": "道の駅 テスト", "type": "道の駅"}]  # 観光地/展望台なし
+
+    def make_response(courses):
+        return {"body": MagicMock(read=lambda: json.dumps({
+            "content": [{"text": json.dumps({"courses": courses}, ensure_ascii=False)}]
+        }).encode())}
+
+    mock_invoke = MagicMock(side_effect=[make_response(invalid_courses), make_response(valid_courses())])
+    monkeypatch.setattr(module.bedrock, "invoke_model", mock_invoke)
+
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
+             "headers": {"x-forwarded-for": "1.2.3.4"},
+             "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
+    resp = module.lambda_handler(event, mock_context)
+
+    assert mock_invoke.call_count == 2  # Bedrockは2回呼ばれるが
+    assert reverse_mock.call_count == 3  # アンカーの逆ジオコーディングは3帯域分の1回きり
+    assert resp["statusCode"] == 200
+
+
+def test_destination_distance_plausible_skips_geocode_when_matches_anchor(module, monkeypatch):
+    """destinationがアンカーの実在地名と完全一致する場合、ジオコーディングを省略して
+    Trueを即返すこと。アンカー自体が帯域上限に対して十分小さい距離で算出されているため、
+    地名が一致する時点で改めて検証する意味がない。目的地アンカー導入後にNominatim呼び出しが
+    往復2回分に増え、Lambda30秒制約に対して実測Duration26〜28秒・500エラーを観測した
+    ための高速化（2026-09-06追加）。"""
+    geocode_mock = MagicMock(return_value=(35.6, 139.6))
+    monkeypatch.setattr(module, "nominatim_geocode", geocode_mock)
+    course = {"destination": "朝霞市", "distance_range_km": {"min": 20, "max": 49}}
+    anchor = {"name": "朝霞市", "lat": 35.8, "lon": 139.6, "distance_km": 13.0, "bearing": 0}
+    assert module._destination_distance_plausible(course, 35.6, 139.6, anchor) is True
+    assert not geocode_mock.called
+
+
+def test_destination_distance_plausible_still_geocodes_when_not_matching_anchor(module, monkeypatch):
+    """destinationがアンカー名と一致しない（AIが別のランドマークを選んだ）場合は、
+    従来通りジオコーディングして検証すること（高速化の対象外）。"""
+    geocode_mock = MagicMock(return_value=(35.9, 139.6))  # 遠い場所（初級の限界を超える想定）
+    monkeypatch.setattr(module, "nominatim_geocode", geocode_mock)
+    course = {"destination": "別の観光地", "distance_range_km": {"min": 20, "max": 49}}
+    anchor = {"name": "朝霞市", "lat": 35.8, "lon": 139.6, "distance_km": 13.0, "bearing": 0}
+    module._destination_distance_plausible(course, 35.6, 139.6, anchor)
+    assert geocode_mock.called
 
 
 def test_suggest_final_attempt_still_checks_and_emits_metric_when_implausible(module, mock_context, monkeypatch):
