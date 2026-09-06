@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="Page-1" id="diagram-1">
-    <mxGraphModel dx="1768" dy="1051" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1350" background="#FFFFFF" math="0" shadow="0">
+    <mxGraphModel dx="2020" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1350" background="#FFFFFF" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -161,11 +161,11 @@
         <mxCell id="e-lambdasuggest-cwlogs" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;strokeWidth=2;" target="g-cwlogs">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e-lambdasuggest-dynamodb" edge="1" parent="1" source="svc-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.5;exitDx=0;exitDy=0;strokeWidth=2;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" target="svc-dynamodb">
+        <mxCell id="e-lambdasuggest-dynamodb" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;strokeWidth=2;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="g-dynamodb">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1060" y="835" />
-              <mxPoint x="1060" y="1044" />
+              <mxPoint x="960" y="960.03" />
+              <mxPoint x="1180" y="960.03" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -183,88 +183,82 @@
         <mxCell id="step-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="1" vertex="1">
           <mxGeometry height="28" width="28" x="326" y="850" as="geometry" />
         </mxCell>
-        <!-- ===== 2026-09-06 追加: 外部API(ジオコーディング・ルーティング) ===== -->
         <mxCell id="ext-ggeocode" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fontColor=#666666;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;" value="Google Geocoding API" vertex="1">
-          <mxGeometry height="140" width="140" x="1400" y="600" as="geometry" />
+          <mxGeometry height="140" width="140" x="1400" y="345" as="geometry" />
         </mxCell>
         <mxCell id="ext-ggeocode-icon" parent="ext-ggeocode" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#666666;fillColor=#666666;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt1;fontFamily=Helvetica;" value="&lt;div&gt;&lt;i&gt;目的地・立寄りスポットの&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;ジオコーディング&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="44" width="44" x="48" y="48" as="geometry" />
         </mxCell>
         <mxCell id="ext-groutes" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fontColor=#666666;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;" value="Google Routes API" vertex="1">
-          <mxGeometry height="140" width="140" x="1600" y="600" as="geometry" />
+          <mxGeometry height="140" width="140" x="1400" y="560" as="geometry" />
         </mxCell>
         <mxCell id="ext-groutes-icon" parent="ext-groutes" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#666666;fillColor=#666666;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt1;fontFamily=Helvetica;" value="&lt;div&gt;&lt;i&gt;実道路距離・&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;所要時間の取得&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="44" width="44" x="48" y="48" as="geometry" />
         </mxCell>
         <mxCell id="ext-nominatim" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fontColor=#666666;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;" value="Nominatim" vertex="1">
-          <mxGeometry height="140" width="140" x="1400" y="800" as="geometry" />
+          <mxGeometry height="140" width="140" x="1400" y="775" as="geometry" />
         </mxCell>
         <mxCell id="ext-nominatim-icon" parent="ext-nominatim" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#666666;fillColor=#666666;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt1;fontFamily=Helvetica;" value="&lt;div&gt;&lt;i&gt;ジオコーディング&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;(無料枠超過時)&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="44" width="44" x="48" y="48" as="geometry" />
         </mxCell>
         <mxCell id="ext-osrm" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fontColor=#666666;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;" value="OSRM" vertex="1">
-          <mxGeometry height="140" width="140" x="1600" y="800" as="geometry" />
+          <mxGeometry height="140" width="140" x="1400" y="990" as="geometry" />
         </mxCell>
         <mxCell id="ext-osrm-icon" parent="ext-osrm" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#666666;fillColor=#666666;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt1;fontFamily=Helvetica;" value="&lt;div&gt;&lt;i&gt;ルーティング&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;(無料枠超過時)&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="44" width="44" x="48" y="48" as="geometry" />
         </mxCell>
-        <mxCell id="e-lambdasuggest-ggeocode" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.964;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="ext-ggeocode">
+        <mxCell id="e-lambdasuggest-ggeocode" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1.01;exitY=0.346;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;exitPerimeter=0;" target="ext-ggeocode">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1030" y="799" />
-              <mxPoint x="1030" y="735" />
+              <mxPoint x="1080" y="816.5" />
+              <mxPoint x="1080" y="760" />
+              <mxPoint x="1360" y="760" />
+              <mxPoint x="1360" y="415" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-lambdasuggest-ggeocode-label" connectable="0" parent="e-lambdasuggest-ggeocode" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="優先" vertex="1">
-          <mxGeometry relative="1" x="-0.6" y="-1" as="geometry">
-            <mxPoint as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="e-lambdasuggest-groutes" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="ext-groutes">
+        <mxCell id="e-lambdasuggest-groutes" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="ext-groutes">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1045" y="817" />
-              <mxPoint x="1045" y="760" />
-              <mxPoint x="1670" y="760" />
+              <mxPoint x="1080" y="817" />
+              <mxPoint x="1080" y="760" />
+              <mxPoint x="1360" y="760" />
+              <mxPoint x="1360" y="630" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-lambdasuggest-groutes-label" connectable="0" parent="e-lambdasuggest-groutes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="優先" vertex="1">
-          <mxGeometry relative="1" x="0" y="-1" as="geometry">
+        <mxCell id="9YkpqeYW_2O1sK9Wp125-1" connectable="0" parent="e-lambdasuggest-groutes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;優先&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.7338" y="-1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-lambdasuggest-nominatim" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.65;exitDx=0;exitDy=0;entryX=0;entryY=0.964;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-nominatim">
+        <mxCell id="e-lambdasuggest-nominatim" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.65;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-nominatim">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1080" y="853" />
-              <mxPoint x="1080" y="935" />
+              <mxPoint x="1080" y="920.03" />
+              <mxPoint x="1360" y="920.03" />
+              <mxPoint x="1360" y="845" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-lambdasuggest-nominatim-label" connectable="0" parent="e-lambdasuggest-nominatim" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="フォールバック" vertex="1">
-          <mxGeometry relative="1" x="-0.5" y="-1" as="geometry">
-            <mxPoint as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="e-lambdasuggest-osrm" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeWidth=2;" target="ext-osrm">
+        <mxCell id="e-lambdasuggest-osrm" edge="1" parent="1" source="g-lambda-suggest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=1;exitY=0.653;exitDx=0;exitDy=0;entryX=0;entryY=0.443;entryDx=0;entryDy=0;strokeWidth=2;entryPerimeter=0;exitPerimeter=0;" target="ext-osrm">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1100" y="871" />
-              <mxPoint x="1100" y="960" />
-              <mxPoint x="1670" y="960" />
+              <mxPoint x="1080" y="853.4" />
+              <mxPoint x="1080" y="920.03" />
+              <mxPoint x="1360" y="920.03" />
+              <mxPoint x="1360" y="1052.03" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-lambdasuggest-osrm-label" connectable="0" parent="e-lambdasuggest-osrm" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="フォールバック" vertex="1">
-          <mxGeometry relative="1" x="0" y="-1" as="geometry">
+        <mxCell id="9YkpqeYW_2O1sK9Wp125-3" connectable="0" parent="e-lambdasuggest-osrm" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;フォールバック&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.0784" y="2" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <!-- ===== 凡例パネル(1360→1800へ右シフトし、外部API群のためのスペースを確保) ===== -->
         <mxCell id="legend-outer" connectable="0" parent="1" style="group" value="" vertex="1">
-          <mxGeometry height="730" width="500" x="1800" y="280" as="geometry" />
+          <mxGeometry height="730" width="500" x="1600" y="280" as="geometry" />
         </mxCell>
         <mxCell id="legend-bg" parent="legend-outer" style="verticalLabelPosition=bottom;verticalAlign=top;html=1;shape=mxgraph.basic.rect;fillColor2=none;strokeWidth=1;size=20;indent=5;fillColor=light-dark(#EDF3FF,#305363);strokeColor=#6c8ebf;" value="" vertex="1">
           <mxGeometry height="730" width="500" as="geometry" />
@@ -311,7 +305,7 @@
         <mxCell id="legend-aux-note" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;fontStyle=2;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;i&gt;SSM(GMaps使用カウント)・CloudWatch Logs・DynamoDB(ratelimit/share)はLambda(suggest)の補助経路。&lt;/i&gt;&lt;div&gt;&lt;i&gt;&lt;br&gt;&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;EventBridge→Lambda(stats)→S3は独立した日次バッチ(stats.json生成)。&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;既存の構成図(007_architecture.png)と同じリソース構成・配置に合わせている。&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="90" width="450" y="320" as="geometry" />
         </mxCell>
-        <mxCell id="external-api-legend" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;div&gt;&lt;b&gt;外部API(ジオコーディング・ルーティング、2026-09-06〜)&lt;/b&gt;&lt;/div&gt;&lt;div&gt;Lambda(zer0-touring-suggest)は目的地・立寄りスポットの座標取得にGoogle Geocoding API、実道路距離・所要時間の取得にGoogle Routes APIを優先利用する。&lt;/div&gt;&lt;div&gt;いずれも無料枠超過時やエラー時はNominatim(ジオコーディング)・OSRM(ルーティング)へ自動フォールバックする。&lt;/div&gt;" vertex="1">
+        <mxCell id="external-api-legend" parent="legend-container" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=light-dark(#666666,#CCCCCC);" value="&lt;div&gt;&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;外部API(ジオコーディング・ルーティング)&lt;/b&gt;&lt;/div&gt;&lt;div&gt;Lambda(zer0-touring-suggest)は目的地・立寄りスポットの座標取得にGoogle Geocoding API、実道路距離・所要時間の取得にGoogle Routes APIを優先利用する。&lt;/div&gt;&lt;div&gt;いずれも無料枠超過時やエラー時はNominatim(ジオコーディング)・OSRM(ルーティング)へ自動フォールバックする。&lt;/div&gt;" vertex="1">
           <mxGeometry height="120" width="450" y="420" as="geometry" />
         </mxCell>
         <mxCell id="legend-line-group" parent="legend-outer" style="group;fontFamily=Helvetica;fillColor=light-dark(#F5F5F5,#29393B);strokeColor=#666666;" value="" vertex="1">
