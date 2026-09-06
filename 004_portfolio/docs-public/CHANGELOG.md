@@ -390,3 +390,10 @@
 - 当初は001〜008全プロジェクトの`architecture`フィールドをSVGへ全面切り替えする案だったが、実装前に調査したところ各プロジェクトの`_architecture_plugin_flowdot.svg`はAWSアイコンの埋め込みラスターデータにより1.3〜1.7MBと大きく（svgoで最適化しても2%程度しか縮まない）、既存のPNG（約200〜280KB）から5〜8倍の重量増になることが判明。加えて`architecture`フィールドはOGP画像（`ogImage`）にも流用されており、SVGはSNS共有プレビューとして機能しないため全面切り替え自体が不適切と判断
 - 折衷案として、`Project`型に新規`architectureSvg`フィールドを追加（`/images/{番号}_architecture.svg`、001〜008全件分の`_plugin_flowdot.svg`を`src/public/images/`へ配置）。一覧ページのカード・OGP画像は従来通りPNG（`architecture`）を維持し、`ImageLightbox.astro`に新設した`hiresSrc`props経由で**詳細ページの拡大表示（ズーム時）のみ**アニメーション付きSVGに差し替える方式を採用。初期表示の軽量さとSNS共有互換性を保ったまま、実際に構成図を詳しく見たいユーザーだけがアニメーション付きの高精細版を見られるようにした
 - `npm run build`型チェック・`astro dev`でのHTML出力確認（一覧ページ=PNG、詳細ページの`data-lightbox-src`=SVG、OGP=PNG）、SVGのcontent-type（`image/svg+xml`）確認後、`bash scripts/deploy.sh`で本番デプロイ。本番URLでも同様に一覧=PNG・拡大表示=SVG・OGP=PNGであることを確認済み
+
+### 構成図拡大表示SVGで④Lambda→RSSのフロードットが流れない不具合を修正
+
+- ユーザーから「④のLambdaからRSSまではドットが流れていないけど正常？」と指摘。調査の結果、正常ではなく抜け漏れだった
+- 原因は`build_architecture_flowdot.py`の004設定`hops`に`e-apigw-lambda`までの4本しか登録されておらず、Lambda→RSSのエッジが未登録だったこと。このエッジは`.drawio`内で他の矢印と違い`e-lambda-rss`のような命名規則付きIDではなくdraw.ioの自動生成ID（`AwdYved6b948T5VhJU04-3`）のままだったため、hops登録時に見落とされていた（2026-09-05に008で見つかった「矢印の抜け漏れ」バグと同種）
+- `004_architecture_plugin.drawio`・`.drawio.svg`双方で該当エッジのIDを`e-lambda-rss`にリネーム（エッジラベル子セルの`parent`参照も追従）した上で、`build_architecture_flowdot.py`の004 hopsに5本目として追加し`_flowdot.svg`を再生成（主要フロー`main=5/5`に増加）
+- `src/public/images/004_architecture.svg`へ反映・ビルド・`bash scripts/deploy.sh`でデプロイ後、本番URLの画像とローカルファイルのMD5一致を確認済み

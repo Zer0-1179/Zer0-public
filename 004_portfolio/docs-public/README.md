@@ -147,3 +147,8 @@ bash scripts/deploy.sh
 - 004自体の構成図が2026-09-05の一括更新（新様式=draw.ioプラグイン様式）で対象外のまま据え置かれていたのを修正
 - 構成図の埋め込みはPNG（静止画）のためアニメーションドットが表示されない問題に対応。`Project`型に`architectureSvg`フィールドを新設し、一覧ページ・OGP画像は軽量なPNGを維持したまま、詳細ページの拡大表示（ズーム時）だけアニメーション付きSVGに差し替える方式を採用（SVGは1.3〜1.7MBと重くOGP非対応のため全面切り替えは見送り）
 - `bash scripts/deploy.sh`で本番デプロイ後、一覧=PNG・拡大表示=SVG・OGP=PNGであることを本番で確認済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
+
+#### 構成図拡大表示SVGの④Lambda→RSSフロードット抜け漏れを修正
+
+- `build_architecture_flowdot.py`の004設定でLambda→RSSエッジが未登録だったため、通信フローのオレンジドットが4本目（APIGateway→Lambda）までしか流れず5本目が欠落していた不具合を修正
+- 該当エッジにdraw.io自動生成IDではなく`e-lambda-rss`という命名規則付きIDを振り直して登録し、`main=5/5`で全区間にドットが流れることを確認。本番デプロイ・MD5一致確認済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
