@@ -567,21 +567,21 @@ _ANCHOR_STRAIGHT_KM = {
 }
 
 
-# 逆ジオコーディングで実在地名まで確定させる帯域。本番検証でDuration実測26〜28秒
-# （Lambda Timeout=30秒に対し余裕僅か）を確認したため、3帯域全てを逆ジオコーディングすると
-# 時間コストが大きすぎる（1回1〜1.8秒×3帯域）。過去の実障害（2026-09-06発見）を帯域別に見ると、
-# 初級(実測往復270km・314km、目安の5〜6倍)・中級(実測238km・337km、目安の2.4〜3.4倍)は
-# AIの「距離の推測」自体が大きく外れていたのに対し、上級の実障害(実測436km)は目的地の
-# 距離感ではなく経由地選択による大回り（_is_on_routeの迂回率判定で別途修正済み）が主因だった。
-# そのため上級は逆ジオコーディングを省略し方角・距離の説明のみとし、時間予算を初級・中級に
-# 優先配分する（上級は帯域の許容幅も最も広く、実測との乖離はenrich時の再分類フォールバックが
-# 引き続き保険になる）。
-_ANCHOR_REVERSE_GEOCODE_DIFFICULTIES = {"初級", "中級"}
+# 逆ジオコーディングで実在地名まで確定させる帯域。当初は時間予算節約のため上級を除外していたが
+# （本番検証でDuration実測26〜28秒とLambda30秒制約への余裕が乏しかったため）、除外した状態で
+# 実測検証したところ上級コースの実測距離が355km・363km（帯域上限300kmを超過）になる事例が
+# 4件中2件と高頻度で発生した。上級の過去の実障害（実測436km）は経由地の大回り
+# （_is_on_routeの迂回率判定で別途修正済み）だけでなく、目的地そのものの距離感がAIにとって
+# 一番狂いやすい帯域（許容範囲が100〜300kmと広い分、AIが際限なく遠い場所を選びがち）である
+# ことが実測で判明したため、正確性を優先し3帯域全てを対象に戻した（2026-09-06）。
+# 時間予算は_destination_distance_plausibleのアンカー完全一致時ジオコーディング省略と
+# 組み合わせて確保する。
+_ANCHOR_REVERSE_GEOCODE_DIFFICULTIES = {"初級", "中級", "上級"}
 
 
 def _compute_anchors(origin_lat, origin_lon):
     """3帯域それぞれについて、現在地からランダムな方角・目安距離のアンカー地点を算出し、
-    逆ジオコーディングで実在の地名まで確定させる（上級を除く。理由は上記コメント参照）。
+    逆ジオコーディングで実在の地名まで確定させる。
     戻り値は {difficulty: {"name", "lat", "lon", "distance_km", "bearing"}} の辞書。
 
     座標・方角・距離を「説明」として渡すだけでは、AIがその制約を無視して大きく離れた
@@ -1431,12 +1431,11 @@ def lambda_handler(event, context):
             # 受け入れるしかないが、チェック自体は行いメトリクスで可視化する
             # （実測との乖離はenrich時の再分類フォールバックが最終的な保険）。
             check_threshold = DEST_CHECK_MIN_REMAINING_MS if attempt == 0 else DEST_CHECK_FINAL_MIN_REMAINING_MS
-            # 上級は_ANCHOR_REVERSE_GEOCODE_DIFFICULTIESの対象外（実在地名アンカーを持たない）
-            # ため、このチェックでの検証対象からも外す（時間予算節約。理由は_compute_anchorsの
-            # コメント参照。上級の実測乖離はenrich時の再分類フォールバックで引き続き保険される）。
-            check_targets = [c for c in courses if c.get("difficulty") != "上級"]
+            # 3帯域すべてを検証対象にする（上級を対象外にしたところ、実測検証で上級コースの
+            # 実測距離が帯域上限300kmを超える事例が4件中2件と高頻度で発生したため、2026-09-06に
+            # 全帯域へ戻した。理由は_compute_anchorsのコメント参照）。
             if context.get_remaining_time_in_millis() > check_threshold:
-                if not all(_destination_distance_plausible(c, lat, lon, anchors.get(c.get("difficulty"))) for c in check_targets):
+                if not all(_destination_distance_plausible(c, lat, lon, anchors.get(c.get("difficulty"))) for c in courses):
                     if attempt == 0:
                         print(f"[suggest] attempt {attempt + 1}: 目的地の距離感が帯域と乖離、作り直す")
                         courses = None
