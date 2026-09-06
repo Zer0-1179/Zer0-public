@@ -356,3 +356,12 @@
 - `_destination_distance_plausible`の事前チェックは「遠すぎないか」の上限しか検査しておらず、この種の異常な近さは素通りしていた。上限（`profile_max * DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)`）と対称に、`profile_min / DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)`を下限として追加
 - 実際の事故ケース（上級・直線4km）で計算すると下限は約25.6kmとなり、正しく「作り直す」対象として検知されることを確認
 - 回帰テスト1件追加（バックエンド計50件）。本番デプロイ後、中野区起点で複数回`/api/suggest`を実行し全コースが帯域内・Duration最大26秒（30秒に対し約4秒の余裕）であることを確認
+
+### ジオコーディング・ルーティングをNominatim/OSRMからGoogle Maps Platformへ全面移行
+
+- 上記「真鶴岬」誤マッチ事故を受け、ユーザーがGoogle Cloudで新規プロジェクト`zer0-touring-maps`を作成しGeocoding API・Routes APIを有効化、この2つのみ許可するAPI制限付きAPIキーを発行。AWS側（`infra/cfn-touring.yaml`の`GoogleMapsApiKey`パラメータ、Lambda環境変数`GOOGLE_MAPS_API_KEY`）へも設定済み
+- **ジオコーディング**: `geocode_place`/`reverse_geocode_place`という統一ディスパッチャを新設し、`GOOGLE_MAPS_API_KEY`設定時はGoogle Geocoding APIを優先、0件ヒット・APIエラー・無料枠超過（月10,000件、別カウンタ`geocode-gmaps#{年月}`で管理）時のみ既存のNominatimへフォールバックする方式に変更。目的地の直線距離チェック（`_destination_distance_plausible`）・アンカー算出（`_compute_anchors`）は既にこのディスパッチャ経由になっていたが、実際にコースを組み立てる`geocode_and_filter_spots`（スポット座標）・`enrich_course`（目的地座標、真鶴岬誤マッチの直接の原因箇所）がNominatim直呼び出しのまま取り残されていたため、この2箇所をディスパッチャ経由に切り替えて初めてGoogleが実際に使われるようにした
+- **ルーティング**: 2025年3月の料金改定で新規Google Cloudプロジェクトでは有効化できなくなった旧Directions API（Legacy）を使っていた`google_maps_route`を、新しいRoutes API（`POST https://routes.googleapis.com/directions/v2:computeRoutes`、リクエストヘッダー`X-Goog-Api-Key`・`X-Goog-FieldMask: routes.legs.duration,routes.legs.distanceMeters`必須）へ全面書き換え。無料枠「Compute Routes - Essentials」（月10,000件、中間経由地10個以下・高度機能不使用時のSKU）に収めるため`routingPreference`は明示的に`TRAFFIC_UNAWARE`を指定（`TRAFFIC_AWARE`系はProティア課金に切り替わるため使用しない）。呼び出し元（`enrich_course`）のインターフェース・往路/復路のleg分割ロジックは変更なし
+- 回帰テスト17件追加（バックエンド計67件）。Google API呼び出しは`urllib.request.urlopen`のモックで検証し実ネットワーク呼び出しは行わない。Googleフォールバック挙動・Routes APIレスポンス解析（`duration`の`"1200s"`形式パース含む）・空routes配列・HTTPError発生時の3パターンを個別にテスト
+- **本番検証**: `/api/suggest`を5回実行し全て200 OK（実測Duration 12.1〜25.0秒、旧Nominatim/OSRM構成の実測13.3〜26.0秒と同等かやや高速）。`/api/enrich`を3コースで実行し、Duration 1.2〜3.9秒（旧OSRM構成の実測6.2〜7.2秒から大幅に高速化）。CloudWatchログで`[google-geocode]`・`[google-reverse-geocode]`・`[google-route]`が実際に出力されGoogle側が使われていることを確認。地理的に遠すぎる目的地（例: 起点から371km先の奈良県桜井市）は従来通り`MAX_WAYPOINT_KM`の安全上限で正しく`SKIP`されAI推定値が維持されることも確認。「真鶴岬」を直接Google Geocoding APIへ問い合わせ、正しく神奈川県真鶴町（起点から直線約65km）へ解決されることを個別に確認（従来のNominatim誤マッチである渋谷区内の地点は再現しなくなった）
+- **既知の限界**: Nominatim/OSRMへのフォールバック経路自体は残しているため、Google側が無料枠超過・障害等になった場合は精度が旧構成相当（1req/秒制限あり）まで低下する。Google Cloud側の予算アラートはAPI呼び出し実績が課金画面に反映され次第、別途ユーザーが設定予定
