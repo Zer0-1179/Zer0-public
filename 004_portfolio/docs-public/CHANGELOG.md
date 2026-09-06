@@ -375,3 +375,11 @@
 - SVGを直接ラスタライズする際、cairosvgはdraw.io特有のシェイプ記法で一部アーティファクトが出たため、忠実度の高いheadless Chromiumのスクリーンショットに切り替えて対応
 - `bash scripts/deploy.sh`で本番デプロイ後、7件全ての本番URLの画像とローカルファイルのMD5一致を確認済み
 - 004自体の構成図（`004_architecture.png`）は対象外（別系統のため変更なし）
+
+## 2026-09-06
+
+### 004自身の構成図を新様式（draw.ioプラグイン様式）へ反映漏れ修正
+
+- ユーザーから「実績ページで004のカードだけ構成図が古い」と指摘。2026-09-05の一括更新で001〜003・005〜008は新様式（プラグイン様式）へ切り替えたが、004自体の構成図は「別系統のため対象外」として意図的に据え置いたままだったのが原因（`images/004_architecture_plugin.drawio`・`_flowdot.svg`は既に9/5時点で作成済みだったが、`src/public/images/004_architecture.png`への反映だけが漏れていた）
+- 既存の`004_architecture_plugin.drawio`をdraw.io CLIでPNGエクスポートし、PIL（LANCZOS圧縮+ADAPTIVE 256色パレット、幅上限2600px）で圧縮して`src/public/images/004_architecture.png`を上書き
+- `bash scripts/deploy.sh`で本番デプロイ後、本番URLの画像とローカルファイルのMD5一致を確認済み
