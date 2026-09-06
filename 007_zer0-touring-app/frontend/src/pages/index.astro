@@ -1264,9 +1264,7 @@
                 <p class="route-summary">${routeLine}</p>
                 ${tagsHtml?`<div class="course-tags">${tagsHtml}</div>`:''}
                 <div class="card-info-row">
-                  <span>🛣 往復${c.distance_verified ? '実測' : '目安'} ${d.total}km</span>
-                  <span class="card-info-sep">·</span>
-                  <span>⏱ 片道${fmtHours(c.duration_hours)}</span>
+                  <span>🛣 ${d.total}km</span>
                   <span class="card-info-sep">·</span>
                   <span>🏁 ${escHtml(c.destination)}</span>
                 </div>
@@ -1457,11 +1455,8 @@
           `<span class="dist-tag ${d.cls}">${d.icon} ${d.rangeMatched ? `${d.label}・${d.range}` : '距離条件外'}</span>`;
         document.getElementById('detail-name').textContent=c.name;
         const outboundHours=Number(c.duration_hours) || 0;
-        const rh=Number(c.return_hours ?? outboundHours) || outboundHours;
         document.getElementById('detail-meta').innerHTML=
-          `<span class="meta-pill-lg">🛣 往復${c.distance_verified ? '実測' : '目安'} ${d.total}km</span>`+
-          `<span class="meta-pill-lg">⏱ 片道 ${fmtHours(outboundHours)}</span>`+
-          `<span class="meta-pill-lg">🔄 往復 ${fmtHours(outboundHours+rh)}</span>`+
+          `<span class="meta-pill-lg">🛣 ${d.total}km</span>`+
           `<span class="meta-pill-lg">🏁 ${escHtml(c.destination)}</span>`;
         document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${escHtml(h)}</li>`).join('');
         document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${escHtml(r)}</span>`).join('');
