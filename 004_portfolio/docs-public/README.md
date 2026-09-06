@@ -152,3 +152,7 @@ bash scripts/deploy.sh
 
 - `build_architecture_flowdot.py`の004設定でLambda→RSSエッジが未登録だったため、通信フローのオレンジドットが4本目（APIGateway→Lambda）までしか流れず5本目が欠落していた不具合を修正
 - 該当エッジにdraw.io自動生成IDではなく`e-lambda-rss`という命名規則付きIDを振り直して登録し、`main=5/5`で全区間にドットが流れることを確認。本番デプロイ・MD5一致確認済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
+
+#### 構成図SVGがブラウザのダークモード設定に連動して黒背景になる不具合を修正
+
+- 007の構成図拡大表示で背景が黒っぽく表示されるとの報告。draw.ioの`color-scheme: light dark`+`light-dark()`によるダーク/ライト自動切替が原因（他7プロジェクトは元々`light`固定でこの問題は無かった）。`build_architecture_flowdot.py`で`color-scheme: light`に強制する処理を追加し、007のみ影響ありと確認して再生成・本番デプロイ済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照

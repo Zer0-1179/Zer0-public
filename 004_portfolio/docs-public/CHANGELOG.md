@@ -397,3 +397,10 @@
 - 原因は`build_architecture_flowdot.py`の004設定`hops`に`e-apigw-lambda`までの4本しか登録されておらず、Lambda→RSSのエッジが未登録だったこと。このエッジは`.drawio`内で他の矢印と違い`e-lambda-rss`のような命名規則付きIDではなくdraw.ioの自動生成ID（`AwdYved6b948T5VhJU04-3`）のままだったため、hops登録時に見落とされていた（2026-09-05に008で見つかった「矢印の抜け漏れ」バグと同種）
 - `004_architecture_plugin.drawio`・`.drawio.svg`双方で該当エッジのIDを`e-lambda-rss`にリネーム（エッジラベル子セルの`parent`参照も追従）した上で、`build_architecture_flowdot.py`の004 hopsに5本目として追加し`_flowdot.svg`を再生成（主要フロー`main=5/5`に増加）
 - `src/public/images/004_architecture.svg`へ反映・ビルド・`bash scripts/deploy.sh`でデプロイ後、本番URLの画像とローカルファイルのMD5一致を確認済み
+
+### 構成図SVGがブラウザのダークモード設定に連動して黒背景になる不具合を修正
+
+- ユーザーから、007の構成図を拡大表示すると背景が黒っぽいダークモードで表示されると報告
+- draw.ioの新様式は`color-scheme: light dark;` + `light-dark(#明るい色, #暗い色)`というCSS機能でダーク/ライト自動切替に対応しており、007の構成図SVGだけがこの設定でエクスポートされていた（他7プロジェクトは`color-scheme: light`のみでこの問題は無かった）。PNGとして静止画化していた頃はエクスポート時点の配色で固定されていたため気づかず、今回SVGを生で埋め込む方式（詳細ページの拡大表示、本日の別対応）に変えたことで、閲覧者のOS/ブラウザのダークモード設定がそのままSVGへ反映されるようになり表面化した
+- `build_architecture_flowdot.py`に`force_light_mode()`を追加し、`color-scheme: light dark;`を`color-scheme: light;`へ強制的に書き換えるようにした（CSS仕様上、`light-dark()`は最も近い祖先要素の`color-scheme`を見て解決するため、この1箇所の固定だけで子要素の配色も含め常にライト側に統一される）。全プロジェクトで`--all`再生成した結果、影響があったのは007のみ（`light_forced=True`）で他は無変更だったことを確認
+- `007_architecture.svg`を再生成・`src/public/images/`へ反映・`bash scripts/deploy.sh`でデプロイ後、本番URLのSVGで`color-scheme: light`固定を確認済み
