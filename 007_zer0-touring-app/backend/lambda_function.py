@@ -567,10 +567,22 @@ _ANCHOR_STRAIGHT_KM = {
 }
 
 
+# 逆ジオコーディングで実在地名まで確定させる帯域。本番検証でDuration実測26〜28秒
+# （Lambda Timeout=30秒に対し余裕僅か）を確認したため、3帯域全てを逆ジオコーディングすると
+# 時間コストが大きすぎる（1回1〜1.8秒×3帯域）。過去の実障害（2026-09-06発見）を帯域別に見ると、
+# 初級(実測往復270km・314km、目安の5〜6倍)・中級(実測238km・337km、目安の2.4〜3.4倍)は
+# AIの「距離の推測」自体が大きく外れていたのに対し、上級の実障害(実測436km)は目的地の
+# 距離感ではなく経由地選択による大回り（_is_on_routeの迂回率判定で別途修正済み）が主因だった。
+# そのため上級は逆ジオコーディングを省略し方角・距離の説明のみとし、時間予算を初級・中級に
+# 優先配分する（上級は帯域の許容幅も最も広く、実測との乖離はenrich時の再分類フォールバックが
+# 引き続き保険になる）。
+_ANCHOR_REVERSE_GEOCODE_DIFFICULTIES = {"初級", "中級"}
+
+
 def _compute_anchors(origin_lat, origin_lon):
     """3帯域それぞれについて、現在地からランダムな方角・目安距離のアンカー地点を算出し、
-    逆ジオコーディングで実在の地名まで確定させる。戻り値は
-    {difficulty: {"name", "lat", "lon", "distance_km", "bearing"}} の辞書。
+    逆ジオコーディングで実在の地名まで確定させる（上級を除く。理由は上記コメント参照）。
+    戻り値は {difficulty: {"name", "lat", "lon", "distance_km", "bearing"}} の辞書。
 
     座標・方角・距離を「説明」として渡すだけでは、AIがその制約を無視して大きく離れた
     実在地名を選んでしまう頻度が高いことが実測で判明した（2026-09-06発見: 「初級」の
@@ -579,15 +591,17 @@ def _compute_anchors(origin_lat, origin_lon):
     委ねず、あらかじめ逆ジオコーディングで確定させた実在地名そのものを渡すことで、
     AIの役割を「地理的な距離の推測」から「与えられた地名周辺の魅力探し」へ縮小させる。
     毎回ランダムな方角を選ぶことで生成の多様性も確保する。1リクエストにつき1回だけ
-    呼び出すこと（逆ジオコーディング3回・約4〜6秒を要するため、試行のたびに呼ぶと
-    Lambda30秒制約への時間コストが倍になる）。"""
+    呼び出すこと（逆ジオコーディングを試行のたびに呼ぶとLambda30秒制約への時間コストが
+    倍になる）。"""
     anchors = {}
     for profile in COURSE_PROFILES:
         base_km = _ANCHOR_STRAIGHT_KM[profile["difficulty"]]
         distance_km = round(base_km * random.uniform(0.85, 1.15), 1)  # ±15%のジッターで多様性を持たせる
         bearing = random.uniform(0, 360)
         a_lat, a_lon = _destination_point(origin_lat, origin_lon, distance_km, bearing)
-        place_name = nominatim_reverse(a_lat, a_lon)
+        place_name = None
+        if profile["difficulty"] in _ANCHOR_REVERSE_GEOCODE_DIFFICULTIES:
+            place_name = nominatim_reverse(a_lat, a_lon)
         anchors[profile["difficulty"]] = {
             "name": place_name, "lat": a_lat, "lon": a_lon,
             "distance_km": distance_km, "bearing": bearing,
@@ -1417,8 +1431,12 @@ def lambda_handler(event, context):
             # 受け入れるしかないが、チェック自体は行いメトリクスで可視化する
             # （実測との乖離はenrich時の再分類フォールバックが最終的な保険）。
             check_threshold = DEST_CHECK_MIN_REMAINING_MS if attempt == 0 else DEST_CHECK_FINAL_MIN_REMAINING_MS
+            # 上級は_ANCHOR_REVERSE_GEOCODE_DIFFICULTIESの対象外（実在地名アンカーを持たない）
+            # ため、このチェックでの検証対象からも外す（時間予算節約。理由は_compute_anchorsの
+            # コメント参照。上級の実測乖離はenrich時の再分類フォールバックで引き続き保険される）。
+            check_targets = [c for c in courses if c.get("difficulty") != "上級"]
             if context.get_remaining_time_in_millis() > check_threshold:
-                if not all(_destination_distance_plausible(c, lat, lon, anchors.get(c.get("difficulty"))) for c in courses):
+                if not all(_destination_distance_plausible(c, lat, lon, anchors.get(c.get("difficulty"))) for c in check_targets):
                     if attempt == 0:
                         print(f"[suggest] attempt {attempt + 1}: 目的地の距離感が帯域と乖離、作り直す")
                         courses = None
