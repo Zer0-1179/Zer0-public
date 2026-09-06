@@ -412,6 +412,98 @@ def test_suggest_retries_when_destination_geocode_fails(module, mock_context, mo
     assert resp["statusCode"] == 200
 
 
+# ── 目的地アンカー（方角・距離の事前指定）── ─────────────────────────────
+
+def test_destination_point_and_compass_label_are_consistent(module):
+    """_destination_point（球面三角法での地点算出）で得た地点への実際の直線距離・方位が、
+    指定した距離・方位角とほぼ一致すること（往復方向のズレ検知）。"""
+    lat, lon = 35.6, 139.6
+    for bearing in (0, 45, 90, 135, 180, 225, 270, 315):
+        dist_km = 50
+        d_lat, d_lon = module._destination_point(lat, lon, dist_km, bearing)
+        measured = module._haversine_km(lat, lon, d_lat, d_lon)
+        assert abs(measured - dist_km) < 0.5
+    assert module._compass_label(0) == "北"
+    assert module._compass_label(90) == "東"
+    assert module._compass_label(180) == "南"
+    assert module._compass_label(270) == "西"
+
+
+def test_build_anchor_section_lists_all_three_bands_with_distinct_distances(module):
+    """3帯域（初級・中級・上級）すべてのアンカーが出力され、距離が短い順になっていること
+    （距離帯の目安中央値から算出しているため、上級が最も遠いアンカーになるはず）。"""
+    section = module._build_anchor_section(35.6, 139.6)
+    assert "初級" in section and "中級" in section and "上級" in section
+    assert module._ANCHOR_STRAIGHT_KM["初級"] < module._ANCHOR_STRAIGHT_KM["中級"] < module._ANCHOR_STRAIGHT_KM["上級"]
+
+
+def test_suggest_prompt_includes_anchor_section(module, mock_context, monkeypatch):
+    """/api/suggest が実際にBedrockへ渡すプロンプトに目的地アンカー（方角・距離）の
+    説明文が含まれること（2026-09-06追加: 距離帯の抽象指示だけではAIの地理感覚が
+    大きく外れる事例が複数発生したため、具体的なアンカー地点で誘導する対策）。"""
+    monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())
+    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.6, 139.6)))
+
+    captured_prompts = []
+
+    def mock_invoke(**kwargs):
+        body = json.loads(kwargs["body"])
+        captured_prompts.append(body["messages"][0]["content"])
+        return {"body": MagicMock(read=lambda: json.dumps({
+            "content": [{"text": json.dumps({"courses": valid_courses()}, ensure_ascii=False)}]
+        }).encode())}
+
+    monkeypatch.setattr(module.bedrock, "invoke_model", MagicMock(side_effect=mock_invoke))
+
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
+             "headers": {"x-forwarded-for": "1.2.3.4"},
+             "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
+    resp = module.lambda_handler(event, mock_context)
+
+    assert resp["statusCode"] == 200
+    assert len(captured_prompts) == 1
+    assert "目的地アンカー" in captured_prompts[0]
+    assert "初級" in captured_prompts[0] and "中級" in captured_prompts[0] and "上級" in captured_prompts[0]
+
+
+def test_suggest_final_attempt_still_checks_and_emits_metric_when_implausible(module, mock_context, monkeypatch):
+    """以前は最終試行(attempt==1)は目的地の距離感チェック自体を行わずfail-openになっており、
+    「1回目は弾かれたが2回目も同様に地理感覚が外れた目的地を出す」ケースを完全に見逃していた
+    （2026-09-06発見: この経路で中級コースの実測往復距離が337kmになる事故が発生し、
+    CloudWatchログで両方の試行の目的地ジオコーディング結果を確認して裏付けた）。
+    最終試行はリトライできないため結果はそのまま返すが、チェック自体は行い
+    SuggestDestinationImplausibleFinal メトリクスで検知できるようにする。"""
+    monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())
+
+    # 初級コースの目的地が直線距離だけで100km以上離れている想定（毎試行・毎コースで同じ値を返す）
+    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(36.9, 140.9)))
+
+    def make_response(courses):
+        return {"body": MagicMock(read=lambda: json.dumps({
+            "content": [{"text": json.dumps({"courses": courses}, ensure_ascii=False)}]
+        }).encode())}
+
+    mock_invoke = MagicMock(side_effect=[make_response(valid_courses()), make_response(valid_courses())])
+    monkeypatch.setattr(module.bedrock, "invoke_model", mock_invoke)
+
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
+             "headers": {"x-forwarded-for": "1.2.3.4"},
+             "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
+    resp = module.lambda_handler(event, mock_context)
+
+    # 2回とも距離感が乖離しているため、attempt0で作り直し→attempt1(最終)は受け入れて返す
+    assert mock_invoke.call_count == 2
+    assert resp["statusCode"] == 200
+
+    metric_names = [
+        call.kwargs["MetricData"][0]["MetricName"]
+        for call in module.cloudwatch.put_metric_data.call_args_list
+    ]
+    assert "SuggestDestinationImplausibleFinal" in metric_names
+
+
 def test_enrich_post_updates_course_and_returns_it(module, monkeypatch):
     monkeypatch.setattr(module, "check_and_reserve_gmaps", MagicMock(return_value=False))
 
