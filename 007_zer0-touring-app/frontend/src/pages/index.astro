@@ -1264,8 +1264,6 @@
                 <p class="route-summary">${routeLine}</p>
                 ${tagsHtml?`<div class="course-tags">${tagsHtml}</div>`:''}
                 <div class="card-info-row">
-                  <span>🛣 ${d.total}km</span>
-                  <span class="card-info-sep">·</span>
                   <span>🏁 ${escHtml(c.destination)}</span>
                 </div>
               </div>
@@ -1456,7 +1454,6 @@
         document.getElementById('detail-name').textContent=c.name;
         const outboundHours=Number(c.duration_hours) || 0;
         document.getElementById('detail-meta').innerHTML=
-          `<span class="meta-pill-lg">🛣 ${d.total}km</span>`+
           `<span class="meta-pill-lg">🏁 ${escHtml(c.destination)}</span>`;
         document.getElementById('detail-highlights').innerHTML=(c.highlights??[]).map(h=>`<li>${escHtml(h)}</li>`).join('');
         document.getElementById('detail-roads').innerHTML=(c.road_types??[]).map(r=>`<span class="road-tag-lg">${ROAD[r]??'🚗'} ${escHtml(r)}</span>`).join('');
@@ -1470,7 +1467,7 @@
         document.getElementById('detail-outbound-section').style.display = outboundSpots.length ? '' : 'none';
         document.getElementById('detail-return-section').style.display   = returnSpots.length   ? '' : 'none';
         document.getElementById('detail-info').innerHTML=[
-          c.distance_verified && !d.rangeMatched ? `<div class="info-chip info-caution"><span>↩️</span><span>実測距離が目標帯を外れました。別コースをおすすめします。</span></div>`:'',
+          c.distance_verified && !d.rangeMatched ? `<div class="info-chip info-caution"><span>↩️</span><span>実測距離は目標帯と異なります。</span></div>`:'',
           c.return_note?`<div class="info-chip info-return"><span>🔄</span><span>帰路: ${escHtml(c.return_note)}</span></div>`:'',
           c.caution    ?`<div class="info-chip info-caution"><span>⚠️</span><span>${escHtml(c.caution)}</span></div>`:'',
           c.best_season?`<div class="info-chip info-season"><span>🌸</span><span>ベストシーズン: ${escHtml(c.best_season)}</span></div>`:'',
