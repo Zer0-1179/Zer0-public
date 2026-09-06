@@ -1,17 +1,20 @@
 ---
 interface Props {
   src: string;
+  /** 拡大表示（ライトボックス）時だけ使う高精細版。省略時はsrcをそのまま使う。
+   * 構成図のアニメーション付きSVG等、初期表示には重すぎるがズーム時なら許容できる画像を渡す用途。 */
+  hiresSrc?: string;
   alt: string;
   imgClass?: string;
 }
 
-const { src, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
+const { src, hiresSrc, alt, imgClass = 'w-full h-auto rounded' } = Astro.props;
 ---
 
 <button
   type="button"
   class="lightbox-trigger block w-full appearance-none border-0 bg-transparent p-0 text-left cursor-zoom-in"
-  data-lightbox-src={src}
+  data-lightbox-src={hiresSrc || src}
   data-lightbox-alt={alt}
   aria-label={`${alt}を拡大表示`}
 >

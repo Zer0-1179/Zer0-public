@@ -718,6 +718,13 @@ def test_suggest_prompt_includes_anchor_section(module, mock_context, monkeypatc
     # 全帯域（初級・中級・上級）の距離妥当性チェック（上限・下限とも）を通過する、
     # 現在地から直線約26km離れた座標を返す（3帯域の許容範囲が重なる区間）。
     monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(35.834, 139.6)))
+    # このテストの関心事はプロンプト内容のみ。アンカー座標はランダムな方位角で毎回変わるため、
+    # 固定モック座標(35.834,139.6)との実座標一致は保証できず、アンカー名ありのままだと
+    # anchor-drift検証（ANCHOR_MAX_DRIFT_KM、2026-09-06追加）が本テストの対象外の理由で
+    # 不安定に失敗する。anchor-drift自体は
+    # test_destination_distance_plausible_rejects_when_far_from_anchor_even_in_band 側で
+    # 個別に検証済みのため、ここではアンカー名なし（方角の説明のみ）にしてこの検証を切り離す。
+    monkeypatch.setattr(module, "nominatim_reverse", MagicMock(return_value=None))
 
     captured_prompts = []
 
@@ -795,6 +802,38 @@ def test_destination_distance_plausible_still_geocodes_when_not_matching_anchor(
     anchor = {"name": "朝霞市", "lat": 35.8, "lon": 139.6, "distance_km": 13.0, "bearing": 0}
     module._destination_distance_plausible(course, 35.6, 139.6, anchor)
     assert geocode_mock.called
+
+
+def test_destination_distance_plausible_rejects_when_far_from_anchor_even_in_band(module, monkeypatch):
+    """現在地からの直線距離だけを見ると帯域内に収まっていても、destinationの実座標が
+    アンカー座標から大きくズレている場合はFalseを返すこと。
+
+    2026-09-06本番incident: 中級アンカー「小ケ谷」（現在地から直線距離が帯域内)に対し、
+    AIが「奥多摩湖（小ケ谷周辺）」という、アンカー名を含みつつ実際はアンカーから
+    約41km離れた有名地名を目的地に選んだ。Google Geocodingがこの有名地名の座標を返し、
+    現在地からの直線距離（54km）だけは帯域チェックを通過してしまったため、実測往復168kmという
+    帯域超過（distance_range_matched=False）が/api/enrichまで検知されなかった。
+    アンカー名との文字列完全一致以外のケースでも、実座標とアンカー座標の距離を検証することで、
+    このような「アンカー名を修飾語として含むだけの無関係な有名地名」を作り直させる。"""
+    # アンカー座標(35.92, 139.45)から見て直線約41km離れた「奥多摩湖」相当の座標を返す。
+    # 現在地(35.6, 139.6)からは約42kmで、中級帯域(50-99km)のトレランス込み上限
+    # (99*1.5/2/1.3≒57km)には収まる距離。
+    geocode_mock = MagicMock(return_value=(35.78, 139.04))
+    monkeypatch.setattr(module, "geocode_place", geocode_mock)
+    course = {"destination": "奥多摩湖（小ケ谷周辺）", "distance_range_km": {"min": 50, "max": 99}}
+    anchor = {"name": "小ケ谷", "lat": 35.92, "lon": 139.45, "distance_km": 30.0, "bearing": 300}
+    assert module._destination_distance_plausible(course, 35.6, 139.6, anchor) is False
+
+
+def test_destination_distance_plausible_accepts_landmark_near_anchor(module, monkeypatch):
+    """アンカー名と完全一致しなくても、実座標がアンカーの近く（ANCHOR_MAX_DRIFT_KM以内）の
+    実在ランドマークであれば許容すること（アンカー地点そのものでなく、近傍の観光地・
+    ランドマークを採用してよいという既存のプロンプト仕様を壊さない）。"""
+    geocode_mock = MagicMock(return_value=(35.9, 139.40))  # アンカーから直線約5km
+    monkeypatch.setattr(module, "geocode_place", geocode_mock)
+    course = {"destination": "小ケ谷温泉郷", "distance_range_km": {"min": 50, "max": 99}}
+    anchor = {"name": "小ケ谷", "lat": 35.92, "lon": 139.45, "distance_km": 30.0, "bearing": 300}
+    assert module._destination_distance_plausible(course, 35.6, 139.6, anchor) is True
 
 
 def test_suggest_final_attempt_still_checks_and_emits_metric_when_implausible(module, mock_context, monkeypatch):
