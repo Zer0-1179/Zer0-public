@@ -12,11 +12,11 @@
 | 項目 | 内容 |
 | --- | --- |
 | URL | `https://touring.zer0-infra.com` |
-| 出発地取得 | 現在地（ブラウザ Geolocation API）または手動入力（Nominatim ジオコーディング） |
+| 出発地取得 | 現在地（ブラウザ Geolocation API）または手動入力（Google Geocoding API優先・Nominatimフォールバック） |
 | 天気取得 | Open-Meteo API（現在地・目的地の両方／無料・APIキー不要） |
 | AI提案 | Amazon Bedrock Claude Haiku（好みタグ反映・片道/往復時間・帰路・特徴タグ含む詳細コース生成） |
 | コース内容 | 初級（往復20〜49km）・中級（往復50〜99km）・上級（往復100km〜） + タグ・立ち寄りスポット（経路順）・帰路提案 |
-| 距離・時間 | **Google Maps Directions API（優先）** / OSRM（フォールバック）による往復の実道路距離・走行時間。詳細表示で実測値へ更新 |
+| 距離・時間 | **Google Routes API（優先）** / OSRM（フォールバック）による往復の実道路距離・走行時間。詳細表示で実測値へ更新 |
 | 天気比較 | 詳細画面に現在地 🏍️→ 目的地の天気比較ウィジェット（バイク走行アニメーション付き） |
 | 週間天気 | 現在地・目的地の7日間天気予報ストリップ（狙い目日ハイライト） |
 | シェア | Xシェア・URL短縮コピー（`POST /api/share` → `https://touring.zer0-infra.com/s/abc123`。OGP対応でSNS展開時にコース情報プレビューを表示） |
@@ -36,8 +36,8 @@
         └─▶ CloudFront（touring.zer0-infra.com）
               ├─ /* → S3（Astro static / HTML・CSS・JS）
               └─ /api/* → API Gateway → Lambda → Bedrock Claude Haiku
-                                                     ├─ Nominatim（ジオコーディング）
-                                                     ├─ Google Maps Directions API（走行時間）
+                                                     ├─ Google Geocoding API（ジオコーディング優先）/ Nominatim（フォールバック）
+                                                     ├─ Google Routes API（走行時間・距離優先）
                                                      ├─ OSRM（フォールバック距離）
                                                      └─ Open-Meteo（目的地天気）
 
@@ -53,9 +53,10 @@
 | 現在地取得 | ブラウザ Geolocation API |
 | 天気取得 | Open-Meteo API（現在地・目的地・7日間予報 / 無料・APIキー不要） |
 | AI提案 | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048） |
-| 距離・走行時間 | **Google Maps Directions API**（優先・月10,000件無料） + Nominatim（OSM ジオコーディング）→ OSRM フォールバック |
+| ジオコーディング | **Google Geocoding API**（優先・月10,000件無料）→ Nominatim（OSM、フォールバック） |
+| 距離・走行時間 | **Google Routes API**（`computeRoutes`、優先・月10,000件無料）→ OSRM フォールバック |
 | API | AWS Lambda（Python 3.14）+ API Gateway HTTP API |
-| 使用数管理 | Amazon DynamoDB（`zer0-touring-ratelimit` / `gmaps#{YYYY-MM}` キーで月間 Google Maps 使用数をアトミック管理） |
+| 使用数管理 | Amazon DynamoDB（`zer0-touring-ratelimit` / `gmaps#{YYYY-MM}`＝Routes API・`geocode-gmaps#{YYYY-MM}`＝Geocoding API、それぞれ独立カウンタでアトミック管理） |
 | レートリミット | Amazon DynamoDB（`zer0-touring-ratelimit`：IP 別・日別 3回制限 / TTL で翌々日自動削除） |
 | URL短縮・OGP | Amazon DynamoDB（`zer0-touring-share`：6文字ID・30日 TTL / Lambda が OGP HTML + リダイレクトを返す） |
 | コース履歴保存 | Amazon DynamoDB（`zer0-touring-history`：端末ID紐づけ・180日 TTL・最大30件 / `x-device-id`ヘッダーで識別） |
@@ -69,7 +70,7 @@
 
 ```text
 Landing（コースを探す）
-  │  📍現在地 / ✏️出発地を入力（Nominatim ジオコーディング）
+  │  📍現在地 / ✏️出発地を入力（Google Geocoding API優先・Nominatimフォールバック）
   │  好みスタイルタグ: 🏔峠道 🌊海沿い ♨️温泉 🍜グルメ 🌅絶景 🌳自然 🏯歴史 🛣ガッツリ走る ☕のんびり（3×3グリッド・複数選択可）
   └─▶ Loading（GPS/出発地取得中 → 天気確認中 → AI生成中）
         └─▶ コース一覧（スワイプカード / 1枚ずつ表示・横スワイプで切り替え）
@@ -126,22 +127,22 @@ btoa(encodeURIComponent(JSON.stringify(courseData)))
 JSON.parse(decodeURIComponent(atob(param)))
 ```
 
-### 6. Google Maps 優先 / OSRM フォールバック（高速対応ルーティング）
+### 6. Google Maps Platform 優先 / Nominatim・OSRM フォールバック（高速対応ルーティング）
 
-AI が推測した距離・時間を実際の道路データで上書きする。**月10,000件の無料枠内は Google Maps Directions API を優先**し、枠超過時は OSRM にフォールバックする。
+AI が推測した距離・時間を実際の道路データで上書きする。ジオコーディング・ルーティングともに **Google Maps Platform を優先**し、無料枠超過・APIエラー時のみ OSS 無料公開APIへフォールバックする（2026-09-06、Nominatimの誤マッチによる実障害を機に全面移行。旧Directions API（Legacy）は2025年3月の料金改定で新規プロジェクトでは有効化できないため、ルーティングは新しいRoutes API（`computeRoutes`）を使用）。
 
-1. 目的地名を **Nominatim**（OpenStreetMap ジオコーダー）で GPS 座標に変換
-2. **DynamoDB Conditional Update** で今月の Google Maps 使用カウントをアトミックに確認・予約（9,900 超なら OSRM へ）
-3. **Google Maps**: 高速道路を含む実走行時間・距離を取得
+1. 目的地名を **Google Geocoding API** で GPS 座標に変換（`bounds`パラメータで現在地周辺に偏らせ、`region=jp`指定）。無料枠超過・0件ヒット・APIエラー時のみ **Nominatim**（OpenStreetMap ジオコーダー）へフォールバック
+2. **DynamoDB Conditional Update** で今月の Google Geocoding API・Routes API それぞれの使用カウントを独立してアトミックに確認・予約（Routes APIは9,900超、Geocoding APIは9,500超で自動的にフォールバックへ）
+3. **Google Routes API**（`POST https://routes.googleapis.com/directions/v2:computeRoutes`、`routingPreference: TRAFFIC_UNAWARE`で無料枠「Compute Routes - Essentials」の範囲を維持）: 高速道路を含む実走行時間・距離を取得
 4. **OSRM フォールバック**: 実道路距離を取得し、距離帯別平均速度で所要時間を算出
    - ≥80km: 70km/h（高速想定）/ 40〜80km: 55km/h / <40km: 40km/h
 5. ジオコーディング失敗・異常値（500km超）は AI 推定値にフォールバック
 
-GMAPS_FREE_LIMIT を 10,000 ではなく **9,900** にしているのは 100 件のバッファを確保するため。DynamoDB Conditional Update によりアトミックに増分するため並列実行時でも上限を正確に守れる。
+GMAPS_FREE_LIMIT（Routes API）を 10,000 ではなく **9,900**、GEOCODE_FREE_LIMIT（Geocoding API）を **9,500** にしているのは、それぞれバッファを確保するため（Geocoding APIは1リクエストあたりの呼び出し回数が多いためバッファを広めに取る）。DynamoDB Conditional Update によりアトミックに増分するため並列実行時でも上限を正確に守れる。
 
 ### 7. 天気連動表示（現在地 + 目的地）
 
-現在地の天気を結果画面へフィードバックするだけでなく、Lambda が Nominatim でジオコーディングした目的地座標で **Open-Meteo を再取得**し、目的地の現在天気も返す。
+現在地の天気を結果画面へフィードバックするだけでなく、Lambda が Google Geocoding API（優先）/ Nominatim（フォールバック）でジオコーディングした目的地座標で **Open-Meteo を再取得**し、目的地の現在天気も返す。
 
 - **カード**: 目的地天気バッジ `📌 ☀️ 22℃` をカードヘッダー左下に表示
 - **詳細画面**: 現在地 ↔ 目的地の天気を横並び比較。中央にバイク🏍️が左から右へ走るアニメーション
@@ -166,13 +167,13 @@ iOS Safari はバックグラウンドに回った後に再フォアグラウン
 
 ### 11. Waypoint ジオコード＋方向フィルタ
 
-AI が生成した立ち寄りスポット名を Lambda 内で Nominatim（OSM）によりジオコーディングし、`origin → destination` のバウンディングボックス外のスポットをナビ・地図用の経由点から除外する。表示用の提案スポットは別配列に残すため、ジオコード失敗や方向不一致で観光地・道の駅・温泉／銭湯の表示が消えない。Google マップには検証済みの `lat,lon` 座標を優先して渡すことで誤ジオコーディングによるルート崩壊を防ぐ。
+AI が生成した立ち寄りスポット名を Lambda 内で Google Geocoding API（優先）/ Nominatim（フォールバック）によりジオコーディングし、`origin → destination` のバウンディングボックス外のスポットをナビ・地図用の経由点から除外する。表示用の提案スポットは別配列に残すため、ジオコード失敗や方向不一致で観光地・道の駅・温泉／銭湯の表示が消えない。Google マップには検証済みの `lat,lon` 座標を優先して渡すことで誤ジオコーディングによるルート崩壊を防ぐ。
 
 行き経由地（`outbound_spots`）と帰り立ち寄り（`return_spots`）を分離し、目的地を含めた全スポットをコース間でも重複排除する。端末内には直近60件を保存し、次回のAI提案ではデータ境界付きの除外条件として渡すことで、同じ場所の反復も抑える（1回の生成で目的地+スポットが最大12件程度増えるため、18件では2回の再検索で最初の除外対象が押し出され同じコースが再提案される不具合があり、2026-09-04に60件へ拡張）。AI出力は初級・中級・上級の3件すべてが距離帯・必須スポット・重複なしの条件を満たす場合だけ返す。各コースは観光地または展望台を含み、3コース全体では道の駅を1件以上、温泉・日帰り温泉・銭湯を1件以上必須とする。
 
 ### 12. 詳細取得APIの悪用防止
 
-`POST /api/enrich` はNominatim・Google Maps Directions・OSRMを呼び出すため、IP別・日別に9回（提案3回×各3コース）へ制限する。目的地・経由地点・座標も外部API呼び出し前に検証し、任意地点の検索プロキシとして使えないようにする。地図とGoogleマップナビには座標検証済みの経由地点だけを渡し、詳細取得前は目的地直行にする。
+`POST /api/enrich` はGoogle Geocoding API・Google Routes API・Nominatim・OSRMを呼び出すため、IP別・日別に9回（提案3回×各3コース）へ制限する。目的地・経由地点・座標も外部API呼び出し前に検証し、任意地点の検索プロキシとして使えないようにする。地図とGoogleマップナビには座標検証済みの経由地点だけを渡し、詳細取得前は目的地直行にする。
 
 ### 13. IPレートリミット（DynamoDB）
 
@@ -294,7 +295,7 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 }
 ```
 
-**所要時間**：純粋な走行時間のみ（休憩・観光時間は含まない）。Google Maps / OSRM の実データで AI 推定値を上書き。フロントエンド表示は「約X時間Y分」形式、分は10分単位で切り上げ。
+**所要時間**：純粋な走行時間のみ（休憩・観光時間は含まない）。Google Routes API / OSRM の実データで AI 推定値を上書き。フロントエンド表示は「約X時間Y分」形式、分は10分単位で切り上げ。
 
 ### GET /api/status
 
@@ -339,8 +340,8 @@ OGP メタタグ付き HTML を返しアプリへリダイレクト。SNS シェ
 ### Google Maps API キー
 
 1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成（または既存選択）
-2. **Maps Platform → Directions API** を有効化
-3. 認証情報 → API キーを作成
+2. **Maps Platform → Geocoding API** と **Routes API** の2つを有効化（2026-09-06〜。旧Directions API（Legacy）は2025年3月の料金改定で新規プロジェクトでは有効化できないため使用しない）
+3. 認証情報 → API キーを作成し、API制限でGeocoding API・Routes APIの2つのみ許可することを推奨
 4. Lambda 環境変数に設定:
 
 ```bash
@@ -350,7 +351,7 @@ aws lambda update-function-configuration \
   --region ap-northeast-1
 ```
 
-月10,000件の無料枠。月9,900件超で自動的に OSRM フォールバックへ切り替わるため実質0円で運用可能。
+Geocoding API・Routes APIともに月10,000件の無料枠（別カウンタで独立管理）。それぞれ月9,500件・9,900件超で自動的にNominatim・OSRMフォールバックへ切り替わるため実質0円で運用可能。
 
 ### Admin Token（レートリミットバイパス）
 
@@ -376,8 +377,11 @@ curl -X POST https://touring.zer0-infra.com/api/suggest \
 # Lambda ログ確認
 aws logs tail /aws/lambda/zer0-touring-suggest --follow --region ap-northeast-1
 
-# Google Maps 月間使用カウント確認（DynamoDB管理）
+# Google Routes API 月間使用カウント確認（DynamoDB管理）
 aws dynamodb get-item --table-name zer0-touring-ratelimit --key '{"pk":{"S":"gmaps#'$(date +%Y-%m)'"}}' --region ap-northeast-1
+
+# Google Geocoding API 月間使用カウント確認（Routes APIとは別カウンタ）
+aws dynamodb get-item --table-name zer0-touring-ratelimit --key '{"pk":{"S":"geocode-gmaps#'$(date +%Y-%m)'"}}' --region ap-northeast-1
 
 # フロントエンド再デプロイ（コード変更後、stats.jsonは--excludeで誤削除を防止）
 cd 007_Zer0_TouringApp/frontend && npm run build && \
@@ -394,8 +398,8 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
   - 原因: Bedrock モデルアクセス未承認
   - 対処: AWS Console → Bedrock → モデルアクセスで Claude Haiku 4.5 を有効化
 - **Google Maps の時間が表示されない**
-  - 原因: API キー未設定 or 枠超過
-  - 対処: Lambda 環境変数 `GOOGLE_MAPS_API_KEY` を確認。超過時は翌月自動復帰
+  - 原因: API キー未設定 or 枠超過（Routes API）
+  - 対処: Lambda 環境変数 `GOOGLE_MAPS_API_KEY` を確認。超過時は翌月自動復帰（OSRMフォールバックで距離自体は表示され続ける）
 - **1日3回制限に引っかかる（開発中）**
   - 原因: IP レートリミット
   - 対処: `X-Admin-Token` ヘッダーを付けてリクエスト
@@ -409,8 +413,8 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
   - 原因: デプロイ後のキャッシュ残留
   - 対処: `aws cloudfront create-invalidation ... --paths "/*"` で手動クリア
 - **立ち寄りスポットの座標がずれる**
-  - 原因: Nominatim ジオコーディング誤認識
-  - 対処: CloudWatch Logs でスポット名と座標を確認。日本語正式名称に変更
+  - 原因: Google Geocoding API の無料枠超過でNominatimへフォールバックした際の誤認識、またはGoogle側の誤マッチ
+  - 対処: CloudWatch Logs で `[google-geocode]`/`[geocode]` のログからスポット名と座標・使用APIを確認。日本語正式名称に変更
 
 ## コスト内訳
 
@@ -418,7 +422,7 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 | ----------------------------------------------------- | -------------------- |
 | Bedrock Claude Haiku（in: ~720 / out: ~1,200 tokens） | ~$0.40               |
 | Lambda 実行（~3秒 / 256MB）                           | ~$0.001              |
-| Google Maps Directions API（300回/月以内）            | $0（無料枠内）       |
+| Google Geocoding API・Routes API（それぞれ300回/月以内） | $0（無料枠内）      |
 | DynamoDB（ratelimit + share / PAY_PER_REQUEST）       | ~$0（無料枠内）      |
 | API Gateway・CloudFront・S3                           | ~$0                  |
 | **合計**                                              | **~$0.40（約60円）** |
@@ -464,3 +468,9 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 #### 目的地距離チェックに「近すぎ」の下限判定を追加
 
 - アンカー方式導入後も「上級コースが実測往復17km」という報告。目的地「真鶴岬」（実際は直線約75km）がNominatimの誤マッチで無関係な近隣地点（直線約4km）に解決されていたことが判明。事前チェックは「遠すぎないか」の上限しか見ておらず、この異常な近さを見逃していたため、上限と対称な下限判定を追加。回帰テスト1件追加（バックエンド計50件）。本番で複数回実行し全コース帯域内・Duration最大26秒を確認
+
+#### ジオコーディング・ルーティングをNominatim/OSRMからGoogle Maps Platformへ全面移行
+
+- 上記「真鶴岬」誤マッチ事故を受け、Google Cloud新規プロジェクトでGeocoding API・Routes APIを有効化。既存の`geocode_place`/`reverse_geocode_place`ディスパッチャ（Google優先・Nominatimフォールバック）を、実際にコースを組み立てる`geocode_and_filter_spots`・`enrich_course`（真鶴岬誤マッチの直接の原因箇所）にも適用し、Googleが実際に使われるよう修正
+- 旧Directions API（Legacy、2025年3月の料金改定で新規プロジェクトでは有効化不可）を使っていたルーティングを、新しいRoutes API（`computeRoutes`）へ全面書き換え。無料枠「Compute Routes - Essentials」に収めるため`routingPreference: TRAFFIC_UNAWARE`を明示指定
+- 回帰テスト17件追加（バックエンド計67件）。本番検証で`/api/suggest`・`/api/enrich`とも正常動作・Duration悪化なし（enrichはOSRM構成の6〜7秒から1.2〜3.9秒へ高速化）を確認。詳細は[CHANGELOG.md](./CHANGELOG.md)参照

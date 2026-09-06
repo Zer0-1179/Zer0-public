@@ -924,43 +924,88 @@ def check_and_reserve_gmaps(n_courses=3):
         return False
 
 
+GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
+# 2025年3月の料金改定で、新規Google Cloudプロジェクトでは旧Directions API（Legacy）を
+# 有効化できなくなった（今回発行したAPIキーもAPI制限でGeocoding API・Routes APIの2つしか
+# 許可していないため、旧Directions APIへのリクエストは403で拒否される）。そのため2026-09-06に
+# Routes API（v2:computeRoutes）へ全面移行した。
+
+
+def _parse_route_duration_seconds(duration_str):
+    """Routes APIのduration文字列（例: "1200s"、google.protobuf.Duration形式）を秒数(float)に変換する。"""
+    try:
+        return float(str(duration_str).rstrip("s"))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def google_maps_route(origin_lat, origin_lon, route_waypoints, split_after):
-    """Google Maps Directions APIで往復ループの実距離・時間を1リクエストで取得する。
+    """Google Routes API（computeRoutes）で往復ループの実距離・時間を1リクエストで取得する。
+
+    旧Directions APIと同じ「origin=destination=現在地、経由地列(intermediates)に目的地・
+    スポットを並べた1本のループルート」というリクエスト設計はそのまま維持しており、
+    呼び出し元（enrich_course）のインターフェース・split_afterによるleg分割ロジックは
+    変更していない（旧APIでも同じ本数のlegが返っていたため互換）。
+
+    無料枠「Compute Routes - Essentials」（月10,000件、中間経由地10個以下・TRAFFIC_AWARE等の
+    高度機能を使わない場合のSKU）に収めるため、routingPreferenceは明示的にTRAFFIC_UNAWAREを
+    指定する（TRAFFIC_AWARE/TRAFFIC_AWARE_OPTIMALはProティア課金に切り替わるため使わない）。
 
     route_waypointsは目的地を含む経由地列、split_afterは目的地到着までのleg数。
     (total_km, outbound_hours, return_hours) または3つのNoneを返す。
     """
     if not GOOGLE_MAPS_API_KEY:
         return None, None, None
-    params = {
-        "origin":      f"{origin_lat:.6f},{origin_lon:.6f}",
-        "destination": f"{origin_lat:.6f},{origin_lon:.6f}",
-        "mode":        "driving",
-        "key":         GOOGLE_MAPS_API_KEY,
+    body = {
+        "origin":      {"location": {"latLng": {"latitude": origin_lat, "longitude": origin_lon}}},
+        "destination": {"location": {"latLng": {"latitude": origin_lat, "longitude": origin_lon}}},
+        "intermediates": [
+            {"location": {"latLng": {"latitude": lat, "longitude": lon}}}
+            for lat, lon in route_waypoints
+        ],
+        "travelMode": "DRIVE",
+        "routingPreference": "TRAFFIC_UNAWARE",
     }
-    if route_waypoints:
-        params["waypoints"] = "|".join(f"{lat:.6f},{lon:.6f}" for lat, lon in route_waypoints)
-    url = "https://maps.googleapis.com/maps/api/directions/json?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
+        # フィールドマスク未指定だとcomputeRoutesはエラーを返すため必須。
+        # 距離・時間の算出に使うleg単位のフィールドのみ要求する。
+        "X-Goog-FieldMask": "routes.legs.duration,routes.legs.distanceMeters",
+    }
+    req = urllib.request.Request(
+        GOOGLE_ROUTES_URL, data=json.dumps(body).encode(), headers=headers, method="POST"
+    )
     try:
         with urllib.request.urlopen(req, timeout=8) as r:
             data = json.loads(r.read())
-        if data.get("status") != "OK" or not data.get("routes"):
-            print(f"[gmaps] status={data.get('status')}")
+        routes = data.get("routes") or []
+        if not routes:
+            print("[google-route] no route found")
             return None, None, None
-        legs = data["routes"][0].get("legs", [])
+        legs = routes[0].get("legs", [])
         if len(legs) < split_after + 1:
             return None, None, None
-        dist_km = round(sum(leg["distance"]["value"] for leg in legs) / 1000)
-        outbound_h = round(sum(leg["duration"]["value"] for leg in legs[:split_after]) / 3600, 1)
-        return_h = round(sum(leg["duration"]["value"] for leg in legs[split_after:]) / 3600, 1)
+        dist_km = round(sum(leg.get("distanceMeters", 0) for leg in legs) / 1000)
+        outbound_h = round(
+            sum(_parse_route_duration_seconds(leg.get("duration")) for leg in legs[:split_after]) / 3600, 1
+        )
+        return_h = round(
+            sum(_parse_route_duration_seconds(leg.get("duration")) for leg in legs[split_after:]) / 3600, 1
+        )
         if dist_km > 500:
-            print(f"[gmaps] SKIP unreasonable: {dist_km}km")
+            print(f"[google-route] SKIP unreasonable: {dist_km}km")
             return None, None, None
-        print(f"[gmaps] OK {dist_km}km out={outbound_h}h return={return_h}h")
+        print(f"[google-route] OK {dist_km}km out={outbound_h}h return={return_h}h")
         return dist_km, outbound_h, return_h
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode(errors="replace")
+        except Exception:
+            err_body = ""
+        print(f"[google-route] HTTP {e.code}: {err_body[:300]}")
     except Exception as e:
-        print(f"[gmaps] ERR {e}")
+        print(f"[google-route] ERR {e}")
     return None, None, None
 
 
@@ -999,7 +1044,7 @@ def _is_on_route(slat, slon, olat, olon, dlat, dlon, max_detour_ratio=1.4):
 
 
 MIN_TIME_BUFFER_MS = 6000
-MIN_ROUTE_BUFFER_MS = 14000  # Directions(最大8秒)+天気(最大5秒)+応答余裕
+MIN_ROUTE_BUFFER_MS = 14000  # Routes API(最大8秒)+天気(最大5秒)+応答余裕
 MIN_GEOCODE_BUFFER_MS = 20000  # スポットの最大5秒呼び出しを複数回行う前の余裕
 # 注意: API Gateway HTTP APIのLambda統合タイムアウトは30秒固定でAWS側の仕様上引き上げ不可のため、
 # Lambda自体のTimeoutを30秒より長くしても効果がない。エラーを確実に避けるには、この安全バッファを
@@ -1019,8 +1064,8 @@ def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, 
         if context.get_remaining_time_in_millis() < MIN_GEOCODE_BUFFER_MS:
             print("[waypoint] 残り時間不足のため以降のジオコーディングをスキップ")
             break
-        # スポットは補助情報なので、公開Nominatimの負荷とLambda時間を増やす再試行はしない。
-        lat, lon = nominatim_geocode(spot["name"], origin_lat, origin_lon, retry=False)
+        # スポットは補助情報なので、再試行はしない（Google優先・Nominatimフォールバックはgeocode_placeが判断）。
+        lat, lon = geocode_place(spot["name"], origin_lat, origin_lon, retry=False)
         if lat is None:
             continue
         if reverse:
@@ -1037,7 +1082,7 @@ def geocode_and_filter_spots(spots, origin_lat, origin_lon, dest_lat, dest_lon, 
 def enrich_course(course, origin_lat, origin_lon, context, use_gmaps=True):
     """
     目的地（destination）をジオコーディングして距離・所要時間を取得する。
-    use_gmaps=True のとき Google Maps Directions API を使用、False なら OSRM。
+    use_gmaps=True のとき Google Routes API を使用、False なら OSRM。
     失敗時は AI 推定値をそのまま維持。
 
     外部API（Nominatim/OSRM/Google Maps/Open-Meteo）が劣化・タイムアウトすると
@@ -1052,7 +1097,9 @@ def enrich_course(course, origin_lat, origin_lon, context, use_gmaps=True):
 
     # 目的地は/api/enrichで1コースにつき1回しか呼ばれず、この時点はまだ他の外部API呼び出しを
     # 行っていないため時間予算に余裕があり、retry=Trueにしても後段の残り時間チェックを壊さない
-    dest_lat, dest_lon = nominatim_geocode(dest_name, origin_lat, origin_lon, retry=True)
+    # （geocode_placeがGoogle Geocoding APIを優先し、失敗時のみNominatimへフォールバックする。
+    #   Nominatim側のretry=True時1回リトライ挙動はgeocode_place内でそのまま伝播される）
+    dest_lat, dest_lon = geocode_place(dest_name, origin_lat, origin_lon, retry=True)
     if dest_lat is None:
         print(f"[enrich] {course.get('name','')} destination geocode failed, keeping AI estimate")
         return
@@ -1087,7 +1134,7 @@ def enrich_course(course, origin_lat, origin_lon, context, use_gmaps=True):
         for spot in course["return_waypoints"]
         if spot.get("lat") is not None and spot.get("lon") is not None
     ]
-    # Google Directionsはorigin=destinationの周回ルートを1回だけ取得する。
+    # Google Routes APIはorigin=destinationの周回ルートを1回だけ取得する。
     # 目的地は経由地列のoutbound直後に置き、往路・復路のlegをそこで分割する。
     loop_waypoints = [*outbound_waypoints, (dest_lat, dest_lon), *return_waypoints]
     split_after = len(outbound_waypoints) + 1

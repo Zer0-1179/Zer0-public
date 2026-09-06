@@ -140,6 +140,181 @@ def test_nominatim_geocode_empty_result_not_retried(module):
     assert mock_urlopen.call_count == 1
 
 
+# ── Google Geocoding API（2026-09-06 Nominatim誤マッチ対策で導入） ─────────
+
+def test_google_geocode_returns_coords_on_success(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    monkeypatch.setattr(module, "check_and_reserve_geocode", MagicMock(return_value=True))
+    module.dynamodb.get_item = MagicMock(return_value={})
+    resp = MagicMock()
+    resp.read.return_value = json.dumps({
+        "status": "OK",
+        "results": [{"geometry": {"location": {"lat": 35.1454, "lng": 139.1339}}}],
+    }).encode()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value = resp
+        lat, lon = module.google_geocode("真鶴岬", 35.6, 139.6)
+    assert (lat, lon) == (35.1454, 139.1339)
+    assert module.dynamodb.put_item.called  # sourceを"google"としてキャッシュに書く
+
+
+def test_google_geocode_returns_none_when_status_not_ok(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    monkeypatch.setattr(module, "check_and_reserve_geocode", MagicMock(return_value=True))
+    module.dynamodb.get_item = MagicMock(return_value={})
+    resp = MagicMock()
+    resp.read.return_value = json.dumps({"status": "ZERO_RESULTS", "results": []}).encode()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value = resp
+        assert module.google_geocode("存在しない地名", 35.6, 139.6) == (None, None)
+
+
+def test_google_geocode_rejects_too_far_result(module, monkeypatch):
+    """MAX_WAYPOINT_KMを超える結果は誤マッチとして捨てること（Nominatim側と同じ安全策）。"""
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    monkeypatch.setattr(module, "check_and_reserve_geocode", MagicMock(return_value=True))
+    module.dynamodb.get_item = MagicMock(return_value={})
+    resp = MagicMock()
+    resp.read.return_value = json.dumps({
+        "status": "OK",
+        "results": [{"geometry": {"location": {"lat": 43.06, "lng": 141.35}}}],  # 札幌（現在地から300km超）
+    }).encode()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value = resp
+        assert module.google_geocode("テスト", 35.6, 139.6) == (None, None)
+
+
+def test_google_geocode_skips_network_call_when_free_limit_exceeded(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    monkeypatch.setattr(module, "check_and_reserve_geocode", MagicMock(return_value=False))
+    module.dynamodb.get_item = MagicMock(return_value={})
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        assert module.google_geocode("テスト", 35.6, 139.6) == (None, None)
+    assert not mock_urlopen.called
+
+
+def test_check_and_reserve_geocode_returns_false_without_api_key(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "")
+    assert module.check_and_reserve_geocode() is False
+    assert not module.dynamodb.update_item.called
+
+
+def test_check_and_reserve_geocode_blocks_when_over_free_limit(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+
+    class ConditionalCheckFailedException(Exception):
+        pass
+
+    module.dynamodb.exceptions.ConditionalCheckFailedException = ConditionalCheckFailedException
+    module.dynamodb.update_item = MagicMock(side_effect=ConditionalCheckFailedException())
+    assert module.check_and_reserve_geocode() is False
+
+
+def test_geocode_place_prefers_google_and_skips_nominatim_on_success(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    google_mock = MagicMock(return_value=(35.1, 139.1))
+    nominatim_mock = MagicMock(return_value=(99.0, 99.0))
+    monkeypatch.setattr(module, "google_geocode", google_mock)
+    monkeypatch.setattr(module, "nominatim_geocode", nominatim_mock)
+    lat, lon = module.geocode_place("真鶴岬", 35.6, 139.6)
+    assert (lat, lon) == (35.1, 139.1)
+    assert google_mock.called
+    assert not nominatim_mock.called
+
+
+def test_geocode_place_falls_back_to_nominatim_when_google_fails(module, monkeypatch):
+    """Googleが0件・無料枠超過・APIエラー等で(None,None)を返したら、
+    Nominatimへ確実にフォールバックすること（2026-09-06 真鶴岬誤マッチ修正の直接テスト）。"""
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    google_mock = MagicMock(return_value=(None, None))
+    nominatim_mock = MagicMock(return_value=(35.15, 139.13))
+    monkeypatch.setattr(module, "google_geocode", google_mock)
+    monkeypatch.setattr(module, "nominatim_geocode", nominatim_mock)
+    lat, lon = module.geocode_place("真鶴岬", 35.6, 139.6, retry=True)
+    assert (lat, lon) == (35.15, 139.13)
+    assert google_mock.called
+    nominatim_mock.assert_called_once_with("真鶴岬", 35.6, 139.6, retry=True)
+
+
+def test_geocode_place_uses_nominatim_directly_when_no_api_key(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "")
+    google_mock = MagicMock(return_value=(35.1, 139.1))
+    nominatim_mock = MagicMock(return_value=(35.15, 139.13))
+    monkeypatch.setattr(module, "google_geocode", google_mock)
+    monkeypatch.setattr(module, "nominatim_geocode", nominatim_mock)
+    lat, lon = module.geocode_place("箱根", 35.6, 139.6)
+    assert (lat, lon) == (35.15, 139.13)
+    assert not google_mock.called
+
+
+def test_google_reverse_geocode_returns_locality_name(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    monkeypatch.setattr(module, "check_and_reserve_geocode", MagicMock(return_value=True))
+    resp = MagicMock()
+    resp.read.return_value = json.dumps({
+        "status": "OK",
+        "results": [{
+            "address_components": [{"long_name": "真鶴町", "types": ["locality"]}],
+            "formatted_address": "日本、〒259-0201 神奈川県足柄下郡真鶴町",
+        }],
+    }).encode()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value = resp
+        name = module.google_reverse_geocode(35.15, 139.13)
+    assert name == "真鶴町"
+
+
+def test_reverse_geocode_place_falls_back_to_nominatim_when_google_fails(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    google_mock = MagicMock(return_value=None)
+    nominatim_mock = MagicMock(return_value="真鶴町")
+    monkeypatch.setattr(module, "google_reverse_geocode", google_mock)
+    monkeypatch.setattr(module, "nominatim_reverse", nominatim_mock)
+    name = module.reverse_geocode_place(35.15, 139.13)
+    assert name == "真鶴町"
+    assert google_mock.called
+    assert nominatim_mock.called
+
+
+def test_reverse_geocode_place_uses_nominatim_directly_when_no_api_key(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "")
+    google_mock = MagicMock(return_value="誤った地名")
+    nominatim_mock = MagicMock(return_value="真鶴町")
+    monkeypatch.setattr(module, "google_reverse_geocode", google_mock)
+    monkeypatch.setattr(module, "nominatim_reverse", nominatim_mock)
+    name = module.reverse_geocode_place(35.15, 139.13)
+    assert name == "真鶴町"
+    assert not google_mock.called
+
+
+def test_geocode_and_filter_spots_uses_geocode_place_dispatcher(module, monkeypatch):
+    """Google優先ディスパッチャに切り替わっていること（旧nominatim_geocode直呼び出しの再発防止）。"""
+    dispatcher = MagicMock(return_value=(35.2, 139.0))
+    nominatim_mock = MagicMock(return_value=(99.0, 99.0))
+    monkeypatch.setattr(module, "geocode_place", dispatcher)
+    monkeypatch.setattr(module, "nominatim_geocode", nominatim_mock)
+    ctx = MagicMock()
+    ctx.get_remaining_time_in_millis.return_value = 30000
+    module.geocode_and_filter_spots([{"name": "道の駅 テスト", "type": "道の駅"}], 35.0, 139.0, 35.3, 139.1, ctx)
+    assert dispatcher.called
+    assert not nominatim_mock.called
+
+
+def test_enrich_course_uses_geocode_place_dispatcher_for_destination(module, monkeypatch):
+    """enrich_course（真鶴岬誤マッチの実障害修正箇所）がgeocode_placeを使うこと。"""
+    dispatcher = MagicMock(return_value=(35.15, 139.13))
+    nominatim_mock = MagicMock(return_value=(99.0, 99.0))
+    monkeypatch.setattr(module, "geocode_place", dispatcher)
+    monkeypatch.setattr(module, "nominatim_geocode", nominatim_mock)
+    ctx = MagicMock()
+    ctx.get_remaining_time_in_millis.return_value = 1000  # 目的地ジオコーディング直後に打ち切り
+    course = {"destination": "真鶴岬", "outbound_spots": [], "return_spots": []}
+    module.enrich_course(course, 35.6, 139.6, ctx, use_gmaps=False)
+    dispatcher.assert_called_once_with("真鶴岬", 35.6, 139.6, retry=True)
+    assert not nominatim_mock.called
+    assert course["dest_lat"] == 35.15
+
+
 def test_normalize_courses_requires_three_valid_unique_profiles(module):
     courses = valid_courses()
     normalized = module.normalize_courses(courses)
@@ -205,14 +380,15 @@ def test_normalize_excluded_places_rejects_prompt_like_input_and_limits_count(mo
 
 
 def test_google_maps_route_sums_loop_legs_and_splits_at_destination(module, monkeypatch):
+    """Routes API（computeRoutes）のlegs配列（distanceMeters/duration="Ns"形式）を正しく
+    集計・分割できること（2026-09-06 旧Directions APIからの移行に伴い形式変更）。"""
     monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
     response = MagicMock()
     response.read.return_value = json.dumps({
-        "status": "OK",
         "routes": [{"legs": [
-            {"distance": {"value": 12000}, "duration": {"value": 1200}},
-            {"distance": {"value": 18000}, "duration": {"value": 1800}},
-            {"distance": {"value": 20000}, "duration": {"value": 2400}},
+            {"distanceMeters": 12000, "duration": "1200s"},
+            {"distanceMeters": 18000, "duration": "1800s"},
+            {"distanceMeters": 20000, "duration": "2400s"},
         ]}],
     }).encode()
     with patch("urllib.request.urlopen") as mock_urlopen:
@@ -222,20 +398,61 @@ def test_google_maps_route_sums_loop_legs_and_splits_at_destination(module, monk
         )
     assert (total, outbound, returning) == (50, 0.8, 0.7)
 
+    # リクエストがcomputeRoutesエンドポイントへのPOST・必須ヘッダーを持つことを確認
+    req = mock_urlopen.call_args[0][0]
+    assert req.full_url == "https://routes.googleapis.com/directions/v2:computeRoutes"
+    assert req.get_method() == "POST"
+    assert req.get_header("X-goog-api-key") == "test-key"
+    assert req.get_header("X-goog-fieldmask") == "routes.legs.duration,routes.legs.distanceMeters"
+    body = json.loads(req.data)
+    assert body["intermediates"] == [
+        {"location": {"latLng": {"latitude": 35.1, "longitude": 139.1}}},
+        {"location": {"latLng": {"latitude": 35.2, "longitude": 139.2}}},
+    ]
+    assert body["routingPreference"] == "TRAFFIC_UNAWARE"
+
 
 def test_google_maps_route_rejects_unreasonable_loop(module, monkeypatch):
     monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
     response = MagicMock()
     response.read.return_value = json.dumps({
-        "status": "OK",
         "routes": [{"legs": [
-            {"distance": {"value": 300000}, "duration": {"value": 18000}},
-            {"distance": {"value": 300000}, "duration": {"value": 18000}},
+            {"distanceMeters": 300000, "duration": "18000s"},
+            {"distanceMeters": 300000, "duration": "18000s"},
         ]}],
     }).encode()
     with patch("urllib.request.urlopen") as mock_urlopen:
         mock_urlopen.return_value.__enter__.return_value = response
         assert module.google_maps_route(35.0, 139.0, [(35.1, 139.1)], split_after=1) == (None, None, None)
+
+
+def test_google_maps_route_handles_empty_routes_array(module, monkeypatch):
+    """経路が見つからない場合、computeRoutesはHTTP200・空のroutes配列を返す
+    （エラーではないため、この形も明示的にNoneフォールバックへ倒す必要がある）。"""
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    response = MagicMock()
+    response.read.return_value = json.dumps({"routes": []}).encode()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value = response
+        assert module.google_maps_route(35.0, 139.0, [(35.1, 139.1)], split_after=1) == (None, None, None)
+
+
+def test_google_maps_route_handles_http_error(module, monkeypatch):
+    """APIキーのAPI制限違反等でHTTPErrorが返っても例外を投げずNoneフォールバックすること。"""
+    import urllib.error
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "test-key")
+    err = urllib.error.HTTPError(
+        url="https://routes.googleapis.com/directions/v2:computeRoutes",
+        code=403, msg="Forbidden",
+        hdrs=None, fp=MagicMock(read=lambda: b'{"error":{"code":403}}'),
+    )
+    with patch("urllib.request.urlopen", side_effect=err):
+        assert module.google_maps_route(35.0, 139.0, [(35.1, 139.1)], split_after=1) == (None, None, None)
+
+
+def test_google_maps_route_returns_none_without_api_key(module, monkeypatch):
+    monkeypatch.setattr(module, "GOOGLE_MAPS_API_KEY", "")
+    assert module.google_maps_route(35.0, 139.0, [(35.1, 139.1)], split_after=1) == (None, None, None)
 
 
 # ── コース履歴保存機能 ────────────────────────────────────────────────────
