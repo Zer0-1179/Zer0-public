@@ -140,9 +140,10 @@ bash scripts/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-09-05
+### 2026-09-06
 
-#### 001〜003・005〜008の構成図を新様式（draw.ioプラグイン様式）に一括更新
+#### 004自身の構成図の反映漏れ修正・詳細ページ拡大表示にアニメーション付きSVGを採用
 
-- 各プロジェクトの新しい構成図（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別グルーピング・番号バッジ・凡例パネル付き）をheadless Chromiumでスクリーンショットし、PIL（LANCZOS圧縮+ADAPTIVE 256色パレット、幅上限2600px）で圧縮して`src/public/images/{番号}_architecture.png`へ上書き（7件）
-- `bash scripts/deploy.sh`で本番デプロイ後、7件全ての本番URLの画像とローカルファイルのMD5一致を確認済み。004自体の構成図は対象外
+- 004自体の構成図が2026-09-05の一括更新（新様式=draw.ioプラグイン様式）で対象外のまま据え置かれていたのを修正
+- 構成図の埋め込みはPNG（静止画）のためアニメーションドットが表示されない問題に対応。`Project`型に`architectureSvg`フィールドを新設し、一覧ページ・OGP画像は軽量なPNGを維持したまま、詳細ページの拡大表示（ズーム時）だけアニメーション付きSVGに差し替える方式を採用（SVGは1.3〜1.7MBと重くOGP非対応のため全面切り替えは見送り）
+- `bash scripts/deploy.sh`で本番デプロイ後、一覧=PNG・拡大表示=SVG・OGP=PNGであることを本番で確認済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
