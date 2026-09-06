@@ -404,3 +404,12 @@
 - draw.ioの新様式は`color-scheme: light dark;` + `light-dark(#明るい色, #暗い色)`というCSS機能でダーク/ライト自動切替に対応しており、007の構成図SVGだけがこの設定でエクスポートされていた（他7プロジェクトは`color-scheme: light`のみでこの問題は無かった）。PNGとして静止画化していた頃はエクスポート時点の配色で固定されていたため気づかず、今回SVGを生で埋め込む方式（詳細ページの拡大表示、本日の別対応）に変えたことで、閲覧者のOS/ブラウザのダークモード設定がそのままSVGへ反映されるようになり表面化した
 - `build_architecture_flowdot.py`に`force_light_mode()`を追加し、`color-scheme: light dark;`を`color-scheme: light;`へ強制的に書き換えるようにした（CSS仕様上、`light-dark()`は最も近い祖先要素の`color-scheme`を見て解決するため、この1箇所の固定だけで子要素の配色も含め常にライト側に統一される）。全プロジェクトで`--all`再生成した結果、影響があったのは007のみ（`light_forced=True`）で他は無変更だったことを確認
 - `007_architecture.svg`を再生成・`src/public/images/`へ反映・`bash scripts/deploy.sh`でデプロイ後、本番URLのSVGで`color-scheme: light`固定を確認済み
+
+## 2026-09-07
+
+### 構成図SVGのダークモード再発（`color-scheme`固定だけでは不十分だった）を根本修正
+
+- ユーザーから「007だけやっぱダーク」と再度報告。前日の`color-scheme: light`固定では実ブラウザの`<img>`埋め込み表示で効いていなかった
+- 調査の結果、007の構成図SVGは`light-dark()`関数の出現数が246件（他プロジェクトは18〜20件程度）と桁違いに多いことが判明。`<img>`タグで外部ファイルとして読み込まれたSVGは独立した画像コンテキストとして扱われ、`color-scheme`プロパティによる`light-dark()`解決がその文脈で信頼できない（ブラウザのOS/アプリ側ダークモード設定が優先されてしまう）ことが原因と特定
+- `build_architecture_flowdot.py`の`force_light_mode()`を強化し、`light-dark(A, B)`という関数呼び出し自体をライト側の値`A`のリテラルへ直接置換する`_strip_light_dark()`を追加。CSSの間接参照に一切頼らないため`<img>`埋め込みでも確実にライト表示になる（`light-dark(#fff, var(--x, #121212))`のような入れ子の括弧にも対応した専用パーサーで実装）
+- 001〜008・010の全`_flowdot.svg`を対象に適用し、001〜008を`004_portfolio/src/public/images/`へ反映・ビルド・`bash scripts/deploy.sh`でデプロイ。本番URLの全8ファイルでローカルとのMD5一致、`light-dark(`の残存数0件を確認済み

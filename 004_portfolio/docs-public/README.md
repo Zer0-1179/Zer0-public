@@ -140,19 +140,9 @@ bash scripts/deploy.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-09-06
+### 2026-09-07
 
-#### 004自身の構成図の反映漏れ修正・詳細ページ拡大表示にアニメーション付きSVGを採用
+#### 構成図SVGのダークモード再発を根本修正（`color-scheme`固定だけでは不十分だった）
 
-- 004自体の構成図が2026-09-05の一括更新（新様式=draw.ioプラグイン様式）で対象外のまま据え置かれていたのを修正
-- 構成図の埋め込みはPNG（静止画）のためアニメーションドットが表示されない問題に対応。`Project`型に`architectureSvg`フィールドを新設し、一覧ページ・OGP画像は軽量なPNGを維持したまま、詳細ページの拡大表示（ズーム時）だけアニメーション付きSVGに差し替える方式を採用（SVGは1.3〜1.7MBと重くOGP非対応のため全面切り替えは見送り）
-- `bash scripts/deploy.sh`で本番デプロイ後、一覧=PNG・拡大表示=SVG・OGP=PNGであることを本番で確認済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
-
-#### 構成図拡大表示SVGの④Lambda→RSSフロードット抜け漏れを修正
-
-- `build_architecture_flowdot.py`の004設定でLambda→RSSエッジが未登録だったため、通信フローのオレンジドットが4本目（APIGateway→Lambda）までしか流れず5本目が欠落していた不具合を修正
-- 該当エッジにdraw.io自動生成IDではなく`e-lambda-rss`という命名規則付きIDを振り直して登録し、`main=5/5`で全区間にドットが流れることを確認。本番デプロイ・MD5一致確認済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
-
-#### 構成図SVGがブラウザのダークモード設定に連動して黒背景になる不具合を修正
-
-- 007の構成図拡大表示で背景が黒っぽく表示されるとの報告。draw.ioの`color-scheme: light dark`+`light-dark()`によるダーク/ライト自動切替が原因（他7プロジェクトは元々`light`固定でこの問題は無かった）。`build_architecture_flowdot.py`で`color-scheme: light`に強制する処理を追加し、007のみ影響ありと確認して再生成・本番デプロイ済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
+- 「007だけやっぱダーク」と再報告。前日の`color-scheme: light`固定は`<img>`埋め込み表示（独立した画像コンテキスト）では効いておらず、`light-dark()`関数呼び出し自体をライト側の値へ直接置換する方式に強化
+- 007のSVGは`light-dark()`の出現数が246件（他は18〜20件程度）と桁違いに多く、これが実質的な原因だった。001〜008・010の全構成図に対して再適用し、本番URLで`light-dark(`残存0件・MD5一致を確認済み。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
