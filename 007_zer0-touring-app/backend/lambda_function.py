@@ -841,7 +841,12 @@ def _destination_distance_plausible(course, origin_lat, origin_lon, anchor=None)
     （2026-09-06発見: 初級のつもりで提案した目的地が実測往復270km・314kmだった等、
     AIの距離感覚が大きく外れる事例が複数発生。当初はfail-openにしていたため、
     最も距離が外れているケースほどこのチェックをすり抜けていた）。
-    実測検証は/api/enrich側でも行われ、それでも外れていれば実測値に基づき難易度を再分類する。
+    実測検証は/api/enrich側でも行われる。以前は実測値が別帯域に収まる場合に難易度ラベルを
+    付け替える「再分類」を行っていたが、/api/enrichは3コースのうち1コースだけを個別に処理する
+    エンドポイントで他コースの帯域使用状況を検知できず、重複・欠落が発生したため撤回した
+    （2026-09-06、詳細はenrich_course内のコメント参照）。それでも外れていれば
+    distance_range_matched=Falseのまま「距離条件外」と表示するのみで、難易度ラベル自体は
+    変更しない。
 
     anchor（_compute_anchorsの当該帯域分）が渡され、かつdestinationがそのアンカー地名と
     完全一致する場合は、ジオコーディングを省略してTrueを返す。アンカー自体が
@@ -1681,7 +1686,8 @@ def lambda_handler(event, context):
             # 完全に見逃しており、実際にこの経路で中級コースが実測往復337kmになる事故が発生した
             # （2026-09-06発見、CloudWatchログで確認）。最終試行はリトライできないため結果は
             # 受け入れるしかないが、チェック自体は行いメトリクスで可視化する
-            # （実測との乖離はenrich時の再分類フォールバックが最終的な保険）。
+            # （実測との乖離はenrich時にdistance_range_matched=Falseとして表示されるのみで、
+            #   難易度ラベルの自動付け替えは行わない。2026-09-06、enrich_course内コメント参照）。
             check_threshold = DEST_CHECK_MIN_REMAINING_MS if attempt == 0 else DEST_CHECK_FINAL_MIN_REMAINING_MS
             # 3帯域すべてを検証対象にする（上級を対象外にしたところ、実測検証で上級コースの
             # 実測距離が帯域上限300kmを超える事例が4件中2件と高頻度で発生したため、2026-09-06に

@@ -450,7 +450,7 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 - 初級のつもりで提案したコースが実測往復270km、中級のつもりが実測238kmになる等、AIの自己申告距離と実際の道路距離が大きく乖離する事例が複数発生
 - 目的地の直線距離が難易度帯に対して明らかに遠すぎる場合、最初の試行に限り作り直すチェックを`/api/suggest`に追加
 - 経由地が実際に経路上にあるかの判定（`_is_on_route`）を、緯度経度の範囲内かではなく「経由することで直行距離の何倍に迂回するか」の比率判定に変更。群馬県が目的地のコースで栃木県の道の駅を経由地に選び実測距離が直行の約1.7倍に膨らむ事例で発覚
-- 上記をすり抜けて実測距離が帯域から外れた場合も、実測値が別の帯域に収まるならその難易度へ正しく再分類して表示するよう修正（保険）
+- 上記をすり抜けて実測距離が帯域から外れた場合に備え、実測値が別の帯域に収まればその難易度へ再分類する保険を追加したが、`/api/enrich`は1コースずつ個別処理するため他コースの帯域使用状況が分からず重複・欠落が発生し、同日中に撤回した（現在は`distance_range_matched=False`のまま「距離条件外」と表示するのみで難易度ラベルは変えない。詳細は[CHANGELOG.md](./CHANGELOG.md)参照）
 - 回帰テスト2件追加（バックエンド計39件）。本番で複数回`/api/suggest`を実行し距離帯逸脱の検知・作り直しをログで確認。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
 
 #### 目的地ジオコーディング失敗時のフェイルオープンと詳細画面の無限ループを追加修正
@@ -474,3 +474,8 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 - 上記「真鶴岬」誤マッチ事故を受け、Google Cloud新規プロジェクトでGeocoding API・Routes APIを有効化。既存の`geocode_place`/`reverse_geocode_place`ディスパッチャ（Google優先・Nominatimフォールバック）を、実際にコースを組み立てる`geocode_and_filter_spots`・`enrich_course`（真鶴岬誤マッチの直接の原因箇所）にも適用し、Googleが実際に使われるよう修正
 - 旧Directions API（Legacy、2025年3月の料金改定で新規プロジェクトでは有効化不可）を使っていたルーティングを、新しいRoutes API（`computeRoutes`）へ全面書き換え。無料枠「Compute Routes - Essentials」に収めるため`routingPreference: TRAFFIC_UNAWARE`を明示指定
 - 回帰テスト17件追加（バックエンド計67件）。本番検証で`/api/suggest`・`/api/enrich`とも正常動作・Duration悪化なし（enrichはOSRM構成の6〜7秒から1.2〜3.9秒へ高速化）を確認。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
+
+#### 目的地アンカー方式の検証漏れ（アンカーからの乖離未チェック）を修正
+
+- 「もえぎの湯（奥多摩町）」コースで実測往復168kmになり毎回「距離条件外」警告が出る不具合を報告受け調査。中級アンカー「小ケ谷」に対しAIがアンカー名を含みつつ実際は直線約41km離れた有名地名「奥多摩湖」を選んでおり、現在地からのマクロな距離帯チェックしか行っていなかったためアンカーからの乖離を検知できていなかった
+- `_destination_distance_plausible`にdestinationとアンカー座標の距離検証（`ANCHOR_MAX_DRIFT_KM=15km`）を追加。回帰テスト2件追加（バックエンド計69件）。本番デプロイ後`/api/suggest`を複数回実行し実際に乖離検知のログを確認、`/api/enrich`も正常動作を確認。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
