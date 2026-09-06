@@ -173,13 +173,13 @@
         <mxCell id="legend-line-desc" parent="legend-line-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=13;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;" value="&lt;div&gt;&lt;b&gt;- - - アニメーション線&lt;/b&gt;: アクセス〜レンダリングの主要フロー&lt;/div&gt;&lt;div&gt;(SVGエクスポート時も流れて表示される)&lt;/div&gt;" vertex="1">
           <mxGeometry height="47.00227272727273" width="420" x="10" y="30.081454545454548" as="geometry" />
         </mxCell>
-        <mxCell id="AwdYved6b948T5VhJU04-3" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryPerimeter=0;" target="ext-rss-icon" value="">
+        <mxCell id="e-lambda-rss" edge="1" parent="1" source="g-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryPerimeter=0;" target="ext-rss-icon" value="">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="670" y="835" as="sourcePoint" />
             <mxPoint x="208" y="819" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="AwdYved6b948T5VhJU04-4" connectable="0" parent="AwdYved6b948T5VhJU04-3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;リクエスト時にZenn/note記事を並列取得&lt;/span&gt;" vertex="1">
+        <mxCell id="AwdYved6b948T5VhJU04-4" connectable="0" parent="e-lambda-rss" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;リクエスト時にZenn/note記事を並列取得&lt;/span&gt;" vertex="1">
           <mxGeometry relative="1" x="-0.0067" y="1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
