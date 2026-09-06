@@ -384,6 +384,34 @@ def test_suggest_retries_when_destination_too_far_for_band(module, mock_context,
     assert data["courses"][0]["name"] == "テストコース"
 
 
+def test_suggest_retries_when_destination_geocode_fails(module, mock_context, monkeypatch):
+    """目的地のジオコーディングが失敗した場合（0件ヒット・タイムアウト・遠すぎて
+    nominatim_geocode内部の安全上限で弾かれた等）、距離が「わからない」として許容せず
+    作り直すこと。全帯域の許容一方向距離は上級でも約173kmで安全上限200kmより小さいため、
+    ジオコーディング失敗＝ほぼ確実に遠すぎるケースであり、ここをfail-openにすると
+    最も距離が外れているケースほどチェックをすり抜けてしまっていた
+    （2026-09-06発見: 初級コースが実測往復270km・314kmだった事例で判明）。"""
+    monkeypatch.setattr(module, "check_rate_limit", MagicMock(return_value=True))
+    monkeypatch.setattr(module, "enrich_course", MagicMock())
+    monkeypatch.setattr(module, "nominatim_geocode", MagicMock(return_value=(None, None)))
+
+    def make_response(courses):
+        return {"body": MagicMock(read=lambda: json.dumps({
+            "content": [{"text": json.dumps({"courses": courses}, ensure_ascii=False)}]
+        }).encode())}
+
+    mock_invoke = MagicMock(side_effect=[make_response(valid_courses()), make_response(valid_courses())])
+    monkeypatch.setattr(module.bedrock, "invoke_model", mock_invoke)
+
+    event = {"requestContext": {"http": {"method": "POST", "path": "/api/suggest"}},
+             "headers": {"x-forwarded-for": "1.2.3.4"},
+             "body": json.dumps({"latitude": 35.6, "longitude": 139.6, "temperature": 20, "weather_condition": "晴れ"})}
+    resp = module.lambda_handler(event, mock_context)
+
+    assert mock_invoke.call_count == 2
+    assert resp["statusCode"] == 200
+
+
 def test_enrich_post_updates_course_and_returns_it(module, monkeypatch):
     monkeypatch.setattr(module, "check_and_reserve_gmaps", MagicMock(return_value=False))
 
