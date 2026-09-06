@@ -11,6 +11,7 @@ import base64
 import html as html_module
 import urllib.request
 import urllib.parse
+import urllib.error
 import unicodedata
 from datetime import datetime, timedelta, timezone
 import boto3
@@ -18,7 +19,12 @@ from botocore.config import Config
 
 BEDROCK_MODEL_ID    = os.environ.get("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0")
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
-GMAPS_FREE_LIMIT    = 9_900  # 10,000件の無料枠から100件バッファ
+GMAPS_FREE_LIMIT    = 9_900  # Routes API「Compute Routes - Essentials」10,000件/月の無料枠から100件バッファ
+# Geocoding APIはRoutes APIとは別のSKU・別の無料枠（月10,000件）のため、check_and_reserve_gmapsとは
+# 独立したカウンタ（check_and_reserve_geocode）で管理する。1リクエストあたりの呼び出し回数が
+# Routesより多い（目的地1回＋アンカー逆ジオコーディング3回＋スポット最大6回程度）ため、
+# GMAPS_FREE_LIMITよりバッファを広めに取る。
+GEOCODE_FREE_LIMIT  = 9_500  # 10,000件の無料枠から500件バッファ
 DAILY_LIMIT         = int(os.environ.get("DAILY_LIMIT", "3"))
 SHARE_DAILY_LIMIT    = int(os.environ.get("SHARE_DAILY_LIMIT", "30"))
 MAX_SHARE_COURSE_BYTES = 8192  # course JSON の上限（DynamoDBアイテム膨張・共有URL肥大化の防止）
@@ -412,24 +418,30 @@ def _get_geocode_cache(name, origin_lat, origin_lon):
             return None
         lat = float(item["lat"]["N"])
         lon = float(item["lon"]["N"])
-        print(f"[geocode-cache] HIT {name}: ({lat:.4f},{lon:.4f})")
+        source = item.get("source", {}).get("S", "nominatim")  # 旧キャッシュ項目にはsourceがない
+        print(f"[geocode-cache] HIT {name}: ({lat:.4f},{lon:.4f}) src={source}")
         return lat, lon
     except Exception as e:
         print(f"[geocode-cache] ERR read {name}: {e}")
         return None
 
 
-def _put_geocode_cache(name, origin_lat, origin_lon, lat, lon):
+def _put_geocode_cache(name, origin_lat, origin_lon, lat, lon, source="nominatim"):
+    """ジオコード結果をキャッシュに書き込む。sourceは "nominatim" または "google"（観測・デバッグ用の
+    付帯情報でしかなく、キャッシュキー自体はプロバイダ間で共有する。座標の正しさはプロバイダに依らず
+    同じ意味を持つため、将来Nominatimのみに戻した場合もGoogle由来のキャッシュ値をそのまま使ってよい。
+    どちらの起源か`_get_geocode_cache`のログで追跡できるようにするためだけに保持する）。"""
     key = _geocode_cache_key(name, origin_lat, origin_lon)
     ttl = int((datetime.now(timezone.utc) + timedelta(days=GEOCODE_CACHE_TTL_DAYS)).timestamp())
     try:
         dynamodb.put_item(
             TableName=RATE_LIMIT_TABLE,
             Item={
-                "pk":  {"S": key},
-                "lat": {"N": str(lat)},
-                "lon": {"N": str(lon)},
-                "ttl": {"N": str(ttl)},
+                "pk":     {"S": key},
+                "lat":    {"N": str(lat)},
+                "lon":    {"N": str(lon)},
+                "ttl":    {"N": str(ttl)},
+                "source": {"S": source},
             },
         )
     except Exception as e:
@@ -527,6 +539,170 @@ def nominatim_reverse(lat, lon):
         return None
 
 
+def check_and_reserve_geocode(n=1):
+    """Google Geocoding API 残枠を DynamoDB でアトミックに確認・予約する。
+
+    Routes API（check_and_reserve_gmaps）とは別のSKU・別の無料枠（月10,000件）のため、
+    別カウンタ「geocode-gmaps#{YYYY-MM}」で独立管理する。使用可能なら True、
+    無料枠超過または未設定なら False を返す。"""
+    if not GOOGLE_MAPS_API_KEY:
+        return False
+    current_month = datetime.now(JST).strftime("%Y-%m")
+    pk  = f"geocode-gmaps#{current_month}"
+    ttl = int((datetime.now(JST) + timedelta(days=60)).timestamp())  # 60日後に自動削除
+    try:
+        resp = dynamodb.update_item(
+            TableName=RATE_LIMIT_TABLE,
+            Key={"pk": {"S": pk}},
+            UpdateExpression="ADD #c :n SET #ttl = if_not_exists(#ttl, :ttl)",
+            ConditionExpression="attribute_not_exists(#c) OR #c < :limit",
+            ExpressionAttributeNames={"#c": "count", "#ttl": "ttl"},
+            ExpressionAttributeValues={
+                ":n":     {"N": str(n)},
+                ":ttl":   {"N": str(ttl)},
+                ":limit": {"N": str(GEOCODE_FREE_LIMIT - n + 1)},
+            },
+            ReturnValues="UPDATED_NEW",
+        )
+        count = int(resp.get("Attributes", {}).get("count", {}).get("N", 0))
+        print(f"[geocode-gmaps-usage] {current_month}: {count}/{GEOCODE_FREE_LIMIT}")
+        return True
+    except dynamodb.exceptions.ConditionalCheckFailedException:
+        print(f"[geocode-gmaps-usage] 無料枠上限 {current_month} → Nominatimへフォールバック")
+        return False
+    except Exception as e:
+        print(f"[geocode-gmaps-usage] ERR {e} → Nominatimへフォールバック")
+        return False
+
+
+GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+# Geocoding API のエンドポイントは2025年3月の料金改定・SKU再編後も変わっていない
+# （料金改定でエンドポイント自体が廃止されたのは旧Directions API（Legacy）等の一部のみ）。
+
+
+def google_geocode(name, origin_lat, origin_lon):
+    """Google Geocoding APIで地名をジオコーディングする。
+    nominatim_geocodeと同じ (lat, lon) または (None, None) を返すインターフェース・同じ
+    DynamoDBジオコードキャッシュ（_get_geocode_cache/_put_geocode_cache）を使う。
+
+    無料枠（月10,000件、check_and_reserve_geocodeで管理）超過時・APIエラー時・0件ヒット時は
+    (None, None) を返し、呼び出し元（geocode_place）でNominatimへフォールバックする。"""
+    cached = _get_geocode_cache(name, origin_lat, origin_lon)
+    if cached is not None:
+        return cached
+    if not check_and_reserve_geocode(1):
+        return None, None
+
+    # ±3°(約300km) の範囲内に検索を偏らせる。Nominatimのviewbox+bounded=1と同じ意図だが、
+    # Geocoding APIのboundsはあくまで結果の「優先」であり厳密なフィルタではないため、
+    # 「現在地から離れすぎた誤マッチ」を防ぐ効果はMAX_WAYPOINT_KMのhaversine距離チェックで担保する。
+    box = 3
+    params = {
+        "address": name,
+        "key": GOOGLE_MAPS_API_KEY,
+        "language": "ja",
+        "region": "jp",
+        "bounds": f"{origin_lat-box},{origin_lon-box}|{origin_lat+box},{origin_lon+box}",
+    }
+    url = GOOGLE_GEOCODE_URL + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+        if data.get("status") != "OK" or not data.get("results"):
+            print(f"[google-geocode] status={data.get('status')} for {name}")
+            return None, None
+        loc = data["results"][0]["geometry"]["location"]
+        lat, lon = float(loc["lat"]), float(loc["lng"])
+        dist = _haversine_km(origin_lat, origin_lon, lat, lon)
+        if dist > MAX_WAYPOINT_KM:
+            print(f"[google-geocode] SKIP {name}: {dist:.0f}km (too far)")
+            return None, None
+        print(f"[google-geocode] OK {name}: ({lat:.4f},{lon:.4f}) {dist:.0f}km")
+        _put_geocode_cache(name, origin_lat, origin_lon, lat, lon, source="google")
+        return lat, lon
+    except Exception as e:
+        print(f"[google-geocode] ERR {name}: {e}")
+        return None, None
+
+
+# Nominatimのzoom=12（市区町村〜集落レベル）相当の粒度に絞るためのresult_type
+_GOOGLE_REVERSE_RESULT_TYPES = "locality|sublocality|administrative_area_level_3|administrative_area_level_2"
+
+
+def google_reverse_geocode(lat, lon):
+    """Google Geocoding APIで座標付近の実在地名を逆ジオコーディングする。
+    nominatim_reverseと同じ (name) または None を返すインターフェース。
+
+    無料枠超過時・APIエラー時・妥当な地名が取れない場合はNoneを返し、呼び出し元
+    （reverse_geocode_place）でNominatimへフォールバックする。"""
+    if not check_and_reserve_geocode(1):
+        return None
+    params = {
+        "latlng": f"{lat:.6f},{lon:.6f}",
+        "key": GOOGLE_MAPS_API_KEY,
+        "language": "ja",
+        "region": "jp",
+        "result_type": _GOOGLE_REVERSE_RESULT_TYPES,
+    }
+    url = GOOGLE_GEOCODE_URL + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+        if data.get("status") != "OK" or not data.get("results"):
+            print(f"[google-reverse-geocode] status={data.get('status')} at ({lat:.4f},{lon:.4f})")
+            return None
+        result = data["results"][0]
+        # result_typeでlocality系に絞っているが、address_componentsからも同種の名前を優先して探し
+        # formatted_address先頭要素（"日本、〒..."等の郵便番号付き文字列になりがち）より安定させる
+        name = None
+        for component in result.get("address_components", []):
+            if any(t in component.get("types", []) for t in ("locality", "sublocality", "administrative_area_level_2")):
+                name = component.get("long_name")
+                break
+        if not name:
+            name = str(result.get("formatted_address", "")).split(",")[0].strip()
+        name = str(name or "").strip()
+        # プロンプトへ埋め込む前に他のAI入力欄と同じ安全な文字集合へ制限する
+        if not name or not EXCLUDED_PLACE_RE.fullmatch(name):
+            print(f"[google-reverse-geocode] SKIP invalid name at ({lat:.4f},{lon:.4f}): {name!r}")
+            return None
+        print(f"[google-reverse-geocode] OK ({lat:.4f},{lon:.4f}) -> {name}")
+        return name
+    except Exception as e:
+        print(f"[google-reverse-geocode] ERR ({lat:.4f},{lon:.4f}): {e}")
+        return None
+
+
+def geocode_place(name, origin_lat, origin_lon, retry=False):
+    """地名ジオコーディングの統一エントリポイント。
+
+    google_maps_route→OSRMフォールバックと同じ「Google優先・OSS無料枠フォールバック」の思想で、
+    GOOGLE_MAPS_API_KEYが設定されていればGoogle Geocoding APIを優先し、未設定時・無料枠超過時・
+    APIエラー時・0件ヒット時はNominatim（無料公開API）にフォールバックする。
+    呼び出し元（_destination_distance_plausible/enrich_course/geocode_and_filter_spots）は
+    この関数だけを呼べばよく、優先順位の判断はここに閉じ込める。"""
+    if GOOGLE_MAPS_API_KEY:
+        lat, lon = google_geocode(name, origin_lat, origin_lon)
+        if lat is not None:
+            return lat, lon
+        print(f"[geocode-place] Google失敗、Nominatimへフォールバック: {name}")
+    return nominatim_geocode(name, origin_lat, origin_lon, retry=retry)
+
+
+def reverse_geocode_place(lat, lon):
+    """逆ジオコーディングの統一エントリポイント。GOOGLE_MAPS_API_KEYが設定されていれば
+    Google Geocoding APIを優先し、未設定時・無料枠超過時・APIエラー時はNominatimにフォールバックする。
+    呼び出し元（_compute_anchors）はこの関数だけを呼べばよい。"""
+    if GOOGLE_MAPS_API_KEY:
+        name = google_reverse_geocode(lat, lon)
+        if name is not None:
+            return name
+        print(f"[reverse-geocode-place] Google失敗、Nominatimへフォールバック: ({lat:.4f},{lon:.4f})")
+    return nominatim_reverse(lat, lon)
+
+
 DEST_ROAD_DETOUR_FACTOR = 1.3  # 日本の道路網は直線距離よりおおむね1.2〜1.4倍程度長くなる目安
 DEST_BAND_TOLERANCE = 1.5      # 帯域は「中央付近を狙う」目安であり厳密な境界ではないための余裕
 DEST_CHECK_MIN_REMAINING_MS = 16000  # 目的地ジオコーディング(約4秒)+再試行分のBedrock(約9秒)+余裕
@@ -601,7 +777,7 @@ def _compute_anchors(origin_lat, origin_lon):
         a_lat, a_lon = _destination_point(origin_lat, origin_lon, distance_km, bearing)
         place_name = None
         if profile["difficulty"] in _ANCHOR_REVERSE_GEOCODE_DIFFICULTIES:
-            place_name = nominatim_reverse(a_lat, a_lon)
+            place_name = reverse_geocode_place(a_lat, a_lon)
         anchors[profile["difficulty"]] = {
             "name": place_name, "lat": a_lat, "lon": a_lon,
             "distance_km": distance_km, "bearing": bearing,
@@ -679,7 +855,7 @@ def _destination_distance_plausible(course, origin_lat, origin_lon, anchor=None)
     if anchor and anchor.get("name") and _spot_key(dest_name) == _spot_key(anchor["name"]):
         print(f"[suggest] destination matches anchor exactly, skip geocode: {dest_name}")
         return True
-    lat, lon = nominatim_geocode(dest_name, origin_lat, origin_lon, retry=False)
+    lat, lon = geocode_place(dest_name, origin_lat, origin_lon, retry=False)
     if lat is None:
         print(f"[suggest] destination geocode failed (too far or not found): {dest_name}")
         return False
