@@ -19,6 +19,11 @@ Parameters:
     Type: String
     Default: ""
     Description: Email address to notify on Lambda errors / high latency / API Gateway 5xx (leave empty to skip alarm setup)
+  GoogleMapsApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Google Maps Platform API key (Geocoding API + Routes API enabled, restricted by API only) for accurate geocoding/routing; leave empty to fall back to Nominatim/OSRM
 
 Conditions:
   HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
@@ -229,7 +234,7 @@ Resources:
       Environment:
         Variables:
           BEDROCK_MODEL_ID: jp.anthropic.claude-haiku-4-5-20251001-v1:0
-          GOOGLE_MAPS_API_KEY: ""
+          GOOGLE_MAPS_API_KEY: !Ref GoogleMapsApiKey
           DAILY_LIMIT: "3"
           SHARE_DAILY_LIMIT: "30"
           EDGE_SECRET: !Ref EdgeSecret
