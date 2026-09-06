@@ -194,7 +194,7 @@ spotのtypeに使える値: 「道の駅」「温泉」「日帰り温泉」「�
   1. 初級（初心者コース）: 往復20〜49km。幹線国道・一般道中心、峠なし
   2. 中級（中級者コース）: 往復50〜99km。一部ワインディング可
   3. 上級（上級者コース）: 往復100〜300km。本格的な峠道・山岳路を含めてもよい
-- destinationは必ず上記の「目的地アンカー」の方角・距離の近辺（目安からの多少のズレは許容するが、明らかに逆方向・倍以上遠い等は不可）から選ぶこと。往復距離の帯域指示と矛盾する場合はアンカーの方角・距離を優先すること（distanceは「距離の推測」で外れやすいが、アンカーは現在地からの実距離計算に基づく確定値のため）
+- destinationは必ず上記の「目的地アンカー」に記載された地名（またはその近傍の実在スポット）をそのまま採用すること。これは最優先の絶対条件であり、往復距離の帯域指示と数値が矛盾するように見えても、必ずアンカーを優先すること（distanceの数値はAIの「距離の推測」が外れやすいが、アンカーは現在地からの実距離計算に基づく確定値のため）。アンカーと大きく異なる地域・逆方向・倍以上遠い地名を選ぶことは禁止
 - total_distance_kmは、立ち寄りと帰路を含む往復の目安距離を必ず数値で返すこと
 - 天気が雨・曇りの場合は屋内施設や温泉を多く含める
 - destinationはGoogleマップで検索できる正確な地名
@@ -484,6 +484,49 @@ def nominatim_geocode(name, origin_lat, origin_lon, retry=False):
     return None, None
 
 
+def nominatim_reverse(lat, lon):
+    """座標付近の実在地名（市区町村・集落レベル）を逆ジオコーディングで取得する。
+    (name) または None を返す。forward geocode と同じロック・1req/秒レート制限を共有する。
+
+    目的地アンカーの方角・距離だけをプロンプトで指示しても、AIがその制約を無視して
+    大きく離れた実在地名を選んでしまう頻度が高いことが実測で判明した（2026-09-06発見:
+    「初級」のアンカーを直線約13kmに指定しても、実測本番検証で銚子市(104km)・九十九里町(70km)・
+    鎌倉(44km)等、指示の3〜8倍遠い地名が繰り返し選ばれた）。座標や距離の「説明」をAIに解釈させる
+    のではなく、あらかじめ逆ジオコーディングで確定させた実在の地名そのものをプロンプトに渡すことで、
+    AIの役割を「地理的な距離の推測」から「与えられた地名周辺の魅力探し」へ縮小させる狙い。"""
+    params = {
+        "lat": f"{lat:.5f}",
+        "lon": f"{lon:.5f}",
+        "format": "json",
+        "zoom": 12,  # 市区町村〜集落レベルの粒度
+        "accept-language": "ja",
+    }
+    url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": "zer0-touring-app/1.0"})
+    try:
+        with _NOM_LOCK:
+            with urllib.request.urlopen(req, timeout=4) as r:
+                data = json.loads(r.read())
+            time.sleep(1.0)  # Nominatimの公開APIポリシー（最大1 req/sec）を守る
+        address = data.get("address", {}) or {}
+        name = (
+            address.get("city") or address.get("town") or address.get("village")
+            or address.get("county") or address.get("suburb")
+        )
+        if not name:
+            name = str(data.get("display_name", "")).split(",")[0].strip()
+        name = str(name).strip()
+        # プロンプトへ埋め込む前に他のAI入力欄と同じ安全な文字集合へ制限する
+        if not name or not EXCLUDED_PLACE_RE.fullmatch(name):
+            print(f"[reverse-geocode] SKIP invalid name at ({lat:.4f},{lon:.4f}): {name!r}")
+            return None
+        print(f"[reverse-geocode] OK ({lat:.4f},{lon:.4f}) -> {name}")
+        return name
+    except Exception as e:
+        print(f"[reverse-geocode] ERR ({lat:.4f},{lon:.4f}): {e}")
+        return None
+
+
 DEST_ROAD_DETOUR_FACTOR = 1.3  # 日本の道路網は直線距離よりおおむね1.2〜1.4倍程度長くなる目安
 DEST_BAND_TOLERANCE = 1.5      # 帯域は「中央付近を狙う」目安であり厳密な境界ではないための余裕
 DEST_CHECK_MIN_REMAINING_MS = 16000  # 目的地ジオコーディング(約4秒)+再試行分のBedrock(約9秒)+余裕
@@ -524,26 +567,66 @@ _ANCHOR_STRAIGHT_KM = {
 }
 
 
-def _build_anchor_section(origin_lat, origin_lon):
+def _compute_anchors(origin_lat, origin_lon):
     """3帯域それぞれについて、現在地からランダムな方角・目安距離のアンカー地点を算出し、
-    プロンプトに埋め込む説明文を返す。毎回ランダムな方角を選ぶことで生成の多様性も確保する。"""
-    lines = []
+    逆ジオコーディングで実在の地名まで確定させる。戻り値は
+    {difficulty: {"name", "lat", "lon", "distance_km", "bearing"}} の辞書。
+
+    座標・方角・距離を「説明」として渡すだけでは、AIがその制約を無視して大きく離れた
+    実在地名を選んでしまう頻度が高いことが実測で判明した（2026-09-06発見: 「初級」の
+    アンカーを直線約13kmに指定しても、本番検証で銚子市(104km)・九十九里町(70km)・
+    鎌倉(44km)等、指示の3〜8倍遠い地名が繰り返し選ばれた）。座標の「解釈」をAIに
+    委ねず、あらかじめ逆ジオコーディングで確定させた実在地名そのものを渡すことで、
+    AIの役割を「地理的な距離の推測」から「与えられた地名周辺の魅力探し」へ縮小させる。
+    毎回ランダムな方角を選ぶことで生成の多様性も確保する。1リクエストにつき1回だけ
+    呼び出すこと（逆ジオコーディング3回・約4〜6秒を要するため、試行のたびに呼ぶと
+    Lambda30秒制約への時間コストが倍になる）。"""
+    anchors = {}
     for profile in COURSE_PROFILES:
         base_km = _ANCHOR_STRAIGHT_KM[profile["difficulty"]]
         distance_km = round(base_km * random.uniform(0.85, 1.15), 1)  # ±15%のジッターで多様性を持たせる
         bearing = random.uniform(0, 360)
         a_lat, a_lon = _destination_point(origin_lat, origin_lon, distance_km, bearing)
-        lines.append(
-            f"  {profile['difficulty']}: 現在地から{_compass_label(bearing)}方向に直線約{distance_km}km"
-            f"（緯度{a_lat:.3f}, 経度{a_lon:.3f}付近）"
-        )
+        place_name = nominatim_reverse(a_lat, a_lon)
+        anchors[profile["difficulty"]] = {
+            "name": place_name, "lat": a_lat, "lon": a_lon,
+            "distance_km": distance_km, "bearing": bearing,
+        }
+    return anchors
+
+
+def _format_anchor_section(anchors):
+    """_compute_anchors() の結果をプロンプト埋め込み用の説明文に整形する。
+    逆ジオコーディングが失敗した地点（海上等）は、フォールバックとして方角・距離の
+    説明文を使う。"""
+    lines = []
+    for profile in COURSE_PROFILES:
+        a = anchors[profile["difficulty"]]
+        if a["name"]:
+            lines.append(
+                f"  {profile['difficulty']}: "
+                f"「{a['name']}」またはそこから半径5km以内の実在する観光地・ランドマークをそのまま採用すること"
+                f"（{_compass_label(a['bearing'])}方向・現在地から直線約{a['distance_km']}km）"
+            )
+        else:
+            lines.append(
+                f"  {profile['difficulty']}: 現在地から{_compass_label(a['bearing'])}方向に直線約{a['distance_km']}km"
+                "の実在する地名（地図上でこの方角・距離から大きくズレないこと）"
+            )
     return (
-        "\n\n目的地アンカー（実在の地名選定の基準。海上・山中など地名が存在しない地点の場合は、"
-        "ごく近くの実在する市町村・集落・観光地を選ぶこと）:\n" + "\n".join(lines)
+        "\n\n目的地アンカー（destinationを決める絶対的な基準。往復距離帯の指示より優先すること。"
+        "この方角・距離・地名から大きく外れた目的地を選ぶことは禁止）:\n" + "\n".join(lines)
     )
 
 
-def _destination_distance_plausible(course, origin_lat, origin_lon):
+def _build_anchor_section(origin_lat, origin_lon):
+    """_compute_anchors()+_format_anchor_section() をまとめて呼ぶ簡易ラッパー（テスト・単体利用向け）。
+    lambda_handler本体は、アンカー辞書を_destination_distance_plausibleの高速化にも使うため、
+    このラッパーではなく2関数を個別に呼び出す（逆ジオコーディングの二重実行を避けるため）。"""
+    return _format_anchor_section(_compute_anchors(origin_lat, origin_lon))
+
+
+def _destination_distance_plausible(course, origin_lat, origin_lon, anchor=None):
     """AIが提案した目的地が、その難易度帯の往復距離に対して地理的に現実的か
     （実測ルート取得前の粗い事前チェック）。
 
@@ -557,10 +640,21 @@ def _destination_distance_plausible(course, origin_lat, origin_lon):
     （2026-09-06発見: 初級のつもりで提案した目的地が実測往復270km・314kmだった等、
     AIの距離感覚が大きく外れる事例が複数発生。当初はfail-openにしていたため、
     最も距離が外れているケースほどこのチェックをすり抜けていた）。
-    実測検証は/api/enrich側でも行われ、それでも外れていれば実測値に基づき難易度を再分類する。"""
+    実測検証は/api/enrich側でも行われ、それでも外れていれば実測値に基づき難易度を再分類する。
+
+    anchor（_compute_anchorsの当該帯域分）が渡され、かつdestinationがそのアンカー地名と
+    完全一致する場合は、ジオコーディングを省略してTrueを返す。アンカー自体が
+    帯域の上限に対して十分小さい距離で算出されているため、地名が一致する時点で
+    改めて検証する意味がない。目的地アンカー導入後にNominatim呼び出しが往復2回分
+    （逆ジオコーディング3回＋このチェック）に増え、Lambda30秒制約に対して実測
+    Duration26〜28秒・まれに500エラーとなる事例を確認したため、このケースだけでも
+    ネットワーク呼び出しを省いて時間予算を確保する（2026-09-06追加）。"""
     dest_name = str(course.get("destination", "")).strip()
     profile_max = (course.get("distance_range_km") or {}).get("max")
     if not dest_name or not profile_max:
+        return True
+    if anchor and anchor.get("name") and _spot_key(dest_name) == _spot_key(anchor["name"]):
+        print(f"[suggest] destination matches anchor exactly, skip geocode: {dest_name}")
         return True
     lat, lon = nominatim_geocode(dest_name, origin_lat, origin_lon, retry=False)
     if lat is None:
@@ -1252,6 +1346,16 @@ def lambda_handler(event, context):
         preferences_section = ""
     excluded_places_section = json.dumps(excluded_places, ensure_ascii=False)
 
+    # 目的地アンカー（方角・距離・実在地名）はリクエストにつき1回だけ算出する（逆ジオコーディングを
+    # 3回行うため、試行のたびに作り直すとLambda30秒制約への時間コストが倍になってしまう）。
+    # 1回目の試行でBedrockがアンカーを無視しても、2回目は同じアンカーを再提示して従わせを試みる
+    # （2026-09-06追加: 距離帯の抽象指示・座標の説明だけではAIの地理感覚が大きく外れるため、
+    # 逆ジオコーディングで確定させた実在地名をそのまま使わせる方式に変更）。
+    # アンカー辞書は後段の_destination_distance_plausibleにも渡し、destinationがアンカー名と
+    # 完全一致する場合の再ジオコーディングを省略する高速化にも使う。
+    anchors = _compute_anchors(lat, lon)
+    anchor_section = _format_anchor_section(anchors)
+
     # Bedrockはプロンプトの必須条件（例: 初級コースに観光地/展望台を最低1箇所含める）に
     # 従わない出力を稀に返す。1回の生成は約9秒・Timeout=30秒のため、同一リクエスト内で
     # 1回だけ再試行してからユーザーにエラーを返す（2026-09-06発見: 連続失敗が実発生）。
@@ -1259,10 +1363,6 @@ def lambda_handler(event, context):
     text = ""
     for attempt in range(2):
         seed = random.randint(100000, 999999)
-        # 目的地アンカー（方角・距離の具体的な地点）は毎試行ランダムに算出し直す。ネットワーク
-        # 呼び出しを伴わない数学計算のみなので、Lambda30秒制約への時間コストはゼロ
-        # （2026-09-06追加: 距離帯の抽象指示だけではAIの地理感覚が大きく外れるため）。
-        anchor_section = _build_anchor_section(lat, lon)
         prompt = PROMPT_TEMPLATE.format(
             lat=lat,
             lon=lon,
@@ -1318,7 +1418,7 @@ def lambda_handler(event, context):
             # （実測との乖離はenrich時の再分類フォールバックが最終的な保険）。
             check_threshold = DEST_CHECK_MIN_REMAINING_MS if attempt == 0 else DEST_CHECK_FINAL_MIN_REMAINING_MS
             if context.get_remaining_time_in_millis() > check_threshold:
-                if not all(_destination_distance_plausible(c, lat, lon) for c in courses):
+                if not all(_destination_distance_plausible(c, lat, lon, anchors.get(c.get("difficulty"))) for c in courses):
                     if attempt == 0:
                         print(f"[suggest] attempt {attempt + 1}: 目的地の距離感が帯域と乖離、作り直す")
                         courses = None
