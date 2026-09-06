@@ -282,6 +282,7 @@
       .dot.active { background: var(--accent); transform: scale(1.4); }
 
       /* scroll-snap スライダー本体 */
+      .slider-track { position: relative; }
       .card-viewport {
         display: flex;
         overflow-x: scroll;
@@ -294,6 +295,25 @@
         width: 100%;
       }
       .card-viewport::-webkit-scrollbar { display: none; }
+
+      /* PC（マウス操作）ではスワイプで次のコースへ移れないため、矢印ボタンで移動できるようにする。
+         タッチ操作端末ではスワイプで十分なため、ホバー可能なポインタデバイスのみ表示する。 */
+      .slider-nav-btn {
+        display: none;
+        position: absolute; top: 50%; transform: translateY(-50%);
+        width: 2.25rem; height: 2.25rem; border-radius: 50%;
+        background: rgba(15, 23, 42, .72); border: 1px solid var(--border); color: var(--text);
+        align-items: center; justify-content: center;
+        font-size: 1.3rem; line-height: 1; cursor: pointer; z-index: 3;
+        transition: background .15s, opacity .15s;
+      }
+      .slider-nav-btn:disabled { opacity: .25; cursor: default; pointer-events: none; }
+      .slider-nav-btn:not(:disabled):hover { background: rgba(15, 23, 42, .92); }
+      .slider-nav-prev { left: .5rem; }
+      .slider-nav-next { right: .5rem; }
+      @media (hover: hover) and (pointer: fine) {
+        .slider-nav-btn { display: flex; }
+      }
 
       /* ─── コースカード ─── */
       .course-card {
@@ -893,7 +913,11 @@
 
       <div class="slider-outer">
         <div class="slider-dots" id="slider-dots"></div>
-        <div class="card-viewport" id="card-viewport">
+        <div class="slider-track">
+          <button class="slider-nav-btn slider-nav-prev" id="slider-prev" aria-label="前のコース">‹</button>
+          <div class="card-viewport" id="card-viewport">
+          </div>
+          <button class="slider-nav-btn slider-nav-next" id="slider-next" aria-label="次のコース">›</button>
         </div>
       </div>
 
@@ -1165,6 +1189,10 @@
         document.querySelectorAll('.dot').forEach((dot,i)=>{
           dot.classList.toggle('active', i===currentSlide);
         });
+        const prevBtn = document.getElementById('slider-prev');
+        const nextBtn = document.getElementById('slider-next');
+        if (prevBtn) prevBtn.disabled = currentSlide === 0;
+        if (nextBtn) nextBtn.disabled = currentSlide >= courses.length - 1;
       }
 
       function goTo(idx) {
@@ -1282,6 +1310,7 @@
         dotsEl.querySelectorAll('.dot').forEach(dot=>{
           dot.addEventListener('click',()=>goTo(+dot.dataset.i));
         });
+        updateDots(); // PC用の矢印ボタン（slider-prev/next）の有効・無効状態を初期化
         // ← initSlider() は showScreen() の後に呼ぶ（preserveState時はスライダー初期化不要のため
         //   代わりにスクロール位置だけcurrentSlideへ合わせ直す）
         if (opts.preserveState) {
@@ -1866,6 +1895,8 @@
 
       document.getElementById('btn-start').addEventListener('click',findCourses);
       document.getElementById('btn-retry').addEventListener('click',findCourses);
+      document.getElementById('slider-prev').addEventListener('click', () => goTo(currentSlide - 1));
+      document.getElementById('slider-next').addEventListener('click', () => goTo(currentSlide + 1));
       document.getElementById('origin-input').addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); findCourses(); }
       });

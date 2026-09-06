@@ -483,6 +483,35 @@ def nominatim_geocode(name, origin_lat, origin_lon, retry=False):
     return None, None
 
 
+DEST_ROAD_DETOUR_FACTOR = 1.3  # 日本の道路網は直線距離よりおおむね1.2〜1.4倍程度長くなる目安
+DEST_BAND_TOLERANCE = 1.5      # 帯域は「中央付近を狙う」目安であり厳密な境界ではないための余裕
+DEST_CHECK_MIN_REMAINING_MS = 16000  # 目的地ジオコーディング(約4秒)+再試行分のBedrock(約9秒)+余裕
+
+
+def _destination_distance_plausible(course, origin_lat, origin_lon):
+    """AIが提案した目的地が、その難易度帯の往復距離に対して地理的に現実的か
+    （実測ルート取得前の粗い事前チェック）。
+
+    目的地の直線距離から見て往復で明らかに帯域上限を超えることが分かる場合はFalseを返す。
+    ジオコーディング失敗など判定できない場合は「わからない」としてTrueを返す（疑わしきは通す。
+    実測検証は/api/enrich側でも行われ、外れていれば実測値に基づき難易度を再分類する）。
+    （2026-09-06発見: 初級のつもりで提案した目的地が実測往復270kmだった等、AIの距離感覚が
+    大きく外れる事例が複数発生したため追加）"""
+    dest_name = str(course.get("destination", "")).strip()
+    profile_max = (course.get("distance_range_km") or {}).get("max")
+    if not dest_name or not profile_max:
+        return True
+    lat, lon = nominatim_geocode(dest_name, origin_lat, origin_lon, retry=False)
+    if lat is None:
+        return True
+    straight_km = _haversine_km(origin_lat, origin_lon, lat, lon)
+    limit_km = profile_max * DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)
+    ok = straight_km <= limit_km
+    if not ok:
+        print(f"[suggest] destination too far for band: {dest_name} straight={straight_km:.0f}km limit={limit_km:.0f}km")
+    return ok
+
+
 def osrm_route(waypoints):
     """OSRMで実道路距離を取得。(distance_km, None) または (None, None) を返す。所要時間は呼び出し側で算出する。"""
     # 座標は lon,lat の順（OSRM仕様）
@@ -596,13 +625,20 @@ def fetch_dest_weather(lat, lon):
     return None, None
 
 
-def _is_on_route(slat, slon, olat, olon, dlat, dlon, margin_deg=0.5):
-    """スポットが origin→destination の経路コリドー内にあるか確認（バウンディングボックス+マージン）。"""
-    min_lat = min(olat, dlat) - margin_deg
-    max_lat = max(olat, dlat) + margin_deg
-    min_lon = min(olon, dlon) - margin_deg
-    max_lon = max(olon, dlon) + margin_deg
-    return min_lat <= slat <= max_lat and min_lon <= slon <= max_lon
+def _is_on_route(slat, slon, olat, olon, dlat, dlon, max_detour_ratio=1.4):
+    """スポット経由で origin→destination へ向かう場合の迂回率が一定以下か確認する。
+
+    以前は緯度経度のバウンディングボックス（+0.5度マージン）で判定していたが、
+    originとdestinationが東西・南北に離れている場合、直線経路から大きく外れた地点
+    （山を挟んだ反対側等）もボックス内という理由だけで「経路上」と誤判定していた
+    （2026-09-06発見: 群馬県が目的地のコースで栃木県の道の駅を経由地に選び、実測距離が
+    直行の約1.7倍・往復200km超に膨らんだ事例）。迂回距離（origin→spot→destination の
+    合計）が直行距離の何倍かで判定する方式に変更し、実際に大回りになる地点を除外する。"""
+    direct_km = _haversine_km(olat, olon, dlat, dlon)
+    if direct_km < 1:  # 至近距離では比率が不安定なため常に許可
+        return True
+    via_km = _haversine_km(olat, olon, slat, slon) + _haversine_km(slat, slon, dlat, dlon)
+    return via_km <= direct_km * max_detour_ratio
 
 
 MIN_TIME_BUFFER_MS = 6000
@@ -736,6 +772,18 @@ def enrich_course(course, origin_lat, origin_lon, context, use_gmaps=True):
             )
         except (KeyError, TypeError, ValueError):
             pass
+        # AIの距離見積もりは実際の道路距離と大きくズレることがある（例: 初級のつもりで
+        # 提案した目的地が実測270kmだった）。この場合「距離条件外」と表示するより、実測値が
+        # 収まる別の帯域があればそちらの難易度に付け替えて正しく表示する方がユーザーに親切
+        # （2026-09-06発見: 初級コースが実測270kmになる事例で判明）。
+        if not course.get("distance_range_matched"):
+            for profile in COURSE_PROFILES:
+                if profile["min_km"] <= dist_km <= profile["max_km"]:
+                    course["difficulty"] = profile["difficulty"]
+                    course["distance_range_km"] = {"min": profile["min_km"], "max": profile["max_km"]}
+                    course["distance_range_matched"] = True
+                    print(f"[enrich] {course.get('name','')}: 距離帯を実測値に基づき{profile['difficulty']}へ再分類")
+                    break
         print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_h}h")
 
     if context.get_remaining_time_in_millis() < MIN_TIME_BUFFER_MS:
@@ -1179,6 +1227,14 @@ def lambda_handler(event, context):
             courses = normalize_courses(data["courses"], excluded_places)
             if len(courses) != len(COURSE_PROFILES):
                 raise ValueError("AI response did not meet all course requirements")
+            # 目的地の距離感がその帯域に対して明らかにおかしい場合、最初の試行に限り
+            # （時間・リトライ予算が残っていれば）作り直す。最終試行は必ず受け入れる
+            # （実測との乖離はenrich時の再分類フォールバックに委ねる）。
+            if attempt == 0 and context.get_remaining_time_in_millis() > DEST_CHECK_MIN_REMAINING_MS:
+                if not all(_destination_distance_plausible(c, lat, lon) for c in courses):
+                    print(f"[suggest] attempt {attempt + 1}: 目的地の距離感が帯域と乖離、作り直す")
+                    courses = None
+                    continue
             break
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"[ERROR] Parse (attempt {attempt + 1}): {e}\nRaw: {text}")
