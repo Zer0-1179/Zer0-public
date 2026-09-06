@@ -1575,7 +1575,14 @@
         const bikeEl = document.querySelector('.wc-bike');
         if (bikeEl) { bikeEl.style.animation='none'; void bikeEl.offsetHeight; bikeEl.style.animation=''; }
 
-        enrichCourseDetail(idx);
+        // ジオコーディングが構造的に失敗する目的地（Nominatimで見つからない・日帰り圏外すぎる等）
+        // だと、enrich失敗→再描画のためのopenDetail再呼び出し→末尾のこの呼び出しでenrich再試行
+        // →再び失敗…という無限ループになっていた（2026-09-06発見: 同一コースへのenrich呼び出しが
+        // 1分間に数百回発生し、Lambda invocation数が異常に跳ね上がる実障害が発生）。
+        // 一度失敗済み（c._enrichFailed）なら、ユーザーが明示的に開き直すまで再試行しない。
+        if (!c._enriched && !c._enrichFailed) {
+          enrichCourseDetail(idx);
+        }
       }
 
       // 二段階レスポンスの後段: 詳細画面を開いたコースだけ、距離・スポット座標・

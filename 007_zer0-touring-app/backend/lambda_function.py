@@ -493,17 +493,24 @@ def _destination_distance_plausible(course, origin_lat, origin_lon):
     （実測ルート取得前の粗い事前チェック）。
 
     目的地の直線距離から見て往復で明らかに帯域上限を超えることが分かる場合はFalseを返す。
-    ジオコーディング失敗など判定できない場合は「わからない」としてTrueを返す（疑わしきは通す。
-    実測検証は/api/enrich側でも行われ、外れていれば実測値に基づき難易度を再分類する）。
-    （2026-09-06発見: 初級のつもりで提案した目的地が実測往復270kmだった等、AIの距離感覚が
-    大きく外れる事例が複数発生したため追加）"""
+    目的地名が空欄など判定不能な場合のみ「わからない」としてTrueを返す。
+    ジオコーディング自体の失敗（0件ヒット・タイムアウト・`nominatim_geocode`内の
+    ±200km安全上限超過）はFalse（作り直す）とする。全帯域の許容一方向距離は最大でも
+    上級の約173kmで安全上限200kmより十分小さいため、「200km超で弾かれた」ケースは
+    どの帯域でも確実に不適合であり、ここをTrue（fail-open）にすると「遠すぎて
+    ジオコーディングが拒否された」という最も明白な違反ケースを逆に見逃してしまう
+    （2026-09-06発見: 初級のつもりで提案した目的地が実測往復270km・314kmだった等、
+    AIの距離感覚が大きく外れる事例が複数発生。当初はfail-openにしていたため、
+    最も距離が外れているケースほどこのチェックをすり抜けていた）。
+    実測検証は/api/enrich側でも行われ、それでも外れていれば実測値に基づき難易度を再分類する。"""
     dest_name = str(course.get("destination", "")).strip()
     profile_max = (course.get("distance_range_km") or {}).get("max")
     if not dest_name or not profile_max:
         return True
     lat, lon = nominatim_geocode(dest_name, origin_lat, origin_lon, retry=False)
     if lat is None:
-        return True
+        print(f"[suggest] destination geocode failed (too far or not found): {dest_name}")
+        return False
     straight_km = _haversine_km(origin_lat, origin_lon, lat, lon)
     limit_km = profile_max * DEST_BAND_TOLERANCE / (2 * DEST_ROAD_DETOUR_FACTOR)
     ok = straight_km <= limit_km
