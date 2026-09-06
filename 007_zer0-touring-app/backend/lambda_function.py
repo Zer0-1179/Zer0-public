@@ -953,18 +953,13 @@ def enrich_course(course, origin_lat, origin_lon, context, use_gmaps=True):
             )
         except (KeyError, TypeError, ValueError):
             pass
-        # AIの距離見積もりは実際の道路距離と大きくズレることがある（例: 初級のつもりで
-        # 提案した目的地が実測270kmだった）。この場合「距離条件外」と表示するより、実測値が
-        # 収まる別の帯域があればそちらの難易度に付け替えて正しく表示する方がユーザーに親切
-        # （2026-09-06発見: 初級コースが実測270kmになる事例で判明）。
-        if not course.get("distance_range_matched"):
-            for profile in COURSE_PROFILES:
-                if profile["min_km"] <= dist_km <= profile["max_km"]:
-                    course["difficulty"] = profile["difficulty"]
-                    course["distance_range_km"] = {"min": profile["min_km"], "max": profile["max_km"]}
-                    course["distance_range_matched"] = True
-                    print(f"[enrich] {course.get('name','')}: 距離帯を実測値に基づき{profile['difficulty']}へ再分類")
-                    break
+        # 過去に「実測値が収まる別の帯域があればそちらの難易度へ付け替える」再分類を
+        # 行っていたが（2026-09-06一時導入）、/api/enrichは3コースのうち1コースだけを
+        # 個別に処理するエンドポイントであり、他の2コースの難易度・実測距離を知る手段が
+        # ないため、再分類先の帯域が既に別のコースで使われていても検知できず、「初級が
+        # 消えて中級が2つ」のような重複・欠落が発生していた（2026-09-06発見・撤回）。
+        # 帯域不一致はdistance_range_matched=Falseのまま「距離条件外」と表示し、
+        # 難易度ラベル自体（3コースで初級・中級・上級が必ず1つずつ）は変更しない。
         print(f"[enrich] {course.get('name','')} -> {dist_km}km {duration_h}h")
 
     if context.get_remaining_time_in_millis() < MIN_TIME_BUFFER_MS:
