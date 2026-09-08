@@ -17,8 +17,6 @@ if [ -z "${SENDER_EMAIL:-}" ] || [ -z "${RECIPIENT_EMAIL:-}" ]; then
   echo "  export SENDER_EMAIL='your-verified@example.com'"
   echo "  export RECIPIENT_EMAIL='notify@example.com'"
   echo "  ./deploy.sh"
-  echo ""
-  echo "Layerを更新する場合: DEPLOY_LAYER=1 ./deploy.sh"
   exit 1
 fi
 
@@ -33,37 +31,9 @@ echo "実行スケジュール: 毎月1日・15日 21:00 JST"
 echo "=============================="
 echo ""
 
-# [1/3] Layerデプロイ（DEPLOY_LAYER=1 のときのみ）
-LAYER_ARN=""
-if [ "${DEPLOY_LAYER:-0}" = "1" ]; then
-  echo "[1/3] Lambda Layerをデプロイ中（直接publish・S3不要）..."
-  LAYER_ZIP="${SCRIPT_DIR}/../matplotlib_layer.zip"
-  if [ ! -f "${LAYER_ZIP}" ]; then
-    echo "Error: ${LAYER_ZIP} が見つかりません。build_layer.sh を実行してください。"
-    exit 1
-  fi
-  LAYER_ARN=$(aws lambda publish-layer-version \
-    --layer-name matplotlib-aws-icons-mid \
-    --description "matplotlib + numpy + Pillow + AWS official icons for mid-level article diagram generation" \
-    --zip-file "fileb://${LAYER_ZIP}" \
-    --compatible-runtimes python3.14 \
-    --compatible-architectures x86_64 \
-    --region "${REGION}" \
-    --query "LayerVersionArn" --output text)
-  echo "  ✓ Layer publish 完了: ${LAYER_ARN}"
-else
-  # 現在 Lambda が使用中の Layer ARN を取得
-  LAYER_ARN=$(aws lambda get-function-configuration \
-    --function-name ZennMidArticleGenerator \
-    --region "${REGION}" \
-    --query "Layers[0].Arn" --output text 2>/dev/null || \
-    echo "arn:aws:lambda:${REGION}:$(aws sts get-caller-identity --query Account --output text):layer:matplotlib-aws-icons-mid:25")
-  echo "[1/3] Layer: ${LAYER_ARN}（既存を使用）"
-fi
-
-# [2/3] CloudFormationスタックをデプロイ
+# [1/2] CloudFormationスタックをデプロイ
 echo ""
-echo "[2/3] CloudFormationスタックをデプロイ中..."
+echo "[1/2] CloudFormationスタックをデプロイ中..."
 aws cloudformation deploy \
   --template-file "${SCRIPT_DIR}/cfn-mid-article-generator.yaml" \
   --stack-name "${STACK_NAME}" \
@@ -73,13 +43,12 @@ aws cloudformation deploy \
     SenderEmail="${SENDER_EMAIL}" \
     RecipientEmail="${RECIPIENT_EMAIL}" \
     BedrockModelId="${BEDROCK_MODEL_ID:-jp.anthropic.claude-sonnet-4-6}" \
-    DiagramsLayerArn="${LAYER_ARN}" \
   --no-fail-on-empty-changeset
 echo "  ✓ スタックデプロイ完了"
 
-# [3/3] Lambdaコードを直接デプロイ（S3不使用）
+# [2/2] Lambdaコードを直接デプロイ（S3不使用）
 echo ""
-echo "[3/3] Lambdaコードをデプロイ中..."
+echo "[2/2] Lambdaコードをデプロイ中..."
 cd "${SCRIPT_DIR}"
 # 画像はGPTに生成・配置を依頼する運用のため、diagram_generator.py・aws_icons/・fonts/は
 # 本番Lambdaにはもう不要（同梱すると16MB超の無駄なデプロイパッケージになる）。
@@ -125,9 +94,5 @@ echo "  aws lambda invoke --function-name ZennMidArticleGenerator --region ${REG
 echo ""
 echo "  ログ確認:"
 echo "  aws logs tail /aws/lambda/ZennMidArticleGenerator --region ${REGION} --since 10m --follow"
-echo ""
-echo "【Layerを更新する場合】"
-echo "  bash scripts/build_layer.sh  # matplotlib_layer.zip をビルド"
-echo "  DEPLOY_LAYER=1 ./deploy.sh   # Layer publish + スタック更新"
 echo ""
 echo "自動実行スケジュール: 毎月1日・15日 21:00 JST（UTC 12:00）"
