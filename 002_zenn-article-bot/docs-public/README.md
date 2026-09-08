@@ -155,4 +155,5 @@ bash scripts/download_article.sh
 - 記事の画像は今後GPTに質確認と合わせて生成・最適配置を依頼する運用に変更し、Bot側の構成図PNG自動生成（`diagram_generator.py`呼び出し）を停止した
 - メール通知・記事保存後の案内文言を「GPTに記事の質確認と画像生成・最適配置を依頼してから埋め込む」に変更
 - `diagram_generator.py`本体は削除せず残置。未使用になったLambda Layer `matplotlib-aws-icons`はCFnスタックからデタッチのうえ削除済み
+- 記事プロンプトに残っていた`{DIAGRAM_N}`マーカー挿入指示（フォーク実装時の見落とし）も削除し、画像配置の判断を完全にGPT側に委ねる設計に統一
 - 詳細は[CHANGELOG.md](./CHANGELOG.md)参照
