@@ -47,7 +47,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 | ストレージ   | Amazon S3（ライフサイクル90日自動削除設定済み）                                                          |
 | 通知         | Amazon SES                                                                                               |
 | IaC          | CloudFormation                                                                                           |
-| Lambda Layer | matplotlib / numpy / Pillow（構成図生成廃止に伴い2026-09-08〜未使用。スタックにはまだ接続されたまま、取り外しは別途判断） |
+| Lambda Layer | なし（構成図生成廃止に伴い2026-09-08にmatplotlib / numpy / Pillow Layerを取り外し・削除済み） |
 
 ## 実装のこだわり
 
@@ -114,11 +114,8 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 ## デプロイ
 
 ```bash
-# 初回デプロイ（CloudFormation + Lambda）
+# デプロイ（CloudFormation + Lambda）
 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
-
-# Layer も更新する場合
-DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
 ```
 
 ## テスト / 動作確認
@@ -157,5 +154,5 @@ bash scripts/download_article.sh
 
 - 記事の画像は今後GPTに質確認と合わせて生成・最適配置を依頼する運用に変更し、Bot側の構成図PNG自動生成（`diagram_generator.py`呼び出し）を停止した
 - メール通知・記事保存後の案内文言を「GPTに記事の質確認と画像生成・最適配置を依頼してから埋め込む」に変更
-- `diagram_generator.py`本体・Lambda Layer `matplotlib-aws-icons`は削除せず残置（Layerの取り外しは別途判断）
+- `diagram_generator.py`本体は削除せず残置。未使用になったLambda Layer `matplotlib-aws-icons`はCFnスタックからデタッチのうえ削除済み
 - 詳細は[CHANGELOG.md](./CHANGELOG.md)参照

@@ -251,5 +251,12 @@
 - ユーザー方針により、記事の画像は今後GPTに質確認と合わせて生成・最適配置を依頼する運用に変更。Bot側の構成図PNG自動生成（`diagram_generator.py`呼び出し）を停止した
 - `lambda_function.py`から`generate_diagrams_with_titles`の呼び出し・`diagram_titles`を用いた記事プロンプトへの構成図整合指示・「構成図が2枚未満」の品質チェック項目を削除。`png_paths`は常に空リストとして扱う
 - メール通知・記事保存後の案内文言を「Zennエディタで構成図PNGをアップロード」から「GPTに記事の質確認と画像生成・最適配置を依頼してから埋め込む」に変更
-- `diagram_generator.py`本体は将来の再利用に備えて削除せず残置。Lambda Layer `matplotlib-aws-icons`は本変更により未使用になったが、取り外し（CFnテンプレート変更）はユーザー確認の上で別途判断
+- `diagram_generator.py`本体は将来の再利用に備えて削除せず残置
 - テスト23件全てパスを確認、`aws lambda update-function-code`でコードのみ更新しdry_run実行で正常動作（`images_generated: 0`）を確認済み
+
+### Lambda Layer `matplotlib-aws-icons` を削除
+
+- 上記の構成図自動生成廃止により未使用になったLambda Layerを取り外し。CFnテンプレート`cfn-article-generator.yaml`から`DiagramsLayerArn`パラメータと`Layers`プロパティを削除し、`aws cloudformation deploy`でスタック更新
+- `deploy.sh`のLayer関連ロジック（`DEPLOY_LAYER=1`分岐、Layer ARN取得処理）を削除し、デプロイステップを[1/3]〜[3/3]から[1/2]〜[2/2]に整理。デプロイzipから`diagram_generator.py`・`aws_icons/`・`fonts/`も除外（24KB）
+- デタッチ後にdry_run実行で正常動作（StatusCode 200）を確認してから、`aws lambda delete-layer-version`でLayer本体（v36）を削除
+- `scripts/build_layer.sh`は非推奨コメントを追加し参照用に残置
