@@ -109,11 +109,8 @@ EventBridge（毎月1日・15日 21:00 JST）
 ## デプロイ
 
 ```bash
-# 初回デプロイ（CloudFormation + Lambda）
+# デプロイ（CloudFormation + Lambda）
 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
-
-# Layer も更新する場合
-DEPLOY_LAYER=1 SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
 ```
 
 ## テスト / 動作確認
@@ -146,4 +143,5 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 #### 構成図の自動生成を廃止、画像はGPTベースの手動ワークフローへ移行
 
 - 記事内の画像はBotで自動生成せず、GPTに記事の質確認と合わせて生成・最適配置を依頼する運用に変更。`diagram_generator.py`の自動呼び出しを廃止し、`{DIAGRAM_1}`マーカー方式を整理
-- SES通知メールの案内文言・デプロイパッケージ（16MB→28KB）を更新。詳細は[CHANGELOG.md](./CHANGELOG.md)参照
+- SES通知メールの案内文言・デプロイパッケージ（16MB→28KB）を更新。未使用になったLambda Layer `matplotlib-aws-icons-mid`はCFnスタックからデタッチのうえ削除済み
+- 詳細は[CHANGELOG.md](./CHANGELOG.md)参照
