@@ -15,7 +15,7 @@
 | 対応トピック     | 24種類（複合アーキテクチャ12 + ユースケース別12）                        |
 | 記事ボリューム   | 15,000〜30,000文字（初級Botの約3倍）                                     |
 | 差別化セクション | コスト最適化・セキュリティ設計・スケーラビリティの考慮点を追加           |
-| 生成画像         | アーキテクチャ図 PNG × 1枚（AWS公式アイコン使用）                        |
+| 画像             | Botは生成しない。GPTに記事の質確認と画像生成・最適配置を依頼する運用（2026-09-08〜） |
 | 使用モデル       | Amazon Bedrock **Claude Sonnet 4.6**（`jp.anthropic.claude-sonnet-4-6`） |
 | 月額コスト       | ~$2.7（約410円）                                                         |
 
@@ -31,8 +31,7 @@ EventBridge（毎月1日・15日 21:00 JST）
         ├─ Bedrock Claude Haiku（トピック選択: ~10 tokens）
         ├─ SSM からトピック履歴取得（直近12件除外）
         ├─ Bedrock Claude Sonnet（記事本文生成: ~12,000 tokens出力）
-        ├─ diagram_generator.py（matplotlib + AWS公式アイコン）
-        ├─ S3 PUT（MD + PNG × 1）
+        ├─ S3 PUT（MD）
         ├─ SSM PUT（トピック履歴更新）
         └─ SES（生成完了メール通知）
 ```

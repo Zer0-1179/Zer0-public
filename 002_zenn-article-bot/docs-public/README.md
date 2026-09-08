@@ -1,6 +1,6 @@
 # 002 Zenn Article Bot（初級）
 
-> AWS初学者向け技術記事を毎月2回、Bedrock Claude で 4,000〜8,000文字自動生成し、matplotlib + AWS公式アイコンでアーキテクチャ図PNG×2枚を同時生成してS3に保存するシステム。
+> AWS初学者向け技術記事を毎月2回、Bedrock Claude で 4,000〜8,000文字自動生成しS3に保存するシステム。画像は2026-09-08よりGPTに質確認・生成・配置を依頼する手動ワークフローに変更し、Bot側での構成図PNG自動生成は廃止した。
 
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20S3-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
@@ -15,7 +15,7 @@
 | 対応トピック   | 28種類のAWSサービス（EC2/S3/Lambda/RDS 等22種 + サービス特化サブトピック6種） |
 | 記事ボリューム | 4,000〜8,000文字 + Zenn Markdown 完全対応                 |
 | 切り口         | コスト/セキュリティ/連携/つまずきポイントの4種からランダム選択（同トピック2周目以降の重複緩和） |
-| 生成画像       | アーキテクチャ図 PNG × 2枚（AWS公式アイコン使用、記事本文とプロンプトレベルで整合） |
+| 画像           | Bot側では生成しない（2026-09-08〜）。GPTに記事の質確認と合わせて生成・最適配置を依頼する手動ワークフロー |
 | 重複防止       | SSM でトピック直近20件・切り口直近3件を記録、連続生成を防止 |
 | 出力先         | Amazon S3（`zer0-dev-s3/zenn-articles/`）+ SES メール通知 |
 | 月額コスト     | ~$0.16（約24円）                                          |
@@ -28,13 +28,10 @@
 EventBridge Scheduler（第1・第3木曜 21:00 JST）
   └─▶ Lambda（Python 3.14 / 256MB / 900秒）
         ├─ SSM からトピック履歴（直近20件）・切り口履歴（直近3件）取得 → ランダム選択
-        ├─ diagram_generator.py（記事生成より先に実行）
-        │   ├─ matplotlib + AWS公式アイコン（64px PNG）
-        │   └─ PNG 生成 × 2枚（メイン構成図 + 詳細図）+ 各図のタイトルを取得
-        ├─ Bedrock Claude Haiku（切り口・図の内容をプロンプトに注入して記事本文生成 ~8,000 tokens出力）
+        ├─ Bedrock Claude Haiku（切り口をプロンプトに注入して記事本文生成 ~8,000 tokens出力）
         ├─ 軽微な問題を自動修正（古いランタイム表記・h1見出し・コードブロック言語指定・--region漏れ。Bedrock再呼び出しなし）
-        ├─ 記事品質チェック（文字数・Zenn記法対応・CLIコマンド体裁・構成図枚数。自動修正で直らない問題のみメールで警告）
-        ├─ S3 PUT（MD + PNG × 2）※ dry_run時はスキップ
+        ├─ 記事品質チェック（文字数・Zenn記法対応・CLIコマンド体裁。自動修正で直らない問題のみメールで警告）
+        ├─ S3 PUT（MD）※ dry_run時はスキップ
         ├─ SSM PUT（トピック・切り口履歴更新）※ dry_run時はスキップ
         └─ SES（生成完了メール通知：タイトル・見出し一覧・コスト概算等を含む）※ dry_run時はスキップ
 ```
@@ -45,19 +42,18 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 | ------------ | -------------------------------------------------------------------------------------------------------- |
 | 実行基盤     | AWS Lambda（Python 3.14 / 256MB / 900秒）                                                                |
 | AI生成       | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 8,192） |
-| 図生成       | matplotlib（Graphviz・diagrams 依存ゼロ）                                                                |
-| アイコン     | AWS公式アイコン 64px PNG（Lambda Layer に同梱）                                                          |
+| 画像         | Bot側では生成しない。GPTに手動で生成・配置を依頼（2026-09-08〜）                                         |
 | 状態管理     | SSM Parameter Store（トピック履歴 + 記事カウンター）                                                     |
 | ストレージ   | Amazon S3（ライフサイクル90日自動削除設定済み）                                                          |
 | 通知         | Amazon SES                                                                                               |
 | IaC          | CloudFormation                                                                                           |
-| Lambda Layer | matplotlib / numpy / Pillow（50MB 以内 / 直接アップロード）                                              |
+| Lambda Layer | matplotlib / numpy / Pillow（構成図生成廃止に伴い2026-09-08〜未使用。スタックにはまだ接続されたまま、取り外しは別途判断） |
 
 ## 実装のこだわり
 
-### 1. Lambda 環境での図生成（Graphviz 不使用）
+### 1. 画像はGPTによる手動ワークフローへ移行（2026-09-08〜）
 
-`diagrams` や `graphviz` はシステムバイナリが必要なため Lambda では動作しない。**matplotlib のみで AWS公式アイコンを配置・矢印描画するカスタムエンジン**（`diagram_generator.py`）を自前実装。ノード間の矢印衝突回避・クラスター枠の自動パディング調整・日本語フォントの動的ロードまで独自で実装している。
+以前は`diagram_generator.py`（matplotlib + AWS公式アイコンの自前描画エンジン）でアーキテクチャ図PNGを2枚自動生成していたが、GPTに記事の質確認と合わせて画像生成・最適配置を依頼する運用に切り替え、Bot側の自動生成は廃止した。`diagram_generator.py`自体は将来の再利用に備えて削除せず残しているが、Lambdaからは呼び出していない。
 
 ### 2. Zenn Markdown 完全対応
 
@@ -71,9 +67,9 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 
 `download_article.sh`でローカルにダウンロードした記事はS3から即時削除される。ダウンロードされないまま残った記事もS3バケット（`zer0-dev-s3`）の90日ライフサイクルルールで自動削除される。ローカルの`output/`配下は投稿履歴として残すため自動削除しない。
 
-### 5. 構成図とハンズオン本文の整合性
+### 5. 構成図とハンズオン本文の整合性（廃止・履歴）
 
-以前は構成図（`diagram_generator.py`が固定生成）と記事本文（Bedrockが自由生成）が独立していたため、図とハンズオン手順の構成が食い違うことがあった。構成図を先に生成してタイトルを取得し、記事生成プロンプトに「図1/図2はこの構成を示す」と注入することで、本文の該当箇所を図と一致させている。
+以前は構成図（`diagram_generator.py`が固定生成）と記事本文（Bedrockが自由生成）の整合を取るため、構成図を先に生成してタイトルを記事生成プロンプトに注入する仕組みを持っていたが、2026-09-08の画像生成廃止に伴いこの仕組みも不要になった。画像と本文の整合性は、埋め込みを担当するGPT側が記事全体を読んだ上で判断する。
 
 ### 6. トピック選定はrandom.choice（Bedrock不使用）
 
@@ -99,7 +95,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 002_Zenn_Auto_Article_Bot/
 ├── src/
 │   ├── lambda_function.py    # メインロジック
-│   ├── diagram_generator.py  # matplotlib 図生成エンジン
+│   ├── diagram_generator.py  # matplotlib 図生成エンジン（2026-09-08〜未使用、削除せず保管）
 │   ├── deploy.sh             # デプロイスクリプト
 │   └── tests/
 │       └── test_lambda.py    # ユニットテスト（23件）
@@ -155,15 +151,11 @@ bash scripts/download_article.sh
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-09-05
+### 2026-09-08
 
-#### メール通知の迷惑メール判定を修正、送信元をドメインアドレスへ切替
+#### 構成図PNG自動生成を廃止、GPTによる手動ワークフローへ移行
 
-- 送信元(`SenderEmail`)が個人Gmailアドレスのままだったため、宛先(同じGmail)から自己スプーフィングとして迷惑メール判定されていた問題を修正
-- 送信元をSES上でDKIM署名済みのドメインアドレス`zenn-bot@info.zer0-infra.com`に変更。IAMポリシーのResource ARNも`SenderEmail`のドメイン部分から導出する方式に変更
-
-#### 構成図をdraw.io「プラグイン様式」に更新
-
-- 構成図の参照先を`002_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`002_architecture_plugin_flowdot.svg`に変更
-- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）
+- 記事の画像は今後GPTに質確認と合わせて生成・最適配置を依頼する運用に変更し、Bot側の構成図PNG自動生成（`diagram_generator.py`呼び出し）を停止した
+- メール通知・記事保存後の案内文言を「GPTに記事の質確認と画像生成・最適配置を依頼してから埋め込む」に変更
+- `diagram_generator.py`本体・Lambda Layer `matplotlib-aws-icons`は削除せず残置（Layerの取り外しは別途判断）
 - 詳細は[CHANGELOG.md](./CHANGELOG.md)参照

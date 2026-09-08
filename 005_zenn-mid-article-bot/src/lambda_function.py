@@ -1391,8 +1391,6 @@ bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh
           <td>{char_count:,}文字</td></tr>
       <tr><td style="padding:5px;font-weight:bold;">生成日時</td>
           <td>{timestamp}</td></tr>
-      <tr><td style="padding:5px;font-weight:bold;">構成図PNG</td>
-          <td><ul style="margin:0;padding-left:16px;">{png_list_html}</ul></td></tr>
       {s3_row}
     </table>
   </div>
@@ -1416,9 +1414,8 @@ bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh
     <h3>次のアクション</h3>
     <ol>
       {download_row}
-      <li>Zennエディタで新規記事を作成</li>
-      <li>MDファイルの内容を貼り付け</li>
-      <li>:::message ブロック内の指示に従ってPNGをアップロード・差し替え</li>
+      <li>記事をGPTに渡し、内容の質確認と画像生成・最適な埋め込み位置の提案を依頼する</li>
+      <li>Zennエディタで新規記事を作成し、GPTの提案どおりに画像を埋め込みながらMDファイルの内容を貼り付け</li>
       <li><code>published: false</code> → <code>true</code> に変更して公開</li>
     </ol>
   </div>
@@ -1551,12 +1548,11 @@ def lambda_handler(event, context):
     article, is_truncated = generate_article(topic, today, model_id)
     print(f"  記事生成完了: {len(article):,}文字 [{time.time()-_t:.1f}s]")
 
-    # Step 4: ローカル保存 + 構成図生成
+    # Step 4: ローカル保存（画像はGPTに生成・配置を依頼する運用のため生成しない）
     _t = time.time()
-    print("Step 4: ローカルに保存中（記事MD + 構成図PNG）...")
+    print("Step 4: ローカルに保存中（記事MD）...")
     md_path, png_paths = save_to_local(topic, article, timestamp, occurrence)
-    print(f"  MD保存完了: {md_path}")
-    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]")
+    print(f"  MD保存完了: {md_path} [{time.time()-_t:.1f}s]")
 
     # Step 5: S3 アップロード（Lambda環境のみ）
     # ここで例外を伝播させるとLambdaの再試行で記事生成（Bedrockコスト）から
