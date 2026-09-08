@@ -65,14 +65,14 @@ def test_article_prompt_no_key_error():
     """プロンプト組み立て（テンプレートformat＋乱択要素の埋め込み）がKeyErrorを出さないこと"""
     result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
     assert "Lambda" in result
-    assert "{DIAGRAM_1}" in result
+    assert "DIAGRAM" not in result  # 画像はGPTに生成・配置を依頼する運用のためマーカーは出力しない
 
 
-def test_build_prompt_keeps_diagram_marker_and_sections():
-    """乱択要素が入ってもDIAGRAM_1マーカーと必須セクション指示が毎回含まれること"""
+def test_build_prompt_no_diagram_marker_and_keeps_sections():
+    """乱択要素が入ってもDIAGRAMマーカーが混入せず、必須セクション指示は毎回含まれること"""
     for _ in range(30):
         result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
-        assert "{DIAGRAM_1}" in result
+        assert "DIAGRAM" not in result
         assert "## 各コンポーネントの選定理由" in result
         assert "## 構成手順" in result
         assert "## はじめに" in result

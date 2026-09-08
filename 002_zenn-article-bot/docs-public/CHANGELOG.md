@@ -243,3 +243,13 @@
 - 新しい構成図は`002_architecture_plugin.drawio`（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル付き）から作成・レビュー済み（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
 - 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/002_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
 - 旧`002_architecture.drawio`/`002_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）
+
+## 2026-09-08
+
+### 構成図PNG自動生成を廃止、GPTによる手動ワークフローへ移行
+
+- ユーザー方針により、記事の画像は今後GPTに質確認と合わせて生成・最適配置を依頼する運用に変更。Bot側の構成図PNG自動生成（`diagram_generator.py`呼び出し）を停止した
+- `lambda_function.py`から`generate_diagrams_with_titles`の呼び出し・`diagram_titles`を用いた記事プロンプトへの構成図整合指示・「構成図が2枚未満」の品質チェック項目を削除。`png_paths`は常に空リストとして扱う
+- メール通知・記事保存後の案内文言を「Zennエディタで構成図PNGをアップロード」から「GPTに記事の質確認と画像生成・最適配置を依頼してから埋め込む」に変更
+- `diagram_generator.py`本体は将来の再利用に備えて削除せず残置。Lambda Layer `matplotlib-aws-icons`は本変更により未使用になったが、取り外し（CFnテンプレート変更）はユーザー確認の上で別途判断
+- テスト23件全てパスを確認、`aws lambda update-function-code`でコードのみ更新しdry_run実行で正常動作（`images_generated: 0`）を確認済み

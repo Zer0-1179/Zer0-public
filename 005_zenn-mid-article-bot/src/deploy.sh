@@ -81,13 +81,11 @@ echo "  ✓ スタックデプロイ完了"
 echo ""
 echo "[3/3] Lambdaコードをデプロイ中..."
 cd "${SCRIPT_DIR}"
-# aws_icons/（AWS公式アイコン）・fonts/（CJKフォント）を同梱しないと、Lambda本番環境で
-# 構成図の日本語が文字化けし、アイコンも自作の色付きボックスにフォールバックしてしまう
+# 画像はGPTに生成・配置を依頼する運用のため、diagram_generator.py・aws_icons/・fonts/は
+# 本番Lambdaにはもう不要（同梱すると16MB超の無駄なデプロイパッケージになる）。
+# ファイル自体は将来のため削除せずリポジトリに残している。
 zip -r /tmp/zenn_mid_function.zip \
   lambda_function.py \
-  diagram_generator.py \
-  aws_icons/ \
-  fonts/ \
   -q
 echo "  zipサイズ: $(du -sh /tmp/zenn_mid_function.zip | cut -f1)"
 
