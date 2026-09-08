@@ -1007,7 +1007,7 @@ def send_email_notification(
     char_count = len(article)
     preview    = article[:300].replace("\n", " ")
     preview_html = _html.escape(preview)
-    diagram_info = ", ".join(os.path.basename(p) for p in png_paths) if png_paths else "生成なし"
+    diagram_info = ", ".join(os.path.basename(p) for p in png_paths) if png_paths else "未生成（GPTに作成・配置を依頼してください）"
 
     gen_meta = gen_meta or {}
     headings = [l[3:].strip() for l in article.splitlines() if l.startswith("## ")]
@@ -1027,7 +1027,7 @@ def send_email_notification(
 
     png_list_html = "".join(
         f'<li><code>{os.path.basename(p)}</code></li>' for p in png_paths
-    ) if png_paths else "<li>（生成なし）</li>"
+    ) if png_paths else "<li>（未生成。GPTに作成・配置を依頼してください）</li>"
 
     s3_row = (
         f'<tr><td style="padding:5px;font-weight:bold;">S3保存先</td>'
@@ -1083,9 +1083,9 @@ Zennに投稿する前に内容を必ず確認してください。
 ■ 次のアクション
 1. 記事をダウンロード（下記コマンドをそのままコピペして実行）
 bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh
-2. Zennエディタで新規記事を作成（または zenn-cli で管理）
-3. MDファイルの内容を貼り付け
-4. :::message ブロック内の指示に従ってPNGをアップロード・差し替え
+2. GPTに記事内容を渡して質確認と画像の生成・最適な挿入箇所の提案を依頼し、画像を貼り込む
+3. Zennエディタで新規記事を作成（または zenn-cli で管理）
+4. MDファイルの内容を貼り付け
 5. published: false → true に変更して公開
 
 このメールは自動送信されています。
@@ -1162,9 +1162,9 @@ bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh
     <h3>次のアクション</h3>
     <ol>
       {download_row}
+      <li>GPTに記事内容を渡して質確認と画像の生成・最適な挿入箇所の提案を依頼し、画像を貼り込む</li>
       <li>Zennエディタで新規記事を作成</li>
       <li>MDファイルの内容を貼り付け</li>
-      <li><code>:::message</code> ブロックの指示に従ってPNGをアップロード・差し替え</li>
       <li><code>published: false</code> → <code>true</code> に変更して公開</li>
     </ol>
   </div>
@@ -1213,18 +1213,17 @@ def run(dry_run: bool = False):
     save_angle_to_ssm(angle, dry_run=dry_run)
     print(f"  選択されたトピック: {topic['name']} / 切り口: {angle} [{time.time()-_t:.1f}s]")
 
-    # Step 2: 出力先準備 + 構成図生成（記事プロンプトに図の内容を伝えるため記事生成より先に行う）
+    # Step 2: 出力先準備（画像はGPTに手動で依頼する運用のため、構成図PNGは生成しない）
     _t = time.time()
-    print("Step 2: 構成図を生成中...")
     output_dir = os.path.expanduser(OUTPUT_DIR)
     md_path, png_base = _prepare_article_paths(topic, timestamp, output_dir, dry_run=dry_run)
-    png_paths, diagram_titles = generate_diagrams_with_titles(topic["id"], png_base)
-    print(f"  PNG生成完了: {len(png_paths)}枚 [{time.time()-_t:.1f}s]" if png_paths else f"  PNG生成: スキップ [{time.time()-_t:.1f}s]")
+    png_paths: list[str] = []
+    print(f"  出力先準備完了 [{time.time()-_t:.1f}s]")
 
     # Step 3: 記事生成
     _t = time.time()
     print("Step 3: 記事を生成中（4,000〜8,000文字程度）...")
-    article, title, is_truncated, gen_meta = generate_article(topic, today, angle, diagram_titles)
+    article, title, is_truncated, gen_meta = generate_article(topic, today, angle)
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")
 
@@ -1256,8 +1255,6 @@ def run(dry_run: bool = False):
     print("Step 6: 記事品質をチェック中...")
     try:
         issues = validate_article(article, char_count)
-        if len(png_paths) < 2:
-            issues.append(f"構成図が{len(png_paths)}枚しか生成されていません（想定: 2枚）")
         if issues:
             print(f"  ⚠️ 品質チェック問題: {len(issues)}件 [{time.time()-_t:.1f}s]")
         else:
