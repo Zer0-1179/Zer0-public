@@ -5,11 +5,9 @@ import time
 import boto3
 import datetime
 from botocore.config import Config
-try:
-    from diagram_generator import generate_diagrams_with_titles
-except ImportError:
-    def generate_diagrams_with_titles(topic_id, base_path):
-        return [], []
+# 構成図PNGの自動生成は廃止（2026-09-08〜）。画像はGPTに記事の質確認と合わせて
+# 生成・最適配置を依頼する手動ワークフローへ移行した。diagram_generator.py は
+# 将来また使う可能性があるため削除せず残してあるが、本体からは呼び出さない。
 
 # AWS clients
 bedrock = boto3.client(
@@ -626,7 +624,7 @@ def select_angle(excluded_angles: list[str]) -> str:
 
 # ─── 記事生成 ─────────────────────────────────────────────────────────────────
 
-def generate_article(topic: dict, today: str, angle: str, diagram_titles: list[str]) -> tuple[str, str, bool, dict]:
+def generate_article(topic: dict, today: str, angle: str) -> tuple[str, str, bool, dict]:
     """Bedrock を使って記事を生成する。(article_text, title, is_truncated, meta) を返す"""
     docs_content = fetch_aws_docs(topic["id"])
     docs_section = (
@@ -637,13 +635,6 @@ def generate_article(topic: dict, today: str, angle: str, diagram_titles: list[s
         if docs_content else ""
     )
     diagram_section = ""
-    if diagram_titles:
-        diagram_lines = "\n".join(f"- 図{i}: {t}" for i, t in enumerate(diagram_titles, start=1))
-        diagram_section = (
-            "## 構成図（本文と整合させること）\n"
-            "記事中には以下の構成図が挿入されます。図の直前の説明文・ハンズオン手順の内容はこの構成と一致させてください。\n"
-            f"{diagram_lines}\n\n---\n"
-        )
     prompt = ARTICLE_PROMPT_TEMPLATE.format(
         topic_name=topic["name"],
         topic_subtitle=topic["subtitle"],
