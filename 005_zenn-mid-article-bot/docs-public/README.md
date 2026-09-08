@@ -141,15 +141,9 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-09-05
+### 2026-09-08
 
-#### メール通知の迷惑メール判定を修正、送信元をドメインアドレスへ切替
+#### 構成図の自動生成を廃止、画像はGPTベースの手動ワークフローへ移行
 
-- 送信元(`SenderEmail`)が個人Gmailアドレスのままだったため、宛先(同じGmail)から自己スプーフィングとして迷惑メール判定されていた問題を修正
-- 送信元をSES上でDKIM署名済みのドメインアドレス`zenn-mid-bot@info.zer0-infra.com`に変更。IAMポリシーのResource ARNも`SenderEmail`のドメイン部分から導出する方式に変更
-
-#### 構成図をdraw.io「プラグイン様式」に更新
-
-- 構成図の参照先を`005_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`005_architecture_plugin_flowdot.svg`に変更
-- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）
-- 詳細は[CHANGELOG.md](./CHANGELOG.md)参照
+- 記事内の画像はBotで自動生成せず、GPTに記事の質確認と合わせて生成・最適配置を依頼する運用に変更。`diagram_generator.py`の自動呼び出しを廃止し、`{DIAGRAM_1}`マーカー方式を整理
+- SES通知メールの案内文言・デプロイパッケージ（16MB→28KB）を更新。詳細は[CHANGELOG.md](./CHANGELOG.md)参照

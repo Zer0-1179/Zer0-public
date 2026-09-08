@@ -309,3 +309,14 @@
 - 新しい構成図は`005_architecture_plugin.drawio`（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル付き）から作成・レビュー済み（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
 - 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/005_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
 - 旧`005_architecture.drawio`/`005_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）
+
+## 2026-09-08
+
+### 構成図の自動生成を廃止、画像はGPTベースの手動ワークフローへ移行
+
+- ユーザー方針により、記事内の画像（構成図等）は今後GPTに記事の質確認と合わせて生成・最適配置を依頼する運用に変更。Botによる`diagram_generator.py`（matplotlib + AWS公式アイコン）の自動呼び出しを廃止
+- `lambda_function.py`から`diagram_generator`のimportと呼び出しを削除し、`{DIAGRAM_1}`マーカー方式の生成プロンプト指示・`_DIAGRAM_INTRO_STYLES`・画像プレースホルダー組み立てロジックを整理。`png_paths`は常に空リストとして扱う（LLMがマーカーを誤って出力した場合のみ除去する軽量なフォールバックは維持）
+- SES通知メール（テキスト・HTML両方）の文言を「Zennエディタで構成図PNGをアップロード」から「記事をGPTに渡し、質確認と画像生成・最適な埋め込み位置の提案を依頼する」に変更
+- デプロイパッケージから`diagram_generator.py`・`aws_icons/`・`fonts/`を除外（`deploy.sh`のzip対象を`lambda_function.py`のみに変更）。デプロイサイズが16MB→28KBに縮小。各ファイル自体は将来の再利用に備えリポジトリに残置
+- pytest 22件（DIAGRAM関連のテスト2件は前提を更新）全通過、`dry_run`実行で実機動作確認済み（`png_count: 0`で正常終了）
+- Lambda Layer `matplotlib-aws-icons-mid`は本変更により未使用になったが、CFnスタックからのデタッチ（`DiagramsLayerArn`の解除）はインフラ変更のためユーザー確認後に別途実施する
