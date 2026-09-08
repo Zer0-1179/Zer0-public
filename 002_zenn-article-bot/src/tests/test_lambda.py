@@ -21,8 +21,8 @@ def test_article_prompt_no_key_error():
         angle="コスト最適化の観点",
     )
     assert "Amazon S3" in result
-    assert "{DIAGRAM_1}" in result
-    assert "{DIAGRAM_2}" in result
+    assert "{DIAGRAM_1}" not in result
+    assert "{DIAGRAM_2}" not in result
 
 
 def test_get_recent_topics_empty(monkeypatch):
@@ -72,19 +72,19 @@ def test_embed_cleanup_removes_single_brace_markers():
     assert "{DIAGRAM_2}" not in out
 
 
-def test_embed_fallback_no_heading_does_not_raise():
-    """見出しが1つも無くてもIndexErrorを出さず画像を末尾に追記すること"""
+def test_embed_no_heading_does_not_raise():
+    """見出しが1つも無くても例外を出さずそのまま返すこと（画像はBot側で生成しない）"""
     article = "見出しのない本文だけのテキスト"
-    out = lambda_function._embed_image_placeholders(article, ["/tmp/x_1.png"], "Amazon S3")
-    assert "x_1.png" in out
+    out = lambda_function._embed_image_placeholders(article, [], "Amazon S3")
+    assert out == article
 
 
-def test_embed_replaces_marker_with_placeholder():
-    """マーカーが画像プレースホルダーに置換されること"""
+def test_embed_strips_marker_without_embedding_image():
+    """{DIAGRAM_N}マーカーは画像に置換せず除去だけすること（画像はGPTに依頼する運用のため）"""
     article = "## はじめに\n本文\n\n{DIAGRAM_1}\n\n## まとめ\n"
-    out = lambda_function._embed_image_placeholders(article, ["/tmp/diagram_1.png"], "Amazon S3")
+    out = lambda_function._embed_image_placeholders(article, [], "Amazon S3")
     assert "{DIAGRAM_1}" not in out
-    assert "diagram_1.png" in out
+    assert ".png" not in out
 
 
 def test_select_topic_excludes_recent():
