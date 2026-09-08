@@ -9,11 +9,6 @@ from botocore.config import Config
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
-try:
-    from diagram_generator import generate_diagrams
-except ImportError:
-    def generate_diagrams(topic, base_path):
-        return []
 
 # AWS clients
 bedrock = boto3.client(
@@ -639,20 +634,10 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 
 ### ## アーキテクチャ概要
 
-**`{{DIAGRAM_1}}` マーカーの配置ルール（必ず守ること）**
-- マーカーは `## アーキテクチャ概要` セクションの本文中にのみ置く。他のセクション・見出し直後には置かない。
-- 直前（1文）: {diagram_intro_style}
-  - 決まり文句ではなく、このテーマの内容に即した自分の言葉で書く
-  - 禁止: 「以下が全体構成図です。」のような内容のない定型文
-- 直後（1〜2文）: 図から読み取れる最重要ポイントを具体的に補足する
-
 構成:
 1. この構成が解決する課題と解決策の概要を段落で書く
-2. 予告文（1文）を書く
-3. 単独行で `{{DIAGRAM_1}}` を挿入（前後に空行必須）
-4. 図の補足説明（1〜2文）
-5. 各サービスが担う役割を1〜2行で箇条書き
-6. データ・リクエストの流れを番号付きで説明
+2. 各サービスが担う役割を1〜2行で箇条書き
+3. データ・リクエストの流れを番号付きで説明
 
 {middle_sections}
 
@@ -761,13 +746,6 @@ _OPENING_STYLES: list[str] = [
     "- **冒頭の1〜2文は「この構成が必要になる典型シナリオ」から入る**（どんなチーム・システム規模・フェーズで必要になるかを具体的に描く）",
 ]
 
-# 構成図直前の予告文も「良い例」の逐語転写が確認されたため、切り口の指示のみ乱択で与える
-_DIAGRAM_INTRO_STYLES: list[str] = [
-    "図を先に把握しておくと以降のどの設計判断が理解しやすくなるか、を示す予告文を書く",
-    "図に何がまとまっているか（サービス間の接続関係・データの流れ）を予告する1文を書く",
-    "図のどこに注目して読んでほしいか（要のサービス・境界など）を示す1文を書く",
-]
-
 # 「選定理由」と「構成手順」は記事として自然さを損なわない範囲で順序を入れ替えられるため、
 # 2ブロックを乱択で並べ替えて {middle_sections} に埋め込む（見出し構成の紋切り型化を防ぐ）
 _SECTION_COMPONENTS = """### ## 各コンポーネントの選定理由
@@ -794,9 +772,8 @@ _SECTION_STEPS = """### ## 構成手順
 
 
 def build_article_prompt(topic: dict, today: str, docs_section: str) -> str:
-    """記事生成プロンプトを組み立てる。書き出しスタイル・図の予告文の切り口・
+    """記事生成プロンプトを組み立てる。書き出しスタイル・
     中盤セクション（選定理由/構成手順）の順序をコード側乱択で決定する。
-    {{DIAGRAM_1}}マーカーの記法・配置ルールはここでは一切変更しない。
     """
     middle_order = random.choice([
         (_SECTION_COMPONENTS, _SECTION_STEPS),
@@ -811,7 +788,6 @@ def build_article_prompt(topic: dict, today: str, docs_section: str) -> str:
         docs_section=docs_section,
         primary_service_label=topic.get("primary_service_label", ""),
         opening_style=random.choice(_OPENING_STYLES),
-        diagram_intro_style=random.choice(_DIAGRAM_INTRO_STYLES),
         middle_sections="\n\n".join(middle_order),
     )
 
@@ -1040,84 +1016,17 @@ def generate_article(topic: dict, today: str, model_id: str) -> tuple[str, bool]
     return text, is_truncated
 
 
-# ─── MD 生成（画像プレースホルダー付き） ─────────────────────────────────────
-
-_DIAGRAM_CAPTIONS = [
-    "{topic_name} – 構成図",
-]
-
-
-def _make_image_placeholder(png_path: str, topic_name: str, index: int) -> str:
-    filename = os.path.basename(png_path)
-    caption_tmpl = _DIAGRAM_CAPTIONS[index - 1] if index - 1 < len(_DIAGRAM_CAPTIONS) else "{topic_name} 構成図" + str(index)
-    caption = caption_tmpl.format(topic_name=topic_name)
-    return (
-        f"\n"
-        f":::message\n"
-        f"📷 **【Zenn投稿時】** `{filename}` をZennエディタでアップロードし、下の画像パスをZenn CDN URLに置き換えてください。\n"
-        f":::\n\n"
-        f"![{caption}](./images/{filename})\n"
-        f"*{caption}*\n"
-    )
-
+# ─── MD 生成 ──────────────────────────────────────────────────────────────
 
 def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: str) -> str:
-    """{{DIAGRAM_N}} マーカーを画像プレースホルダーに置換する。
-    マーカーが見つからない場合は見出し名ベースのフォールバック挿入を行う。
+    """画像はGPTに生成・配置を依頼する運用のため、Botは構成図を作らない
+    （png_paths は常に空）。プロンプト側も {DIAGRAM_N} マーカーの出力は指示していないが、
+    LLMが過去の学習データの影響で稀に出力するケースに備え、残存マーカーだけ除去する。
     """
-    if not png_paths:
-        # format() 後は単一波括弧 {DIAGRAM_N}、未展開時は二重波括弧 {{DIAGRAM_N}} の
-        # どちらが残っていても除去できるようにパターンを両対応にする。
-        cleaned, n = re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
-        if n:
-            print(f"[WARNING] PNG未生成のためDIAGRAMマーカー{n}件を除去しました")
-        return cleaned
-
-    # フォールバック用: 見出し名で挿入位置を探す順序
-    _FALLBACK_HEADINGS = ["アーキテクチャ概要"]
-
-    result = article
-    for img_idx, png_path in enumerate(png_paths):
-        n = img_idx + 1
-        # format() 後は単一波括弧が正常だが、LLMがプロンプト例文の二重波括弧を
-        # そのまま出力することがあるため両方を置換対象にする
-        marker = "{" + f"DIAGRAM_{n}" + "}"
-        marker_double = "{" + marker + "}"
-        placeholder = _make_image_placeholder(png_path, topic_name, n)
-
-        if marker_double in result:
-            result = result.replace(marker_double, placeholder, 1)
-        elif marker in result:
-            result = result.replace(marker, placeholder, 1)
-        else:
-            # フォールバック: 対応する見出し名の直後に挿入
-            lines = result.split("\n")
-            target_heading = _FALLBACK_HEADINGS[img_idx] if img_idx < len(_FALLBACK_HEADINGS) else None
-            h2_positions = [i for i, line in enumerate(lines) if line.startswith("## ")]
-            if not h2_positions:
-                # 見出しが1つもない場合は末尾に追記（スキップせずプレースホルダーを保持）
-                print(f"[WARNING] DIAGRAM_{n} のマーカー・見出しが見つからないため末尾に挿入します")
-                result = result.rstrip() + "\n\n" + placeholder
-                continue
-
-            if target_heading:
-                matched = [i for i, line in enumerate(lines)
-                           if line.startswith("## ") and target_heading in line]
-                insert_idx = matched[0] if matched else h2_positions[min(img_idx + 1, len(h2_positions) - 1)]
-            else:
-                insert_idx = h2_positions[min(img_idx + 1, len(h2_positions) - 1)]
-
-            lines.insert(insert_idx + 1, placeholder)
-            result = "\n".join(lines)
-
-    # 図の一部が生成失敗した場合、残存する {DIAGRAM_N} マーカーを除去する
-    # LLMがプロンプト例文の二重波括弧 {{DIAGRAM_N}} をそのまま出力するケースもあるため、
-    # 単一・二重波括弧の両方を除去対象にする（_embed_image_placeholders冒頭と同じパターン）
-    result, n_orphan = re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', result)
-    if n_orphan:
-        print(f"[WARNING] 図生成失敗により未置換のDIAGRAMマーカー{n_orphan}件を除去しました")
-
-    return result
+    cleaned, n = re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
+    if n:
+        print(f"[WARNING] 未使用のDIAGRAMマーカー{n}件を除去しました")
+    return cleaned
 
 
 def _inject_reference_link(article: str, topic: dict) -> str:
@@ -1165,7 +1074,10 @@ def _next_article_number(output_dir: str) -> str:
 
 
 def save_to_local(topic: dict, article: str, timestamp: str, occurrence: int = 1) -> tuple[str, list[str]]:
-    """記事を MD ファイルに保存し、構成図 PNG も生成する。(mdパス, pngパスリスト) を返す"""
+    """記事を MD ファイルに保存する。(mdパス, pngパスリスト) を返す。
+    画像はGPTに記事の質確認と合わせて生成・配置を依頼する運用のため、
+    構成図の自動生成は行わない（images_dir はGPT生成画像の手動配置先として空のまま残す）。
+    """
     output_dir = os.path.expanduser(OUTPUT_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -1177,10 +1089,8 @@ def save_to_local(topic: dict, article: str, timestamp: str, occurrence: int = 1
     os.makedirs(images_dir,  exist_ok=True)
 
     md_path  = os.path.join(article_dir, f"{base_name}.md")
-    png_base = os.path.join(images_dir,  f"{base_name}_diagram")
 
-    # 構成図を生成（1枚）
-    png_paths = generate_diagrams(topic, png_base)
+    png_paths: list[str] = []
 
     # primary_service の確定URLを '## 参考' セクションに挿入（LLM生成ではない安全なリンク）
     article = _inject_reference_link(article, topic)
@@ -1368,7 +1278,6 @@ def send_email_notification(
     preview    = article[:300].replace("\n", " ")
     preview_html = _html.escape(preview)
     services_str = " + ".join(topic["services"])
-    diagram_info = ", ".join(os.path.basename(p) for p in png_paths) if png_paths else "生成なし"
 
     outline = extract_article_outline(article)
     outline_text = "\n".join(f"  - {h}（約{c:,}文字）" for h, c in outline) or "  （見出しが検出できませんでした）"
@@ -1386,10 +1295,6 @@ def send_email_notification(
         if is_truncated else
         f"{subject_prefix}【Zenn中級記事生成完了】{topic['name']} - {timestamp}"
     )
-
-    png_list_html = "".join(
-        f'<li><code>{os.path.basename(p)}</code></li>' for p in png_paths
-    ) if png_paths else "<li>（生成なし）</li>"
 
     s3_row = (
         f'<tr><td style="padding:5px;font-weight:bold;">S3保存先</td>'
@@ -1423,7 +1328,6 @@ Zennに投稿する前に内容を必ず確認してください。
 - 使用サービス: {services_str}
 - 文字数: {char_count:,}文字
 - 生成日時: {timestamp}
-- 構成図PNG: {diagram_info}
 - S3保存先: {s3_url}
 
 ■ 見出しアウトライン
@@ -1438,10 +1342,9 @@ Zennに投稿する前に内容を必ず確認してください。
 ■ 次のアクション
 1. 記事をダウンロード（下記コマンドをそのままコピペして実行）
 bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh
-2. Zennエディタで新規記事を作成
-3. MDファイルの内容を貼り付け
-4. :::message ブロック内の指示に従ってPNGをアップロード・差し替え
-5. published: false → true に変更して公開
+2. 記事をGPTに渡し、内容の質確認と画像生成・最適な埋め込み位置の提案を依頼する
+3. Zennエディタで新規記事を作成し、GPTの提案どおりに画像を埋め込みながらMDファイルの内容を貼り付け
+4. published: false → true に変更して公開
 
 このメールは自動送信されています。
 """
