@@ -395,13 +395,6 @@ aws s3 ls
   - 本質から入る例: 「{topic_name}は〜するためのサービスです。これがあると〜が不要になります」
   - 「この記事では〜を解説します」という宣言は使わない
 - この記事を読むと「何ができるようになるか」を1〜2文で示す
-- 書き終えたら以下のマーカーを**単独行**で挿入（前後に空行必須）:
-
-{{DIAGRAM_1}}
-
-  直前に図を見る動機づけになる1〜2文を書く（毎回違う切り口で。例文のコピー不可）:
-  - 「{topic_name}の全体像を先に掴んでおくと、以降の説明がすっと入ってきます。」
-  - 「実際の現場でどう使われているか、構成図から先に見ておきましょう。」
 
 ### 中間セクション（以下から選んで自由に構成する）
 
@@ -413,12 +406,6 @@ aws s3 ls
 | アーキテクチャ / 連携パターン | 実務でよく使う構成例・他サービスとの組み合わせ |
 | ベストプラクティス / 落とし穴 | 実務で詰まるポイント・よくある設定ミス |
 | 他サービスとの使い分け | 「〇〇との違い」「どちらを選ぶか」の判断基準 |
-
-**ハンズオンを含める場合**、セクション冒頭（手順前）に以下を挿入（前後に空行必須）:
-
-{{DIAGRAM_2}}
-
-  直前に図を見る動機づけになる1〜2文を書く（毎回違う切り口で）
 
 ハンズオンに必ず含めること:
 - **前提条件**（必要なもの。箇条書き）
@@ -706,79 +693,18 @@ def generate_article(topic: dict, today: str, angle: str) -> tuple[str, str, boo
     return text, title, is_truncated, meta
 
 
-# ─── MD 生成（画像プレースホルダー付き） ─────────────────────────────────────
-
-_DIAGRAM_CAPTIONS = [
-    "{topic_name} – よく使われる全体構成図",
-    "{topic_name} – ハンズオンで構築する構成図",
-]
-
-
-def _make_image_placeholder(png_path: str, topic_name: str, index: int) -> str:
-    filename = os.path.basename(png_path)
-    caption_tmpl = _DIAGRAM_CAPTIONS[index - 1] if index - 1 < len(_DIAGRAM_CAPTIONS) \
-        else "{topic_name} 構成図" + str(index)
-    caption = caption_tmpl.format(topic_name=topic_name)
-    return (
-        f"\n"
-        f":::message\n"
-        f"📷 **【Zenn投稿時】** `{filename}` をZennエディタでアップロードし、下の画像パスをZenn CDN URLに置き換えてください。\n"
-        f":::\n\n"
-        f"![{caption}](./images/{filename})\n"
-        f"*{caption}*\n"
-    )
-
+# ─── MD 生成 ───────────────────────────────────────────────────────────────
 
 def _embed_image_placeholders(article: str, png_paths: list[str], topic_name: str) -> str:
-    """{DIAGRAM_N} マーカーを画像プレースホルダーに置換する。
-    マーカーが見つからない場合はフォールバック挿入（はじめに直後 / ハンズオン直後）。
+    """画像はBot側で生成しない（2026-09-08〜、GPTに質確認と合わせて生成・最適配置を依頼する
+    運用のため）。プロンプト側も{DIAGRAM_N}マーカーの出力は指示していないが、LLMが過去の
+    学習データの影響で稀に出力するケースに備え、残存マーカーだけ除去する。
     """
-    if not png_paths:
-        import re as _re
-        # マーカーは format() 後に単一波括弧 {DIAGRAM_N} となる。
-        # 二重波括弧 {{...}} とのどちらが残っても除去できるようにする。
-        cleaned, n = _re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
-        if n:
-            print(f"[WARNING] PNG未生成のためDIAGRAMマーカー{n}件を除去しました")
-        return cleaned
-
-    _FALLBACK_HEADINGS = ["はじめに", "ハンズオン"]
-
-    result = article
-    for img_idx, png_path in enumerate(png_paths):
-        n = img_idx + 1
-        marker = "{" + f"DIAGRAM_{n}" + "}"
-        placeholder = _make_image_placeholder(png_path, topic_name, n)
-
-        if marker in result:
-            result = result.replace(marker, placeholder, 1)
-        else:
-            # フォールバック: 対応する見出し名の直後に挿入
-            lines = result.split("\n")
-            target = _FALLBACK_HEADINGS[img_idx] if img_idx < len(_FALLBACK_HEADINGS) else None
-            h2_positions = [i for i, line in enumerate(lines) if line.startswith("## ")]
-            if not h2_positions:
-                # 見出しが1つも無い場合は末尾に追記（IndexError 回避）
-                print(f"[WARNING] DIAGRAM_{n} のマーカー・見出しが見つからないため末尾に挿入します")
-                result = result.rstrip() + "\n\n" + placeholder
-                continue
-            if target:
-                matched = [i for i, line in enumerate(lines)
-                           if line.startswith("## ") and target in line]
-                insert_idx = matched[0] if matched else \
-                    h2_positions[min(img_idx + 1, len(h2_positions) - 1)]
-            else:
-                insert_idx = h2_positions[min(img_idx + 1, len(h2_positions) - 1)]
-            lines.insert(insert_idx + 1, placeholder)
-            result = "\n".join(lines)
-
-    # 図の一部が生成失敗した場合、残存する {DIAGRAM_N} マーカーを除去する
     import re as _re
-    result, n_orphan = _re.subn(r'\n*\{DIAGRAM_\d+\}\n*', '\n\n', result)
-    if n_orphan:
-        print(f"[WARNING] 図生成失敗により未置換のDIAGRAMマーカー{n_orphan}件を除去しました")
-
-    return result
+    cleaned, n = _re.subn(r'\n*\{\{?DIAGRAM_\d+\}\}?\n*', '\n\n', article)
+    if n:
+        print(f"[WARNING] 未使用のDIAGRAMマーカー{n}件を除去しました")
+    return cleaned
 
 
 SSM_COUNTER_PATH = "/zenn-article-bot/article-counter"
@@ -824,8 +750,7 @@ def save_to_local(
     topic: dict, article: str, md_path: str, png_paths: list[str],
     timestamp: str, title: str,
 ) -> str:
-    """記事を MD ファイルに保存する（構成図は生成済みの png_paths を使用）。mdパスを返す"""
-    # 図1・図2ともに {DIAGRAM_N} マーカーで記事中に挿入（マーカー不在時はフォールバック）
+    """記事を MD ファイルに保存する（画像はBot側で生成しない。png_pathsは常に空）。mdパスを返す"""
     article_with_images = _embed_image_placeholders(article, png_paths, topic["name"])
 
     # Zennフロントマター用メタ情報
