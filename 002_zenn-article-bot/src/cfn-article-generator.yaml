@@ -20,9 +20,6 @@ Parameters:
     Type: String
     Default: jp.anthropic.claude-haiku-4-5-20251001-v1:0
     Description: Article generation model (Haiku - cost efficient)
-  DiagramsLayerArn:
-    Type: String
-    Description: ARN of the matplotlib Lambda Layer for diagram generation
 Resources:
 
   ArticleGeneratorDLQ:
@@ -89,8 +86,6 @@ Resources:
       Role: !GetAtt ArticleGeneratorRole.Arn
       Timeout: 900
       MemorySize: 256
-      Layers:
-        - !Ref DiagramsLayerArn
       Description: BedrockでAWS初心者向けZenn技術記事（アーキテクチャ図付き）を毎月第1・第3木曜21時JSTに自動生成し、SESメールで通知するLambda関数
       Environment:
         Variables:
