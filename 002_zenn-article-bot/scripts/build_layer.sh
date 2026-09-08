@@ -2,9 +2,13 @@
 set -euo pipefail
 
 # ============================================================
-# matplotlib Lambda Layer ビルドスクリプト
+# [2026-09-08〜非推奨] matplotlib Lambda Layer ビルドスクリプト
 # matplotlib + numpy + pillow を Lambda Layer としてパッケージ化
 # Amazon Linux 2023 (x86_64) 互換
+#
+# 画像はGPTに生成・配置を依頼する運用へ移行し、構成図生成（diagram_generator.py）を
+# Lambdaから呼ばなくなったため本Layer（matplotlib-aws-icons）は削除済み。
+# deploy.shのLayerデプロイ経路も削除した。参照用に残すのみで今後使わない。
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
