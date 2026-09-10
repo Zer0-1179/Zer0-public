@@ -20,7 +20,7 @@
           <mxGeometry height="685" width="720" x="160" y="275" as="geometry" />
         </mxCell>
         <mxCell id="g-cwlogs" parent="aws-cloud" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Management &amp; Governance" vertex="1">
-          <mxGeometry height="120" width="120" x="510" y="485" as="geometry" />
+          <mxGeometry height="120" width="120" x="510" y="490" as="geometry" />
         </mxCell>
         <mxCell id="svc-cwlogs" parent="g-cwlogs" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;fontFamily=Helvetica;shadow=1;" value="Amazon CloudWatch&lt;div&gt;&lt;i&gt;Logs&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="48" width="48" x="36" y="36" as="geometry" />
@@ -89,9 +89,9 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-cloudfront-s3-label" connectable="0" parent="e-cloudfront-s3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;labelBackgroundColor=none;" value="/_astro/*: 静的ファイル取得(OAC・長期キャッシュ)" vertex="1">
-          <mxGeometry relative="1" x="-0.1" y="-12" as="geometry">
-            <mxPoint x="-96" as="offset" />
+        <mxCell id="Ii1U-8Hh2keS9A35t6uo-1" connectable="0" parent="e-cloudfront-s3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;/_astro/*: 静的ファイル取得(OAC・長期キャッシュ)&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.8692" as="geometry">
+            <mxPoint x="90" y="-3" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="step-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=16;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;align=center;verticalAlign=middle;labelBackgroundColor=none;" value="3" vertex="1">
@@ -111,7 +111,12 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="e-apigw-lambda" edge="1" parent="1" source="g-apigw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;flowAnimation=1;strokeWidth=2;" target="g-lambda">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="730" y="720" />
+              <mxPoint x="520" y="720" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="legend-outer" connectable="0" parent="1" style="group" value="" vertex="1">
           <mxGeometry height="685" width="500" x="960" y="280" as="geometry" />
