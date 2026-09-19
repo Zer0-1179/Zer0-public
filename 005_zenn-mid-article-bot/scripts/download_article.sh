@@ -32,9 +32,16 @@ for FOLDER in $FOLDERS; do
   # フォルダ名（例: zenn-mid-articles/20260501_210000_serverless_ec/）からベース名を取得
   BASENAME=$(echo "$FOLDER" | sed "s|${S3_PREFIX}/||" | tr -d '/')
 
-  # 連番を付与（output/ 内の既存 NNN_* ディレクトリ数 + 1）
-  EXISTING_COUNT=$(find "$OUTPUT_DIR" -maxdepth 1 -type d -name '[0-9][0-9][0-9]_*' 2>/dev/null | wc -l)
-  NUM=$(printf "%03d" $((EXISTING_COUNT + 1)))
+  # 連番を付与（output/ 内の既存 NNN_* ディレクトリの最大値 + 1）
+  # 注意: 「ディレクトリ数 + 1」で採番すると、一時的にディレクトリが欠けていた
+  # 期間（テストフォルダ削除直後等）に既存の最大番号より小さい番号が再割り当て
+  # され、番号が重複する不具合が002で実際に発生した（2026-09-20修正、002側の
+  # docs-public/CHANGELOG.md参照）。個数ではなく実際に存在する番号の最大値を
+  # 基準にすることで再発を防ぐ。
+  MAX_NUM=$(find "$OUTPUT_DIR" -maxdepth 1 -type d -name '[0-9][0-9][0-9]_*' -printf '%f\n' 2>/dev/null \
+    | sed -E 's/^([0-9]{3})_.*/\1/' | sort -n | tail -1)
+  MAX_NUM=${MAX_NUM:-0}
+  NUM=$(printf "%03d" $((10#$MAX_NUM + 1)))
   ARTICLE_DIR="${OUTPUT_DIR}/${NUM}_${BASENAME}"
   LOCAL_IMAGES_DIR="${ARTICLE_DIR}/images"
 
