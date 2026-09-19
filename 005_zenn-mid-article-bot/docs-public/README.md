@@ -138,10 +138,9 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-09-08
+### 2026-09-20
 
-#### 構成図の自動生成を廃止、画像はGPTベースの手動ワークフローへ移行
+#### download_article.shの記事番号採番ロジックを事前修正（002での重複発生を受けた予防対応）
 
-- 記事内の画像はBotで自動生成せず、GPTに記事の質確認と合わせて生成・最適配置を依頼する運用に変更。`diagram_generator.py`の自動呼び出しを廃止し、`{DIAGRAM_1}`マーカー方式を整理
-- SES通知メールの案内文言・デプロイパッケージ（16MB→28KB）を更新。未使用になったLambda Layer `matplotlib-aws-icons-mid`はCFnスタックからデタッチのうえ削除済み
+- 002の`output/`で記事番号重複が発生し修正した際、005の`download_article.sh`にも同一の採番ロジック（既存ディレクトリの個数+1）があることが判明。005側では重複は未発生だったが、同種不具合を予防するため「個数+1」から「既存番号の最大値+1」に修正
 - 詳細は[CHANGELOG.md](./CHANGELOG.md)参照
