@@ -7,3 +7,6 @@ export const socialLinks = {
 };
 
 export const siteUrl = process.env.SITE_URL || 'http://localhost:4321';
+
+// ポートフォリオ上では非表示にするnote記事（プライベート性の高い内容など）
+export const excludedNoteSlugs = ['n544468e6e3ef'];
