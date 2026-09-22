@@ -146,20 +146,60 @@ def add_legend_gray_dot_note(data, extra_height=20):
     return data, True
 
 
-def force_light_mode(data):
-    """draw.ioのダーク/ライト自動切替(`color-scheme: light dark` + `light-dark(...)`)を
-    無効化し、常にライトモードの配色で表示されるようにする。
+def _strip_light_dark(data):
+    """`light-dark(A, B)`関数呼び出しをすべてライト側の値`A`のリテラルに直接置換する。
+    括弧の対応を手動で追跡することで、`light-dark(#fff, var(--x, #121212))`のように
+    第2引数が関数呼び出しでネストしているケースにも対応する。"""
+    marker = "light-dark("
+    out = []
+    i, n, count = 0, len(data), 0
+    while True:
+        idx = data.find(marker, i)
+        if idx == -1:
+            out.append(data[i:])
+            break
+        out.append(data[i:idx])
+        open_paren = idx + len(marker) - 1
+        depth, k = 0, open_paren
+        while k < n:
+            if data[k] == "(":
+                depth += 1
+            elif data[k] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        inner = data[open_paren + 1:k]
+        depth2, split_at = 0, None
+        for p, ch in enumerate(inner):
+            if ch == "(":
+                depth2 += 1
+            elif ch == ")":
+                depth2 -= 1
+            elif ch == "," and depth2 == 0:
+                split_at = p
+                break
+        light_value = inner[:split_at].strip() if split_at is not None else inner.strip()
+        out.append(light_value)
+        i = k + 1
+        count += 1
+    return "".join(out), count
 
-    ポートフォリオサイト(004)の詳細ページではこのSVGを`<img>`でそのまま埋め込んでおり、
-    閲覧者のOS/ブラウザがダークモードだと`light-dark()`がダーク側の色（背景が黒に近い等）
-    に自動的に解決されてしまう（2026-09-06発見: PNGだった頃は常に固定色でエクスポートされて
-    いたため気づかなかったが、SVGを生でも表示するようになって表面化した）。
-    SVGルート要素の`color-scheme`を`light`のみに固定することで、`light-dark()`の解決先を
-    常にライト側の値に強制する（CSS仕様上、light-dark()は最も近い祖先のcolor-schemeの
-    algorithmic valueを見るため、これだけで子要素の`light-dark()`もすべてライト固定になる）。"""
+
+def force_light_mode(data):
+    """SVGを常にライトモード配色に固定する(ダークモードOS上でブラウザが直接開いた際の
+    smart invert対策とは別に、light-dark()関数のcolor-scheme依存を断ち切るため)。
+
+    当初は`color-scheme`をSVGルートで`light`固定するだけで対応していたが、007で
+    `<img>`埋め込み時に実ブラウザでダーク表示が再発（2026-09-07）。`<img>`で読み込んだ
+    SVGは独立した画像コンテキストとして扱われ、`color-scheme`によるcolor-scheme依存の
+    `light-dark()`解決が信頼できないと判断し、`light-dark(A, B)`自体をライト値`A`の
+    リテラルへ直接置換する方式に強化した（中央スクリプトと同一ロジック、2026-09-22に
+    各プロジェクトのローカルコピーへ同期）。"""
     new_data = re.sub(r'color-scheme:\s*light\s+dark\s*;', 'color-scheme: light;', data)
     changed = new_data != data
-    return new_data, changed
+    new_data, stripped = _strip_light_dark(new_data)
+    return new_data, changed or stripped > 0, stripped
 
 def build():
     src = BASE / f"{NUM}_architecture_plugin.drawio.svg"
@@ -169,7 +209,7 @@ def build():
         return False
 
     data = src.read_text(encoding="utf-8")
-    data, light_forced = force_light_mode(data)
+    data, light_forced, stripped = force_light_mode(data)
     data, n_main, missing_main = add_main_flow_dots(data, HOPS)
     n_aux, missing_aux, legend_changed = 0, [], False
     if AUX:
@@ -180,7 +220,7 @@ def build():
     ET.parse(dst)  # 壊れたXMLで書き出していないかの確認
 
     total_main = sum(len(h) for h in HOPS)
-    print(f"[{NUM}] main={n_main}/{total_main} aux={n_aux}/{len(AUX)} legend_note={legend_changed} light_forced={light_forced} -> {dst}")
+    print(f"[{NUM}] main={n_main}/{total_main} aux={n_aux}/{len(AUX)} legend_note={legend_changed} light_forced={light_forced}(stripped {stripped}) -> {dst}")
     if missing_main:
         print(f"   ⚠ 主要フローで見つからなかった矢印ID: {missing_main}")
     if missing_aux:
