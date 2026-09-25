@@ -356,3 +356,13 @@
 - 新しい構成図は`008_architecture_plugin.drawio`（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル付き）から作成・レビュー済み（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
 - 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/008_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
 - 旧`008_architecture.drawio`/`008_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）
+
+## 2026-09-25
+
+### システム仕様書をテーマ別に分割
+
+- `docs/specifications/システム仕様書.md`が818行になりドキュメント分割ルールの上限（300〜400行程度）を超えたため、`docs/specifications/システム仕様書/`配下の4ファイルに章単位で分割し、元ファイルは目次にした。
+- 分割先は、1〜2章（概要・設計の理由）、3〜7章（構成・機能・Lambda・インフラ・デプロイ）、8章（動作確認と改善の記録）、9〜11章（制約・拡張候補・変更履歴）の4つで、章番号は分割前のまま維持した。
+- 本文546行が重複・漏れなく移っていることを機械的に検証し、章をまたぐアンカーリンクを移動先ファイルのアンカーに張り替えた。
+- 仕様書からREADME.md・CHANGELOG.mdへのリンクが`../docs-public/`になっており、`docs/specifications/`からは1階層足りず壊れていたため、`../../docs-public/`に修正した。
+- `docs/setup/docs_payment_setup.md`（8i節）と`docs/setup/docs_line_setup.md`（8q節）からの参照を、移動先の`03_verification_and_improvement_log.md`に張り替えた。
