@@ -622,3 +622,118 @@ def test_record_partial_fill_after_cancel_records_only_when_filled(executor, mon
     bb.get_order.return_value = {"status": "CANCELED_UNFILLED", "average_price": "0", "executed_amount": "0"}
     assert executor.record_partial_fill_after_cancel(bb, "eth_jpy", "long", "r", pos, 5) == 0.0
     rec.assert_not_called()
+
+
+# ── 2026-10-02: レバレッジ対策（同時2件・1件=受入保証金×0.75） ──
+def test_position_limits_keep_margin_ratio_above_call_line(executor):
+    assert executor.MAX_POSITIONS == 2
+    total = executor.MAX_POSITIONS * executor.POSITION_EQUITY_RATIO      # 資金比の建玉合計
+    worst = (1 - total * 0.12) / (total * 0.88)                          # 2件同時に過去最大12%で損切り後の保証金率
+    assert worst > executor.MARGIN_EMRG_PCT / 100                        # 自ら手仕舞うラインより上
+    assert executor.MARGIN_EMRG_PCT > 50                                 # 追証の前に自ら手仕舞う
+
+
+def test_get_available_margin_uses_short_side(executor):
+    bb = MagicMock()
+    bb.get_margin_status.return_value = {"available_balances": [{"pair": "eth_jpy", "long": "100", "short": "40"}]}
+    assert executor.get_available_margin(bb, "eth_jpy", "short") == 40.0
+    assert executor.get_available_margin(bb, "eth_jpy") == 100.0
+
+
+def test_get_margin_equity_returns_zero_on_failure(executor):
+    bb = MagicMock()
+    bb.get_margin_status.return_value = {"total_margin_balance": "11270.2170"}
+    assert executor.get_margin_equity(bb) == 11270.217
+    bb.get_margin_status.side_effect = Exception("down")
+    assert executor.get_margin_equity(bb) == 0.0
+
+
+# ── 2026-10-02: SL未約定の安全網 ──
+def test_sl_needs_rescue_conditions(executor):
+    now = 1_790_000_000.0
+    assert executor._sl_needs_rescue({"status": "INACTIVE"}, now) is None
+    assert executor._sl_needs_rescue({"status": "UNFILLED"}, now) is None             # 未発動の指値
+    assert executor._sl_needs_rescue({"status": "UNFILLED", "triggered_at": (now - 60) * 1000}, now) is None
+    assert executor._sl_needs_rescue({"status": "UNFILLED", "triggered_at": (now - 300) * 1000}, now)
+    assert executor._sl_needs_rescue({"status": "PARTIALLY_FILLED", "triggered_at": now - 300}, now)
+    assert executor._sl_needs_rescue({"status": "CANCELED_UNFILLED"}, now)
+    assert executor._sl_needs_rescue({"status": "REJECTED"}, now)
+    assert executor._sl_needs_rescue({"status": "FULLY_FILLED"}, now) is None
+
+
+def _rescue_env(executor, monkeypatch, order_status_after_cancel, open_amount="0.0110"):
+    bb = MagicMock()
+    bb.get_order.return_value = {"status": order_status_after_cancel, "average_price": "0", "executed_amount": "0"}
+    bb.get_margin_positions.return_value = [{"pair": "eth_jpy", "position_side": "long", "open_amount": open_amount}]
+    bb.create_market_order.return_value = {"order_id": 999}
+    rec = MagicMock(return_value={"pnl_source": "pending"})
+    monkeypatch.setattr(executor, "record_trade", rec)
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=410000.0))
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    pos = {"direction": "long", "entry_price": 429501.0, "position_id": "p",
+           "tp1_order_id": 11, "sl_order_id": 22}
+    return bb, rec, mail, pos
+
+
+def test_rescue_close_market_closes_actual_open_amount(executor, monkeypatch):
+    bb, rec, mail, pos = _rescue_env(executor, monkeypatch, "CANCELED_UNFILLED")
+    assert executor.rescue_close(bb, "eth_jpy", pos, "test", {"amount_prec": 4, "price_prec": 0}) is True
+    bb.create_market_order.assert_called_once_with("eth_jpy", "0.0110", "sell", position_side="long")
+    assert rec.call_args.kwargs["order_id"] == 999
+    assert "rescue_pending" not in pos
+
+
+def test_rescue_close_does_not_market_close_while_order_still_alive(executor, monkeypatch):
+    bb, rec, mail, pos = _rescue_env(executor, monkeypatch, "FULLY_FILLED")
+    assert executor.rescue_close(bb, "eth_jpy", pos, "test", {"amount_prec": 4, "price_prec": 0}) is False
+    bb.create_market_order.assert_not_called()       # 二重決済しない
+    assert pos["rescue_pending"] is True and mail.call_count == 1
+
+
+def test_rescue_close_marks_pending_when_market_order_fails(executor, monkeypatch):
+    bb, rec, mail, pos = _rescue_env(executor, monkeypatch, "CANCELED_UNFILLED")
+    bb.create_market_order.side_effect = Exception("70020 CB中")
+    assert executor.rescue_close(bb, "eth_jpy", pos, "test", {"amount_prec": 4, "price_prec": 0}) is False
+    assert pos["rescue_pending"] is True
+
+
+def test_rescue_close_no_position_left(executor, monkeypatch):
+    bb, rec, mail, pos = _rescue_env(executor, monkeypatch, "CANCELED_UNFILLED", open_amount="0.0000")
+    assert executor.rescue_close(bb, "eth_jpy", pos, "test", {"amount_prec": 4, "price_prec": 0}) is True
+    bb.create_market_order.assert_not_called()
+
+
+def test_create_order_stop_type_omits_price(executor, monkeypatch):
+    bb = executor.BitbankClient("k", "s")
+    sent = {}
+    monkeypatch.setattr(bb, "_post", lambda path, body: sent.update(body) or {"success": 1, "data": {"order_id": 1}})
+    monkeypatch.setattr(executor, "SL_ORDER_TYPE", "stop")
+    bb.create_order("eth_jpy", "0.0110", "411000", "sell", position_side="long", trigger_price="413000")
+    assert sent["type"] == "stop" and "price" not in sent and sent["trigger_price"] == "413000"
+    monkeypatch.setattr(executor, "SL_ORDER_TYPE", "stop_limit")
+    bb.create_order("eth_jpy", "0.0110", "411000", "sell", position_side="long", trigger_price="413000")
+    assert sent["type"] == "stop_limit" and sent["price"] == "411000"
+    bb.create_order("eth_jpy", "0.0047", "437745", "sell", position_side="long")
+    assert sent["type"] == "limit" and sent["price"] == "437745"
+
+
+def test_trailing_sl_rejected_after_tp1_triggers_rescue(executor, monkeypatch):
+    """TP1約定後に建値トレールSLが60018で拒否されたら、TP1を記録して成行救済する"""
+    pos = {"status": "active", "direction": "long", "position_id": "eth_jpy-1", "entry_price": 429501.0,
+           "atr_jpy": 6595.2, "tp1_order_id": 11, "sl_order_id": 22, "tp1_price": 437745.0,
+           "tp1_amount": 0.0047, "trail_amount": 0.011, "sl_price": 413013.0, "total_amount": 0.0157}
+    state = {"positions": {"eth_jpy": pos}}
+    bb = MagicMock()
+    bb.get_order.side_effect = lambda pair, oid: {11: {"status": "FULLY_FILLED", "average_price": "437745",
+                                                        "executed_amount": "0.0047"}}.get(oid, {"status": "CANCELED_UNFILLED"})
+    bb.create_order.side_effect = Exception("create_order失敗: code=60018")
+    rec = MagicMock(return_value={"pnl_source": "pending"})
+    monkeypatch.setattr(executor, "record_trade", rec)
+    rescue = MagicMock(return_value=True)
+    monkeypatch.setattr(executor, "rescue_close", rescue)
+    monkeypatch.setattr(executor, "send_email", MagicMock())
+    out = executor.maintain_positions(bb, state, {})
+    assert rec.call_args_list[0].args[2] == "TP1部分利確"
+    assert rescue.called and "tp1_order_id" not in rescue.call_args.args[2]
+    assert "eth_jpy" not in out["positions"]
