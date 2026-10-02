@@ -125,3 +125,9 @@ class TestBuildScaleUpProgressFormats:
     def test_html_is_well_formed_table_rows(self, weekly):
         html = weekly.build_scale_up_progress_html(_stats(closed_count=0))
         assert html.count("<tr>") == html.count("</tr>") == 4
+
+
+def test_partial_fill_records_do_not_close_position(weekly):
+    assert weekly.is_closing_reason("トレーリングSL") is True
+    assert weekly.is_closing_reason("TP1部分利確") is False
+    assert weekly.is_closing_reason("トレーリングSL（キャンセル前の一部約定）") is False

@@ -26,6 +26,13 @@ TRADES_KEY_PREFIX = "cryptobot/trades/"
 # 追加/変更するたびに更新漏れが起きやすい（実際に「手動決済（トレーリング中）」が
 # 抜けており、2026-07-21分の2ポジションが勝率・PF・増額判断の集計から欠落していた）。
 NON_CLOSING_REASONS = ("TP1部分利確",)
+# 2026-10-02〜: 決済注文をキャンセルした時の一部約定（「〜（キャンセル前の一部約定）」）も、
+# ポジション継続中の部分決済なので閉じたとみなさない（最終決済は別の記録で付く）
+PARTIAL_FILL_MARK = "キャンセル前の一部約定"
+
+
+def is_closing_reason(reason: str | None) -> bool:
+    return reason not in NON_CLOSING_REASONS and PARTIAL_FILL_MARK not in (reason or "")
 
 PAIR_LABELS   = {"btc_jpy": "BTC/JPY", "eth_jpy": "ETH/JPY", "sol_jpy": "SOL/JPY"}
 SIDE_LABELS   = {"long": "ロング", "short": "ショート"}
@@ -88,7 +95,7 @@ def summarize_trades(trades: list[dict], now: datetime) -> dict:
         pid = t.get("position_id") or f"_solo_{i}"
         p = positions.setdefault(pid, {"pnl": 0.0, "closed": False})
         p["pnl"] += t["pnl_jpy"]
-        if t.get("reason") not in NON_CLOSING_REASONS:
+        if is_closing_reason(t.get("reason")):
             p["closed"] = True
 
     closed  = [p["pnl"] for p in positions.values() if p["closed"]]

@@ -94,7 +94,7 @@ FILL_POLL_INTERVAL_S = 2   # 成行約定待機ポーリング間隔（秒）
 FILL_POLL_TIMEOUT_S  = 20  # 成行約定待機タイムアウト（秒）（MAX_POSITIONS=2 時最大 40s / Lambda timeout 300s）
 
 # 証拠金維持率閾値（total_margin_balance_percentage = 残高/建玉時価総額×100）
-# 通常の運用値: 3ポジション満杯で約55〜70%。実口座で確認済み（2026-04-28）
+# 通常の運用値: 2ポジション満杯（建玉＝資金の約1.2倍）で約83%以上（2026-10-02〜。以前の3ポジションでは約52%）
 # bitbank公式: 追証は保証金率50%（margin_call_percentage）、強制決済は25%（losscut_percentage）。
 # 建玉合計を資金の1.2倍以下に抑えるため通常は83%以上。旧値(50/30)は追証ライン以下で機能していなかった
 MARGIN_WARN_PCT = 65   # この値以下で警告メール（処理継続）
@@ -352,6 +352,23 @@ def record_partial_fill_after_cancel(bb, pair: str, direction: str, reason: str,
     return amount
 
 
+def get_open_amount(bb, pair: str, direction: str) -> float | None:
+    """取引所上の実際の建玉数量。取得できなければ None（呼び出し側で state の数量にフォールバック）。"""
+    try:
+        for p in bb.get_margin_positions():
+            if p.get("pair") == pair and p.get("position_side") == direction:
+                return float(p.get("open_amount") or 0)
+        return 0.0
+    except Exception as e:
+        log(f"{pair}: 建玉数量の取得失敗: {e}")
+        return None
+
+
+# 安全網で取り消した注文の記録理由（注文の役割ごと）
+_RESCUE_FILLED_REASON = {"tp1_order_id": "TP1部分利確", "sl_order_id": "損切り（SL約定）",
+                         "trail_sl_order_id": "トレーリングSL"}
+
+
 def _sl_needs_rescue(order: dict, now_s: float | None = None) -> str | None:
     """SL/トレーリングSL注文が「発動したのに約定していない」「取り消された・拒否された」状態なら理由を返す。
     stop_limit は価格が SL_SLIPPAGE 以上飛ぶと、発動後の指値が板に残って約定しない（公式にも明記）。
@@ -377,36 +394,45 @@ def rescue_close(bb, pair: str, pos: dict, reason: str, cfg: dict) -> bool:
     direction  = pos.get("direction", "long")
     close_side = "sell" if direction == "long" else "buy"
     log(f"{pair}({direction}): 安全網発動 — {reason}")
-    order_ids = [pos.get(k) for k in ("tp1_order_id", "sl_order_id", "trail_sl_order_id") if pos.get(k)]
-    for oid in order_ids:
+    orders = [(k, pos.get(k)) for k in ("tp1_order_id", "sl_order_id", "trail_sl_order_id") if pos.get(k)]
+    for _, oid in orders:
         try:
             bb.cancel_order(pair, oid)
         except Exception as ce:
             log(f"{pair}: 安全網 注文取消失敗 order_id={oid}（終了済みの可能性）: {ce}")
+    # 取消後の状態を確かめる。約定済み・一部約定の分は記録し、まだ生きている注文があれば成行は出さない。
+    # 約定済み（FULLY_FILLED）は「生きている注文」ではないので保留にしない（2026-10-02修正: 以前は
+    # 約定済みのSLを生きている扱いにして、救済が永久に保留されたまま残り30%が無防備になる経路があった）
     alive = []
-    for oid in order_ids:
+    for key, oid in orders:
         try:
             o = bb.get_order(pair, oid)
         except Exception as ge:
             alive.append(f"{oid}(状態取得失敗: {ge})")
             continue
         st = o.get("status", "")
-        if st in ("INACTIVE", "UNFILLED", "PARTIALLY_FILLED", "FULLY_FILLED"):
+        if st in ("INACTIVE", "UNFILLED", "PARTIALLY_FILLED"):
             alive.append(f"{oid}({st})")
+        elif st == "FULLY_FILLED":
+            fill = order_fill(o)
+            if fill:
+                record_trade(pair, direction, _RESCUE_FILLED_REASON[key], pos.get("entry_price", fill[0]),
+                             fill[0], fill[1], pos.get("position_id"), bb=bb, order_id=oid)
         elif st == "CANCELED_PARTIALLY_FILLED":
-            record_partial_fill_after_cancel(bb, pair, direction, "損切り（キャンセル前の一部約定）", pos, oid)
+            record_partial_fill_after_cancel(bb, pair, direction,
+                                             f"{_RESCUE_FILLED_REASON[key]}（キャンセル前の一部約定）", pos, oid)
+        pos[key] = None   # 終了済みの注文は次回以降の取消・照会対象から外す
     if alive:
         pos["rescue_pending"] = True
         send_email(f"【Zer0-CryptoBot】🚨SL未約定の救済を保留 - {pair.upper()}",
-                   f"SLが機能していないため成行決済しようとしましたが、まだ有効または約定済みの注文があるため"
+                   f"SLが機能していないため成行決済しようとしましたが、まだ有効な注文があるため"
                    f"今回は見送りました。次回の実行で再試行します。手動で確認してください。\n\n"
                    f"理由：{reason}\n注文：{', '.join(alive)}")
         return False
     try:
-        open_amt = 0.0
-        for p in bb.get_margin_positions():
-            if p.get("pair") == pair and p.get("position_side") == direction:
-                open_amt = float(p.get("open_amount") or 0)
+        open_amt = get_open_amount(bb, pair, direction)
+        if open_amt is None:
+            raise Exception("建玉数量を取得できない")
         if open_amt <= 0:
             log(f"{pair}: 安全網 建玉はすでにない → 終了")
             pos.pop("rescue_pending", None)
@@ -415,9 +441,23 @@ def rescue_close(bb, pair: str, pos: dict, reason: str, cfg: dict) -> bool:
         mkt = bb.create_market_order(pair, amount_str, close_side, position_side=direction)
         log(f"{pair}: 安全網 成行決済 {close_side} {amount_str}")
         est_price = get_bitbank_price(pair)
+        # 成行がサーキットブレーカー等で一部しか約定しないことがあるため、実際の約定数量で記録し、
+        # 建玉が残っていれば保留にして次回また決済する
+        left = open_amt
+        for _ in range(5):
+            time.sleep(2)
+            left = get_open_amount(bb, pair, direction)
+            if left is not None and left <= 0:
+                break
+        filled = open_amt - (left or 0) if left is not None else open_amt
         rec = record_trade(pair, direction, "損切り（SL未約定→成行救済）", pos.get("entry_price", est_price),
-                           est_price, float(amount_str), pos.get("position_id"),
+                           est_price, float(round_amount(filled, cfg["amount_prec"])), pos.get("position_id"),
                            estimated=True, bb=bb, order_id=(mkt or {}).get("order_id"))
+        if left is None or left > 0:
+            pos["rescue_pending"] = True
+            send_email(f"【Zer0-CryptoBot】🚨SL未約定の成行決済が一部のみ - {pair.upper()}",
+                       f"安全網の成行決済で建玉が残りました（残り{left}）。次回の実行で再試行します。\n\n理由：{reason}")
+            return False
         send_email(f"【Zer0-CryptoBot】🚨SL未約定のため成行で決済 - {pair.upper()}",
                    f"SL注文が機能していなかったため、安全網が成行で決済しました。\n\n"
                    f"理由：{reason}\n数量：{amount_str}\n現在価格：{est_price:,.0f}円\n"
@@ -909,8 +949,14 @@ class BitbankClient:
         return resp["data"]
 
     def cancel_order(self, pair: str, order_id: int) -> dict:
-        return self._post("/user/spot/cancel_order",
-                          {"pair": pair, "order_id": order_id})["data"]
+        """取消に失敗したら（約定済み・取消済み等で success!=1）例外にする。呼び出し側は例外時に
+        get_order で状態を確かめて分岐する前提（2026-10-02修正: 以前は失敗しても例外にならず、
+        約定済みの注文を「取消成功」と誤認する経路があった）。"""
+        resp = self._post("/user/spot/cancel_order", {"pair": pair, "order_id": order_id})
+        if resp.get("success") != 1:
+            raise Exception(f"cancel_order失敗 pair={pair} order_id={order_id}: "
+                            f"code={resp.get('data', {}).get('code')}")
+        return resp["data"]
 
 
 def get_bitbank_price(pair: str) -> float:
@@ -986,7 +1032,7 @@ def _apply_entry_fill(bb: "BitbankClient", pair: str, pos: dict, order: dict, cf
                                sl_limit_str,
                                close_side, position_side=direction,
                                trigger_price=sl_trigger_str)
-        verify_order(bb, pair, o_sl["order_id"], "初期SL注文（stop_limit）")
+        verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
         pos["sl_order_id"] = o_sl["order_id"]
 
     pos.update({
@@ -1071,11 +1117,13 @@ def _emergency_close_all(bb: BitbankClient, state: dict) -> list[str]:
                 except Exception as ce:
                     log(f"{pair}: キャンセル失敗 {key}={oid}: {ce}")
 
-        # 保有中のみ成行決済
-        if status == "active":
-            amount = pos.get("total_amount", 0)
-        elif status == "trailing":
-            amount = pos.get("trail_amount", 0)
+        # 保有中のみ成行決済。数量は取引所の実際の建玉を優先する（state の数量は一部約定等でずれ得る）
+        if status in ("active", "trailing"):
+            actual = get_open_amount(bb, pair, direction)
+            if actual is not None:
+                amount = actual
+            else:
+                amount = pos.get("total_amount", 0) if status == "active" else pos.get("trail_amount", 0)
         elif status == "buy_pending":
             # エントリーは成行のため buy_pending でも建玉は約定済みのことが多い。
             # 実際の約定数量を取得して決済する（未約定なら 0 → スキップ）。
@@ -1185,8 +1233,8 @@ def reconcile_positions(bb: BitbankClient, state: dict):
 def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     """証拠金維持率を確認する。
     - status が CALL/LOSSCUT: 緊急成行決済
-    - total_margin_balance_percentage が MARGIN_EMRG_PCT(30%)以下: 緊急成行決済
-    - MARGIN_WARN_PCT(50%)以下: 警告メール送信（処理継続）
+    - total_margin_balance_percentage が MARGIN_EMRG_PCT(55%)以下: 緊急成行決済
+    - MARGIN_WARN_PCT(65%)以下: 警告メール送信（処理継続）
     - 建玉なし(null) / 取得失敗: スキップして True を返す"""
     try:
         margin = bb.get_margin_status()
@@ -1447,20 +1495,33 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                                              pos, pos["tp1_order_id"])
                         except Exception as ce:
                             log(f"{pair}: TP1キャンセル失敗: {ce}")
-                            send_email(
-                                f"【Zer0-CryptoBot】⚠️TP1キャンセル失敗 - {pair.upper()}",
-                                f"SL約定後のTP1注文キャンセルに失敗しました。手動キャンセルが必要です。\n\n"
-                                f"コイン：{pair.upper()}\n方向：{direction}\n"
-                                f"TP1注文ID：{pos.get('tp1_order_id')}\nエラー：{ce}",
-                            )
-                        # SL(70%)約定後、残30%(tp1_amount)を成行クローズ
-                        tp1_amt = pos.get("tp1_amount", 0)
+                            # 同じ30分の間に TP1 も約定していた場合は取消できない。約定済みなら記録して進める
+                            try:
+                                o_tp1_chk = bb.get_order(pair, pos["tp1_order_id"])
+                            except Exception:
+                                o_tp1_chk = {}
+                            tp1_done = order_fill(o_tp1_chk) if o_tp1_chk.get("status") == "FULLY_FILLED" else None
+                            if tp1_done:
+                                record_trade(pair, direction, "TP1部分利確", pos["entry_price"], tp1_done[0],
+                                             tp1_done[1], pos.get("position_id"), bb=bb,
+                                             order_id=pos.get("tp1_order_id"))
+                            else:
+                                send_email(
+                                    f"【Zer0-CryptoBot】⚠️TP1キャンセル失敗 - {pair.upper()}",
+                                    f"SL約定後のTP1注文キャンセルに失敗しました。手動キャンセルが必要です。\n\n"
+                                    f"コイン：{pair.upper()}\n方向：{direction}\n"
+                                    f"TP1注文ID：{pos.get('tp1_order_id')}\nエラー：{ce}",
+                                )
+                        # SL(70%)約定後、残り（通常30%）を成行クローズ。数量は取引所の実際の建玉を使う
+                        # （TP1が一部・全部約定済みの場合に建玉を超えて決済しようとしないため）
+                        actual_left = get_open_amount(bb, pair, direction)
+                        tp1_amt = pos.get("tp1_amount", 0) if actual_left is None else actual_left
                         if tp1_amt > 0:
                             try:
                                 mkt = bb.create_market_order(pair,
                                                              round_amount(tp1_amt, cfg["amount_prec"]),
                                                              close_side, position_side=direction)
-                                log(f"{pair}: 残30% 成行クローズ {tp1_amt}")
+                                log(f"{pair}: 残り 成行クローズ {tp1_amt}")
                                 try:
                                     est_price = get_bitbank_price(pair)
                                     record_trade(pair, direction, "損切り（残30%成行）",
