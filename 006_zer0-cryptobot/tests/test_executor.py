@@ -353,3 +353,94 @@ def test_update_positions_json_skips_pair_on_price_fetch_failure(executor, monke
 
     payload = json.loads(mock_put.call_args.kwargs["Body"])
     assert payload["positions"] == []
+
+
+# ── 2026-10-02: 取引記録を bitbank 実績（手数料・利息控除後）と1円単位で一致させる ──
+# 実データ: 2026-09-27 SOL/JPY ロングのトレーリングSL（order_id=60895638803）の約定履歴
+_SOL_TRAIL_FILL = {
+    "trade_id": 1, "pair": "sol_jpy", "order_id": 60895638803, "side": "sell",
+    "position_side": "long", "type": "stop_limit", "amount": "0.2466", "price": "19267.1",
+    "maker_taker": "taker", "fee_amount_base": "0", "fee_amount_quote": "11.3357",
+    "fee_occurred_amount_quote": "5.7015", "profit_loss": "41.034358368000560",
+    "interest": "3.75611255999999960", "executed_at": 1790516100000,
+}
+
+
+def test_fetch_exact_close_uses_bitbank_profit_loss(executor):
+    bb = MagicMock()
+    bb.get_trade_history.return_value = [_SOL_TRAIL_FILL]
+    r = executor.fetch_exact_close(bb, "sol_jpy", 60895638803)
+    assert r["pnl_jpy"] == 41.0344          # 価格差 (19267.1-19039.5)*0.2466=56.1 ではなく実損益
+    assert r["fee_jpy"] == 11.3357
+    assert r["interest_jpy"] == 3.7561
+    assert r["gross_pnl_jpy"] == 56.1262
+    assert r["exit_price"] == 19267.1 and r["amount"] == 0.2466
+
+
+def test_fetch_exact_close_sums_multiple_fills_and_ignores_other_orders(executor):
+    a = dict(_SOL_TRAIL_FILL, amount="0.1", profit_loss="10.5", fee_amount_quote="1", interest="0.5", price="100")
+    b = dict(_SOL_TRAIL_FILL, amount="0.3", profit_loss="-2.25", fee_amount_quote="2", interest="0", price="200")
+    other = dict(_SOL_TRAIL_FILL, order_id=1, profit_loss="999")
+    bb = MagicMock()
+    bb.get_trade_history.return_value = [a, b, other]
+    r = executor.fetch_exact_close(bb, "sol_jpy", 60895638803)
+    assert r["pnl_jpy"] == 8.25 and r["fee_jpy"] == 3.0 and r["fill_count"] == 2
+    assert r["exit_price"] == 175.0          # 数量加重平均
+
+
+def test_fetch_exact_close_returns_none_without_fills_or_on_error(executor):
+    bb = MagicMock()
+    bb.get_trade_history.return_value = []
+    assert executor.fetch_exact_close(bb, "sol_jpy", 1) is None
+    bb.get_trade_history.side_effect = Exception("boom")
+    assert executor.fetch_exact_close(bb, "sol_jpy", 1) is None
+    assert executor.fetch_exact_close(None, "sol_jpy", 1) is None
+
+
+def test_record_trade_writes_bitbank_actual_pnl(executor, monkeypatch):
+    put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", put)
+    monkeypatch.setattr(executor, "update_stats_json", MagicMock())
+    bb = MagicMock()
+    bb.get_trade_history.return_value = [_SOL_TRAIL_FILL]
+    executor.record_trade("sol_jpy", "long", "トレーリングSL", 19039.5, 19267.1, 0.2466,
+                          "sol_jpy-1790337610", bb=bb, order_id=60895638803)
+    rec = json.loads(put.call_args.kwargs["Body"])
+    assert rec["pnl_jpy"] == 41.0344 and rec["pnl_source"] == "bitbank"
+    assert rec["order_id"] == 60895638803 and rec["estimated"] is False
+
+
+def test_record_trade_marks_pending_when_history_not_ready(executor, monkeypatch):
+    put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", put)
+    monkeypatch.setattr(executor, "update_stats_json", MagicMock())
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    bb = MagicMock()
+    bb.get_trade_history.return_value = []
+    executor.record_trade("sol_jpy", "long", "トレーリングSL", 19039.5, 19267.1, 0.2466,
+                          "p", bb=bb, order_id=60895638803)
+    rec = json.loads(put.call_args.kwargs["Body"])
+    assert rec["pnl_source"] == "pending" and rec["pnl_jpy"] == 56.1
+    assert bb.get_trade_history.call_count == 2   # 1回だけ再取得
+
+
+def test_reconcile_trade_records_overwrites_pending_with_actual(executor, monkeypatch):
+    pending = {"ts": "2026-09-27T22:45:18+09:00", "pair": "sol_jpy", "direction": "long",
+               "reason": "トレーリングSL", "pnl_jpy": 56.1, "order_id": 60895638803,
+               "pnl_source": "pending", "estimated": False}
+    done = dict(pending, pnl_source="bitbank", pnl_jpy=1.0)
+    pages = [{"Contents": [{"Key": "cryptobot/trades/a.json"}, {"Key": "cryptobot/trades/b.json"}]}]
+    paginator = MagicMock(); paginator.paginate.return_value = pages
+    monkeypatch.setattr(executor._s3, "get_paginator", MagicMock(return_value=paginator))
+    bodies = {"cryptobot/trades/a.json": pending, "cryptobot/trades/b.json": done}
+    monkeypatch.setattr(executor._s3, "get_object",
+                        MagicMock(side_effect=lambda Bucket, Key: {"Body": MagicMock(read=lambda: json.dumps(bodies[Key]).encode())}))
+    put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", put)
+    monkeypatch.setattr(executor, "update_stats_json", MagicMock())
+    bb = MagicMock()
+    bb.get_trade_history.return_value = [_SOL_TRAIL_FILL]
+    assert executor.reconcile_trade_records(bb) == 1
+    assert put.call_args.kwargs["Key"] == "cryptobot/trades/a.json"
+    rec = json.loads(put.call_args.kwargs["Body"])
+    assert rec["pnl_jpy"] == 41.0344 and rec["pnl_source"] == "bitbank"

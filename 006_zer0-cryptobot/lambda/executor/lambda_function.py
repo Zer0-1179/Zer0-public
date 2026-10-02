@@ -19,6 +19,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import boto3
+from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 
 # ── 定数 ──────────────────────────────────────────────────────────────────────
@@ -182,9 +183,39 @@ def save_state(state: dict):
 
 
 # ── SES ───────────────────────────────────────────────────────────────────────
+def fetch_exact_close(bb, pair: str, order_id) -> dict | None:
+    """決済注文の約定履歴から、口座残高の実際の増減と1円単位で一致する損益内訳を返す。
+    pnl_jpy = Σprofit_loss（bitbankが手数料・利息を控除済みの実現損益）。
+    約定履歴がまだ反映されていない・取得失敗の場合は None（呼び出し側で後から照合する）。"""
+    if bb is None or not order_id:
+        return None
+    try:
+        fills = bb.get_trade_history(pair, int(order_id))
+    except Exception as e:
+        log(f"{pair}: 約定履歴取得失敗 order_id={order_id}: {e}")
+        return None
+    fills = [f for f in fills if str(f.get("order_id")) == str(order_id)]
+    if not fills:
+        return None
+    net  = sum(Decimal(f.get("profit_loss") or "0") for f in fills)
+    fee  = sum(Decimal(f.get("fee_amount_quote") or "0") for f in fills)
+    intr = sum(Decimal(f.get("interest") or "0") for f in fills)
+    amt  = sum(Decimal(f["amount"]) for f in fills)
+    avg  = sum(Decimal(f["amount"]) * Decimal(f["price"]) for f in fills) / amt
+    return {
+        "pnl_jpy":       float(net.quantize(Decimal("0.0001"))),
+        "gross_pnl_jpy": float((net + fee + intr).quantize(Decimal("0.0001"))),
+        "fee_jpy":       float(fee.quantize(Decimal("0.0001"))),
+        "interest_jpy":  float(intr.quantize(Decimal("0.0001"))),
+        "exit_price":    float(avg),
+        "amount":        float(amt),
+        "fill_count":    len(fills),
+    }
+
+
 def record_trade(pair: str, direction: str, reason: str, entry: float,
                  exit_price: float, amount: float, position_id: str | None = None,
-                 estimated: bool = False):
+                 estimated: bool = False, bb=None, order_id=None):
     """確定損益を S3 に「1決済 = 1オブジェクト」で書き込む（put_object のみ）。
 
     キーは {prefix}{ts}_{pair}_{time_ns}.json でナノ秒サフィックス付き。
@@ -193,11 +224,20 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
     重なっても既存レコードを上書き・消失させない（追記消失レースが構造的に発生しない）。
     集計は Analyzer / WeeklySummary 側で prefix の list_objects により行う。
     記録失敗で取引処理を止めないこと（ログのみ残して継続）。
-    estimated=True は成行クローズ等で約定価格が取れず現在価格で代用した記録。"""
+    estimated=True は成行クローズ等で約定価格が取れず現在価格で代用した記録。
+
+    2026-10-02〜: bb と order_id を渡すと bitbank の約定履歴から実際の損益
+    （手数料・利息控除後、口座残高の増減と一致）で記録する（pnl_source="bitbank"）。
+    約定履歴が未反映なら価格差の概算で仮記録し（pnl_source="pending"）、
+    次回以降の reconcile_trade_records() が同じキーを実績値で上書きする。"""
     if direction == "long":
         pnl = (exit_price - entry) * amount
     else:
         pnl = (entry - exit_price) * amount
+    exact = fetch_exact_close(bb, pair, order_id)
+    if exact is None and bb is not None and order_id:
+        time.sleep(1.0)  # 成行直後は約定履歴の反映がわずかに遅れることがあるため1回だけ再取得
+        exact = fetch_exact_close(bb, pair, order_id)
     record = {
         "ts":          datetime.now(JST).isoformat(timespec="seconds"),
         "pair":        pair,
@@ -209,13 +249,22 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
         "pnl_jpy":     round(pnl, 1),
         "position_id": position_id,
         "estimated":   estimated,
+        "order_id":    int(order_id) if order_id else None,
+        "pnl_source":  "estimate",
     }
+    if exact is not None:
+        record.update(exact)
+        record["estimated"]  = False
+        record["pnl_source"] = "bitbank"
+        pnl = exact["pnl_jpy"]
+    elif order_id:
+        record["pnl_source"] = "pending"
     try:
         ts  = datetime.now(JST).strftime("%Y%m%dT%H%M%S")
         key = f"{TRADES_KEY_PREFIX}{ts}_{pair}_{time.time_ns()}.json"
         _s3.put_object(Bucket=TRADES_BUCKET, Key=key,
                        Body=json.dumps(record, ensure_ascii=False).encode("utf-8"))
-        log(f"{pair}: 取引履歴記録 {reason} pnl={pnl:+,.1f}円")
+        log(f"{pair}: 取引履歴記録 {reason} pnl={pnl:+,.4f}円 source={record['pnl_source']}")
     except Exception as e:
         log(f"{pair}: 取引履歴記録失敗（取引処理は継続）: {e}")
         return
@@ -244,6 +293,40 @@ def _load_all_trades() -> list[dict]:
     return trades
 
 
+def reconcile_trade_records(bb) -> int:
+    """pnl_source="pending" の取引記録を bitbank の約定履歴で実績値に置き換える（同じキーへ上書き）。
+    件数が少ない（1決済1オブジェクト）ため毎回全件を走査する。失敗しても取引処理は継続。"""
+    fixed = 0
+    try:
+        paginator = _s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=TRADES_BUCKET, Prefix=TRADES_KEY_PREFIX):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if not key.endswith(".json"):
+                    continue
+                rec = json.loads(_s3.get_object(Bucket=TRADES_BUCKET, Key=key)["Body"].read())
+                if rec.get("pnl_source") != "pending" or not rec.get("order_id"):
+                    continue
+                exact = fetch_exact_close(bb, rec["pair"], rec["order_id"])
+                if exact is None:
+                    continue
+                rec.update(exact)
+                rec["estimated"]  = False
+                rec["pnl_source"] = "bitbank"
+                _s3.put_object(Bucket=TRADES_BUCKET, Key=key,
+                               Body=json.dumps(rec, ensure_ascii=False).encode("utf-8"))
+                log(f"{rec['pair']}: 取引記録を実績値に更新 {key} pnl={exact['pnl_jpy']:+,.4f}円")
+                fixed += 1
+    except Exception as e:
+        log(f"取引記録の照合失敗（取引処理は継続）: {e}")
+    if fixed:
+        try:
+            update_stats_json()
+        except Exception as e:
+            log(f"統計JSON更新失敗（照合自体は成功・処理は継続）: {e}")
+    return fixed
+
+
 def update_stats_json():
     """全取引履歴から資産推移（equity curve）を計算し、004ポートフォリオの
     非公開ダッシュボードページ用の統計JSONとして非公開S3バケットへ書き出す
@@ -263,12 +346,12 @@ def update_stats_json():
             "direction":          t["direction"],
             "reason":             t["reason"],
             "pnl_jpy":            t["pnl_jpy"],
-            "cumulative_pnl_jpy": round(cum, 1),
+            "cumulative_pnl_jpy": round(cum, 4),
             "position_id":        t.get("position_id"),
         })
     payload = {
         "generated_at":  datetime.now(JST).isoformat(timespec="seconds"),
-        "total_pnl_jpy": round(cum, 1),
+        "total_pnl_jpy": round(cum, 4),
         "trade_count":   len(trades),
         "points":        points,
     }
@@ -535,6 +618,12 @@ class BitbankClient:
     def get_order(self, pair: str, order_id: int) -> dict:
         return self._get("/user/spot/order", {"pair": pair, "order_id": order_id})["data"]
 
+    def get_trade_history(self, pair: str, order_id: int) -> list[dict]:
+        """注文IDに紐づく約定（fill）一覧。信用取引の決済約定には profit_loss（手数料・利息控除後の
+        実現損益）・fee_amount_quote・interest が入る。口座のJPY残高はこの profit_loss の分だけ動く。"""
+        return self._get("/user/spot/trade_history",
+                         {"pair": pair, "order_id": order_id, "count": 1000})["data"]["trades"]
+
     def create_order(self, pair: str, amount: str, price: str, side: str,
                      position_side: str | None = None,
                      trigger_price: str | None = None) -> dict:
@@ -743,13 +832,14 @@ def _emergency_close_all(bb: BitbankClient, state: dict) -> list[str]:
         if amount > 0:
             amount_str = round_amount(amount, cfg["amount_prec"])
             try:
-                bb.create_market_order(pair, amount_str, close_side, position_side=direction)
+                mkt = bb.create_market_order(pair, amount_str, close_side, position_side=direction)
                 log(f"{pair}: 緊急成行決済 {close_side} {amount_str}")
                 try:
                     est_price = get_bitbank_price(pair)
                     record_trade(pair, direction, "緊急決済",
                                  pos.get("entry_price", est_price), est_price, amount,
-                                 pos.get("position_id"), estimated=True)
+                                 pos.get("position_id"), estimated=True,
+                                 bb=bb, order_id=(mkt or {}).get("order_id"))
                 except Exception as re_:
                     log(f"{pair}: 緊急決済記録失敗: {re_}")
             except Exception as e:
@@ -958,7 +1048,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                                  pos["entry_price"],
                                                  sl_price_f,
                                                  sl_amount_f,
-                                                 pos.get("position_id"))
+                                                 pos.get("position_id"),
+                                                 bb=bb, order_id=pos.get("sl_order_id"))
                                     notify_close(pair, direction, "SL（TP1後）",
                                                  sl_price_f,
                                                  pos["entry_price"],
@@ -1018,7 +1109,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             realized_pnl = (entry - tp1_fill_price) * tp1_filled_amount
                         record_trade(pair, direction, "TP1部分利確", entry,
                                      tp1_fill_price, tp1_filled_amount,
-                                     pos.get("position_id"))
+                                     pos.get("position_id"),
+                                     bb=bb, order_id=pos.get("tp1_order_id"))
                         notify_trail_started(pair, direction, entry, pos["tp1_price"],
                                              tp1_fill_price, realized_pnl)
                         continue
@@ -1068,15 +1160,16 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         tp1_amt = pos.get("tp1_amount", 0)
                         if tp1_amt > 0:
                             try:
-                                bb.create_market_order(pair,
-                                                       round_amount(tp1_amt, cfg["amount_prec"]),
-                                                       close_side, position_side=direction)
+                                mkt = bb.create_market_order(pair,
+                                                             round_amount(tp1_amt, cfg["amount_prec"]),
+                                                             close_side, position_side=direction)
                                 log(f"{pair}: 残30% 成行クローズ {tp1_amt}")
                                 try:
                                     est_price = get_bitbank_price(pair)
                                     record_trade(pair, direction, "損切り（残30%成行）",
                                                  pos["entry_price"], est_price, tp1_amt,
-                                                 pos.get("position_id"), estimated=True)
+                                                 pos.get("position_id"), estimated=True,
+                                                 bb=bb, order_id=(mkt or {}).get("order_id"))
                                 except Exception as re_:
                                     log(f"{pair}: 残30%記録失敗: {re_}")
                             except Exception as me:
@@ -1094,7 +1187,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                      pos["entry_price"],
                                      sl_fill_price,
                                      sl_fill_amount,
-                                     pos.get("position_id"))
+                                     pos.get("position_id"),
+                                     bb=bb, order_id=pos.get("sl_order_id"))
                         notify_close(pair, direction, "損切り",
                                      sl_fill_price,
                                      pos["entry_price"],
@@ -1146,7 +1240,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                     remaining = get_available_margin(bb, pair)
                     record_trade(pair, direction, "トレーリングSL",
                                  pos["entry_price"], exit_p, exit_a,
-                                 pos.get("position_id"))
+                                 pos.get("position_id"),
+                                 bb=bb, order_id=pos.get("trail_sl_order_id"))
                     notify_close(pair, direction, "トレーリングSL",
                                  exit_p, pos["entry_price"], exit_a, remaining)
                     to_delete.append(pair)
@@ -1383,6 +1478,9 @@ def lambda_handler(event, context):
         api_key    = get_ssm(SSM_API_KEY,    decrypt=True)
         api_secret = get_ssm(SSM_API_SECRET, decrypt=True)
         bb         = BitbankClient(api_key, api_secret)
+
+        # 前回までに仮記録（約定履歴未反映）となった取引を bitbank の実績値で確定させる
+        reconcile_trade_records(bb)
 
         # テスト専用: 指定注文を強制キャンセル（ENABLE_FORCE_TEST=1 時のみ有効）
         if FORCE_TEST_ENABLED:
