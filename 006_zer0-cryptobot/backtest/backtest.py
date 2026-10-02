@@ -80,9 +80,12 @@ TRAIL_MULT = 0.75
 # エントリースリッページ: ロングは不利方向（高く約定）、ショートも不利方向（安く約定）に 0.1%
 SLIP_RATE = 0.001
 # 往復手数料率（マイナス=コスト控除、プラス=リベート収入）
-#   BTC: bitbank信用 成行テイカー 往復 0.06%（Taker 0.03%×2 をコストとして控除）→ -0.0006
-#   ETH/SOL: メイカーリベート 往復 -0.08%（-0.04%×2 が収入）→ +0.0008
-FEE_RATES = {"BTC": -0.0006, "ETH": 0.0008, "SOL": 0.0008}
+#   本番は「成行で建てる（テイカー）→指値で決済（メイカー）」なので往復 = open_taker + close_maker
+#   公式値（https://api.bitbank.cc/v1/spot/pairs の margin_*_fee_rate_quote、2026-10-02確認）:
+#   BTC: open_taker 0.1% + close_maker 0%      → -0.0010
+#   ETH/SOL: open_taker 0.12% + close_maker -0.02% → -0.0010
+#   （2026-10-02修正: 旧値 BTC -0.0006 / ETH・SOL +0.0008 は公式と食い違い、損益を過大評価していた）
+FEE_RATES = {"BTC": -0.0010, "ETH": -0.0010, "SOL": -0.0010}
 
 # ── M1: ATRベース ポジションサイジング ───────────────────────
 RISK_PCT       = 0.015   # 1トレードのリスク額 = 資本 × 1.5%
@@ -529,9 +532,7 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                  signal_mode="flip", daily_lookup: dict | None = None,
                  sizing_mode: str = "fixed", fee_on: bool = True,
                  slippage_on: bool = True, same_dir_limit: int | None = None,
-                 start_ts=None, end_ts=None, entry_mode: str = "market",
-                 limit_atr: float = 0.5, limit_bars: int = 2,
-                 fill_buffer: float = 0.0, limit_fee_rates: dict | None = None) -> dict:
+                 start_ts=None, end_ts=None) -> dict:
     """
     全コインを統合してシミュレーションを実行する。
     BTCの200EMAで市場方向（ロング/ショート）を決定し、
@@ -549,11 +550,6 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
     fee_on / slippage_on : H1 手数料・スリッページの有効化（後方互換のため切替可能）
     same_dir_limit       : M2 同一方向の同時建て上限（None=無制限）
     start_ts / end_ts    : L1 ウォークフォワード用の期間スライス（この範囲のシグナルのみ建てる）
-    entry_mode           : 2026-10 エントリー方式の比較用
-      "market"          : 既存仕様。シグナル足の終値で成行（スリッページ込み）
-      "limit"           : シグナル終値から limit_atr×ATR 押した価格に指値。limit_bars 本以内に
-                          約定しなければ見送り（押し目待ち。約定足は保守的にSL側のみ判定）
-      "limit_fallback"  : limit と同じだが、期限までに約定しなければ期限足の終値で成行
 
     フィルタ一覧:
       "flip"          : 既存仕様。Supertrend転換の瞬間のみエントリー
@@ -706,27 +702,6 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
     completed:     list[Trade] = []
     equity = [0.0]
     skipped_signals = 0   # M2: 同方向上限で見送ったシグナル数
-    pending: list[dict] = []   # 2026-10: 未約定の指値エントリー
-    missed_limits = 0          # 期限切れで見送った指値の数
-    coin_close: dict[str, dict] = {c: df.set_index("open_time")["close"].to_dict()
-                                   for c, df in coin_dfs.items()}
-
-    def _size(coin, entry, atr, nav):
-        """サイジング（market/limit共通）。(invest, amount) を返す。数量0なら None"""
-        amount = None
-        invest = max(nav * POSITION_RATIO / MAX_POSITIONS, MIN_INVEST)
-        if sizing_mode == "risk":
-            sl_dist = atr * SL_MULT
-            if sl_dist <= 0:
-                return None
-            qty = min((nav * RISK_PCT) / sl_dist, (nav * LEVERAGE) / entry)
-            lot = MIN_LOT.get(coin, 0.0001)
-            qty = (int(qty / lot)) * lot
-            if qty <= 0:
-                return None
-            amount = qty
-            invest = entry * qty
-        return invest, amount
 
     for bar_i, ts in enumerate(all_ts):
         # ── 既存ポジションの TP/SL チェック ──────────────────────────────
@@ -745,55 +720,6 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
             completed.append(t)
             pool_nav += t.pnl
             equity.append(pool_nav - INITIAL_CAPITAL)
-
-        # ── 2026-10: 指値エントリーの約定・期限切れ処理 ─────────────────────
-        for p in list(pending):
-            bar = coin_ohlc.get(p["coin"], {}).get(ts)
-            if bar is None:
-                continue
-            p["age"] += 1
-            long_ = p["direction"] == "long"
-            # fill_buffer: 指値に「触れただけ」では約定扱いにせず、さらに率で突き抜けた時のみ約定（保守的検証用）
-            hit = (bar["low"] <= p["price"] * (1 - fill_buffer) if long_
-                   else bar["high"] >= p["price"] * (1 + fill_buffer))
-            if hit:
-                pending.remove(p)
-                sized = _size(p["coin"], p["price"], p["atr"], pool_nav)
-                if sized is None:
-                    continue
-                # limit_fee_rates: 指値約定（メイカー建て）用の往復手数料率。未指定なら FEE_RATES
-                fee_tbl  = limit_fee_rates if limit_fee_rates is not None else FEE_RATES
-                fee_rate = fee_tbl.get(p["coin"], 0.0) if fee_on else 0.0
-                t = Trade(p["coin"], ts, p["price"], p["atr"], sized[0], p["direction"], strategy,
-                          p["sig_type"], fee_rate=fee_rate, amount=sized[1])
-                t.entry_idx = bar_i
-                # 約定足は足内の順序が不明なので、有利側(TP)は見ずSL側だけ判定する（保守的）
-                if long_:
-                    t.check_bar(p["price"], bar["low"], ts)
-                else:
-                    t.check_bar(bar["high"], p["price"], ts)
-                if t.closed:
-                    t.exit_idx = bar_i
-                    completed.append(t)
-                    pool_nav += t.pnl
-                    equity.append(pool_nav - INITIAL_CAPITAL)
-                else:
-                    active_trades.append(t)
-            elif p["age"] >= limit_bars:
-                pending.remove(p)
-                if entry_mode == "limit_fallback":
-                    c = coin_close[p["coin"]][ts]
-                    entry = c * (1 + SLIP_RATE) if long_ else c * (1 - SLIP_RATE)
-                    sized = _size(p["coin"], entry, p["atr"], pool_nav)
-                    if sized is None:
-                        continue
-                    fee_rate = FEE_RATES.get(p["coin"], 0.0) if fee_on else 0.0
-                    t = Trade(p["coin"], ts, entry, p["atr"], sized[0], p["direction"], strategy,
-                              p["sig_type"], fee_rate=fee_rate, amount=sized[1])
-                    t.entry_idx = bar_i
-                    active_trades.append(t)
-                else:
-                    missed_limits += 1
 
         # ── L1: ウォークフォワード期間外はエントリーしない（既存玉の決済は継続）──
         if (start_ts is not None and ts < start_ts) or (end_ts is not None and ts > end_ts):
@@ -814,11 +740,9 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
                         sigs.remove(s)
 
         for sig in sigs:
-            if len(active_trades) + len(pending) >= MAX_POSITIONS:
+            if len(active_trades) >= MAX_POSITIONS:
                 break
             if any(t.coin == sig["coin"] for t in active_trades):
-                continue
-            if any(p["coin"] == sig["coin"] for p in pending):
                 continue
 
             if pool_nav < MIN_INVEST:
@@ -830,19 +754,10 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
 
             # M2: 同方向の同時保有数が上限に達していたら見送り（既存玉も含めてカウント）
             if same_dir_limit is not None:
-                same_dir_active = (sum(1 for t in active_trades if t.direction == direction)
-                                   + sum(1 for p in pending if p["direction"] == direction))
+                same_dir_active = sum(1 for t in active_trades if t.direction == direction)
                 if same_dir_active >= same_dir_limit:
                     skipped_signals += 1
                     continue
-
-            # 2026-10: 指値エントリー（押し目待ち）は注文だけ置いて次の足から約定判定
-            if entry_mode in ("limit", "limit_fallback"):
-                off = atr * limit_atr
-                price = sig["close"] - off if direction == "long" else sig["close"] + off
-                pending.append({"coin": coin, "direction": direction, "atr": atr,
-                                "price": price, "sig_type": sig["sig_type"], "age": 0})
-                continue
 
             # H1: スリッページ（建値を不利方向にずらす）
             if slippage_on:
@@ -905,8 +820,7 @@ def run_backtest(btc_df: pd.DataFrame, coin_dfs: dict, strategy: str = "old",
         equity.append(pool_nav - INITIAL_CAPITAL)
 
     return {"trades": completed, "equity": equity, "timestamps": [],
-            "final_pool": pool_nav, "skipped_signals": skipped_signals,
-            "missed_limits": missed_limits}
+            "final_pool": pool_nav, "skipped_signals": skipped_signals}
 
 
 # ── 統計計算 ──────────────────────────────────────────
