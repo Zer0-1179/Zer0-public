@@ -444,3 +444,23 @@ def test_reconcile_trade_records_overwrites_pending_with_actual(executor, monkey
     assert put.call_args.kwargs["Key"] == "cryptobot/trades/a.json"
     rec = json.loads(put.call_args.kwargs["Body"])
     assert rec["pnl_jpy"] == 41.0344 and rec["pnl_source"] == "bitbank"
+
+
+def test_update_stats_json_includes_fee_interest_breakdown(executor, monkeypatch):
+    monkeypatch.setattr(executor, "STATS_BUCKET", "zer0-cryptobot-stats-s3")
+    trades = [
+        {"ts": "2026-09-27T22:45:18+09:00", "pair": "sol_jpy", "direction": "long", "reason": "トレーリングSL",
+         "pnl_jpy": 41.0344, "gross_pnl_jpy": 56.1262, "fee_jpy": 11.3357, "interest_jpy": 3.7561, "pnl_source": "bitbank"},
+        {"ts": "2026-09-28T00:00:00+09:00", "pair": "btc_jpy", "direction": "long", "reason": "緊急決済",
+         "pnl_jpy": -10.0, "pnl_source": "pending"},
+    ]
+    monkeypatch.setattr(executor, "_load_all_trades", MagicMock(return_value=trades))
+    put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", put)
+    executor.update_stats_json()
+    payload = json.loads(put.call_args.kwargs["Body"])
+    assert payload["total_pnl_jpy"] == 31.0344
+    assert payload["total_fee_jpy"] == 11.3357 and payload["total_interest_jpy"] == 3.7561
+    assert payload["total_gross_pnl_jpy"] == 56.1262
+    assert payload["points"][0]["fee_jpy"] == 11.3357
+    assert payload["points"][1]["fee_jpy"] is None and payload["points"][1]["pnl_source"] == "pending"

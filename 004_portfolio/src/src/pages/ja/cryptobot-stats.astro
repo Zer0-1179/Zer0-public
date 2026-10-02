@@ -29,12 +29,21 @@ interface StatsPoint {
   direction: string;
   reason: string;
   pnl_jpy: number;
+  // 2026-10-02〜: pnl_jpy は bitbank 約定履歴の実損益（手数料・利息控除後、口座残高の増減と一致）。
+  // 内訳は約定履歴で確定した記録のみ持つ（pending/estimate は null）
+  gross_pnl_jpy?: number | null;
+  fee_jpy?: number | null;
+  interest_jpy?: number | null;
+  pnl_source?: 'bitbank' | 'pending' | 'estimate';
   cumulative_pnl_jpy: number;
   position_id?: string | null;
 }
 interface StatsPayload {
   generated_at: string;
   total_pnl_jpy: number;
+  total_gross_pnl_jpy?: number;
+  total_fee_jpy?: number;
+  total_interest_jpy?: number;
   trade_count: number;
   points: StatsPoint[];
 }
@@ -92,6 +101,13 @@ try {
 
 const openPositions = positionsPayload?.positions ?? [];
 const fmtYen = (v: number) => `${v >= 0 ? '+' : ''}${v.toLocaleString()}円`;
+// 実損益は bitbank が小数4桁で計算しているため、円未満も2桁まで表示する（丸めで差異を作らない）
+const fmtYen2 = (v: number) =>
+  `${v >= 0 ? '+' : ''}${v.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円`;
+// 手数料・利息は0円なら色を付けない（赤字は実際に差し引かれた額だけ）
+const costCls = (v: number | null | undefined) => (v ? 'text-red-300' : 'text-slate-500');
+const fmtCost = (v: number | null | undefined) =>
+  v == null ? '—' : `${v === 0 ? '' : '-'}${Math.abs(v).toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円`;
 const fmtPrice = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
 // SSR実行環境(Lambda)のデフォルトタイムゾーンはUTCのため、timeZone省略だと
 // generated_at(JSTのISO文字列)がUTC表示になってしまう。明示的にJST指定する。
@@ -119,6 +135,20 @@ const winCount = closedPositions.filter((p) => p.pnl > 0).length;
 const lossCount = closedPositions.length - winCount;
 const winRate = closedPositions.length > 0 ? ((winCount / closedPositions.length) * 100).toFixed(1) : null;
 const positionCount = closedPositions.length;
+
+// PF（総利益÷総損失、ポジション単位）・平均利益/平均損失。損失0件のときPFは算出不可（—）
+const grossWin = closedPositions.filter((p) => p.pnl > 0).reduce((a, p) => a + p.pnl, 0);
+const grossLoss = -closedPositions.filter((p) => p.pnl <= 0).reduce((a, p) => a + p.pnl, 0);
+const profitFactor = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : null;
+const avgWin = winCount > 0 ? grossWin / winCount : null;
+const avgLoss = lossCount > 0 ? grossLoss / lossCount : null;
+
+// 元本（bitbank信用口座への入金額）。口座残高＝元本＋全約定の実現損益で一致することを
+// 2026-10-02に確認済み。入金・出金で元本が変わったらこの値を更新すること
+const INITIAL_CAPITAL_JPY = 10000;
+// 資金増額の判断基準（006 project_006_scale_up_plan: 累計20件で最低確認・30件で安心ライン）
+const SCALE_UP_MIN = 20;
+const SCALE_UP_SAFE = 30;
 
 // 最大ドローダウン（累積損益カーブのピークからの最大下落幅）。基準0円を起点に含める。
 let peak = 0;
@@ -274,9 +304,9 @@ const xLabels =
       <>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
-            <div class="text-xs text-slate-400 mb-1">累計損益</div>
+            <div class="text-xs text-slate-400 mb-1">累計損益（手数料・利息控除後）</div>
             <div class={`text-xl font-bold ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {stats!.total_pnl_jpy >= 0 ? '+' : ''}{stats!.total_pnl_jpy.toLocaleString()}円
+              {fmtYen2(stats!.total_pnl_jpy)}
             </div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
@@ -290,9 +320,70 @@ const xLabels =
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">最大DD</div>
-            <div class="text-xl font-bold text-white">-{maxDD.toLocaleString()}円</div>
+            <div class="text-xl font-bold text-white">{fmtCost(maxDD)}</div>
           </div>
         </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">元本に対する利益率</div>
+            <div class={`text-xl font-bold ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {stats!.total_pnl_jpy >= 0 ? '+' : ''}{((stats!.total_pnl_jpy / INITIAL_CAPITAL_JPY) * 100).toFixed(2)}%
+            </div>
+            <div class="text-xs text-slate-500 mt-1">元本 {INITIAL_CAPITAL_JPY.toLocaleString()}円</div>
+          </div>
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">PF（総利益÷総損失）</div>
+            <div class="text-xl font-bold text-white">{profitFactor ?? '—'}</div>
+          </div>
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">平均利益 / 平均損失</div>
+            <div class="text-sm font-bold text-white mt-1">
+              <span class="text-green-400">{avgWin != null ? fmtYen2(avgWin) : '—'}</span>
+              <span class="text-slate-500"> / </span>
+              <span class="text-red-400">{avgLoss != null ? fmtCost(avgLoss) : '—'}</span>
+            </div>
+          </div>
+          <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
+            <div class="text-xs text-slate-400 mb-1">増額判断までの進捗</div>
+            <div class="text-xl font-bold text-white">{positionCount} / {SCALE_UP_MIN}件</div>
+            <div class="text-xs text-slate-500 mt-1">
+              {positionCount < SCALE_UP_MIN
+                ? `最低ラインまであと${SCALE_UP_MIN - positionCount}件（安心ライン${SCALE_UP_SAFE}件）`
+                : positionCount < SCALE_UP_SAFE
+                  ? `最低ライン到達。安心ラインまであと${SCALE_UP_SAFE - positionCount}件`
+                  : '安心ライン到達'}
+            </div>
+          </div>
+        </div>
+
+        {typeof stats!.total_fee_jpy === 'number' && (
+          <div class="bg-navy-800/40 border border-navy-700 rounded-xl p-5 mb-8">
+            <h2 class="text-sm font-semibold text-white mb-3">損益の内訳</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div class="text-xs text-slate-400 mb-1">売買の損益（控除前）</div>
+                <div class="text-slate-200 font-semibold">{fmtYen2(stats!.total_gross_pnl_jpy ?? 0)}</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 mb-1">取引手数料</div>
+                <div class="text-red-300 font-semibold">{fmtCost(stats!.total_fee_jpy)}</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 mb-1">建玉金利（0.04%/日）</div>
+                <div class="text-red-300 font-semibold">{fmtCost(stats!.total_interest_jpy)}</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 mb-1">実際の損益</div>
+                <div class={`font-semibold ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtYen2(stats!.total_pnl_jpy)}</div>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 mt-3">
+              bitbankの約定履歴（実現損益・手数料・利息）をそのまま集計しており、口座残高の増減と一致します。
+              {points.some((p) => p.pnl_source !== 'bitbank') && ' 一部の記録は約定履歴の反映待ちのため概算で、内訳には含まれていません（次回のBot実行時に確定値へ置き換わります）。'}
+            </p>
+          </div>
+        )}
 
         <div class="bg-navy-800/40 border border-navy-700 rounded-xl p-5 mb-6">
           <h2 class="text-sm font-semibold text-white mb-3">累積損益推移</h2>
@@ -318,7 +409,7 @@ const xLabels =
                 stroke="#112240"
                 stroke-width="1.5"
               >
-                <title>{`${p.ts.slice(0, 10)} ${PAIR_LABEL[p.pair] ?? p.pair} ${DIR_LABEL[p.direction] ?? p.direction} / ${p.reason} / ${p.pnl_jpy >= 0 ? '+' : ''}${p.pnl_jpy.toLocaleString()}円 / 累計${p.cumulative_pnl_jpy.toLocaleString()}円`}</title>
+                <title>{`${p.ts.slice(0, 10)} ${PAIR_LABEL[p.pair] ?? p.pair} ${DIR_LABEL[p.direction] ?? p.direction} / ${p.reason} / ${fmtYen2(p.pnl_jpy)}${p.fee_jpy != null ? `（手数料${fmtCost(p.fee_jpy)}・利息${fmtCost(p.interest_jpy)}控除後）` : ''} / 累計${fmtYen2(p.cumulative_pnl_jpy)}`}</title>
               </circle>
             ))}
             <circle
@@ -339,30 +430,65 @@ const xLabels =
         </div>
 
         <details class="bg-navy-800/40 border border-navy-700 rounded-xl p-5" open>
-          <summary class="text-sm font-semibold text-white cursor-pointer select-none">テーブル表示</summary>
-          <div class="overflow-x-auto mt-4">
+          <summary class="text-sm font-semibold text-white cursor-pointer select-none">取引一覧（新しい順）</summary>
+          {/* スマホ・タブレット: 1トレード1カード（横スクロールを作らない） */}
+          <div class="lg:hidden mt-4 space-y-3">
+            {[...points].reverse().map((p) => (
+              <div class="border border-navy-700 rounded-lg p-3 bg-navy-900/30">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-slate-200 text-sm font-medium">
+                      {PAIR_LABEL[p.pair] ?? p.pair}
+                      <span class="text-slate-400 font-normal"> {DIR_LABEL[p.direction] ?? p.direction}</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-0.5">{p.ts.slice(0, 10)} ・ {p.reason}</div>
+                  </div>
+                  <div class={`text-right font-semibold shrink-0 ${p.pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {fmtYen2(p.pnl_jpy)}
+                    {p.pnl_source && p.pnl_source !== 'bitbank' && <div class="text-xs text-slate-500 font-normal">（概算）</div>}
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 pt-2 border-t border-navy-700 text-xs">
+                  <div class="flex justify-between"><span class="text-slate-500">控除前</span><span class="text-slate-300">{p.gross_pnl_jpy != null ? fmtYen2(p.gross_pnl_jpy) : '—'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500">手数料</span><span class={costCls(p.fee_jpy)}>{fmtCost(p.fee_jpy)}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500">利息</span><span class={costCls(p.interest_jpy)}>{fmtCost(p.interest_jpy)}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500">累計</span><span class="text-slate-300">{fmtYen2(p.cumulative_pnl_jpy)}</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* PC: 表形式 */}
+          <div class="hidden lg:block mt-4">
             <table class="w-full text-sm">
               <thead>
                 <tr class="text-slate-400 text-xs">
-                  <th class="text-left py-2 pr-4">日付</th>
-                  <th class="text-left py-2 pr-4">ペア</th>
-                  <th class="text-left py-2 pr-4">方向</th>
-                  <th class="text-left py-2 pr-4">決済理由</th>
-                  <th class="text-right py-2 pr-4">損益</th>
-                  <th class="text-right py-2">累計</th>
+                  <th class="text-left py-2 pr-3 whitespace-nowrap">日付</th>
+                  <th class="text-left py-2 pr-3 whitespace-nowrap">ペア</th>
+                  <th class="text-right py-2 pr-3 whitespace-nowrap">損益</th>
+                  <th class="text-right py-2 pr-3 whitespace-nowrap">手数料</th>
+                  <th class="text-right py-2 pr-3 whitespace-nowrap">利息</th>
+                  <th class="text-right py-2 pr-3 whitespace-nowrap">控除前</th>
+                  <th class="text-right py-2 pr-3 whitespace-nowrap">累計</th>
+                  <th class="text-left py-2 pr-3 whitespace-nowrap">方向</th>
+                  <th class="text-left py-2">決済理由</th>
                 </tr>
               </thead>
               <tbody>
-                {points.map((p) => (
+                {/* 最近のトレードを上に表示（グラフは時系列順のまま） */}
+                {[...points].reverse().map((p) => (
                   <tr class="border-t border-navy-700">
-                    <td class="py-2 pr-4 text-slate-300">{p.ts.slice(0, 10)}</td>
-                    <td class="py-2 pr-4 text-slate-300">{PAIR_LABEL[p.pair] ?? p.pair}</td>
-                    <td class="py-2 pr-4 text-slate-300">{DIR_LABEL[p.direction] ?? p.direction}</td>
-                    <td class="py-2 pr-4 text-slate-300">{p.reason}</td>
-                    <td class={`py-2 pr-4 text-right ${p.pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {p.pnl_jpy >= 0 ? '+' : ''}{p.pnl_jpy.toLocaleString()}円
+                    <td class="py-2 pr-3 text-slate-300 whitespace-nowrap">{p.ts.slice(0, 10)}</td>
+                    <td class="py-2 pr-3 text-slate-300 whitespace-nowrap">{PAIR_LABEL[p.pair] ?? p.pair}</td>
+                    <td class={`py-2 pr-3 text-right whitespace-nowrap ${p.pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {fmtYen2(p.pnl_jpy)}{p.pnl_source && p.pnl_source !== 'bitbank' && <span class="text-slate-500">（概算）</span>}
                     </td>
-                    <td class="py-2 text-right text-slate-300">{p.cumulative_pnl_jpy.toLocaleString()}円</td>
+                    <td class={`py-2 pr-3 text-right whitespace-nowrap ${costCls(p.fee_jpy)}`}>{fmtCost(p.fee_jpy)}</td>
+                    <td class={`py-2 pr-3 text-right whitespace-nowrap ${costCls(p.interest_jpy)}`}>{fmtCost(p.interest_jpy)}</td>
+                    <td class="py-2 pr-3 text-right text-slate-300 whitespace-nowrap">{p.gross_pnl_jpy != null ? fmtYen2(p.gross_pnl_jpy) : '—'}</td>
+                    <td class="py-2 pr-3 text-right text-slate-300 whitespace-nowrap">{fmtYen2(p.cumulative_pnl_jpy)}</td>
+                    <td class="py-2 pr-3 text-slate-300 whitespace-nowrap">{DIR_LABEL[p.direction] ?? p.direction}</td>
+                    <td class="py-2 text-slate-300">{p.reason}</td>
                   </tr>
                 ))}
               </tbody>
