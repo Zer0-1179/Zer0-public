@@ -313,6 +313,27 @@ def _load_all_trades() -> list[dict]:
     return trades
 
 
+def record_partial_fill_after_cancel(bb, pair: str, direction: str, reason: str,
+                                     pos: dict, order_id) -> float:
+    """キャンセルした決済注文（TP1・SL・トレーリングSL）に一部約定があれば、その約定分を記録する。
+    キャンセル前に一部だけ約定していると、口座残高は動くのに取引記録が残らず差額になるため。
+    戻り値は約定済み数量（記録失敗・約定なしは0）。注文数量の調整は行わない（記録のみ）。"""
+    if not order_id:
+        return 0.0
+    try:
+        fill = order_fill(bb.get_order(pair, order_id))
+    except Exception as e:
+        log(f"{pair}: キャンセル済み注文の約定確認失敗 order_id={order_id}: {e}")
+        return 0.0
+    if not fill:
+        return 0.0
+    price, amount = fill
+    log(f"{pair}: キャンセル前に一部約定あり order_id={order_id} 数量={amount} → 記録")
+    record_trade(pair, direction, reason, pos.get("entry_price", price), price, amount,
+                 pos.get("position_id"), bb=bb, order_id=order_id)
+    return amount
+
+
 def reconcile_trade_records(bb) -> int:
     """pnl_source="pending" の取引記録を bitbank の約定履歴で実績値に置き換える（同じキーへ上書き）。
     件数が少ない（1決済1オブジェクト）ため毎回全件を走査する。1件の失敗で他の照合を止めない。
@@ -932,6 +953,9 @@ def _emergency_close_all(bb: BitbankClient, state: dict) -> list[str]:
                 try:
                     bb.cancel_order(pair, oid)
                     log(f"{pair}: 緊急キャンセル {key}={oid}")
+                    if key != "buy_order_id":
+                        record_partial_fill_after_cancel(bb, pair, direction, "緊急決済（キャンセル前の一部約定）",
+                                                         pos, oid)
                 except Exception as ce:
                     log(f"{pair}: キャンセル失敗 {key}={oid}: {ce}")
 
@@ -1160,6 +1184,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         try:
                             bb.cancel_order(pair, pos["sl_order_id"])
                             sl_cancel_ok = True
+                            record_partial_fill_after_cancel(bb, pair, direction, "損切り（キャンセル前の一部約定）",
+                                                             pos, pos["sl_order_id"])
                         except Exception as ce:
                             log(f"{pair}: 旧SL キャンセル失敗: {ce}")
                             try:
@@ -1280,6 +1306,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         log(f"{pair}({direction}): SL（損切り）約定 → TP1キャンセル → 残30%成行クローズ → 終了")
                         try:
                             bb.cancel_order(pair, pos["tp1_order_id"])
+                            record_partial_fill_after_cancel(bb, pair, direction, "TP1部分利確（キャンセル前の一部約定）",
+                                                             pos, pos["tp1_order_id"])
                         except Exception as ce:
                             log(f"{pair}: TP1キャンセル失敗: {ce}")
                             send_email(
@@ -1393,8 +1421,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     log(f"{pair}(long): トレーリングSL更新 "
                                         f"{pos['trail_sl_price']} → {new_trail_val}")
                                     try:
-                                        bb.cancel_order(pair, pos["trail_sl_order_id"])
+                                        old_trail_id = pos["trail_sl_order_id"]
+                                        bb.cancel_order(pair, old_trail_id)
                                         pos["trail_sl_order_id"] = None  # 以後は再発注失敗時も次回自己修復させる
+                                        record_partial_fill_after_cancel(bb, pair, direction,
+                                                                         "トレーリングSL（キャンセル前の一部約定）",
+                                                                         pos, old_trail_id)
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue
@@ -1424,8 +1456,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     log(f"{pair}(short): トレーリングSL更新 "
                                         f"{pos['trail_sl_price']} → {new_trail_val}")
                                     try:
-                                        bb.cancel_order(pair, pos["trail_sl_order_id"])
+                                        old_trail_id = pos["trail_sl_order_id"]
+                                        bb.cancel_order(pair, old_trail_id)
                                         pos["trail_sl_order_id"] = None  # 以後は再発注失敗時も次回自己修復させる
+                                        record_partial_fill_after_cancel(bb, pair, direction,
+                                                                         "トレーリングSL（キャンセル前の一部約定）",
+                                                                         pos, old_trail_id)
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue

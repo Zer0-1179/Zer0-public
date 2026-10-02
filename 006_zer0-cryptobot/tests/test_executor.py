@@ -608,3 +608,17 @@ def test_sl_after_tp1_path_records_both_tp1_and_sl(executor, monkeypatch):
     assert reasons == ["TP1部分利確", "SL（TP1後）"]
     assert rec.call_args_list[0].kwargs["order_id"] == 11
     assert rec.call_args_list[1].kwargs["order_id"] == 22
+
+
+def test_record_partial_fill_after_cancel_records_only_when_filled(executor, monkeypatch):
+    rec = MagicMock()
+    monkeypatch.setattr(executor, "record_trade", rec)
+    bb = MagicMock()
+    pos = {"entry_price": 100.0, "position_id": "x"}
+    bb.get_order.return_value = {"status": "CANCELED_PARTIALLY_FILLED", "average_price": "110", "executed_amount": "0.002"}
+    assert executor.record_partial_fill_after_cancel(bb, "eth_jpy", "long", "r", pos, 5) == 0.002
+    assert rec.call_args.kwargs["order_id"] == 5 and rec.call_args.args[5] == 0.002
+    rec.reset_mock()
+    bb.get_order.return_value = {"status": "CANCELED_UNFILLED", "average_price": "0", "executed_amount": "0"}
+    assert executor.record_partial_fill_after_cancel(bb, "eth_jpy", "long", "r", pos, 5) == 0.0
+    rec.assert_not_called()

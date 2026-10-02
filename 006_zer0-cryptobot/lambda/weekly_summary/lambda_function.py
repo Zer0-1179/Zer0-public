@@ -158,7 +158,7 @@ def build_scale_up_progress(stats: dict) -> list[str]:
         f"  累計クローズ: {n}/{SCALE_UP_MIN_TRADES}（最低ライン）・{n}/{SCALE_UP_SAFE_TRADES}（安心ライン）",
         f"  実勝率: {m['win_str']} {m['win_mark']}（基準: 60%推奨/55%最低）".rstrip(),
         f"  実PF:   {m['pf_str']} {m['pf_mark']}（基準: >1.0）".rstrip(),
-        f"  実現ベース最大DD: {m['dd_str']}（参考値・バックテストDD5.2%は資本比%のため単純比較不可）",
+        f"  実現ベース最大DD: {m['dd_str']}（参考値・バックテストDD5.5%は資本比%のため単純比較不可）",
     ]
 
 
@@ -296,17 +296,17 @@ def lambda_handler(event, context):
             if p["pnl"] is not None:
                 lines.append(f"    含み損益:   {fmt_jpy(p['pnl'])} {fmt_pct(p['pnl'], p['cost'])}")
             lines.append("")
-        lines.append(f"■ 含み損益合計: {fmt_jpy(total_pnl)}")
+        lines.append(f"■ 含み損益合計: {fmt_jpy(total_pnl)}（値幅のみ・手数料・利息は決済時に控除）")
     if stats:
         win_str = f"{stats['win_rate']:.1f}%" if stats["win_rate"] is not None else "—"
         pf_str  = f"{stats['pf']:.2f}" if stats["pf"] is not None else "—"
         lines += [
             "",
             "■ 実現損益（確定分）",
-            f"  今週の確定損益: {fmt_jpy(stats['weekly_pnl'])}（決済 {stats['weekly_count']}件）",
-            f"  累計確定損益:   {fmt_jpy(stats['total_pnl'])}",
+            f"  今週の確定損益: {fmt_jpy(stats['weekly_pnl'])}（決済 {stats['weekly_count']}件・手数料・利息控除後）",
+            f"  累計確定損益:   {fmt_jpy(stats['total_pnl'])}（手数料・利息控除後）",
             f"  クローズ済み:   {stats['closed_count']}ポジション / 勝率 {win_str} / PF {pf_str}",
-            "  （参考: バックテスト2年・現実コスト込み 勝率72.9% / PF1.16 / 最大DD5.2%）",
+            "  （参考: バックテスト2年・公式手数料込み 勝率71.8% / PF1.14 / 最大DD5.5%）",
             "",
             "■ 資金増額判断の進捗",
             *build_scale_up_progress(stats),
@@ -372,7 +372,7 @@ def lambda_handler(event, context):
           <td style="padding:6px;">{stats['closed_count']}ポジション / 勝率 {win_str} / PF {pf_str}</td>
         </tr>
       </table>
-      <p style="color:#555;font-size:12px;margin:8px 0 0;">参考: バックテスト2年・現実コスト込み 勝率72.9% / PF1.16 / 最大DD5.2%</p>
+      <p style="color:#555;font-size:12px;margin:8px 0 0;">参考: バックテスト2年・公式手数料込み 勝率71.8% / PF1.14 / 最大DD5.5%</p>
     </div>
     <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;">
       <h3 style="color:#3ea8ff;margin:0 0 12px;">資金増額判断の進捗</h3>
