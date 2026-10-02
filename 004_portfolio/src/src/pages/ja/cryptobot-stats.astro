@@ -148,7 +148,8 @@ points.forEach((p, i) => {
   const pid = p.position_id ?? `_solo_${i}`;
   const agg = positionAgg.get(pid) ?? { pnl: 0, closed: false };
   agg.pnl += p.pnl_jpy;
-  if (!NON_CLOSING_REASONS.has(p.reason)) agg.closed = true;
+  // 「〜（キャンセル前の一部約定）」もポジション継続中の部分決済（006 weekly_summary と同じ判定）
+  if (!NON_CLOSING_REASONS.has(p.reason) && !p.reason.includes('キャンセル前の一部約定')) agg.closed = true;
   positionAgg.set(pid, agg);
 });
 const closedPositions = [...positionAgg.values()].filter((p) => p.closed);
