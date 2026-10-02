@@ -464,3 +464,147 @@ def test_update_stats_json_includes_fee_interest_breakdown(executor, monkeypatch
     assert payload["total_gross_pnl_jpy"] == 56.1262
     assert payload["points"][0]["fee_jpy"] == 11.3357
     assert payload["points"][1]["fee_jpy"] is None and payload["points"][1]["pnl_source"] == "pending"
+
+
+# ── 2026-10-02 Fableレビュー指摘の修正 ──
+def test_fetch_exact_close_returns_none_when_fills_are_partial(executor):
+    bb = MagicMock()
+    bb.get_trade_history.return_value = [dict(_SOL_TRAIL_FILL, amount="0.1")]
+    # 決済数量 0.2466 に対し履歴は 0.1 しか出ていない → 確定させない
+    assert executor.fetch_exact_close(bb, "sol_jpy", 60895638803, 0.2466) is None
+    bb.get_trade_history.return_value = [_SOL_TRAIL_FILL]
+    assert executor.fetch_exact_close(bb, "sol_jpy", 60895638803, 0.2466)["pnl_jpy"] == 41.0344
+
+
+def test_record_trade_uses_order_id_key_for_idempotency(executor, monkeypatch):
+    put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", put)
+    monkeypatch.setattr(executor, "update_stats_json", MagicMock())
+    bb = MagicMock()
+    bb.get_trade_history.return_value = [_SOL_TRAIL_FILL]
+    for _ in range(2):
+        executor.record_trade("sol_jpy", "long", "トレーリングSL", 19039.5, 19267.1, 0.2466,
+                              "p", bb=bb, order_id=60895638803)
+    keys = {c.kwargs["Key"] for c in put.call_args_list}
+    assert keys == {"cryptobot/trades/order_sol_jpy_60895638803.json"}
+
+
+def test_reconcile_continues_after_broken_object(executor, monkeypatch):
+    pending = {"ts": "2026-09-27T22:45:18+09:00", "pair": "sol_jpy", "direction": "long",
+               "reason": "トレーリングSL", "pnl_jpy": 56.1, "order_id": 60895638803,
+               "expected_amount": 0.2466, "pnl_source": "pending", "estimated": False}
+    pages = [{"Contents": [{"Key": "cryptobot/trades/broken.json"}, {"Key": "cryptobot/trades/a.json"}]}]
+    paginator = MagicMock(); paginator.paginate.return_value = pages
+    monkeypatch.setattr(executor._s3, "get_paginator", MagicMock(return_value=paginator))
+    bodies = {"cryptobot/trades/broken.json": b"{not json", "cryptobot/trades/a.json": json.dumps(pending).encode()}
+    monkeypatch.setattr(executor._s3, "get_object",
+                        MagicMock(side_effect=lambda Bucket, Key: {"Body": MagicMock(read=lambda: bodies[Key])}))
+    put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", put)
+    monkeypatch.setattr(executor, "update_stats_json", MagicMock())
+    bb = MagicMock()
+    bb.get_trade_history.return_value = [_SOL_TRAIL_FILL]
+    assert executor.reconcile_trade_records(bb) == 1
+
+
+def test_reconcile_alerts_once_for_stale_pending(executor, monkeypatch):
+    pending = {"ts": "2026-09-01T00:00:00+09:00", "pair": "sol_jpy", "direction": "long",
+               "reason": "トレーリングSL", "pnl_jpy": 56.1, "order_id": 1,
+               "expected_amount": 0.2466, "pnl_source": "pending", "estimated": False}
+    pages = [{"Contents": [{"Key": "cryptobot/trades/a.json"}]}]
+    paginator = MagicMock(); paginator.paginate.return_value = pages
+    monkeypatch.setattr(executor._s3, "get_paginator", MagicMock(return_value=paginator))
+    monkeypatch.setattr(executor._s3, "get_object",
+                        MagicMock(return_value={"Body": MagicMock(read=lambda: json.dumps(pending).encode())}))
+    put = MagicMock()
+    monkeypatch.setattr(executor._s3, "put_object", put)
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    bb = MagicMock()
+    bb.get_trade_history.return_value = []
+    executor.reconcile_trade_records(bb)
+    assert mail.call_count == 1
+    assert json.loads(put.call_args.kwargs["Body"])["pending_alerted"] is True
+
+
+def _account_bb(balance: str):
+    bb = MagicMock()
+    bb.get_assets.return_value = {"jpy": {"asset": "jpy", "onhand_amount": balance}}
+    bb.get_margin_positions.return_value = [
+        {"pair": "eth_jpy", "position_side": "long", "open_amount": "0.0157",
+         "unrealized_fee_amount": "8.0917", "unrealized_interest_amount": "1.5"},
+        {"pair": "btc_jpy", "position_side": "long", "open_amount": "0.0000",
+         "unrealized_fee_amount": "0", "unrealized_interest_amount": "0"},
+    ]
+    return bb
+
+
+def test_check_account_matches_when_balance_equals_records(executor, monkeypatch):
+    monkeypatch.setattr(executor, "_load_all_trades",
+                        MagicMock(return_value=[{"pnl_jpy": 1321.8268, "pnl_source": "bitbank"}]))
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    r = executor.check_account(_account_bb("11184.7337"))
+    assert r["matched"] is True and abs(r["diff_jpy"]) < 0.01
+    assert r["unrealized"] == {"eth_jpy:long": {"fee_jpy": 8.0917, "interest_jpy": 1.5}}
+    mail.assert_not_called()
+
+
+def test_check_account_alerts_once_on_unrecorded_close(executor, monkeypatch):
+    monkeypatch.setattr(executor, "_load_all_trades",
+                        MagicMock(return_value=[{"pnl_jpy": 1321.8268, "pnl_source": "bitbank"}]))
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    stored = {}
+    monkeypatch.setattr(executor._s3, "put_object",
+                        MagicMock(side_effect=lambda **kw: stored.update({kw["Key"]: kw["Body"]})))
+    def _get(Bucket, Key):
+        if Key not in stored:
+            raise Exception("NoSuchKey")
+        return {"Body": MagicMock(read=lambda: stored[Key])}
+    monkeypatch.setattr(executor._s3, "get_object", MagicMock(side_effect=_get))
+    bb = _account_bb("11084.7337")   # 100円の記録漏れ
+    r = executor.check_account(bb)
+    assert r["matched"] is False and round(r["diff_jpy"], 2) == -100.0
+    executor.check_account(bb)       # 同じ差額では再送しない
+    assert mail.call_count == 1
+
+
+def test_check_account_skips_alert_while_pending(executor, monkeypatch):
+    monkeypatch.setattr(executor, "_load_all_trades",
+                        MagicMock(return_value=[{"pnl_jpy": 50.0, "pnl_source": "pending"}]))
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    executor.check_account(_account_bb("11184.7337"))
+    mail.assert_not_called()
+
+
+def test_net_pnl_lines_in_notification(executor):
+    rec = {"pnl_source": "bitbank", "pnl_jpy": 41.0344, "fee_jpy": 11.3357, "interest_jpy": 3.7561}
+    assert "+41.03円" in executor._net_pnl_lines(rec)
+    assert "反映待ち" in executor._net_pnl_lines({"pnl_source": "pending"})
+    assert executor._net_pnl_lines(None) == ""
+
+
+def test_sl_after_tp1_path_records_both_tp1_and_sl(executor, monkeypatch):
+    """TP1約定→旧SLキャンセル失敗→SLも約定済み、の経路で TP1 分の記録が抜けないこと"""
+    pos = {"status": "active", "direction": "long", "position_id": "eth_jpy-1", "entry_price": 429501.0,
+           "atr_jpy": 6595.2, "tp1_order_id": 11, "sl_order_id": 22, "tp1_price": 437745.0,
+           "tp1_amount": 0.0047, "trail_amount": 0.011, "sl_price": 413013.0, "total_amount": 0.0157}
+    state = {"positions": {"eth_jpy": pos}}
+    bb = MagicMock()
+    orders = {11: {"status": "FULLY_FILLED", "average_price": "437745", "executed_amount": "0.0047"},
+              22: {"status": "FULLY_FILLED", "average_price": "413013", "executed_amount": "0.011"}}
+    bb.get_order.side_effect = lambda pair, oid: orders[oid]
+    bb.cancel_order.side_effect = Exception("already filled")
+    rec = MagicMock(return_value={"pnl_source": "pending"})
+    monkeypatch.setattr(executor, "record_trade", rec)
+    monkeypatch.setattr(executor, "notify_close", MagicMock())
+    monkeypatch.setattr(executor, "get_available_margin", MagicMock(return_value=10000))
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=413000))
+    monkeypatch.setattr(executor, "send_email", MagicMock())
+    executor.maintain_positions(bb, state, {})
+    reasons = [c.args[2] for c in rec.call_args_list]
+    assert reasons == ["TP1部分利確", "SL（TP1後）"]
+    assert rec.call_args_list[0].kwargs["order_id"] == 11
+    assert rec.call_args_list[1].kwargs["order_id"] == 22

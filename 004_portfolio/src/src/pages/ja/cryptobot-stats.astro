@@ -64,10 +64,25 @@ interface PositionSnapshot {
   lowest_price?: number | null;
   unrealized_pnl_jpy: number;
   locked_pnl_jpy?: number;
+  // 2026-10-02〜: bitbank の未実現手数料（建てた時の分）・利息。決済時にまとめて差し引かれる
+  unrealized_fee_jpy?: number;
+  unrealized_interest_jpy?: number;
+  unrealized_net_pnl_jpy?: number;
+}
+// 口座照合: JPY残高 = 元本 + 取引記録の合計 + 記録対象外（テスト取引等）。Executor が毎回計算
+interface AccountSummary {
+  jpy_balance: number;
+  capital_jpy: number;
+  recorded_pnl_jpy: number;
+  excluded_pnl_jpy: number;
+  diff_jpy: number;
+  matched: boolean;
+  pending_count: number;
 }
 interface PositionsPayload {
   generated_at: string;
   positions: PositionSnapshot[];
+  account?: AccountSummary;
 }
 
 let stats: StatsPayload | null = null;
@@ -100,14 +115,20 @@ try {
 }
 
 const openPositions = positionsPayload?.positions ?? [];
+const account = positionsPayload?.account ?? null;
 const fmtYen = (v: number) => `${v >= 0 ? '+' : ''}${v.toLocaleString()}円`;
 // 実損益は bitbank が小数4桁で計算しているため、円未満も2桁まで表示する（丸めで差異を作らない）
 const fmtYen2 = (v: number) =>
   `${v >= 0 ? '+' : ''}${v.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円`;
 // 手数料・利息は0円なら色を付けない（赤字は実際に差し引かれた額だけ）
-const costCls = (v: number | null | undefined) => (v ? 'text-red-300' : 'text-slate-500');
+// 手数料・利息は「支払った額」なので、正の値を「-」付きで表示する。負の値（メイカーリベートが
+// 上回った等、受け取った額）は「+」付き・緑で表示する
+const costCls = (v: number | null | undefined) =>
+  !v ? 'text-slate-500' : v > 0 ? 'text-red-300' : 'text-green-400';
 const fmtCost = (v: number | null | undefined) =>
-  v == null ? '—' : `${v === 0 ? '' : '-'}${Math.abs(v).toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円`;
+  v == null
+    ? '—'
+    : `${v > 0 ? '-' : v < 0 ? '+' : ''}${Math.abs(v).toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円`;
 const fmtPrice = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
 // SSR実行環境(Lambda)のデフォルトタイムゾーンはUTCのため、timeZone省略だと
 // generated_at(JSTのISO文字列)がUTC表示になってしまう。明示的にJST指定する。
@@ -245,12 +266,19 @@ const xLabels =
                   <div class="text-slate-200">{fmtPrice(p.current_price)}円</div>
                 </div>
                 <div>
-                  <div class="text-xs text-slate-400">含み損益</div>
+                  <div class="text-xs text-slate-400">含み損益（値幅）</div>
                   <div class={`font-semibold ${p.unrealized_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {fmtYen(p.unrealized_pnl_jpy)}
                   </div>
                 </div>
               </div>
+              {typeof p.unrealized_net_pnl_jpy === 'number' && (
+                <div class="text-xs text-slate-400 mb-3">
+                  手数料・利息を引くと
+                  <span class={`font-semibold ${p.unrealized_net_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}> {fmtYen2(p.unrealized_net_pnl_jpy)}</span>
+                  （手数料{fmtCost(p.unrealized_fee_jpy)}・利息{fmtCost(p.unrealized_interest_jpy)}。決済時にまとめて差し引かれ、決済分の手数料は別途かかります）
+                </div>
+              )}
 
               {p.status === 'active' && (
                 <div class="text-xs text-slate-400 bg-navy-900/40 rounded-lg p-3 leading-relaxed">
@@ -305,40 +333,40 @@ const xLabels =
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">累計損益（手数料・利息控除後）</div>
-            <div class={`text-xl font-bold ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div class={`text-base sm:text-xl font-bold whitespace-nowrap ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {fmtYen2(stats!.total_pnl_jpy)}
             </div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">決済ポジション数</div>
-            <div class="text-xl font-bold text-white">{positionCount}件</div>
+            <div class="text-base sm:text-xl font-bold whitespace-nowrap text-white">{positionCount}件</div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">勝率</div>
-            <div class="text-xl font-bold text-white">{winRate}%</div>
+            <div class="text-base sm:text-xl font-bold whitespace-nowrap text-white">{winRate}%</div>
             <div class="text-xs text-slate-500 mt-1">{winCount}勝{lossCount}敗</div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">最大DD</div>
-            <div class="text-xl font-bold text-white">{fmtCost(maxDD)}</div>
+            <div class="text-base sm:text-xl font-bold whitespace-nowrap text-white">{fmtCost(maxDD)}</div>
           </div>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
-            <div class="text-xs text-slate-400 mb-1">元本に対する利益率</div>
-            <div class={`text-xl font-bold ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div class="text-xs text-slate-400 mb-1">戦略の利益率（元本比）</div>
+            <div class={`text-base sm:text-xl font-bold whitespace-nowrap ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {stats!.total_pnl_jpy >= 0 ? '+' : ''}{((stats!.total_pnl_jpy / INITIAL_CAPITAL_JPY) * 100).toFixed(2)}%
             </div>
             <div class="text-xs text-slate-500 mt-1">元本 {INITIAL_CAPITAL_JPY.toLocaleString()}円</div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">PF（総利益÷総損失）</div>
-            <div class="text-xl font-bold text-white">{profitFactor ?? '—'}</div>
+            <div class="text-base sm:text-xl font-bold whitespace-nowrap text-white">{profitFactor ?? '—'}</div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">平均利益 / 平均損失</div>
-            <div class="text-sm font-bold text-white mt-1">
+            <div class="text-sm font-bold text-white mt-1 leading-relaxed">
               <span class="text-green-400">{avgWin != null ? fmtYen2(avgWin) : '—'}</span>
               <span class="text-slate-500"> / </span>
               <span class="text-red-400">{avgLoss != null ? fmtCost(avgLoss) : '—'}</span>
@@ -346,7 +374,7 @@ const xLabels =
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">増額判断までの進捗</div>
-            <div class="text-xl font-bold text-white">{positionCount} / {SCALE_UP_MIN}件</div>
+            <div class="text-base sm:text-xl font-bold whitespace-nowrap text-white">{positionCount} / {SCALE_UP_MIN}件</div>
             <div class="text-xs text-slate-500 mt-1">
               {positionCount < SCALE_UP_MIN
                 ? `最低ラインまであと${SCALE_UP_MIN - positionCount}件（安心ライン${SCALE_UP_SAFE}件）`
@@ -370,7 +398,7 @@ const xLabels =
                 <div class="text-red-300 font-semibold">{fmtCost(stats!.total_fee_jpy)}</div>
               </div>
               <div>
-                <div class="text-xs text-slate-400 mb-1">建玉金利（0.04%/日）</div>
+                <div class="text-xs text-slate-400 mb-1">建玉金利</div>
                 <div class="text-red-300 font-semibold">{fmtCost(stats!.total_interest_jpy)}</div>
               </div>
               <div>
@@ -379,8 +407,46 @@ const xLabels =
               </div>
             </div>
             <p class="text-xs text-slate-500 mt-3">
-              bitbankの約定履歴（実現損益・手数料・利息）をそのまま集計しており、口座残高の増減と一致します。
+              Botの戦略トレードについて、bitbankの約定履歴（実現損益・手数料・利息）をそのまま集計しています。テスト取引などの記録対象外の取引は含みません（口座残高との照合は下の「口座照合」を参照）。PF・勝率・平均損益は決済済みのポジション単位で計算しています。
               {points.some((p) => p.pnl_source !== 'bitbank') && ' 一部の記録は約定履歴の反映待ちのため概算で、内訳には含まれていません（次回のBot実行時に確定値へ置き換わります）。'}
+            </p>
+          </div>
+        )}
+
+        {account && (
+          <div class={`border rounded-xl p-5 mb-8 ${account.matched ? 'bg-navy-800/40 border-navy-700' : 'bg-red-900/20 border-red-700/40'}`}>
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-semibold text-white">口座照合</h2>
+              <span class={`text-xs px-2 py-0.5 rounded-full ${account.matched ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'}`}>
+                {account.matched ? '一致' : account.pending_count > 0 ? '約定履歴の反映待ち' : '不一致（要確認）'}
+              </span>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+              <div>
+                <div class="text-xs text-slate-400 mb-1">口座のJPY残高</div>
+                <div class="text-slate-200 font-semibold">{account.jpy_balance.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 mb-1">元本</div>
+                <div class="text-slate-200 font-semibold">{account.capital_jpy.toLocaleString()}円</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 mb-1">戦略トレードの損益</div>
+                <div class="text-slate-200 font-semibold">{fmtYen2(account.recorded_pnl_jpy)}</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 mb-1">記録対象外</div>
+                <div class="text-slate-200 font-semibold">{fmtYen2(account.excluded_pnl_jpy)}</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 mb-1">差額</div>
+                <div class={`font-semibold ${account.matched ? 'text-green-400' : 'text-red-400'}`}>{fmtYen2(account.diff_jpy)}</div>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 mt-3">
+              口座全体の損益は {fmtYen2(account.jpy_balance - account.capital_jpy)}（元本比 {((account.jpy_balance - account.capital_jpy) / account.capital_jpy * 100).toFixed(2)}%）。
+              記録対象外は、取引記録の運用開始（2026-06-23）より前の約定と2026-07-21の実弾テストの実現損益です。
+              残高は決済時に動くため、保有中ポジションの損益は含みません。Bot実行毎（30分）に照合し、ずれた場合はメールで通知します。
             </p>
           </div>
         )}

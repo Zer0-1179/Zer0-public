@@ -53,6 +53,17 @@ JST                = timezone(timedelta(hours=9))
 STATS_BUCKET = os.environ.get("STATS_BUCKET", "")
 STATS_KEY    = "stats.json"
 POSITIONS_KEY = "positions.json"  # 現在保有中ポジションのスナップショット（Phase A毎に上書き）
+
+# ── 口座照合（2026-10-02〜）──────────────────────────────────────────────────
+# 「口座のJPY残高 = 元本 + 取引記録(pnl_jpy)の合計 + 記録対象外の実現損益」が常に成り立つことを
+# 毎回確認し、ずれたら（手動決済・ロスカット・一部約定後キャンセル等の記録漏れ）メールで知らせる。
+ACCOUNT_CAPITAL_JPY = Decimal("10000")   # 信用口座への入金額。入出金したら更新すること
+# 記録対象外の実現損益: 取引記録の運用開始(2026-06-23)前の約定 -135.9720円（4〜6月のSOL少額取引・
+# 6/19のETHショート等）＋ 2026-07-21のSOL実弾テスト -1.1212円 ＋ 4桁丸め差 0.0001円
+EXCLUDED_PNL_JPY    = Decimal("-137.0931")
+ACCOUNT_TOLERANCE   = Decimal("0.01")    # bitbank側の4桁丸めの累積差は許容（1円未満）
+ACCOUNT_CHECK_KEY   = "cryptobot/account_check.json"  # 同じ差額で毎回メールしないための状態
+PENDING_ALERT_HOURS = 6                  # これ以上確定しない仮記録はメールで知らせる
 # 004ポートフォリオの非公開トレード実績ページ（要admin Cookie。通知メール本文への案内用）
 PORTFOLIO_STATS_URL = "https://www.zer0-infra.com/ja/cryptobot-stats"
 
@@ -183,10 +194,12 @@ def save_state(state: dict):
 
 
 # ── SES ───────────────────────────────────────────────────────────────────────
-def fetch_exact_close(bb, pair: str, order_id) -> dict | None:
+def fetch_exact_close(bb, pair: str, order_id, expected_amount=None) -> dict | None:
     """決済注文の約定履歴から、口座残高の実際の増減と1円単位で一致する損益内訳を返す。
     pnl_jpy = Σprofit_loss（bitbankが手数料・利息を控除済みの実現損益）。
-    約定履歴がまだ反映されていない・取得失敗の場合は None（呼び出し側で後から照合する）。"""
+    約定履歴がまだ反映されていない・取得失敗の場合は None（呼び出し側で後から照合する）。
+    expected_amount（実際に決済された数量）を渡すと、約定履歴の数量合計と一致した時だけ確定値を返す
+    （成行直後で約定の一部しか履歴に出ていない状態を確定扱いにしないため）。"""
     if bb is None or not order_id:
         return None
     try:
@@ -201,6 +214,9 @@ def fetch_exact_close(bb, pair: str, order_id) -> dict | None:
     fee  = sum(Decimal(f.get("fee_amount_quote") or "0") for f in fills)
     intr = sum(Decimal(f.get("interest") or "0") for f in fills)
     amt  = sum(Decimal(f["amount"]) for f in fills)
+    if expected_amount is not None and abs(amt - Decimal(str(expected_amount))) > Decimal("0.00000001"):
+        log(f"{pair}: 約定履歴の数量{amt}が決済数量{expected_amount}と不一致 → 仮記録のまま照合待ち")
+        return None
     avg  = sum(Decimal(f["amount"]) * Decimal(f["price"]) for f in fills) / amt
     return {
         "pnl_jpy":       float(net.quantize(Decimal("0.0001"))),
@@ -234,10 +250,10 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
         pnl = (exit_price - entry) * amount
     else:
         pnl = (entry - exit_price) * amount
-    exact = fetch_exact_close(bb, pair, order_id)
+    exact = fetch_exact_close(bb, pair, order_id, amount)
     if exact is None and bb is not None and order_id:
         time.sleep(1.0)  # 成行直後は約定履歴の反映がわずかに遅れることがあるため1回だけ再取得
-        exact = fetch_exact_close(bb, pair, order_id)
+        exact = fetch_exact_close(bb, pair, order_id, amount)
     record = {
         "ts":          datetime.now(JST).isoformat(timespec="seconds"),
         "pair":        pair,
@@ -250,6 +266,7 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
         "position_id": position_id,
         "estimated":   estimated,
         "order_id":    int(order_id) if order_id else None,
+        "expected_amount": amount,
         "pnl_source":  "estimate",
     }
     if exact is not None:
@@ -261,18 +278,21 @@ def record_trade(pair: str, direction: str, reason: str, entry: float,
         record["pnl_source"] = "pending"
     try:
         ts  = datetime.now(JST).strftime("%Y%m%dT%H%M%S")
-        key = f"{TRADES_KEY_PREFIX}{ts}_{pair}_{time.time_ns()}.json"
+        # 注文IDがある決済はキーを注文IDで固定し、再実行で同じ注文が二重に記録されないようにする
+        key = (f"{TRADES_KEY_PREFIX}order_{pair}_{int(order_id)}.json" if order_id
+               else f"{TRADES_KEY_PREFIX}{ts}_{pair}_{time.time_ns()}.json")
         _s3.put_object(Bucket=TRADES_BUCKET, Key=key,
                        Body=json.dumps(record, ensure_ascii=False).encode("utf-8"))
         log(f"{pair}: 取引履歴記録 {reason} pnl={pnl:+,.4f}円 source={record['pnl_source']}")
     except Exception as e:
         log(f"{pair}: 取引履歴記録失敗（取引処理は継続）: {e}")
-        return
+        return record
 
     try:
         update_stats_json()
     except Exception as e:
         log(f"統計JSON更新失敗（取引履歴記録自体は成功・処理は継続）: {e}")
+    return record
 
 
 def _load_all_trades() -> list[dict]:
@@ -295,36 +315,107 @@ def _load_all_trades() -> list[dict]:
 
 def reconcile_trade_records(bb) -> int:
     """pnl_source="pending" の取引記録を bitbank の約定履歴で実績値に置き換える（同じキーへ上書き）。
-    件数が少ない（1決済1オブジェクト）ため毎回全件を走査する。失敗しても取引処理は継続。"""
+    件数が少ない（1決済1オブジェクト）ため毎回全件を走査する。1件の失敗で他の照合を止めない。
+    PENDING_ALERT_HOURS を過ぎても確定しない記録は1回だけメールで知らせる。"""
     fixed = 0
     try:
         paginator = _s3.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=TRADES_BUCKET, Prefix=TRADES_KEY_PREFIX):
-            for obj in page.get("Contents", []):
-                key = obj["Key"]
-                if not key.endswith(".json"):
-                    continue
-                rec = json.loads(_s3.get_object(Bucket=TRADES_BUCKET, Key=key)["Body"].read())
-                if rec.get("pnl_source") != "pending" or not rec.get("order_id"):
-                    continue
-                exact = fetch_exact_close(bb, rec["pair"], rec["order_id"])
-                if exact is None:
-                    continue
-                rec.update(exact)
-                rec["estimated"]  = False
-                rec["pnl_source"] = "bitbank"
-                _s3.put_object(Bucket=TRADES_BUCKET, Key=key,
-                               Body=json.dumps(rec, ensure_ascii=False).encode("utf-8"))
-                log(f"{rec['pair']}: 取引記録を実績値に更新 {key} pnl={exact['pnl_jpy']:+,.4f}円")
-                fixed += 1
+        keys = [obj["Key"] for page in paginator.paginate(Bucket=TRADES_BUCKET, Prefix=TRADES_KEY_PREFIX)
+                for obj in page.get("Contents", []) if obj["Key"].endswith(".json")]
     except Exception as e:
-        log(f"取引記録の照合失敗（取引処理は継続）: {e}")
+        log(f"取引記録の照合: 一覧取得失敗（取引処理は継続）: {e}")
+        return 0
+    for key in keys:
+        try:
+            rec = json.loads(_s3.get_object(Bucket=TRADES_BUCKET, Key=key)["Body"].read())
+            if rec.get("pnl_source") != "pending" or not rec.get("order_id"):
+                continue
+            exact = fetch_exact_close(bb, rec["pair"], rec["order_id"], rec.get("expected_amount"))
+            if exact is None:
+                age_h = (datetime.now(JST) - datetime.fromisoformat(rec["ts"])).total_seconds() / 3600
+                if age_h >= PENDING_ALERT_HOURS and not rec.get("pending_alerted"):
+                    send_email(
+                        "【Zer0-CryptoBot】⚠️取引記録が実績値で確定しません",
+                        f"約定履歴と一致しない仮記録が{age_h:.0f}時間残っています。手動で確認してください。\n\n"
+                        f"記録：{key}\nペア：{rec['pair']}\n注文ID：{rec['order_id']}\n"
+                        f"決済数量：{rec.get('expected_amount')}\n仮の損益：{rec.get('pnl_jpy')}円",
+                    )
+                    rec["pending_alerted"] = True
+                    _s3.put_object(Bucket=TRADES_BUCKET, Key=key,
+                                   Body=json.dumps(rec, ensure_ascii=False).encode("utf-8"))
+                continue
+            rec.update(exact)
+            rec["estimated"]  = False
+            rec["pnl_source"] = "bitbank"
+            _s3.put_object(Bucket=TRADES_BUCKET, Key=key,
+                           Body=json.dumps(rec, ensure_ascii=False).encode("utf-8"))
+            log(f"{rec['pair']}: 取引記録を実績値に更新 {key} pnl={exact['pnl_jpy']:+,.4f}円")
+            fixed += 1
+        except Exception as e:
+            log(f"取引記録の照合失敗 {key}（他の記録の照合は継続）: {e}")
     if fixed:
         try:
             update_stats_json()
         except Exception as e:
             log(f"統計JSON更新失敗（照合自体は成功・処理は継続）: {e}")
     return fixed
+
+
+def check_account(bb) -> dict | None:
+    """口座のJPY残高と取引記録を突き合わせる。
+    残高 = 元本 + Σpnl_jpy + 記録対象外 が成り立たなければ（記録漏れ）メールで知らせる。
+    仮記録(pending)がある間は残高と記録がずれて当然なので通知しない。
+    戻り値は positions.json に載せる口座サマリ（建玉ごとの未実現手数料・利息を含む）。"""
+    try:
+        jpy     = bb.get_assets()["jpy"]
+        balance = Decimal(jpy["onhand_amount"])
+        trades  = _load_all_trades()
+        recorded = sum((Decimal(str(t["pnl_jpy"])) for t in trades), Decimal("0"))
+        pending  = sum(1 for t in trades if t.get("pnl_source") == "pending")
+        diff = balance - ACCOUNT_CAPITAL_JPY - recorded - EXCLUDED_PNL_JPY
+        unrealized = {}
+        for p in bb.get_margin_positions():
+            if Decimal(p.get("open_amount") or "0") > 0:
+                unrealized[f"{p['pair']}:{p['position_side']}"] = {
+                    "fee_jpy":      float(Decimal(p.get("unrealized_fee_amount") or "0")),
+                    "interest_jpy": float(Decimal(p.get("unrealized_interest_amount") or "0")),
+                }
+    except Exception as e:
+        log(f"口座照合失敗（取引処理は継続）: {e}")
+        return None
+
+    matched = abs(diff) < ACCOUNT_TOLERANCE
+    log(f"口座照合: 残高{balance} = 元本{ACCOUNT_CAPITAL_JPY} + 記録{recorded} + 対象外{EXCLUDED_PNL_JPY} "
+        f"+ 差額{diff}（pending {pending}件）")
+    if not matched and pending == 0:
+        try:
+            last = json.loads(_s3.get_object(Bucket=TRADES_BUCKET, Key=ACCOUNT_CHECK_KEY)["Body"].read())
+        except Exception:
+            last = {}
+        if last.get("alerted_diff") != str(diff.quantize(Decimal("0.01"))):
+            send_email(
+                "【Zer0-CryptoBot】⚠️口座残高と取引記録が一致しません",
+                f"口座のJPY残高と取引記録の合計がずれています。手動決済・ロスカット・一部約定後のキャンセル等で"
+                f"記録されていない決済がないか、bitbankの約定履歴を確認してください。\n\n"
+                f"JPY残高　　：{balance}円\n元本　　　　：{ACCOUNT_CAPITAL_JPY}円\n"
+                f"記録の合計　：{recorded}円\n記録対象外　：{EXCLUDED_PNL_JPY}円\n差額　　　　：{diff}円",
+            )
+            try:
+                _s3.put_object(Bucket=TRADES_BUCKET, Key=ACCOUNT_CHECK_KEY,
+                               Body=json.dumps({"alerted_diff": str(diff.quantize(Decimal("0.01"))),
+                                                "at": datetime.now(JST).isoformat(timespec="seconds")}).encode("utf-8"))
+            except Exception as e:
+                log(f"口座照合の通知状態保存失敗: {e}")
+    return {
+        "jpy_balance":       float(balance),
+        "capital_jpy":       float(ACCOUNT_CAPITAL_JPY),
+        "recorded_pnl_jpy":  float(recorded),
+        "excluded_pnl_jpy":  float(EXCLUDED_PNL_JPY),
+        "diff_jpy":          float(diff),
+        "matched":           matched,
+        "pending_count":     pending,
+        "unrealized":        unrealized,
+    }
 
 
 def update_stats_json():
@@ -336,17 +427,18 @@ def update_stats_json():
         return
     trades = _load_all_trades()
     trades.sort(key=lambda t: t["ts"])
-    cum = 0.0
-    tot_gross = tot_fee = tot_int = 0.0
+    # float の足し算で丸め誤差を作らないよう Decimal で集計する
+    cum = Decimal("0")
+    tot_gross = tot_fee = tot_int = Decimal("0")
     points = []
     for t in trades:
-        cum += t["pnl_jpy"]
+        cum += Decimal(str(t["pnl_jpy"]))
         # 手数料・利息の内訳は bitbank 約定履歴で確定した記録のみ持つ（概算記録は None）
         has_breakdown = t.get("pnl_source") == "bitbank"
         if has_breakdown:
-            tot_gross += t["gross_pnl_jpy"]
-            tot_fee   += t["fee_jpy"]
-            tot_int   += t["interest_jpy"]
+            tot_gross += Decimal(str(t["gross_pnl_jpy"]))
+            tot_fee   += Decimal(str(t["fee_jpy"]))
+            tot_int   += Decimal(str(t["interest_jpy"]))
         points.append({
             "ts":                 t["ts"],
             "pair":               t["pair"],
@@ -357,15 +449,15 @@ def update_stats_json():
             "fee_jpy":            t.get("fee_jpy") if has_breakdown else None,
             "interest_jpy":       t.get("interest_jpy") if has_breakdown else None,
             "pnl_source":         t.get("pnl_source", "estimate"),
-            "cumulative_pnl_jpy": round(cum, 4),
+            "cumulative_pnl_jpy": float(cum),
             "position_id":        t.get("position_id"),
         })
     payload = {
         "generated_at":       datetime.now(JST).isoformat(timespec="seconds"),
-        "total_pnl_jpy":      round(cum, 4),
-        "total_gross_pnl_jpy": round(tot_gross, 4),
-        "total_fee_jpy":      round(tot_fee, 4),
-        "total_interest_jpy": round(tot_int, 4),
+        "total_pnl_jpy":      float(cum),
+        "total_gross_pnl_jpy": float(tot_gross),
+        "total_fee_jpy":      float(tot_fee),
+        "total_interest_jpy": float(tot_int),
         "trade_count":        len(trades),
         "points":             points,
     }
@@ -375,10 +467,10 @@ def update_stats_json():
         ContentType="application/json",
         CacheControl="public, max-age=300",
     )
-    log(f"統計JSON更新完了（{len(trades)}件）")
+    log(f"統計JSON更新完了（{len(trades)}件・累計{cum}円）")
 
 
-def update_positions_json(state: dict):
+def update_positions_json(state: dict, account: dict | None = None):
     """現在保有中ポジションのスナップショットを004ポートフォリオ向けに書き出す。
     「TP1部分利確後、次はいつ利確するのか分からず不安」というユーザー要望を受け、
     トレーリングSLには固定の利確ラインが存在しない（高値/安値からATR×TRAIL_MULT反落で決済）
@@ -441,12 +533,21 @@ def update_positions_json(state: dict):
                     else (entry_price - pos.get("trail_sl_price", entry_price)) * amount, 1),
             })
 
+        # 建てた時の手数料・ここまでの利息（決済時にまとめて差し引かれる）を bitbank の値で添える
+        u = ((account or {}).get("unrealized") or {}).get(f"{pair}:{direction}")
+        if u:
+            snap["unrealized_fee_jpy"]      = u["fee_jpy"]
+            snap["unrealized_interest_jpy"] = u["interest_jpy"]
+            snap["unrealized_net_pnl_jpy"]  = round(snap["unrealized_pnl_jpy"] - u["fee_jpy"] - u["interest_jpy"], 2)
+
         snapshots.append(snap)
 
     payload = {
         "generated_at": datetime.now(JST).isoformat(timespec="seconds"),
         "positions":    snapshots,
     }
+    if account is not None:
+        payload["account"] = {k: v for k, v in account.items() if k != "unrealized"}
     try:
         _s3.put_object(
             Bucket=STATS_BUCKET, Key=POSITIONS_KEY,
@@ -516,7 +617,7 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
 
 
 def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: float,
-                         current_price: float, realized_pnl: float):
+                         current_price: float, realized_pnl: float, rec: dict | None = None):
     dir_str = "ロング" if direction == "long" else "ショート"
     coin = _coin(pair)
     if direction == "long":
@@ -532,7 +633,8 @@ def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: flo
         f"\n"
         f"現在価格　　：{current_price:,.0f}円\n"
         f"TP1約定価格：{tp1_price:,.0f}円（{tp1_pct:+.1f}%）\n"
-        f"確定利益　　：{realized_pnl:+,.0f}円\n"
+        f"確定利益　　：{realized_pnl:+,.0f}円（値幅）\n"
+        f"{_net_pnl_lines(rec)}"
         f"\n"
         f"次の決済ライン（現時点）：{entry:,.0f}円（ブレイクイーブン）\n"
         f"※固定の利確ラインではありません。価格が有利な方向に進むほど、このラインも自動的に切り上がり（切り下がり）ます。\n"
@@ -551,8 +653,18 @@ def notify_trail_updated(pair: str, direction: str, new_trail: float, current_pr
     pass
 
 
+def _net_pnl_lines(rec: dict | None) -> str:
+    """取引記録（record_trade の戻り値）から実損益の行を作る。確定前なら概算である旨を書く。"""
+    if not rec:
+        return ""
+    if rec.get("pnl_source") == "bitbank":
+        return (f"実損益　　：{rec['pnl_jpy']:+,.2f}円（手数料{rec['fee_jpy']:,.2f}円・"
+                f"利息{rec['interest_jpy']:,.2f}円 控除後）\n")
+    return "実損益　　：約定履歴の反映待ち（確定後に実績ページへ反映されます）\n"
+
+
 def notify_close(pair: str, direction: str, reason: str, price: float,
-                 entry: float, amount: float, remaining_margin: float):
+                 entry: float, amount: float, remaining_margin: float, rec: dict | None = None):
     if direction == "long":
         pnl = (price - entry) * amount
         price_diff_pct = (price - entry) / entry * 100
@@ -569,7 +681,8 @@ def notify_close(pair: str, direction: str, reason: str, price: float,
         f"エントリー：{entry:,.0f}円\n"
         f"変動　　　：{price_diff_pct:+.1f}%\n"
         f"購入金額　：{entry * amount:,.0f}円（{amount:.4f} {coin}）\n"
-        f"損益　　　：{pnl:+,.1f}円\n"
+        f"損益(値幅)：{pnl:+,.1f}円\n"
+        f"{_net_pnl_lines(rec)}"
         f"残り証拠金：{remaining_margin/2:,.0f}円"
     )
     send_email(subject, body)
@@ -1058,7 +1171,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     sl_already_filled = True
                                     log(f"{pair}: 旧SL 既に約定 → TP1+SL両方確定 → 終了")
                                     remaining = get_available_margin(bb, pair)
-                                    record_trade(pair, direction, "SL（TP1後）",
+                                    # TP1(30%)も約定済みなので、SL分と別に TP1 分も記録する（2026-10-02修正。
+                                    # 以前はここで continue するため TP1 の記録が丸ごと抜けていた）
+                                    record_trade(pair, direction, "TP1部分利確", pos["entry_price"],
+                                                 tp1_fill[0], tp1_fill[1], pos.get("position_id"),
+                                                 bb=bb, order_id=pos.get("tp1_order_id"))
+                                    rec = record_trade(pair, direction, "SL（TP1後）",
                                                  pos["entry_price"],
                                                  sl_price_f,
                                                  sl_amount_f,
@@ -1068,7 +1186,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                                  sl_price_f,
                                                  pos["entry_price"],
                                                  sl_amount_f,
-                                                 remaining)
+                                                 remaining, rec)
                                     to_delete.append(pair)
                                 elif sl_status in ("CANCELED_UNFILLED",
                                                    "CANCELED_PARTIALLY_FILLED", "REJECTED"):
@@ -1121,12 +1239,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             realized_pnl = (tp1_fill_price - entry) * tp1_filled_amount
                         else:
                             realized_pnl = (entry - tp1_fill_price) * tp1_filled_amount
-                        record_trade(pair, direction, "TP1部分利確", entry,
+                        rec = record_trade(pair, direction, "TP1部分利確", entry,
                                      tp1_fill_price, tp1_filled_amount,
                                      pos.get("position_id"),
                                      bb=bb, order_id=pos.get("tp1_order_id"))
                         notify_trail_started(pair, direction, entry, pos["tp1_price"],
-                                             tp1_fill_price, realized_pnl)
+                                             tp1_fill_price, realized_pnl, rec)
                         continue
 
                     # TP1未約定: 取消済/拒否 検出（外部キャンセル・異常系）
@@ -1197,7 +1315,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         remaining = get_available_margin(bb, pair)
                         # 損益記録・通知は SL の実約定量（sl_fill_amount）を使う。
                         # pos["trail_amount"] は発注時の想定数量で、部分約定時にはずれるため。
-                        record_trade(pair, direction, "損切り（SL約定）",
+                        rec = record_trade(pair, direction, "損切り（SL約定）",
                                      pos["entry_price"],
                                      sl_fill_price,
                                      sl_fill_amount,
@@ -1207,7 +1325,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                      sl_fill_price,
                                      pos["entry_price"],
                                      sl_fill_amount,
-                                     remaining)
+                                     remaining, rec)
                         to_delete.append(pair)
 
             # ── トレーリングSL 管理 ────────────────────────────────────────
@@ -1252,12 +1370,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                     exit_p, exit_a = trail_fill
                     log(f"{pair}({direction}): トレーリングSL 約定 → 終了 exit={exit_p}")
                     remaining = get_available_margin(bb, pair)
-                    record_trade(pair, direction, "トレーリングSL",
+                    rec = record_trade(pair, direction, "トレーリングSL",
                                  pos["entry_price"], exit_p, exit_a,
                                  pos.get("position_id"),
                                  bb=bb, order_id=pos.get("trail_sl_order_id"))
                     notify_close(pair, direction, "トレーリングSL",
-                                 exit_p, pos["entry_price"], exit_a, remaining)
+                                 exit_p, pos["entry_price"], exit_a, remaining, rec)
                     to_delete.append(pair)
                 else:
                     try:
@@ -1557,8 +1675,11 @@ def lambda_handler(event, context):
         log("state⇄実建玉リコンサイル確認")
         reconcile_positions(bb, state)
 
+        log("口座照合（残高 = 元本 + 取引記録 + 記録対象外）")
+        account = check_account(bb)
+
         try:
-            update_positions_json(state)
+            update_positions_json(state, account)
         except Exception as e:
             log(f"ポジションJSON更新失敗（取引処理は継続）: {e}")
 
