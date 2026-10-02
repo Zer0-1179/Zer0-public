@@ -544,8 +544,9 @@ def test_check_account_matches_when_balance_equals_records(executor, monkeypatch
                         MagicMock(return_value=[{"pnl_jpy": 1321.8268, "pnl_source": "bitbank"}]))
     mail = MagicMock()
     monkeypatch.setattr(executor, "send_email", mail)
-    r = executor.check_account(_account_bb("11184.7337"))
-    assert r["matched"] is True and abs(r["diff_jpy"]) < 0.01
+    bal = executor.ACCOUNT_CAPITAL_JPY + executor.Decimal("1321.8268") + executor.EXCLUDED_PNL_JPY
+    r = executor.check_account(_account_bb(str(bal)))
+    assert r["matched"] is True and r["diff_jpy"] == 0.0
     assert r["unrealized"] == {"eth_jpy:long": {"fee_jpy": 8.0917, "interest_jpy": 1.5}}
     mail.assert_not_called()
 
@@ -563,7 +564,8 @@ def test_check_account_alerts_once_on_unrecorded_close(executor, monkeypatch):
             raise Exception("NoSuchKey")
         return {"Body": MagicMock(read=lambda: stored[Key])}
     monkeypatch.setattr(executor._s3, "get_object", MagicMock(side_effect=_get))
-    bb = _account_bb("11084.7337")   # 100円の記録漏れ
+    bal = executor.ACCOUNT_CAPITAL_JPY + executor.Decimal("1321.8268") + executor.EXCLUDED_PNL_JPY - 100
+    bb = _account_bb(str(bal))       # 100円の記録漏れ
     r = executor.check_account(bb)
     assert r["matched"] is False and round(r["diff_jpy"], 2) == -100.0
     executor.check_account(bb)       # 同じ差額では再送しない
@@ -737,3 +739,9 @@ def test_trailing_sl_rejected_after_tp1_triggers_rescue(executor, monkeypatch):
     assert rec.call_args_list[0].args[2] == "TP1部分利確"
     assert rescue.called and "tp1_order_id" not in rescue.call_args.args[2]
     assert "eth_jpy" not in out["positions"]
+
+
+def test_stop_order_live_test_is_blocked_without_force_flag(executor, monkeypatch):
+    monkeypatch.setattr(executor, "FORCE_TEST_ENABLED", False)
+    r = executor.lambda_handler({"action": "stop_order_live_test"}, None)
+    assert r["statusCode"] == 403
