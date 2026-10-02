@@ -445,7 +445,7 @@ const xLabels =
             </div>
             <p class="text-xs text-slate-500 mt-3">
               口座全体の損益は {fmtYen2(account.jpy_balance - account.capital_jpy)}（元本比 {((account.jpy_balance - account.capital_jpy) / account.capital_jpy * 100).toFixed(2)}%）。
-              記録対象外は、取引記録の運用開始（2026-06-23）より前の約定と2026-07-21の実弾テストの実現損益です。
+              記録対象外は、取引記録の運用開始（2026-06-23）より前の約定と、動作確認のための実弾テスト（2026-07-21・2026-10-02）の実現損益です。
               残高は決済時に動くため、保有中ポジションの損益は含みません。Bot実行毎（30分）に照合し、ずれた場合はメールで通知します。
             </p>
           </div>

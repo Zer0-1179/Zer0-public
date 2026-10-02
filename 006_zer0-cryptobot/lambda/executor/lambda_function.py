@@ -67,8 +67,9 @@ POSITIONS_KEY = "positions.json"  # 現在保有中ポジションのスナッ�
 # 毎回確認し、ずれたら（手動決済・ロスカット・一部約定後キャンセル等の記録漏れ）メールで知らせる。
 ACCOUNT_CAPITAL_JPY = Decimal("10000")   # 信用口座への入金額。入出金したら更新すること
 # 記録対象外の実現損益: 取引記録の運用開始(2026-06-23)前の約定 -135.9720円（4〜6月のSOL少額取引・
-# 6/19のETHショート等）＋ 2026-07-21のSOL実弾テスト -1.1212円 ＋ 4桁丸め差 0.0001円
-EXCLUDED_PNL_JPY    = Decimal("-137.0931")
+# 6/19のETHショート等）＋ 2026-07-21のSOL実弾テスト -1.1212円 ＋ 2026-10-02のstop注文の実弾テスト
+# 2回 -0.0093円 ＋ 4桁丸め差 0.0001円
+EXCLUDED_PNL_JPY    = Decimal("-137.1024")
 ACCOUNT_TOLERANCE   = Decimal("0.01")    # bitbank側の4桁丸めの累積差は許容（1円未満）
 ACCOUNT_CHECK_KEY   = "cryptobot/account_check.json"  # 同じ差額で毎回メールしないための状態
 PENDING_ALERT_HOURS = 6                  # これ以上確定しない仮記録はメールで知らせる
@@ -83,8 +84,10 @@ TP1_RATIO   = 0.3   # TP1 の数量割合
 TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
 SL_SLIPPAGE = 0.003 # stop_limit SL の price オフセット率（急落/急騰での未約定防止）
 # SL・トレーリングSLの注文種別。"stop_limit"（発動後に指値を置く。価格が飛ぶと約定せず板に残る）か
-# "stop"（発動後に成行。必ず約定するが滑る）。少額の実弾テストで stop の決済注文を確認してから切り替える
-SL_ORDER_TYPE = "stop_limit"
+# "stop"（発動後に成行。必ず約定するが滑る）。2026-10-02にSOL 0.0001の実弾テストで、stop の信用決済が
+# 受理→未発動(INACTIVE)→取消、現在値を越えた価格では即時発動→成行で全量約定（taker）することを確認し切替
+# （stop は stop_limit と違い、即時発動する価格でも60018で拒否されずその場で決済される）
+SL_ORDER_TYPE = "stop"
 # 安全網: 発動済みなのにこの秒数を過ぎても約定しないSL注文は、取り消して成行で決済する
 STALE_TRIGGER_S = 120
 FILL_POLL_INTERVAL_S = 2   # 成行約定待機ポーリング間隔（秒）
@@ -870,7 +873,8 @@ class BitbankClient:
 
     def create_order(self, pair: str, amount: str, price: str, side: str,
                      position_side: str | None = None,
-                     trigger_price: str | None = None) -> dict:
+                     trigger_price: str | None = None,
+                     order_type: str | None = None) -> dict:
         """
         信用取引は開設・決済ともに position_side が必須。
           開設ロング : side="buy",  position_side="long"
@@ -880,7 +884,8 @@ class BitbankClient:
         trigger_price を指定すると stop_limit 注文（逆指値）になる。
         SL には必ず trigger_price を指定すること（指値のみだと即時約定する）。
         """
-        order_type = SL_ORDER_TYPE if trigger_price else "limit"
+        if order_type is None:
+            order_type = SL_ORDER_TYPE if trigger_price else "limit"
         body = {"pair": pair, "amount": amount, "side": side, "type": order_type}
         if order_type != "stop":   # stop（逆指値成行）は price を送らない
             body["price"] = price
@@ -1772,7 +1777,89 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
 
 
 # ── メイン ────────────────────────────────────────────────────────────────────
+def run_stop_order_live_test(bb, pair: str = "sol_jpy", amount: str = "0.0001") -> dict:
+    """【テスト専用・ENABLE_FORCE_TEST=1 時のみ】stop（逆指値成行）が信用取引の決済注文として使えるかを
+    最小数量の実弾で確認する。1回の実行内で「建てる→試す→決済」まで完了させ、建玉を残さない。
+      A: 発動しない価格(-5%)の stop 決済 → 受理・未発動(INACTIVE)を確認して取消
+      B: 現在値より上(+1%)の stop 決済 → 即時に発動して成行で決済されることを確認（2026-10-02の1回目で、
+         stop は60018で拒否されず即時約定することが分かった）
+    各手順の結果はその都度ログに出す。最後に実際の建玉が残っていれば成行で決済する。"""
+    cfg = PAIRS[pair]
+    res: dict = {"pair": pair, "amount": amount}
+    state = load_state()
+    if pair in state.get("positions", {}):
+        return {"error": f"{pair} は本番ポジション保有中のためテスト中止"}
+
+    def _price(v):
+        return round_price(v, cfg["price_prec"])
+
+    def _step(k, v):
+        res[k] = v
+        log(f"[TEST] {k}: {json.dumps(v, ensure_ascii=False)}")
+
+    def _open_amount():
+        for p in bb.get_margin_positions():
+            if p.get("pair") == pair and p.get("position_side") == "long":
+                return float(p.get("open_amount") or 0)
+        return 0.0
+
+    o_open = bb.create_market_order(pair, amount, "buy", position_side="long")
+    for _ in range(10):
+        if bb.get_order(pair, o_open["order_id"]).get("status") == "FULLY_FILLED":
+            break
+        time.sleep(2)
+    _step("open", {"order_id": o_open["order_id"], "open_amount": _open_amount()})
+    order_ids = [o_open["order_id"]]
+    try:
+        last = get_bitbank_price(pair)
+        oa = bb.create_order(pair, amount, "", "sell", position_side="long",
+                             trigger_price=_price(last * 0.95), order_type="stop")
+        a = bb.get_order(pair, oa["order_id"])
+        _step("A_far_stop", {"order_id": oa["order_id"], "type": a.get("type"), "status": a.get("status"),
+                             "trigger_price": a.get("trigger_price"), "open_amount": _open_amount()})
+        bb.cancel_order(pair, oa["order_id"])
+        _step("A_after_cancel", bb.get_order(pair, oa["order_id"]).get("status"))
+
+        last = get_bitbank_price(pair)
+        ob = bb.create_order(pair, amount, "", "sell", position_side="long",
+                             trigger_price=_price(last * 1.01), order_type="stop")
+        order_ids.append(ob["order_id"])
+        b = {}
+        for _ in range(10):
+            b = bb.get_order(pair, ob["order_id"])
+            if b.get("status") == "FULLY_FILLED":
+                break
+            time.sleep(2)
+        _step("B_immediate_stop", {k: b.get(k) for k in ("order_id", "type", "status", "average_price",
+                                                          "executed_amount", "trigger_price", "triggered_at")})
+    except Exception as e:
+        _step("error", str(e))
+    finally:
+        left = _open_amount()
+        if left > 0:
+            om = bb.create_market_order(pair, round_amount(left, cfg["amount_prec"]), "sell", position_side="long")
+            order_ids.append(om["order_id"])
+            _step("fallback_market_close", {"order_id": om["order_id"], "amount": left})
+            time.sleep(3)
+    time.sleep(2)
+    fills = []
+    for oid in order_ids:
+        for f in bb.get_trade_history(pair, int(oid)):
+            fills.append({k: f.get(k) for k in ("order_id", "type", "side", "amount", "price", "maker_taker",
+                                                 "fee_amount_quote", "fee_occurred_amount_quote",
+                                                 "profit_loss", "interest")})
+    _step("fills", fills)
+    _step("test_profit_loss_total", str(sum(Decimal(f.get("profit_loss") or "0") for f in fills)))
+    return res
+
+
 def lambda_handler(event, context):
+    if event.get("action") == "stop_order_live_test":
+        if not FORCE_TEST_ENABLED:
+            return {"statusCode": 403, "body": "ENABLE_FORCE_TEST=1 のときのみ実行可能"}
+        bb = BitbankClient(get_ssm(SSM_API_KEY, decrypt=True), get_ssm(SSM_API_SECRET, decrypt=True))
+        return {"statusCode": 200, "body": json.dumps(run_stop_order_live_test(bb), ensure_ascii=False)}
+
     if event.get("action") == "validate_ssm_namespace":
         # This path is deliberately side-effect free: it validates only the
         # configured SSM reads and JSON shape while mode=halt blocks trading.
