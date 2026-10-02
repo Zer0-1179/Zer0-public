@@ -24,7 +24,15 @@ from datetime import datetime, timezone, timedelta
 
 # ── 定数 ──────────────────────────────────────────────────────────────────────
 MIN_INVEST_JPY  = 1000          # 最小発注額（円）
-MAX_POSITIONS   = 3
+# 2026-10-02: 3→2。従来は「レバレッジ後の建玉可能額÷空き枠×0.9」で発注していたため、枠が埋まると
+# 建玉合計が資金の約1.9倍・保証金率約52%となり、追証ライン(50%)のすぐ上だった。
+# 同時保有は2件まで・1件=受入保証金×POSITION_EQUITY_RATIO とし、合計を資金の1.2倍に抑える。
+# 0.6は1件あたりのリスクが従来（資金の約0.65倍）とほぼ同じで、「累計20件まで増額しない」方針を守る値。
+# 5年バックテスト: 成長+43.4%・最大DD20.1%・1回の最大損失7.2%（0.75なら+53.7%・24.7%・9.0%）。
+# 2件同時に過去最大の損切り幅（約12%）で決済されても保証金率は約81%で、追証ライン50%に届かない。
+# 増額時はこの値を上げる（0.75で合計1.5倍・同条件の保証金率約62%が上限の目安）。
+MAX_POSITIONS   = 2
+POSITION_EQUITY_RATIO = 0.6
 MAX_PER_SIDE    = 2   # ロング・ショートそれぞれの最大同時保有数
 CANCEL_AFTER_S  = 86400         # 未約定注文キャンセルまでの秒数（24時間）
 BITBANK_PUB     = "https://public.bitbank.cc"
@@ -74,13 +82,20 @@ TRAIL_MULT  = 0.75  # トレーリング幅 = 極値 ± ATR × 0.75（最大効�
 TP1_RATIO   = 0.3   # TP1 の数量割合
 TRAIL_RATIO = 0.7   # トレーリングSL 対象の数量割合
 SL_SLIPPAGE = 0.003 # stop_limit SL の price オフセット率（急落/急騰での未約定防止）
+# SL・トレーリングSLの注文種別。"stop_limit"（発動後に指値を置く。価格が飛ぶと約定せず板に残る）か
+# "stop"（発動後に成行。必ず約定するが滑る）。少額の実弾テストで stop の決済注文を確認してから切り替える
+SL_ORDER_TYPE = "stop_limit"
+# 安全網: 発動済みなのにこの秒数を過ぎても約定しないSL注文は、取り消して成行で決済する
+STALE_TRIGGER_S = 120
 FILL_POLL_INTERVAL_S = 2   # 成行約定待機ポーリング間隔（秒）
-FILL_POLL_TIMEOUT_S  = 20  # 成行約定待機タイムアウト（秒）（MAX_POSITIONS=3 時最大 60s / Lambda timeout 300s）
+FILL_POLL_TIMEOUT_S  = 20  # 成行約定待機タイムアウト（秒）（MAX_POSITIONS=2 時最大 40s / Lambda timeout 300s）
 
 # 証拠金維持率閾値（total_margin_balance_percentage = 残高/建玉時価総額×100）
 # 通常の運用値: 3ポジション満杯で約55〜70%。実口座で確認済み（2026-04-28）
-MARGIN_WARN_PCT = 50   # この値以下で警告メール（処理継続）
-MARGIN_EMRG_PCT = 30   # この値以下で全ポジション緊急成行決済
+# bitbank公式: 追証は保証金率50%（margin_call_percentage）、強制決済は25%（losscut_percentage）。
+# 建玉合計を資金の1.2倍以下に抑えるため通常は83%以上。旧値(50/30)は追証ライン以下で機能していなかった
+MARGIN_WARN_PCT = 65   # この値以下で警告メール（処理継続）
+MARGIN_EMRG_PCT = 55   # この値以下で全ポジション緊急成行決済（追証ライン50%の手前で自ら手仕舞う）
 
 # テスト専用強制フラグの有効化（ENABLE_FORCE_TEST=1 の時のみ動作）
 # 本番Lambdaではこの環境変数を設定しないこと
@@ -332,6 +347,87 @@ def record_partial_fill_after_cancel(bb, pair: str, direction: str, reason: str,
     record_trade(pair, direction, reason, pos.get("entry_price", price), price, amount,
                  pos.get("position_id"), bb=bb, order_id=order_id)
     return amount
+
+
+def _sl_needs_rescue(order: dict, now_s: float | None = None) -> str | None:
+    """SL/トレーリングSL注文が「発動したのに約定していない」「取り消された・拒否された」状態なら理由を返す。
+    stop_limit は価格が SL_SLIPPAGE 以上飛ぶと、発動後の指値が板に残って約定しない（公式にも明記）。
+    stop でもサーキットブレーカーで成行の残りが取り消されることがある。どちらも建玉が無防備になる。"""
+    status = order.get("status", "")
+    if status in ("CANCELED_UNFILLED", "CANCELED_PARTIALLY_FILLED", "REJECTED"):
+        return f"SL注文が{status}"
+    if status in ("UNFILLED", "PARTIALLY_FILLED") and order.get("triggered_at"):
+        trig = float(order["triggered_at"])
+        trig_s = trig / 1000 if trig > 1e12 else trig
+        elapsed = (now_s or time.time()) - trig_s
+        if elapsed > STALE_TRIGGER_S:
+            return f"SL発動から{elapsed:.0f}秒たっても約定しない（{status}）"
+    return None
+
+
+def rescue_close(bb, pair: str, pos: dict, reason: str, cfg: dict) -> bool:
+    """SLが機能していない建玉を成行で決済する（安全網）。
+    1) TP1・SL・トレーリングSL注文をすべて取り消し、一部約定分は記録する
+    2) まだ生きている注文・約定済みの注文があれば成行は出さず次回に回す（二重決済を防ぐ）
+    3) 決済数量は state ではなく取引所の実際の建玉数量（open_amount）を使う
+    成功（建玉なし・決済完了）なら True。失敗時は pos["rescue_pending"]=True にして次回再試行する。"""
+    direction  = pos.get("direction", "long")
+    close_side = "sell" if direction == "long" else "buy"
+    log(f"{pair}({direction}): 安全網発動 — {reason}")
+    order_ids = [pos.get(k) for k in ("tp1_order_id", "sl_order_id", "trail_sl_order_id") if pos.get(k)]
+    for oid in order_ids:
+        try:
+            bb.cancel_order(pair, oid)
+        except Exception as ce:
+            log(f"{pair}: 安全網 注文取消失敗 order_id={oid}（終了済みの可能性）: {ce}")
+    alive = []
+    for oid in order_ids:
+        try:
+            o = bb.get_order(pair, oid)
+        except Exception as ge:
+            alive.append(f"{oid}(状態取得失敗: {ge})")
+            continue
+        st = o.get("status", "")
+        if st in ("INACTIVE", "UNFILLED", "PARTIALLY_FILLED", "FULLY_FILLED"):
+            alive.append(f"{oid}({st})")
+        elif st == "CANCELED_PARTIALLY_FILLED":
+            record_partial_fill_after_cancel(bb, pair, direction, "損切り（キャンセル前の一部約定）", pos, oid)
+    if alive:
+        pos["rescue_pending"] = True
+        send_email(f"【Zer0-CryptoBot】🚨SL未約定の救済を保留 - {pair.upper()}",
+                   f"SLが機能していないため成行決済しようとしましたが、まだ有効または約定済みの注文があるため"
+                   f"今回は見送りました。次回の実行で再試行します。手動で確認してください。\n\n"
+                   f"理由：{reason}\n注文：{', '.join(alive)}")
+        return False
+    try:
+        open_amt = 0.0
+        for p in bb.get_margin_positions():
+            if p.get("pair") == pair and p.get("position_side") == direction:
+                open_amt = float(p.get("open_amount") or 0)
+        if open_amt <= 0:
+            log(f"{pair}: 安全網 建玉はすでにない → 終了")
+            pos.pop("rescue_pending", None)
+            return True
+        amount_str = round_amount(open_amt, cfg["amount_prec"])
+        mkt = bb.create_market_order(pair, amount_str, close_side, position_side=direction)
+        log(f"{pair}: 安全網 成行決済 {close_side} {amount_str}")
+        est_price = get_bitbank_price(pair)
+        rec = record_trade(pair, direction, "損切り（SL未約定→成行救済）", pos.get("entry_price", est_price),
+                           est_price, float(amount_str), pos.get("position_id"),
+                           estimated=True, bb=bb, order_id=(mkt or {}).get("order_id"))
+        send_email(f"【Zer0-CryptoBot】🚨SL未約定のため成行で決済 - {pair.upper()}",
+                   f"SL注文が機能していなかったため、安全網が成行で決済しました。\n\n"
+                   f"理由：{reason}\n数量：{amount_str}\n現在価格：{est_price:,.0f}円\n"
+                   f"{_net_pnl_lines(rec)}")
+        pos.pop("rescue_pending", None)
+        return True
+    except Exception as e:
+        pos["rescue_pending"] = True
+        log(f"{pair}: 安全網 成行決済失敗（次回再試行）: {e}")
+        send_email(f"【Zer0-CryptoBot】🚨SL未約定の成行決済に失敗 - {pair.upper()}",
+                   f"安全網の成行決済に失敗しました。次回の実行で再試行しますが、手動決済も検討してください。\n\n"
+                   f"理由：{reason}\nエラー：{e}")
+        return False
 
 
 def reconcile_trade_records(bb) -> int:
@@ -784,9 +880,10 @@ class BitbankClient:
         trigger_price を指定すると stop_limit 注文（逆指値）になる。
         SL には必ず trigger_price を指定すること（指値のみだと即時約定する）。
         """
-        order_type = "stop_limit" if trigger_price else "limit"
-        body = {"pair": pair, "amount": amount, "price": price,
-                "side": side, "type": order_type}
+        order_type = SL_ORDER_TYPE if trigger_price else "limit"
+        body = {"pair": pair, "amount": amount, "side": side, "type": order_type}
+        if order_type != "stop":   # stop（逆指値成行）は price を送らない
+            body["price"] = price
         if position_side is not None:
             body["position_side"] = position_side
         if trigger_price is not None:
@@ -908,9 +1005,19 @@ def _apply_and_notify_fill(bb: "BitbankClient", pair: str, pos: dict, order: dic
     notify_entry_fill(pair, pos["direction"], entry, amount, sl_price, tp1_price, remaining)
 
 
-def get_available_margin(bb: BitbankClient, pair: str | None = None) -> float:
+def get_margin_equity(bb: BitbankClient) -> float:
+    """受入保証金合計（JPY）。新規建ての発注額の基準。取得できなければ 0（新規建てを抑制）。"""
+    try:
+        return float(bb.get_margin_status().get("total_margin_balance") or 0)
+    except Exception as e:
+        log(f"受入保証金の取得失敗 → 新規建て抑制: {e}")
+        return 0.0
+
+
+def get_available_margin(bb: BitbankClient, pair: str | None = None, side: str = "long") -> float:
     """新規建て可能額（JPY）を返す。
-    available_balances[pair]["long"] は証拠金 × レバレッジ後の建玉可能額。"""
+    available_balances[pair][side] は証拠金 × レバレッジ後の建玉可能額。
+    side はショートの新規建てなら "short"（2026-10-02修正: 以前はショートでも long の値を使っていた）。"""
     try:
         margin = bb.get_margin_status()
         balances = margin.get("available_balances", [])
@@ -919,10 +1026,10 @@ def get_available_margin(bb: BitbankClient, pair: str | None = None) -> float:
             value = None
             for b in balances:
                 if target and b["pair"] == target:
-                    value = float(b.get("long", "0"))
+                    value = float(b.get(side, "0"))
                     break
             if value is None:
-                value = float(balances[0].get("long", "0"))
+                value = float(balances[0].get(side, "0"))
             log(f"新規建て可能額({pair or balances[0]['pair']}): {value:,.0f}円")
             return value
         # フォールバック: available_balances が取れない場合は新規建てを抑制
@@ -1128,6 +1235,12 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
         close_side = "sell" if direction == "long" else "buy"
 
         try:
+            # ── 安全網の再試行（前回、SL未約定の成行救済が保留・失敗したもの）──────────
+            if pos.get("rescue_pending"):
+                if rescue_close(bb, pair, pos, "前回のSL未約定救済の再試行", cfg):
+                    to_delete.append(pair)
+                continue
+
             # ── 買い注文 未約定チェック ────────────────────────────────────
             if pos["status"] == "buy_pending":
                 order  = bb.get_order(pair, pos["buy_order_id"])
@@ -1239,14 +1352,28 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         trail_sl_str      = round_price(trail_sl_price, cfg["price_prec"])
                         trail_limit_f     = trail_sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
                         trail_limit_str   = round_price(trail_limit_f, cfg["price_prec"])
-                        o_trail = bb.create_order(
-                            pair,
-                            round_amount(trail_amount, cfg["amount_prec"]),
-                            trail_limit_str,
-                            close_side, position_side=direction,
-                            trigger_price=trail_sl_str,
-                        )
-                        verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文（stop_limit）")
+                        try:
+                            o_trail = bb.create_order(
+                                pair,
+                                round_amount(trail_amount, cfg["amount_prec"]),
+                                trail_limit_str,
+                                close_side, position_side=direction,
+                                trigger_price=trail_sl_str,
+                            )
+                            verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
+                        except Exception as te:
+                            if "60018" not in str(te):
+                                raise  # 一時的なエラーは従来どおり次回再試行（state は active のまま）
+                            # 価格がすでに建値を割っている（60018: 即時トリガーする価格は指定不可）等で
+                            # トレーリングSLを出せないと、残り70%が無防備になる。TP1分を記録してから成行で決済する。
+                            # TP1記録は注文IDでキーが固定されるため、次回再試行で重複しない
+                            record_trade(pair, direction, "TP1部分利確", entry, tp1_fill[0], tp1_fill[1],
+                                         pos.get("position_id"), bb=bb, order_id=pos.get("tp1_order_id"))
+                            rest = {k: v for k, v in pos.items() if k not in ("tp1_order_id", "sl_order_id")}
+                            state["positions"][pair] = rest
+                            if rescue_close(bb, pair, rest, f"TP1後のトレーリングSLを発注できない: {te}", cfg):
+                                to_delete.append(pair)
+                            continue
                         state["positions"][pair] = {
                             "status":            "trailing",
                             "direction":         direction,
@@ -1298,6 +1425,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                 "executed_amount": str(pos.get("trail_amount", 0))}
                     else:
                         o_sl = bb.get_order(pair, pos["sl_order_id"])
+                    rescue_reason = _sl_needs_rescue(o_sl)
+                    if rescue_reason:
+                        if rescue_close(bb, pair, pos, rescue_reason, cfg):
+                            to_delete.append(pair)
+                        continue
                     sl_fill = order_fill(o_sl) if o_sl.get("status") == "FULLY_FILLED" else None
                     if o_sl.get("status") == "FULLY_FILLED" and not sl_fill:
                         log(f"{pair}({direction}): SL FULLY_FILLED だが約定情報欠落 → 次回再評価")
@@ -1381,6 +1513,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         log(f"{pair}({direction}): トレーリングSL再発注成功 order_id={heal_order['order_id']}")
                     except Exception as heal_e:
                         log(f"{pair}: トレーリングSL再発注失敗（次回再試行）: {heal_e}")
+                        if "60018" in str(heal_e):
+                            # 価格がすでにトレーリングSLを越えている（即時トリガーする価格は指定不可）→ 成行で決済
+                            if rescue_close(bb, pair, pos, f"トレーリングSLの価格をすでに越えている: {heal_e}", cfg):
+                                to_delete.append(pair)
+                            continue
                         send_email(
                             f"【Zer0-CryptoBot】🚨SL不在 - {pair.upper()}",
                             f"トレーリングSLの再発注に失敗し、ポジションが無防備な状態です。手動確認が必要です。\n\n"
@@ -1389,6 +1526,11 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                     continue
 
                 trail_order = bb.get_order(pair, pos["trail_sl_order_id"])
+                rescue_reason = _sl_needs_rescue(trail_order)
+                if rescue_reason:
+                    if rescue_close(bb, pair, pos, rescue_reason, cfg):
+                        to_delete.append(pair)
+                    continue
 
                 trail_status = trail_order.get("status", "")
                 trail_fill = order_fill(trail_order) if trail_status == "FULLY_FILLED" else None
@@ -1533,14 +1675,20 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
 
         try:
             # 証拠金残高確認 + 動的ポジションサイズ計算
-            available = get_available_margin(bb, pair)
+            available = get_available_margin(bb, pair, direction)
 
-            remaining_slots = MAX_POSITIONS - active_count
             if test_invest_jpy:
                 invest_jpy = int(test_invest_jpy)
                 log(f"[TEST] 投資額を {invest_jpy}円 に固定")
             else:
-                invest_jpy = math.floor(available / remaining_slots * 0.9) if remaining_slots > 0 else 0
+                # 発注額は「自分の資金（受入保証金）× POSITION_EQUITY_RATIO」。レバレッジ後の建玉可能額を
+                # 空き枠で割る旧方式は、枠を減らすと1件が大きくなるだけで合計レバレッジが下がらなかった
+                equity = get_margin_equity(bb)
+                if equity <= 0:
+                    log(f"{pair}: 受入保証金が取得できない → 新規建てスキップ")
+                    continue
+                invest_jpy = math.floor(equity * POSITION_EQUITY_RATIO)
+                invest_jpy = min(invest_jpy, math.floor(available * 0.95))  # 建玉可能額の範囲内に収める
                 invest_jpy = max(invest_jpy, MIN_INVEST_JPY)
 
             if available < invest_jpy:
@@ -1552,6 +1700,12 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
             order_side = "buy" if direction == "long" else "sell"
             amount     = invest_jpy / bb_price
             amount_str = round_amount(amount, cfg["amount_prec"])
+            # 数量が小さすぎて TP1(30%) が最小単位未満になると TP1 発注が拒否され、続く SL も出ないまま
+            # 無防備な建玉が残る。その場合は建てない（資金が約6,000円を割ると BTC で起こり得る）
+            prec = cfg["amount_prec"]
+            if math.floor(float(amount_str) * TP1_RATIO * (10 ** prec)) <= 0:
+                log(f"{pair}: 数量{amount_str}ではTP1が最小単位未満 → 新規建てスキップ")
+                continue
 
             log(f"{pair}({direction}): 成行発注 amount={amount_str} market={bb_price:.0f}円 invest={invest_jpy:.0f}円")
             order = bb.create_market_order(pair, amount_str, order_side, position_side=direction)
