@@ -337,23 +337,37 @@ def update_stats_json():
     trades = _load_all_trades()
     trades.sort(key=lambda t: t["ts"])
     cum = 0.0
+    tot_gross = tot_fee = tot_int = 0.0
     points = []
     for t in trades:
         cum += t["pnl_jpy"]
+        # 手数料・利息の内訳は bitbank 約定履歴で確定した記録のみ持つ（概算記録は None）
+        has_breakdown = t.get("pnl_source") == "bitbank"
+        if has_breakdown:
+            tot_gross += t["gross_pnl_jpy"]
+            tot_fee   += t["fee_jpy"]
+            tot_int   += t["interest_jpy"]
         points.append({
             "ts":                 t["ts"],
             "pair":               t["pair"],
             "direction":          t["direction"],
             "reason":             t["reason"],
             "pnl_jpy":            t["pnl_jpy"],
+            "gross_pnl_jpy":      t.get("gross_pnl_jpy") if has_breakdown else None,
+            "fee_jpy":            t.get("fee_jpy") if has_breakdown else None,
+            "interest_jpy":       t.get("interest_jpy") if has_breakdown else None,
+            "pnl_source":         t.get("pnl_source", "estimate"),
             "cumulative_pnl_jpy": round(cum, 4),
             "position_id":        t.get("position_id"),
         })
     payload = {
-        "generated_at":  datetime.now(JST).isoformat(timespec="seconds"),
-        "total_pnl_jpy": round(cum, 4),
-        "trade_count":   len(trades),
-        "points":        points,
+        "generated_at":       datetime.now(JST).isoformat(timespec="seconds"),
+        "total_pnl_jpy":      round(cum, 4),
+        "total_gross_pnl_jpy": round(tot_gross, 4),
+        "total_fee_jpy":      round(tot_fee, 4),
+        "total_interest_jpy": round(tot_int, 4),
+        "trade_count":        len(trades),
+        "points":             points,
     }
     _s3.put_object(
         Bucket=STATS_BUCKET, Key=STATS_KEY,
