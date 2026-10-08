@@ -89,6 +89,48 @@ def test_fetch_binance_raises_after_all_hosts_fail(analyzer, monkeypatch):
             assert "全ホスト取得失敗" in str(e)
 
 
+def _ban_error(code=418, retry_after=None):
+    headers = {"Retry-After": str(retry_after)} if retry_after is not None else {}
+    return urllib.error.HTTPError("https://api.binance.com", code, "banned", headers, None)
+
+
+def test_fetch_binance_stops_rotation_on_ban(analyzer, monkeypatch):
+    """418はIP単位のバンなので他ホストへローテーションせず即打ち切る（叩くとバン延長）。"""
+    monkeypatch.setattr(analyzer.time, "sleep", lambda s: None)
+    monkeypatch.setattr(analyzer, "_ban_wait_left", analyzer.BAN_WAIT_BUDGET_S)
+    with patch("urllib.request.urlopen", side_effect=_ban_error(418, 7200)) as mock_open:
+        try:
+            analyzer.fetch_binance("BTCUSDT")
+            assert False, "BinanceBanErrorが発生するはず"
+        except analyzer.BinanceBanError as e:
+            assert "Retry-After=7200" in str(e)
+        assert mock_open.call_count == 1
+
+
+def test_fetch_binance_waits_and_retries_when_retry_after_within_budget(analyzer, monkeypatch):
+    slept = []
+    monkeypatch.setattr(analyzer.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(analyzer, "_ban_wait_left", analyzer.BAN_WAIT_BUDGET_S)
+    side = [_ban_error(429, 10), _make_klines_response(4)]
+    with patch("urllib.request.urlopen", side_effect=side) as mock_open:
+        result = analyzer.fetch_binance("BTCUSDT")
+        assert len(result) == 4
+        assert mock_open.call_count == 2
+    assert slept == [10]
+    assert analyzer._ban_wait_left == analyzer.BAN_WAIT_BUDGET_S - 10
+
+
+def test_fetch_binance_ban_without_retry_after_raises(analyzer, monkeypatch):
+    monkeypatch.setattr(analyzer.time, "sleep", lambda s: None)
+    monkeypatch.setattr(analyzer, "_ban_wait_left", analyzer.BAN_WAIT_BUDGET_S)
+    with patch("urllib.request.urlopen", side_effect=_ban_error(418)):
+        try:
+            analyzer.fetch_binance("BTCUSDT")
+            assert False
+        except analyzer.BinanceBanError:
+            pass
+
+
 # ── analyze_coin シグナル判定 ────────────────────────────────────────────
 
 def _flat_uptrend_candles(n=250):
