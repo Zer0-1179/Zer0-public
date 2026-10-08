@@ -62,8 +62,13 @@ upload_one() {
   (
     cd "${PROJECT_DIR}/lambda/${source_dir}"
     zip -q "${zip_path}" lambda_function.py
-    # オーナー宛て通知の共通テンプレート（lp_waitlist/stripe_webhookのみ同梱）
-    if [[ -f alert_mail.py ]]; then
+    # オーナー宛て通知の共通テンプレート。lp_waitlist/stripe_webhookは先頭でimportするため、
+    # 欠けるとImportModuleErrorでLP・Stripe Webhookが全停止する。無ければ黙って飛ばさず止める。
+    if [[ "${source_dir}" == "lp_waitlist" || "${source_dir}" == "stripe_webhook" ]]; then
+      if [[ ! -f alert_mail.py ]]; then
+        echo "[error] lambda/${source_dir}/alert_mail.py is missing" >&2
+        exit 1
+      fi
       zip -q "${zip_path}" alert_mail.py
     fi
   )
