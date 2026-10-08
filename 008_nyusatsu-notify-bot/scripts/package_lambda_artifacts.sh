@@ -14,8 +14,10 @@ elif [[ "$#" -eq 1 && "$1" == "--collector-only" ]]; then
   SINGLE_TARGET="collector"
 elif [[ "$#" -eq 1 && "$1" == "--bounce-handler-only" ]]; then
   SINGLE_TARGET="bounce_handler"
+elif [[ "$#" -eq 1 && "$1" == "--lp-waitlist-only" ]]; then
+  SINGLE_TARGET="lp_waitlist"
 elif [[ "$#" -ne 0 ]]; then
-  echo "Usage: $0 [--stripe-webhook-only|--collector-only|--bounce-handler-only]" >&2
+  echo "Usage: $0 [--stripe-webhook-only|--collector-only|--bounce-handler-only|--lp-waitlist-only]" >&2
   exit 2
 fi
 
@@ -60,6 +62,10 @@ upload_one() {
   (
     cd "${PROJECT_DIR}/lambda/${source_dir}"
     zip -q "${zip_path}" lambda_function.py
+    # オーナー宛て通知の共通テンプレート（lp_waitlist/stripe_webhookのみ同梱）
+    if [[ -f alert_mail.py ]]; then
+      zip -q "${zip_path}" alert_mail.py
+    fi
   )
   version_id="$(aws s3api put-object \
     --bucket "${ARTIFACT_BUCKET}" \
@@ -85,6 +91,9 @@ if [[ -n "${SINGLE_TARGET}" ]]; then
   elif [[ "${SINGLE_TARGET}" == "collector" ]]; then
     DEPLOYMENT_TARGET="zer0-nyusatsu-collector"
     DISPLAY_NAME="collector"
+  elif [[ "${SINGLE_TARGET}" == "lp_waitlist" ]]; then
+    DEPLOYMENT_TARGET="zer0-nyusatsu-lp-waitlist"
+    DISPLAY_NAME="LP waitlist"
   else
     DEPLOYMENT_TARGET="zer0-nyusatsu-bounce-handler"
     DISPLAY_NAME="bounce handler"

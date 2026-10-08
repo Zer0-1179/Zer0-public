@@ -10,6 +10,8 @@ import time
 import boto3
 from boto3.dynamodb.conditions import Attr
 
+import alert_mail
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -82,25 +84,28 @@ def verify_signature(payload: str, sig_header: str, secret: str) -> bool:
     return any(hmac.compare_digest(expected, sig) for sig in v1_signatures)
 
 
-def _notify_owner(subject: str, body: str) -> None:
+def _notify_owner(subject: str, body: str, level: str = "info", action: str | None = None) -> None:
     try:
         notify_email = _get_param(NOTIFY_EMAIL_PARAM_NAME)
         sender_email = _get_param(SES_SENDER_PARAM_NAME)
-        # オーナー宛の内部通知。スマホでの視認性のため最小限のHTML版も付ける。
-        body_html = (
-            "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
-            "font-size:14px;line-height:1.7;color:#222222;\">"
-            f"<div>{html.escape(body).replace(chr(10), '<br>')}</div></body></html>"
-        )
+        full_subject = alert_mail.decorate_subject(f"【{SERVICE_NAME}】{subject}", level)
+        # オーナー宛の内部通知（購読者宛てではない）。重要度バッジ付きHTMLで送る。
+        try:
+            mail_body = {
+                "Text": {"Data": alert_mail.render_text(full_subject, body, level=level, action=action),
+                         "Charset": "UTF-8"},
+                "Html": {"Data": alert_mail.render_html(full_subject, body, service=SERVICE_NAME, source="Stripe決済",
+                                                        level=level, action=action), "Charset": "UTF-8"},
+            }
+        except Exception:
+            logger.warning("owner notification render failed; sending plain text")
+            mail_body = {"Text": {"Data": body, "Charset": "UTF-8"}}
         ses.send_email(
             Source=sender_email,
             Destination={"ToAddresses": [notify_email]},
             Message={
-                "Subject": {"Data": f"【{SERVICE_NAME}】{subject}", "Charset": "UTF-8"},
-                "Body": {
-                    "Text": {"Data": body, "Charset": "UTF-8"},
-                    "Html": {"Data": body_html, "Charset": "UTF-8"},
-                },
+                "Subject": {"Data": full_subject, "Charset": "UTF-8"},
+                "Body": mail_body,
             },
             ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
         )
@@ -172,8 +177,10 @@ def _notify_suppressed_payment(subscriber: dict) -> None:
     logger.warning("payment received for a suppressed address; not activating")
     _notify_owner(
         "支払い済みだが配信停止済みのアドレスです",
-        f"アドレス: {subscriber['email']}\n配信停止理由: {subscriber.get('unsubscribed_reason')}\n"
-        "自動では有効化していません。手動でのご確認をお願いします。",
+        "Stripeでの支払いを確認しましたが、配信停止済みのアドレスだったため自動では有効化していません。\n\n"
+        f"アドレス: {subscriber['email']}\n配信停止理由: {subscriber.get('unsubscribed_reason')}",
+        level="warning",
+        action="DynamoDBの購読者レコードと配信停止の経緯を確認し、配信を再開してよい場合は手動で有効化してください。",
     )
 
 
@@ -271,8 +278,10 @@ def handle_checkout_completed(
         logger.info("auto-registered a new paying subscriber via Stripe")
         _notify_owner(
             "LP未登録アドレスからの支払いを検知しました",
-            f"アドレス: {email}\n事前登録(LP)にはなかったメールアドレスですが、"
-            "Stripeでの支払いを確認したため購読者として自動登録しました。",
+            "事前登録(LP)にはなかったメールアドレスですが、Stripeでの支払いを確認したため購読者として自動登録しました。\n\n"
+            f"アドレス: {email}",
+            level="info",
+            action="対応は不要です。購読者として自動登録済みです。",
         )
 
 

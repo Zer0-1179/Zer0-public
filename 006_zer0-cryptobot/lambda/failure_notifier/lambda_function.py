@@ -11,6 +11,8 @@ import os
 import json
 import boto3
 
+import alert_mail
+
 SES_SENDER    = os.environ["SES_SENDER_EMAIL"]
 SES_RECIPIENT = os.environ["SES_RECIPIENT_EMAIL"]
 AWS_REGION    = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
@@ -44,12 +46,19 @@ def lambda_handler(event, context):
         f"aws lambda invoke --function-name Zer0-CryptoBot-Executor \\\n"
         f"  --payload '{{\"signals\":[]}}' /tmp/exec.json --region {AWS_REGION}"
     )
-    html_body = (
-        '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>'
-        '<body style="font-family:sans-serif;font-size:14px;line-height:1.8;">'
-        + body.replace("\n", "<br>")
-        + "</body></html>"
-    )
+    subject = alert_mail.decorate_subject("【Zer0-CryptoBot】🚨Executor 起動失敗", "critical")
+    action = ("Executor が動いていないため、保有中ポジションの管理（TP1/SL/トレーリング）が止まっている可能性があります。"
+              "bitbank の管理画面でポジションとSL注文が残っているかを確認し、上のコマンドで手動実行してください。")
+    try:
+        mail_body = {
+            "Text": {"Data": alert_mail.render_text(subject, body, level="critical", action=action), "Charset": "UTF-8"},
+            "Html": {"Data": alert_mail.render_html(subject, body, service="Zer0-CryptoBot", source="FailureNotifier",
+                                                    level="critical", action=action), "Charset": "UTF-8"},
+        }
+    except Exception as e:
+        # 装飾の不具合で通知そのものが失われないよう、素のテキストで送る
+        print(f"[FailureNotifier] メール整形失敗（テキストのみで送信）: {e}")
+        mail_body = {"Text": {"Data": body, "Charset": "UTF-8"}}
 
     ses = boto3.client("ses", region_name=AWS_REGION)
     ses.send_email(
@@ -57,13 +66,10 @@ def lambda_handler(event, context):
         Destination={"ToAddresses": [SES_RECIPIENT]},
         Message={
             "Subject": {
-                "Data": "【Zer0-CryptoBot】🚨Executor 起動失敗",
+                "Data": subject,
                 "Charset": "UTF-8",
             },
-            "Body": {
-                "Text": {"Data": body,      "Charset": "UTF-8"},
-                "Html": {"Data": html_body, "Charset": "UTF-8"},
-            },
+            "Body": mail_body,
         },
     )
     print(f"[FailureNotifier] アラートメール送信完了: {func_name} ({condition})")

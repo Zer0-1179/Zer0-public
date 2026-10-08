@@ -79,7 +79,7 @@ if grep -v "^#\|^$" requirements.txt 2>/dev/null | grep -q .; then
   pip install -r requirements.txt -t . -q 2>/dev/null || true
   zip -r /tmp/executor.zip . -x "*.pyc" -x "__pycache__/*" -q
 else
-  zip -r /tmp/executor.zip lambda_function.py -q
+  zip -r /tmp/executor.zip lambda_function.py alert_mail.py -q  # alert_mail.py: 通知メール共通テンプレート
 fi
 aws lambda update-function-code \
   --function-name Zer0-CryptoBot-Executor \
@@ -90,7 +90,7 @@ echo "  ✓ Executor コードデプロイ完了"
 
 # FailureNotifier
 cd "${SCRIPT_DIR}/lambda/failure_notifier"
-zip -r /tmp/failure_notifier.zip lambda_function.py -q
+zip -r /tmp/failure_notifier.zip lambda_function.py alert_mail.py -q
 aws lambda update-function-code \
   --function-name Zer0-CryptoBot-FailureNotifier \
   --zip-file fileb:///tmp/failure_notifier.zip \
