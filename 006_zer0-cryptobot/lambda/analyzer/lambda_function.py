@@ -7,7 +7,9 @@ BTC 200EMAで市場方向（ロング/ショート）を判定、シグナルが
 import os
 import json
 import time
+import html
 import boto3
+from datetime import datetime, timedelta, timezone
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -59,14 +61,70 @@ def log(msg: str):
     print(f"[Analyzer] {msg}")
 
 
-def send_error_email(subject: str, body: str):
-    html_body = (
-        '<!DOCTYPE html><html><head>'
-        '<meta charset="UTF-8">'
-        '</head><body style="font-family:sans-serif;font-size:14px;line-height:1.8;">'
-        + body.replace("\n", "<br>")
-        + "</body></html>"
+# 通知の重要度。メール冒頭のバッジ（色・文言）で「対応が要るか」をひと目で分かるようにする。
+ALERT_LEVELS = {
+    "info":     {"badge": "対応不要", "color": "#3ecf8e", "icon": "✅"},
+    "warning":  {"badge": "要確認",   "color": "#f5a623", "icon": "⚠️"},
+    "critical": {"badge": "要対応",   "color": "#ff5c5c", "icon": "🚨"},
+}
+JST = timezone(timedelta(hours=9))
+
+
+def next_run_jst(now: datetime | None = None) -> str:
+    """次回の Analyzer 定期実行時刻（cron(0 */4 * * ? *) = UTC 4時間境界）を JST 文字列で返す。"""
+    now = now or datetime.now(timezone.utc)
+    base = now.replace(minute=0, second=0, microsecond=0)
+    nxt = base + timedelta(hours=4 - base.hour % 4)
+    return nxt.astimezone(JST).strftime("%m/%d %H:%M")
+
+
+def build_alert_html(level: str, title: str, headline: str,
+                     rows: list[tuple[str, str]], action: str) -> str:
+    """ダーク基調（週次サマリーと統一）のアラートメールHTMLを組み立てる。"""
+    lv = ALERT_LEVELS[level]
+    esc = html.escape
+    rows_html = "".join(
+        f'<tr><td style="padding:8px 10px;color:#8a9bb5;white-space:nowrap;vertical-align:top;'
+        f'border-bottom:1px solid #2a3a5c;">{esc(k)}</td>'
+        f'<td style="padding:8px 10px;border-bottom:1px solid #2a3a5c;overflow-wrap:break-word;">{esc(v)}</td></tr>'
+        for k, v in rows
     )
+    now_jst = datetime.now(JST).strftime("%Y-%m-%d %H:%M")
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:sans-serif;background:#0d1b2e;color:#e0e0e0;padding:24px;margin:0;">
+  <div style="max-width:660px;margin:0 auto;">
+    <p style="color:#8a9bb5;font-size:12px;margin:0 0 6px;">Zer0-CryptoBot / Analyzer ・ {now_jst} JST</p>
+    <div style="background:#1a2a3e;border-radius:8px;border-left:6px solid {lv['color']};padding:18px 20px;">
+      <span style="display:inline-block;background:{lv['color']};color:#0d1b2e;font-weight:bold;
+        font-size:13px;padding:3px 12px;border-radius:12px;">{lv['icon']} {lv['badge']}</span>
+      <h2 style="color:#ffffff;font-size:19px;margin:12px 0 6px;">{esc(title)}</h2>
+      <p style="margin:0;font-size:14px;line-height:1.7;">{esc(headline)}</p>
+    </div>
+    <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;">
+      <h3 style="color:#3ea8ff;margin:0 0 10px;font-size:15px;">詳細</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;">{rows_html}</table>
+    </div>
+    <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;border:1px solid {lv['color']};">
+      <h3 style="color:{lv['color']};margin:0 0 8px;font-size:15px;">あなたがすること</h3>
+      <p style="margin:0;font-size:14px;line-height:1.7;">{esc(action)}</p>
+    </div>
+    <p style="color:#555;font-size:12px;margin:8px 0 0;">このメールは Zer0-CryptoBot Analyzer Lambda から自動送信されています。</p>
+  </div>
+</body></html>"""
+
+
+def build_alert_text(level: str, title: str, headline: str,
+                     rows: list[tuple[str, str]], action: str) -> str:
+    """HTML非対応メーラー向けのテキスト版（HTML版と同じ情報を同じ順で載せる）。"""
+    lv = ALERT_LEVELS[level]
+    lines = [f"【{lv['badge']}】{title}", "", headline, "", "■ 詳細"]
+    lines += [f"・{k}: {v}" for k, v in rows]
+    lines += ["", "■ あなたがすること", action]
+    return "\n".join(lines)
+
+
+def send_error_email(subject: str, level: str, title: str, headline: str,
+                     rows: list[tuple[str, str]], action: str):
     try:
         _ses.send_email(
             Source=SES_SENDER,
@@ -74,8 +132,8 @@ def send_error_email(subject: str, body: str):
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
                 "Body": {
-                    "Text": {"Data": body,      "Charset": "UTF-8"},
-                    "Html": {"Data": html_body, "Charset": "UTF-8"},
+                    "Text": {"Data": build_alert_text(level, title, headline, rows, action), "Charset": "UTF-8"},
+                    "Html": {"Data": build_alert_html(level, title, headline, rows, action), "Charset": "UTF-8"},
                 },
             },
         )
@@ -323,26 +381,43 @@ def lambda_handler(event, context):
             except Exception as e:
                 log(f"  {cfg['binance']} 分析エラー: {e}")
                 send_error_email(
-                    f"【Zer0-CryptoBot】Analyzer エラー - {pair_jpy}",
-                    f"コイン分析中にエラーが発生しました。\n\nコイン: {pair_jpy}\nエラー: {e}",
+                    f"【Zer0-CryptoBot】⚠️要確認 Analyzer エラー - {pair_jpy}",
+                    "warning",
+                    f"{pair_jpy} の分析に失敗しました",
+                    "このコインだけ今回のシグナル判定をスキップしました。他のコインの分析とポジション管理（Executor）は通常どおり動いています。",
+                    [("対象コイン", pair_jpy), ("エラー", str(e)),
+                     ("影響", "このコインの今回分のシグナルを取りこぼした可能性があります"),
+                     ("次回の分析", f"{next_run_jst()} JST（自動で再試行）")],
+                    "1回だけなら対応は不要です。同じコインで続けて届く場合は Analyzer のログ（CloudWatch Logs）を確認してください。",
                 )
 
     except BinanceBanError as e:
         log(f"Binance制限で分析スキップ: {e}")
         analysis_error = e
         send_error_email(
-            "【Zer0-CryptoBot】Analyzer 分析スキップ（Binance一時制限）",
-            "Binance がLambdaの送信元IP（AWS共有IP）をバン/レート制限しているため、今回の4時間足分析をスキップしました。"
-            "本Botの呼出量が原因ではなく、時間経過で自然復旧します（次回起動で自動再試行）。"
-            "Executorはポジション管理のため継続起動します。\n\n"
-            f"エラー: {e}",
+            "【Zer0-CryptoBot】✅対応不要 Analyzer 分析スキップ（Binance一時制限）",
+            "info",
+            "今回の分析をスキップしました（自動で復旧します）",
+            "Binance がアクセス元のIPを一時的に制限していたため、今回の4時間足の分析を見送りました。"
+            "このBotの使い方が原因ではなく、時間がたてば自然に解除されます。",
+            [("エラー", str(e)),
+             ("原因", "Lambdaの送信元IPは他のAWS利用者と共有のため、同じIPの他者の過剰アクセスでBinanceに制限されることがあります（本Botの呼び出しは4時間ごと4回のみ）"),
+             ("影響", "今回分のシグナル判定のみ。保有中ポジションの管理（Executor）は通常どおり動いています"),
+             ("次回の分析", f"{next_run_jst()} JST（自動で再試行）")],
+            "対応は不要です。このメールが3回以上続けて届く場合のみ、制限が長引いているのでご確認ください。",
         )
     except Exception as e:
         log(f"致命的エラー: {e}")
         analysis_error = e
         send_error_email(
-            "【Zer0-CryptoBot】Analyzer 致命的エラー",
-            f"Analyzer で予期せぬエラーが発生しました。Executorはメンテナンスのため継続起動します。\n\nエラー: {e}",
+            "【Zer0-CryptoBot】⚠️要確認 Analyzer 致命的エラー",
+            "warning",
+            "Analyzer で予期せぬエラーが発生しました",
+            "今回の分析は全コイン分スキップしました。保有中ポジションの管理（Executor）は継続して起動しています。",
+            [("エラー", str(e)),
+             ("影響", "今回分の全コインのシグナル判定"),
+             ("次回の分析", f"{next_run_jst()} JST（自動で再試行）")],
+            "Analyzer のログ（CloudWatch Logs）でエラー内容を確認してください。次回も同じメールが届く場合はコードの不具合の可能性があります。",
         )
 
     # 分析エラー時もポジション管理のため常に Executor を invoke
@@ -358,8 +433,14 @@ def lambda_handler(event, context):
     except Exception as ie:
         log(f"Executor invoke 失敗: {ie}")
         send_error_email(
-            "【Zer0-CryptoBot】🚨Executor invoke 失敗",
-            f"Executorの起動に失敗しました。ポジションが管理されない可能性があります。\n\nエラー: {ie}",
+            "【Zer0-CryptoBot】🚨要対応 Executor invoke 失敗",
+            "critical",
+            "Executor（注文・ポジション管理）を起動できませんでした",
+            "今回はポジションのTP/SL・トレーリング管理が行われていない可能性があります。",
+            [("エラー", str(ie)),
+             ("影響", "保有中ポジションの管理と、今回のシグナルによる新規注文"),
+             ("次回の起動", f"{next_run_jst()} JST")],
+            "bitbank でポジションと注文（SL）が残っているか確認してください。続く場合は /cryptobot/mode を pause_entry にして調査してください。",
         )
 
     if analysis_error:
