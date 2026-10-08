@@ -148,3 +148,36 @@ def test_analyze_coin_returns_none_when_below_ema200_for_long(analyzer, monkeypa
     monkeypatch.setattr(analyzer, "fetch_binance", MagicMock(return_value=candles + [candles[-1]]))
     result = analyzer.analyze_coin("BTCUSDT", "long")
     assert result is None
+
+
+# ── アラートメール ────────────────────────────────────────────────────────
+
+def test_next_run_jst_rounds_up_to_next_4h_boundary(analyzer):
+    from datetime import datetime, timezone
+    # 00:00 UTC(09:00 JST)ちょうどの実行中 → 次回は 04:00 UTC = 13:00 JST
+    assert analyzer.next_run_jst(datetime(2026, 10, 7, 0, 0, 5, tzinfo=timezone.utc)) == "10/07 13:00"
+    assert analyzer.next_run_jst(datetime(2026, 10, 7, 14, 30, tzinfo=timezone.utc)) == "10/08 01:00"
+
+
+def test_alert_html_shows_badge_and_escapes(analyzer):
+    h = analyzer.build_alert_html("info", "t<x>", "h", [("エラー", "HTTP 418 <b>")], "対応は不要です。")
+    assert "対応不要" in h and "#3ecf8e" in h
+    assert "&lt;b&gt;" in h and "<b>" not in h
+    t = analyzer.build_alert_text("info", "t", "h", [("エラー", "HTTP 418")], "対応は不要です。")
+    assert t.startswith("【対応不要】") and "・エラー: HTTP 418" in t
+
+
+def test_handler_ban_sends_no_action_needed_email(analyzer, monkeypatch):
+    err = analyzer.BinanceBanError("Binance がIPバン/レート制限中(BTCUSDT): HTTP 418")
+    err.retry_after = None
+    monkeypatch.setattr(analyzer, "fetch_binance", MagicMock(side_effect=err))
+    sent = []
+    monkeypatch.setattr(analyzer, "send_error_email", lambda *a, **k: sent.append(a))
+    monkeypatch.setattr(analyzer, "_lambda", MagicMock())
+    res = analyzer.lambda_handler({}, None)
+    assert res["statusCode"] == 500
+    assert len(sent) == 1
+    subject, level, *_rest, action = sent[0]
+    assert "対応不要" in subject and level == "info"
+    assert "対応は不要です" in action
+    analyzer._lambda.invoke.assert_called_once()  # Executor は継続起動
