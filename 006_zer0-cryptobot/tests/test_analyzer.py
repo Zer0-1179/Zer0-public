@@ -159,14 +159,6 @@ def test_next_run_jst_rounds_up_to_next_4h_boundary(analyzer):
     assert analyzer.next_run_jst(datetime(2026, 10, 7, 14, 30, tzinfo=timezone.utc)) == "10/08 01:00"
 
 
-def test_alert_html_shows_badge_and_escapes(analyzer):
-    h = analyzer.build_alert_html("info", "t<x>", "h", [("エラー", "HTTP 418 <b>")], "対応は不要です。")
-    assert "対応不要" in h and "#3ecf8e" in h
-    assert "&lt;b&gt;" in h and "<b>" not in h
-    t = analyzer.build_alert_text("info", "t", "h", [("エラー", "HTTP 418")], "対応は不要です。")
-    assert t.startswith("【対応不要】") and "・エラー: HTTP 418" in t
-
-
 def test_handler_ban_sends_no_action_needed_email(analyzer, monkeypatch):
     err = analyzer.BinanceBanError("Binance がIPバン/レート制限中(BTCUSDT): HTTP 418")
     err.retry_after = None

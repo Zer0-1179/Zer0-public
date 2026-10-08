@@ -33,6 +33,10 @@ os.environ.setdefault("LINE_CHANNEL_SECRET_PARAM_NAME", "/test/line-channel-secr
 os.environ.setdefault("LINE_LIFF_ID_PARAM_NAME", "/test/line-liff-id")
 
 
+# オーナー宛て通知の共通テンプレート（lp_waitlist/stripe_webhookに同一内容のコピーを置く）
+sys.path.insert(0, os.path.join(ROOT, "lambda", "lp_waitlist"))
+
+
 def _load_module(name: str, path: str):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)

@@ -7,12 +7,13 @@ BTC 200EMAで市場方向（ロング/ショート）を判定、シグナルが
 import os
 import json
 import time
-import html
 import boto3
 from datetime import datetime, timedelta, timezone
 import urllib.request
 import urllib.parse
 import urllib.error
+
+import alert_mail
 
 # ── 定数 ──────────────────────────────────────────────────────────────────────
 # 単一ホスト障害・レート制限時にシグナル検出が4時間丸ごと欠落するのを防ぐため、
@@ -61,12 +62,6 @@ def log(msg: str):
     print(f"[Analyzer] {msg}")
 
 
-# 通知の重要度。メール冒頭のバッジ（色・文言）で「対応が要るか」をひと目で分かるようにする。
-ALERT_LEVELS = {
-    "info":     {"badge": "対応不要", "color": "#3ecf8e", "icon": "✅"},
-    "warning":  {"badge": "要確認",   "color": "#f5a623", "icon": "⚠️"},
-    "critical": {"badge": "要対応",   "color": "#ff5c5c", "icon": "🚨"},
-}
 JST = timezone(timedelta(hours=9))
 
 
@@ -78,63 +73,28 @@ def next_run_jst(now: datetime | None = None) -> str:
     return nxt.astimezone(JST).strftime("%m/%d %H:%M")
 
 
-def build_alert_html(level: str, title: str, headline: str,
-                     rows: list[tuple[str, str]], action: str) -> str:
-    """ダーク基調（週次サマリーと統一）のアラートメールHTMLを組み立てる。"""
-    lv = ALERT_LEVELS[level]
-    esc = html.escape
-    rows_html = "".join(
-        f'<tr><td style="padding:8px 10px;color:#8a9bb5;white-space:nowrap;vertical-align:top;'
-        f'border-bottom:1px solid #2a3a5c;">{esc(k)}</td>'
-        f'<td style="padding:8px 10px;border-bottom:1px solid #2a3a5c;overflow-wrap:break-word;">{esc(v)}</td></tr>'
-        for k, v in rows
-    )
-    now_jst = datetime.now(JST).strftime("%Y-%m-%d %H:%M")
-    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="font-family:sans-serif;background:#0d1b2e;color:#e0e0e0;padding:24px;margin:0;">
-  <div style="max-width:660px;margin:0 auto;">
-    <p style="color:#8a9bb5;font-size:12px;margin:0 0 6px;">Zer0-CryptoBot / Analyzer ・ {now_jst} JST</p>
-    <div style="background:#1a2a3e;border-radius:8px;border-left:6px solid {lv['color']};padding:18px 20px;">
-      <span style="display:inline-block;background:{lv['color']};color:#0d1b2e;font-weight:bold;
-        font-size:13px;padding:3px 12px;border-radius:12px;">{lv['icon']} {lv['badge']}</span>
-      <h2 style="color:#ffffff;font-size:19px;margin:12px 0 6px;">{esc(title)}</h2>
-      <p style="margin:0;font-size:14px;line-height:1.7;">{esc(headline)}</p>
-    </div>
-    <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;">
-      <h3 style="color:#3ea8ff;margin:0 0 10px;font-size:15px;">詳細</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;">{rows_html}</table>
-    </div>
-    <div style="background:#1a2a3e;border-radius:8px;padding:16px;margin:16px 0;border:1px solid {lv['color']};">
-      <h3 style="color:{lv['color']};margin:0 0 8px;font-size:15px;">あなたがすること</h3>
-      <p style="margin:0;font-size:14px;line-height:1.7;">{esc(action)}</p>
-    </div>
-    <p style="color:#555;font-size:12px;margin:8px 0 0;">このメールは Zer0-CryptoBot Analyzer Lambda から自動送信されています。</p>
-  </div>
-</body></html>"""
-
-
-def build_alert_text(level: str, title: str, headline: str,
-                     rows: list[tuple[str, str]], action: str) -> str:
-    """HTML非対応メーラー向けのテキスト版（HTML版と同じ情報を同じ順で載せる）。"""
-    lv = ALERT_LEVELS[level]
-    lines = [f"【{lv['badge']}】{title}", "", headline, "", "■ 詳細"]
-    lines += [f"・{k}: {v}" for k, v in rows]
-    lines += ["", "■ あなたがすること", action]
-    return "\n".join(lines)
-
-
 def send_error_email(subject: str, level: str, title: str, headline: str,
                      rows: list[tuple[str, str]], action: str):
+    """重要度バッジ付きHTML（alert_mail 共通テンプレート）で通知する。"""
+    body = headline + "\n\n" + "\n".join(f"{k}：{v}" for k, v in rows)
+    kw = {"level": level, "action": action, "title": title}
+    try:
+        mail_body = {
+            "Text": {"Data": alert_mail.render_text(subject, body, **kw), "Charset": "UTF-8"},
+            "Html": {"Data": alert_mail.render_html(subject, body, service="Zer0-CryptoBot",
+                                                    source="Analyzer", **kw), "Charset": "UTF-8"},
+        }
+    except Exception as e:
+        # 装飾の不具合で通知そのものが失われないよう、素のテキストで送る
+        log(f"メール整形失敗（テキストのみで送信）: {e}")
+        mail_body = {"Text": {"Data": body, "Charset": "UTF-8"}}
     try:
         _ses.send_email(
             Source=SES_SENDER,
             Destination={"ToAddresses": [SES_RECIPIENT]},
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body": {
-                    "Text": {"Data": build_alert_text(level, title, headline, rows, action), "Charset": "UTF-8"},
-                    "Html": {"Data": build_alert_html(level, title, headline, rows, action), "Charset": "UTF-8"},
-                },
+                "Body": mail_body,
             },
         )
     except Exception as e:

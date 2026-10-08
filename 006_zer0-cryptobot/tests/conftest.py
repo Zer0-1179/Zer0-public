@@ -22,6 +22,8 @@ os.environ.setdefault("EXECUTOR_FUNCTION_NAME", "test-executor")
 os.environ.setdefault("TRADES_BUCKET", "test-bucket")
 
 sys.path.insert(0, os.path.join(ROOT, "backtest"))
+# 通知メール共通テンプレート（各Lambdaに同一内容のコピーを置き、test_alert_mail.pyで一致を検証）
+sys.path.insert(0, os.path.join(ROOT, "lambda", "analyzer"))
 
 
 def _load_module(name: str, path: str):
@@ -35,6 +37,7 @@ def _load_module(name: str, path: str):
 with patch("boto3.client", return_value=MagicMock()):
     _analyzer = _load_module("analyzer_lambda_function", os.path.join(ROOT, "lambda", "analyzer", "lambda_function.py"))
     _executor = _load_module("executor_lambda_function", os.path.join(ROOT, "lambda", "executor", "lambda_function.py"))
+    _executor._real_send_email = _executor.send_email  # fixtureでモック化する前の実体（整形フォールバックのテスト用）
     _weekly = _load_module("weekly_summary_lambda_function", os.path.join(ROOT, "lambda", "weekly_summary", "lambda_function.py"))
 
 

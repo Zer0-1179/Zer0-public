@@ -22,6 +22,8 @@ import boto3
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 
+import alert_mail
+
 # ── 定数 ──────────────────────────────────────────────────────────────────────
 MIN_INVEST_JPY  = 1000          # 最小発注額（円）
 # 2026-10-02: 3→2。従来は「レバレッジ後の建玉可能額÷空き枠×0.9」で発注していたため、枠が埋まると
@@ -720,29 +722,45 @@ def update_positions_json(state: dict, account: dict | None = None):
         log(f"ポジションJSON更新失敗（取引処理は継続）: {e}")
 
 
-def send_email(subject: str, body: str):
-    html_body = (
-        '<!DOCTYPE html><html><head>'
-        '<meta charset="UTF-8">'
-        '</head><body style="font-family:sans-serif;font-size:14px;line-height:1.8;">'
-        + body.replace("\n", "<br>")
-        + "</body></html>"
-    )
+def send_email(subject: str, body: str, level: str | None = None, action: str | None = None):
+    """重要度バッジ付きHTML（alert_mail 共通テンプレート）で通知する。
+    level 未指定時は件名の 🚨/⚠️・「エラー/失敗/不一致」から自動判定、それ以外は「対応不要」。"""
+    try:
+        level = level or alert_mail.detect_level(subject)
+        action = action or EXECUTOR_ACTIONS.get(level)
+        subject = alert_mail.decorate_subject(subject, level)
+        mail_body = {
+            "Text": {"Data": alert_mail.render_text(subject, body, level=level, action=action), "Charset": "UTF-8"},
+            "Html": {"Data": alert_mail.render_html(subject, body, service="Zer0-CryptoBot",
+                                                    source="Executor", level=level, action=action),
+                     "Charset": "UTF-8"},
+        }
+    except Exception as e:
+        # 装飾の不具合で重要通知そのものが失われないよう、素のテキストで送る
+        log(f"メール整形失敗（テキストのみで送信）: {e}")
+        mail_body = {"Text": {"Data": body, "Charset": "UTF-8"}}
     try:
         _ses.send_email(
             Source=SES_SENDER,
             Destination={"ToAddresses": [SES_RECIPIENT]},
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body": {
-                    "Text": {"Data": body,      "Charset": "UTF-8"},
-                    "Html": {"Data": html_body, "Charset": "UTF-8"},
-                },
+                "Body": mail_body,
             },
         )
         log(f"メール送信: {subject}")
     except Exception as e:
         log(f"SES 送信失敗: {e}")
+
+
+# 重要度ごとの「あなたがすること」（本文に個別の指示がある場合もこれを末尾に添える）
+EXECUTOR_ACTIONS = {
+    "info":     "対応は不要です。Botが自動で管理しています。最新の状況は実績ページで確認できます：" + PORTFOLIO_STATS_URL,
+    "warning":  "内容を確認してください。1回だけで以後届かなければ様子見で構いません。"
+                "続けて届く場合は Executor のログ（CloudWatch Logs）で原因を確認してください。",
+    "critical": "すぐに bitbank の管理画面でポジションと注文（SL）の状態を確認し、上の記載に従って対応してください。"
+                "新規建てを止めたい場合は /cryptobot/mode を pause_entry にしてください。",
+}
 
 
 def _coin(pair: str) -> str:

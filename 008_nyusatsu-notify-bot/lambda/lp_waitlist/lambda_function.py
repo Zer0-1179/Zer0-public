@@ -17,6 +17,8 @@ import boto3
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 
+import alert_mail
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -261,22 +263,25 @@ def send_confirmation_email(email: str, confirm_url: str, sender: str) -> None:
 def notify_owner_confirmed(email: str) -> None:
     notify_email = _get_param(NOTIFY_EMAIL_PARAM_NAME)
     sender_email = _get_param(SES_SENDER_PARAM_NAME)
-    body_text = f"確認済みメールアドレス: {email}"
-    # オーナー宛の内部通知。スマホでの視認性のため最小限のHTML版も付ける。
-    body_html = (
-        "<!doctype html><html lang=\"ja\"><body style=\"font-family:sans-serif;"
-        "font-size:14px;line-height:1.7;color:#222222;\">"
-        f"<div>{html.escape(body_text)}</div></body></html>"
-    )
+    subject = alert_mail.decorate_subject(f"【{SERVICE_NAME}】事前登録が確認されました", "info")
+    body_text = f"LPからの事前登録で、メールアドレスの確認が完了しました。\n\n確認済みメールアドレス: {email}"
+    action = "対応は不要です。確認済みの登録者として自動で管理されます。"
+    # オーナー宛の内部通知（購読者宛てではない）。重要度バッジ付きHTMLで送る。
+    try:
+        mail_body = {
+            "Text": {"Data": alert_mail.render_text(subject, body_text, level="info", action=action), "Charset": "UTF-8"},
+            "Html": {"Data": alert_mail.render_html(subject, body_text, service=SERVICE_NAME, source="LP事前登録",
+                                                    level="info", action=action), "Charset": "UTF-8"},
+        }
+    except Exception:
+        logger.warning("owner notification render failed; sending plain text")
+        mail_body = {"Text": {"Data": body_text, "Charset": "UTF-8"}}
     ses.send_email(
         Source=sender_email,
         Destination={"ToAddresses": [notify_email]},
         Message={
-            "Subject": {"Data": f"【{SERVICE_NAME}】事前登録が確認されました", "Charset": "UTF-8"},
-            "Body": {
-                "Text": {"Data": body_text, "Charset": "UTF-8"},
-                "Html": {"Data": body_html, "Charset": "UTF-8"},
-            },
+            "Subject": {"Data": subject, "Charset": "UTF-8"},
+            "Body": mail_body,
         },
         ConfigurationSetName=SES_CONFIGURATION_SET_NAME,
     )
