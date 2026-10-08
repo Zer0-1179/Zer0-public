@@ -84,30 +84,70 @@ def send_error_email(subject: str, body: str):
 
 
 # ── Binance API ────────────────────────────────────────────────────────────────
-def fetch_binance(symbol: str) -> list[dict]:
-    """Binance から 4h 足を KLINES_LIMIT 本取得して辞書リストで返す。
-    ホストを変えながら BINANCE_HOSTS を順に試行する（同一ホスト再試行はしない）。"""
-    params = urllib.parse.urlencode({
-        "symbol": symbol, "interval": INTERVAL, "limit": KLINES_LIMIT,
-    })
+# HTTP 418（IPバン）/429（レート制限）は送信元IP単位で全ホスト共通に効くため、
+# ホストを変えても無駄で、叩き続けるとバン期間が延びる。即座にローテーションを打ち切り、
+# Retry-After が待機予算内なら1回だけ待って再試行する。
+# Lambda（VPC外）の送信元IPはAWS共有IPのため、本Botの呼出量（4時間毎4リクエスト）と無関係に
+# 同じIPを使う他者の過剰アクセスでバンされることがある（2026-10-07 09:00に実例）。
+BAN_STATUS_CODES  = (418, 429)
+BAN_WAIT_BUDGET_S = 60     # 1回の起動で待機に使ってよい合計秒数（Lambdaタイムアウト120秒内に収める）
+_ban_wait_left    = BAN_WAIT_BUDGET_S
 
+
+class BinanceBanError(RuntimeError):
+    """Binance が送信元IPをバン/レート制限している（418/429）。時間経過で自然復旧する。"""
+
+
+def _fetch_binance_raw(symbol: str, params: str):
+    """全ホストを順に試行する。418/429 を受けたら BinanceBanError を送出する。"""
     last_err = "不明"
     for i, host in enumerate(BINANCE_HOSTS):
         url = f"{host}{BINANCE_PATH}?{params}"
         try:
             with urllib.request.urlopen(url, timeout=15) as resp:
-                data = json.loads(resp.read())
-            break
+                return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             last_err = f"HTTP {e.code}"
             log(f"Binance取得失敗({symbol}, {host}): {last_err}")
+            if e.code in BAN_STATUS_CODES:
+                retry_after = None
+                try:
+                    retry_after = int(e.headers.get("Retry-After")) if e.headers else None
+                except (TypeError, ValueError):
+                    pass
+                err = BinanceBanError(
+                    f"Binance がIPバン/レート制限中({symbol}): {last_err}"
+                    + (f", Retry-After={retry_after}秒" if retry_after is not None else "")
+                )
+                err.retry_after = retry_after
+                raise err
         except Exception as e:
             last_err = str(e)
             log(f"Binance取得失敗({symbol}, {host}): {last_err}")
         if i < len(BINANCE_HOSTS) - 1:
             time.sleep(1)
-    else:
-        raise RuntimeError(f"Binance 全ホスト取得失敗({symbol}): {last_err}")
+    raise RuntimeError(f"Binance 全ホスト取得失敗({symbol}): {last_err}")
+
+
+def fetch_binance(symbol: str) -> list[dict]:
+    """Binance から 4h 足を KLINES_LIMIT 本取得して辞書リストで返す。
+    ホストを変えながら BINANCE_HOSTS を順に試行する（同一ホスト再試行はしない）。
+    418/429 は Retry-After が待機予算内なら1回だけ待って再試行する。"""
+    global _ban_wait_left
+    params = urllib.parse.urlencode({
+        "symbol": symbol, "interval": INTERVAL, "limit": KLINES_LIMIT,
+    })
+
+    try:
+        data = _fetch_binance_raw(symbol, params)
+    except BinanceBanError as e:
+        wait = e.retry_after
+        if wait is None or wait > _ban_wait_left:
+            raise
+        log(f"Binance制限中のため {wait}秒待って再試行({symbol})")
+        _ban_wait_left -= wait
+        time.sleep(wait)
+        data = _fetch_binance_raw(symbol, params)
 
     return [
         {
@@ -252,6 +292,8 @@ def analyze_coin(symbol: str, direction: str) -> dict | None:
 
 # ── メイン ────────────────────────────────────────────────────────────────────
 def lambda_handler(event, context):
+    global _ban_wait_left
+    _ban_wait_left = BAN_WAIT_BUDGET_S  # ウォームスタートでも起動ごとに待機予算をリセット
     log("Analyzer 開始")
     signals = []
     market_direction = "unknown"
@@ -285,6 +327,16 @@ def lambda_handler(event, context):
                     f"コイン分析中にエラーが発生しました。\n\nコイン: {pair_jpy}\nエラー: {e}",
                 )
 
+    except BinanceBanError as e:
+        log(f"Binance制限で分析スキップ: {e}")
+        analysis_error = e
+        send_error_email(
+            "【Zer0-CryptoBot】Analyzer 分析スキップ（Binance一時制限）",
+            "Binance がLambdaの送信元IP（AWS共有IP）をバン/レート制限しているため、今回の4時間足分析をスキップしました。"
+            "本Botの呼出量が原因ではなく、時間経過で自然復旧します（次回起動で自動再試行）。"
+            "Executorはポジション管理のため継続起動します。\n\n"
+            f"エラー: {e}",
+        )
     except Exception as e:
         log(f"致命的エラー: {e}")
         analysis_error = e
