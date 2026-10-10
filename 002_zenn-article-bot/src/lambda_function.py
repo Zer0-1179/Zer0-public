@@ -803,12 +803,12 @@ def validate_article(article_text: str, char_count: int) -> list[str]:
     issues = []
     lines = article_text.splitlines()
 
-    # 2026-10-10〜 目安は400〜500文字（ハンズオンなし）。AWS CLIコマンドの必須チェックは廃止した。
+    # 2026-10-10〜 目安は500文字程度（ハンズオンなし）。AWS CLIコマンドの必須チェックは廃止した。
     # 超過・不足とも止めずにメールで警告だけ出す
     if char_count < 250:
-        issues.append(f"文字数が目安(400〜500文字程度)に対して少なすぎます: {char_count:,}文字")
+        issues.append(f"文字数が目安(500文字程度)に対して少なすぎます: {char_count:,}文字")
     elif char_count > 800:
-        issues.append(f"文字数が目安(400〜500文字程度)を大きく超えています: {char_count:,}文字")
+        issues.append(f"文字数が目安(500文字程度)を大きく超えています: {char_count:,}文字")
     if "aws " in article_text and "--region" not in article_text:
         issues.append("AWS CLIコマンドに --region の明示が見当たりません")
 
@@ -1075,7 +1075,7 @@ def run(dry_run: bool = False):
 
     # Step 3: 記事生成
     _t = time.time()
-    print("Step 3: 記事を生成中（400〜500文字程度）...")
+    print("Step 3: 記事を生成中（500文字程度）...")
     article, title, is_truncated, gen_meta = generate_article(topic, today, angle)
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")

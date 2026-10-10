@@ -139,7 +139,7 @@ def test_validate_article_flags_too_short():
 
 
 def test_validate_article_flags_too_long():
-    """目安(400〜500文字)を大きく超える記事（800文字超）を警告すること（2026-10-10〜）"""
+    """目安(500文字程度)を大きく超える記事（800文字超）を警告すること（2026-10-10〜）"""
     article = "## はじめに\n\n## まとめ\n"
     issues = lambda_function.validate_article(article, 1200)
     assert any("超えています" in i for i in issues)
