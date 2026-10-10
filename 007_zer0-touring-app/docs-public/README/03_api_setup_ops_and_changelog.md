@@ -208,6 +208,6 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 #### 構成図ダークモード対策が再発していたのを発見・再修正（本番）
 
-- 100_Ritsuan配下プロジェクトの構成図調査を機に001〜008・010を横断確認したところ、本番公開SVG（004_portfolioの`src/public/images/007_architecture.svg`）に`light-dark(`が23箇所残存し、2026-09-07に修正したはずのダークモード表示崩れバグ（そもそも007で最初に見つかったバグ）が再発していたことが判明した
+- 非公開プロジェクトの構成図調査を機に001〜008を横断確認したところ、本番公開SVG（004_portfolioの`src/public/images/007_architecture.svg`）に`light-dark(`が23箇所残存し、2026-09-07に修正したはずのダークモード表示崩れバグ（そもそも007で最初に見つかったバグ）が再発していたことが判明した
 - 原因はプロジェクトローカル版`build_architecture_flowdot.py`の`force_light_mode()`が2026-09-07の`_strip_light_dark()`強化を取り込んでおらず、後日の構成図再編集時に古いロジックで再生成し修正が上書きされていたこと。`_strip_light_dark()`を直接適用して除去（23箇所→0）、ローカル版スクリプトも最新ロジックへ更新した
 - `bash 004_portfolio/scripts/deploy.sh`で本番デプロイ後、本番URLから画像を取得しローカルとのMD5一致・`light-dark(`残存数0件を確認済み。詳細は[CHANGELOG.md](../CHANGELOG.md)参照
