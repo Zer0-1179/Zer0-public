@@ -73,9 +73,10 @@ def test_build_prompt_no_diagram_marker_and_keeps_sections():
     for _ in range(30):
         result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
         assert "DIAGRAM" not in result
-        assert "## 各コンポーネントの選定理由" in result
-        assert "## 構成手順" in result
+        assert "## 構成と流れ" in result
+        assert "## ハンズオン" in result
         assert "## はじめに" in result
+        assert "1,000文字程度" in result
 
 
 def test_build_prompt_opening_style_varies():
@@ -90,15 +91,25 @@ def test_build_prompt_opening_style_varies():
     assert len(seen) >= 2, "書き出しスタイルが1種類しか選ばれていません"
 
 
-def test_build_prompt_section_order_varies():
-    """選定理由と構成手順の並び順が両方向とも出現すること"""
-    orders = set()
-    for _ in range(100):
-        result = lambda_function.build_article_prompt(_prompt_topic(), "2026-01-01", "")
-        idx_components = result.index("## 各コンポーネントの選定理由")
-        idx_steps = result.index("## 構成手順")
-        orders.add(idx_components < idx_steps)
-    assert orders == {True, False}
+def test_count_prose_chars_excludes_code_blocks():
+    """文字数目安の判定はコードブロックを除いた文章だけで行うこと（2026-10-10〜）"""
+    article = "## はじめに\nあいう\n```bash:例\naws s3 ls --region ap-northeast-1\n```\nえお"
+    assert lambda_function.count_prose_chars(article) == len("## はじめに\nあいう\n\nえお")
+
+
+def test_validate_article_quality_flags_long_prose():
+    """文章が目安（1,000文字程度）を大きく超える場合に警告すること"""
+    article = "## はじめに\n## 構成と流れ\n## ハンズオン\n## まとめ\n## 参考\n" + "あ" * 1600
+    issues = lambda_function.validate_article_quality(article)
+    assert any("大きく超えています" in i for i in issues)
+
+
+def test_validate_article_quality_ignores_long_code():
+    """コードが長くても文章が目安内なら文字数警告を出さないこと"""
+    article = ("## はじめに\n## 構成と流れ\n## ハンズオン\n## まとめ\n## 参考\n" + "あ" * 900
+               + "\n```bash:例\n" + "echo x\n" * 500 + "```\n")
+    issues = lambda_function.validate_article_quality(article)
+    assert not any("文字" in i for i in issues)
 
 
 def test_inject_reference_link_covers_all_services():

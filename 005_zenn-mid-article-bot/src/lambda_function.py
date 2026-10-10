@@ -52,7 +52,7 @@ SSM_PARAM_OCCURRENCE = "/mid-article-bot/topic-occurrence"
 
 # ─── Bedrock 呼び出しパラメータ（定数化） ────────────────────────────────────
 BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
-ARTICLE_MAX_TOKENS        = 24000     # 記事本文生成用
+ARTICLE_MAX_TOKENS        = 8000      # 記事本文生成用（2026-10-10〜1,000文字程度の短い記事のため縮小）
 # Claude Sonnet 4.6 概算単価（USD / 100万トークン）
 SONNET_INPUT_COST_PER_MTOK  = 3.0
 SONNET_OUTPUT_COST_PER_MTOK = 15.0
@@ -538,8 +538,12 @@ _ZENN_META: dict[str, dict] = {
 
 ARTICLE_PROMPT_TEMPLATE = """
 あなたはZennで多くの「いいね」を獲得している技術ライターです。
-「読んでよかった」と思わせるアーキテクチャ解説記事を書いてください。
-テンプレートを埋める作業ではなく、設計判断の背景まで伝える記事です。
+「読んでよかった」と思わせる、短いハンズオン記事を書いてください。
+
+**最優先事項: 文章（コードブロックを除く）は1,000文字程度（長くても1,300文字以内）。
+長い記事は読まれないため、見出しは下記の「はじめに」「構成と流れ」「ハンズオン」「まとめ」「参考」の5つだけにし、
+超えそうな場合は説明を削ってでも収めること。網羅性より短さを優先する。
+コードもハンズオンに必要な最小限に絞る（コマンドの羅列で記事を長くしない）。**
 
 ## テーマ
 {topic_name}：{topic_subtitle}
@@ -548,7 +552,7 @@ ARTICLE_PROMPT_TEMPLATE = """
 {services}
 
 **構成図との整合性（必須）**: 構成図は上記サービスの並び・接続関係から機械的に生成される。
-本文の「アーキテクチャ概要」「データ・リクエストの流れ」で説明する構成は、上記サービス一覧に
+本文の「構成と流れ」で説明する構成は、上記サービス一覧に
 含まれる範囲・関係性と一致させること。上記に無いサービスへの分岐（例: 記載のないSQSへの
 ファンアウト、記載のない並列処理）を本文で言及しない。
 
@@ -558,14 +562,14 @@ ARTICLE_PROMPT_TEMPLATE = """
 {docs_section}
 ## 読者像
 AWSの基本サービス（EC2/S3/IAM）は使ったことがある中級者。
-複数サービスを組み合わせた実践的な構成を、「なぜその設計か」まで理解したい。
+複数サービスを組み合わせた構成を、短時間で手を動かして体験したい。
 
 ---
 
 ## 品質の原則
 
 **書くこと**
-- 「なぜこのサービスを選んだか」「代替案と比べてどう違うか」を必ず示す
+- 「なぜこのサービスを選んだか」を一言添える
 - 具体的な数字・コマンド・レスポンス例で語る（「スケールします」ではなく「同時実行数が〜まで」）
 - 1文1意。長い複文は分割する
 - 「〜できます」（「〜することができます」は使わない）
@@ -584,90 +588,35 @@ AWSの基本サービス（EC2/S3/IAM）は使ったことがある中級者。
 
 ---
 
-## Zenn Markdown記法（効果的な場面でのみ使う）
+## Zenn Markdown記法（短い記事のため最小限にする）
 
-**テーブル**: サービス比較・料金・オプション一覧など読者の判断を助ける場面
-**:::message**: 設計上の重要な判断ポイントのみ（乱発しない）
-**:::message alert**: コスト・セキュリティの具体的な注意（「注意してください」だけでなく何に注意するかを書く）
-**:::details**: 読まなくてもメインが理解できる応用設定・トラブルシューティング
-**コードブロック**: 言語またはファイル名を必ず指定する
-
-使用例:
-:::message
-重要な設計判断ポイント（読者が見落としやすいこと）
-:::
-
-:::message alert
-コスト・セキュリティの注意（具体的に書く）
-:::
-
-:::details 本番環境向けの追加設定
-補足内容
-:::
-
-```bash:ステップ例
-# ── ①IAMロールを作成する ──────────────────────
-aws iam create-role --role-name my-app-role \\
-  --assume-role-policy-document file://trust-policy.json
-```
-
-```bash:動作確認
-aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
-```
+- `:::message` / `:::message alert` は記事全体で**最大2つ**まで（前後に必ず空行を入れる）
+- テーブル・`:::details`は使わない
+- コードブロックは `bash:ステップ名` のように言語またはファイル名を必ず指定する
 
 ---
 
-## 記事の見出し構成（この順序を基本とする）
+## 記事の見出し構成（この5見出しのみ。他の見出しは追加しない）
 
-アーキテクチャ解説記事として自然な流れを保つため、以下の順序を基本とする。
-テーマの特性に応じてセクションの統合・分割・改題は自由。
-
-### ## はじめに
+### ## はじめに（2〜3文のみ）
 {opening_style}
   - 指定された切り口はアプローチの指示であり、例文の転写ではなく自分の言葉で具体的に書く
   - 「この記事では〜を解説します」という宣言は使わない
-- この記事で「何が作れるようになるか・何を判断できるようになるか」を1〜2文で示す
-- **「この記事でわかること」を3行の箇条書きで示す**（スキマー向けの要点先出し。冒頭の課題描写のすぐ後、対象読者の前に置く）
-  - 各行は具体的な成果物・判断軸で書く（例:「{topic_name}の構成要素と役割分担」「本番運用で見落としがちなコスト・セキュリティの落とし穴」）
-  - 「〜がわかります」で統一し、抽象的な言い換えの羅列にしない
-- 対象読者と前提知識（箇条書き可）
 
-### ## アーキテクチャ概要
+### ## 構成と流れ
+- 各サービスの役割を1行ずつの箇条書きで示し、データ・リクエストの流れを1〜2文で書く
 
-構成:
-1. この構成が解決する課題と解決策の概要を段落で書く
-2. 各サービスが担う役割を1〜2行で箇条書き
-3. データ・リクエストの流れを番号付きで説明
+### ## ハンズオン
+- 前提条件は「AWSマネジメントコンソールにログイン済み（AWS CloudShellを使用）」の1行のみ（ローカル環境のセットアップは書かない）
+- 最初に `bash:変数設定` ブロックで `APP_NAME` / `REGION` を定義し、以降のコマンドで参照する
+- 手順は**3〜4ステップまで**。構成の核となる部分だけを作る（周辺の作り込みは省く）
+- 各ステップは「何をするか・なぜか」を1文＋コードブロック1つで書く
+- 最後に動作確認（コマンド1つ＋成功時の出力例）を示す
+- **クリーンアップ（末尾に必須）**: 作成したリソースを逆順に削除するコマンドを1つのコードブロックにまとめる。クリーンアップより後に新規リソースを作成するコードを置かない
+- コストが発生しやすいポイントがあれば `:::message alert` で1つだけ注記する
 
-{middle_sections}
-
-### ## 設計上の考慮ポイント
-
-構成:
-1. このセクション全体の視点を1文で紹介
-2. コスト・セキュリティ・スケーラビリティの3観点を解説:
-   - **コスト最適化**: 各サービスの料金構造と削減テクニック
-   - **セキュリティ**: IAMポリシー最小権限・暗号化・ネットワーク分離の具体的な設定
-   - **スケーラビリティ**: 高負荷時の挙動とボトルネック対策
-
-:::message alert
-コストが予想外に膨らみやすいポイントと回避策を必ず明記する
-:::
-
-### ## 月額コスト目安
-- 小規模・中規模・大規模の3パターンをテーブルで比較
-- 各サービスのコスト内訳（リクエスト数・ストレージ・データ転送）
-- コスト削減のための設定（無料枠・Savings Plans・Reserved等）
-- 「最新情報はAWS公式の料金ページで確認してください」と注記する
-- **計算根拠を必ず示す**: 単価×数量の計算式を本文またはテーブル内に明記し、合計欄は内訳の
-  単純合計と一致させる（内訳と合計が食い違わないか書き終えた後に検算する）
-- **日額と月額を混同しない**（日額の値をそのまま月額として書かない。月額換算は30日で計算する）
-- 無料枠を差し引いた実質コストなのか、フル単価での試算なのかを明示する
-
-### ## まとめ
-- **「次に何をすべきか・どう発展させるか」を中心に書く**（学んだことの箇条書き再掲は避ける）
-- このアーキテクチャが本領を発揮するシナリオと、逆に向いていないシナリオ
-- 発展として学ぶべき次のトピック（関連サービス・設計パターン）
+### ## まとめ（1〜2文のみ）
+- 「次に何をすべきか・どう発展させるか」を書く（学んだことの箇条書き再掲は避ける）
 
 ### ## 参考
 - 「## 参考」の見出しだけを書き、本文（リンク一覧）は一切書かない
@@ -692,12 +641,9 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 - 見出しは ## や ### を使ったMarkdown形式で書く（# は使わない）
 - コードやコマンドはバッククォート3つで囲み、言語名またはファイル名を指定する
 - 重要な用語は**太字**で強調する
-- AWSコンソールの操作は具体的なメニュー名やボタン名を明記する
-- 料金は2026年時点の情報を参考にし「最新情報はAWS公式サイトで確認してください」と注記する
-- CLIコマンドの実行結果は**成功時のレスポンス例を必ずコードブロックで示す**（「結果が表示されます」は使わない）
-- `:::message` や `:::details` は前後に必ず空行を入れること
+- 料金に触れる場合は断定せず幅を持たせる（「〜円程度」「〜$以下」形式）
 - コードブロック内のサンプル日付は**本日の日付（{today}）** を基準にする（`2024`や`2023`等の過去の年は使わない）
-- **文字数**: 6,000〜8,000文字程度（水増しより内容の充実を優先する）
+- **文字数**: 文章（コードブロックを除く）は1,000文字程度（長くても1,300文字以内）
 
 ---
 
@@ -714,7 +660,7 @@ aws iam get-role --role-name my-app-role --query 'Role.Arn' --output text
 
 ### AWS CLI コマンドの正確性
 - 記事内のAWS CLIコマンドは**実際に実行できるもの**を書く（オプション名・引数の誤記に注意）
-- 変数は必ず `APP_NAME=` / `REGION=` / `ACCOUNT_ID=` で記事冒頭に定義し、以降の全コマンドで参照する
+- 変数は必ず `APP_NAME=` / `REGION=` で記事冒頭に定義し、以降の全コマンドで参照する（アカウントIDが必要な場合のみ `ACCOUNT_ID=` も定義する）
 - リソースを作成したら ARN・URI を中間変数に保存し、後続コマンドで参照する
 - SNS → Lambda のイベント連携には `aws lambda add-permission` によるリソースベースポリシーの追加が必須
 - IAMポリシーはすべてファイル参照（`file://policy.json`）で記述する
@@ -746,39 +692,11 @@ _OPENING_STYLES: list[str] = [
     "- **冒頭の1〜2文は「この構成が必要になる典型シナリオ」から入る**（どんなチーム・システム規模・フェーズで必要になるかを具体的に描く）",
 ]
 
-# 「選定理由」と「構成手順」は記事として自然さを損なわない範囲で順序を入れ替えられるため、
-# 2ブロックを乱択で並べ替えて {middle_sections} に埋め込む（見出し構成の紋切り型化を防ぐ）
-_SECTION_COMPONENTS = """### ## 各コンポーネントの選定理由
-- なぜこのサービスの組み合わせを選んだか（代替案との比較をテーブルで）
-- 各サービスが解決する課題を「課題 → 解決策 → 採用理由」の形で書く
-- `:::message` で「設計のポイント」を強調する"""
-
-_SECTION_STEPS = """### ## 構成手順
-- **前提条件**: 「AWSマネジメントコンソールにログイン済み（AWS CloudShellを使用）」＋必要なIAM権限のみでよい（ローカル環境へのインストール手順は書かない）
-- **実行環境はAWS CloudShellに統一する**: AWS CLI・Python/pip・Node.js/npm・jq・zip/unzipはCloudShellにプリインストール済みのため、ローカルのセットアップ手順は不要
-  - IAM権限は「CloudShellにログインしているIAMユーザー／ロールの権限がそのまま使われる」旨を`:::message`で必ず注記する
-  - CloudShellは約20〜30分操作がないとセッションがタイムアウトする旨も注記する
-- **作業ディレクトリと変数の設定（冒頭に必須）**: `bash:変数設定` ブロックで `APP_NAME` / `REGION` / `ACCOUNT_ID` を定義する
-- **ステップ1〜5以上**: AWS CLIコマンドを中心に手順を説明する
-  - 各ステップ冒頭に `# ── ①目的 ────` 形式のセクションコメントを付ける（番号は通し番号）
-  - コードブロックは `bash:ステップ名` 形式で記述する
-  - IAMポリシー等の長いJSONはすべてファイル参照（`file://policy.json`）で記述する
-  - 変数展開が必要なJSONファイルは unquoted heredoc（`<< EOF`）を使用し、リテラルは quoted heredoc（`<< 'EOF'`）を明示的に使い分ける
-  - リソース作成後に取得した ARN・URI は変数に保存して後続コマンドで参照する
-  - 各ステップのつまずきポイントを `:::message` で注記する
-  - AWS CLIコマンドは**成功時のレスポンス例を必ずコードブロックで示す**（「結果が表示されます」は使わない）
-- **クリーンアップ（末尾に必須）**: 作成したリソースを逆順に削除するコマンドを列挙する。**クリーンアップより後に新規リソースを作成するコードを置かない**（読者が「片付け済み」と誤解したまま追加コードを実行し、リソースが残留する事故になるため）。片付け対象が複数ステップにまたがる場合は、最後のクリーンアップステップで一括削除する
-- **動作確認**: 実際に動かして確認する手順"""
-
-
 def build_article_prompt(topic: dict, today: str, docs_section: str) -> str:
-    """記事生成プロンプトを組み立てる。書き出しスタイル・
-    中盤セクション（選定理由/構成手順）の順序をコード側乱択で決定する。
+    """記事生成プロンプトを組み立てる。書き出しスタイルをコード側乱択で決定する。
+    （2026-10-10に記事を1,000文字程度の短いハンズオンへ変更し、選定理由/構成手順の
+    2セクション並べ替えは見出し固定化に伴い廃止した）
     """
-    middle_order = random.choice([
-        (_SECTION_COMPONENTS, _SECTION_STEPS),
-        (_SECTION_STEPS, _SECTION_COMPONENTS),
-    ])
     return ARTICLE_PROMPT_TEMPLATE.format(
         topic_name=topic["name"],
         topic_subtitle=topic["subtitle"],
@@ -788,7 +706,6 @@ def build_article_prompt(topic: dict, today: str, docs_section: str) -> str:
         docs_section=docs_section,
         primary_service_label=topic.get("primary_service_label", ""),
         opening_style=random.choice(_OPENING_STYLES),
-        middle_sections="\n\n".join(middle_order),
     )
 
 
@@ -1158,10 +1075,10 @@ def validate_cli_in_article(article_text: str) -> list[str]:
             issues.append(f"{label}が見つかりません")
 
     # 変数定義は記事全体から確認（変数設定ブロックは```bash外に書かれることもある）
+    # ACCOUNT_IDは短いハンズオン化（2026-10-10）で必要な場合のみ定義する扱いにしたため必須から外した
     required_in_text = {
         "APP_NAME=":   "変数設定（APP_NAME）",
         "REGION=":     "変数設定（REGION）",
-        "ACCOUNT_ID=": "変数設定（ACCOUNT_ID）",
     }
     for keyword, label in required_in_text.items():
         if keyword not in article_text:
@@ -1180,9 +1097,14 @@ def validate_cli_in_article(article_text: str) -> list[str]:
 # v2.3→v2.4でAI自動修正機能（検出→書き換え）を撤回した教訓を踏まえ、
 # ここでは機械的に検出してメールで警告するだけに留め、記事本文には一切手を加えない。
 
-_REQUIRED_HEADING_KEYWORDS = ["アーキテクチャ", "選定理由", "構成手順", "コスト", "まとめ", "参考"]
+_REQUIRED_HEADING_KEYWORDS = ["はじめに", "構成", "ハンズオン", "まとめ", "参考"]
 _BANNED_PHRASES = ["することができます", "本記事では", "ぜひ試してみてください"]
 _OUTDATED_RUNTIME_PATTERNS = ["python3.13", "python3.12", "python3.11", "nodejs20.x", "nodejs18.x"]
+
+
+def count_prose_chars(article_text: str) -> int:
+    """コードブロック（```〜```）を除いた文章部分の文字数を返す（文字数目安の判定用）"""
+    return len(re.sub(r"```.*?```", "", article_text, flags=re.DOTALL))
 
 
 def validate_article_quality(article_text: str) -> list[str]:
@@ -1212,8 +1134,12 @@ def validate_article_quality(article_text: str) -> list[str]:
         if year in article_text:
             issues.append(f"過去の年表記「{year}」が含まれています（本日の日付基準か確認してください）")
 
-    if len(article_text) < 3000:
-        issues.append(f"文字数が{len(article_text):,}文字と少なすぎます（生成失敗の可能性）")
+    # 2026-10-10〜 目安は文章（コードブロック除く）1,000文字程度。超過・不足とも検出のみ
+    prose_chars = count_prose_chars(article_text)
+    if prose_chars < 500:
+        issues.append(f"文章（コード除く）が{prose_chars:,}文字と少なすぎます（生成失敗の可能性）")
+    elif prose_chars > 1500:
+        issues.append(f"文章（コード除く）が{prose_chars:,}文字で目安（1,000文字程度）を大きく超えています")
 
     print(f"[品質検証] 機械チェック完了 / 問題{len(issues)}件")
     return issues
@@ -1275,6 +1201,7 @@ def send_email_notification(
     """SES でメール通知を送信する（MD・PNG添付付き）"""
     import html as _html
     char_count = len(article)
+    prose_chars = count_prose_chars(article)
     preview    = article[:300].replace("\n", " ")
     preview_html = _html.escape(preview)
     services_str = " + ".join(topic["services"])
@@ -1326,7 +1253,7 @@ Zennに投稿する前に内容を必ず確認してください。
 ■ 記事情報
 - テーマ: {topic['name']}（{topic['article_type']}）
 - 使用サービス: {services_str}
-- 文字数: {char_count:,}文字
+- 文字数: {char_count:,}文字（うち文章 {prose_chars:,}文字・目安1,000文字程度）
 - 生成日時: {timestamp}
 - S3保存先: {s3_url}
 
@@ -1388,7 +1315,7 @@ bash 005_Zenn_Mid_Article_Bot/scripts/download_article.sh
       <tr><td style="padding:5px;font-weight:bold;">使用サービス</td>
           <td>{services_str}</td></tr>
       <tr><td style="padding:5px;font-weight:bold;">文字数</td>
-          <td>{char_count:,}文字</td></tr>
+          <td>{char_count:,}文字（うち文章 {prose_chars:,}文字・目安1,000文字程度）</td></tr>
       <tr><td style="padding:5px;font-weight:bold;">生成日時</td>
           <td>{timestamp}</td></tr>
       {s3_row}
@@ -1544,7 +1471,7 @@ def lambda_handler(event, context):
 
     # Step 3: 記事生成
     _t = time.time()
-    print("Step 3: 記事を生成中（6,000〜8,000文字）...")
+    print("Step 3: 記事を生成中（文章1,000文字程度＋ハンズオンのコード）...")
     article, is_truncated = generate_article(topic, today, model_id)
     print(f"  記事生成完了: {len(article):,}文字 [{time.time()-_t:.1f}s]")
 
