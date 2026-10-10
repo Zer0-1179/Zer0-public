@@ -159,3 +159,4 @@ bash scripts/download_article.sh
 - `max_tokens`を8192から2048に縮小した。
 - 本番と同じHaiku 4.5でサンプルを生成し、約630文字になることを確認した（目安よりやや長め）。
 - ユニットテスト24件パス、`update-function-code`で`ZennArticleGenerator`へ反映済み。
+- 本番Lambdaのdry_run（Haiku 4.5、1件・約$0.006）で750文字・品質チェック問題なしを確認した（S3保存・メール・SSM更新なし）。
