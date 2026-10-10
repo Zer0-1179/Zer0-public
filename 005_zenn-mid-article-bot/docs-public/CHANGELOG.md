@@ -319,6 +319,7 @@
 - SES通知メール（テキスト・HTML両方）の文言を「Zennエディタで構成図PNGをアップロード」から「記事をGPTに渡し、質確認と画像生成・最適な埋め込み位置の提案を依頼する」に変更
 - デプロイパッケージから`diagram_generator.py`・`aws_icons/`・`fonts/`を除外（`deploy.sh`のzip対象を`lambda_function.py`のみに変更）。デプロイサイズが16MB→28KBに縮小。各ファイル自体は将来の再利用に備えリポジトリに残置
 - pytest 22件（DIAGRAM関連のテスト2件は前提を更新）全通過、`dry_run`実行で実機動作確認済み（`png_count: 0`で正常終了）
+
 ### Lambda Layer `matplotlib-aws-icons-mid` を削除
 
 - 上記の構成図自動生成廃止により未使用になったLambda Layerを取り外し。CFnテンプレート`cfn-mid-article-generator.yaml`から`DiagramsLayerArn`パラメータと`Layers`プロパティを削除し、`aws cloudformation deploy`でスタック更新
