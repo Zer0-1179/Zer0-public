@@ -5,7 +5,7 @@
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20S3-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
 [![Zenn](https://img.shields.io/badge/Zenn-zenn.dev%2Fzer0__infra-3EA8FF)](https://zenn.dev/zer0_infra)
-[![Cost](https://img.shields.io/badge/月額-~%240.16-green)](https://aws.amazon.com/pricing)
+[![Cost](https://img.shields.io/badge/月額-~%240.02-green)](https://aws.amazon.com/pricing)
 
 ## 概要
 
@@ -18,7 +18,7 @@
 | 画像           | Bot側では生成しない（2026-09-08〜）。GPTに記事の質確認と合わせて生成・最適配置を依頼する手動ワークフロー |
 | 重複防止       | SSM でトピック直近20件・切り口直近3件を記録、連続生成を防止 |
 | 出力先         | Amazon S3（`zer0-dev-s3/zenn-articles/`）+ SES メール通知 |
-| 月額コスト     | ~$0.16（約24円）                                          |
+| 月額コスト     | ~$0.02（約3円、2026-10-10の記事短縮後）                   |
 
 ## アーキテクチャ
 
@@ -28,7 +28,7 @@
 EventBridge Scheduler（第1・第3木曜 21:00 JST）
   └─▶ Lambda（Python 3.14 / 256MB / 900秒）
         ├─ SSM からトピック履歴（直近20件）・切り口履歴（直近3件）取得 → ランダム選択
-        ├─ Bedrock Claude Haiku（切り口をプロンプトに注入して記事本文生成 ~8,000 tokens出力）
+        ├─ Bedrock Claude Haiku（切り口をプロンプトに注入して記事本文生成 出力~700 tokens、上限2,048）
         ├─ 軽微な問題を自動修正（古いランタイム表記・h1見出し・コードブロック言語指定・--region漏れ。Bedrock再呼び出しなし）
         ├─ 記事品質チェック（文字数・Zenn記法対応。自動修正で直らない問題のみメールで警告）
         ├─ S3 PUT（MD）※ dry_run時はスキップ
@@ -41,7 +41,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 | レイヤー     | 技術                                                                                                     |
 | ------------ | -------------------------------------------------------------------------------------------------------- |
 | 実行基盤     | AWS Lambda（Python 3.14 / 256MB / 900秒）                                                                |
-| AI生成       | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 8,192） |
+| AI生成       | Amazon Bedrock **Claude Haiku 4.5**（`jp.anthropic.claude-haiku-4-5-20251001-v1:0` / max_tokens: 2,048） |
 | 画像         | Bot側では生成しない。GPTに手動で生成・配置を依頼（2026-09-08〜）                                         |
 | 状態管理     | SSM Parameter Store（トピック履歴 + 記事カウンター）                                                     |
 | ストレージ   | Amazon S3（ライフサイクル90日自動削除設定済み）                                                          |
@@ -57,7 +57,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 
 ### 2. Zenn Markdown 完全対応
 
-単純な Markdown ではなく、Zenn 独自の記法（`:::message`・`:::details`・コードタイトル付きブロック）をプロンプトに組み込み。Few-shot で出力フォーマットを固定し、Bedrock がフォーマット違反を起こさないよう制御。
+単純な Markdown ではなく、Zenn 独自の記法（`:::message`）をプロンプトに組み込み。500文字程度の短い記事のため、`:::message`/`:::message alert`は最大1つ、テーブル・`:::details`・長いコードブロックは使わせない（2026-10-10〜）。`:::`の開閉対応は品質チェックで検出する。
 
 ### 3. AWSサービス名の最新化
 
@@ -98,7 +98,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 │   ├── diagram_generator.py  # matplotlib 図生成エンジン（2026-09-08〜未使用、削除せず保管）
 │   ├── deploy.sh             # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda.py    # ユニットテスト（23件）
+│       └── test_lambda.py    # ユニットテスト（24件）
 ├── scripts/
 │   ├── build_layer.sh        # Lambda Layer ビルド
 │   ├── download_article.sh   # S3 から生成記事をローカルに取得
@@ -121,7 +121,7 @@ SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
 ## テスト / 動作確認
 
 ```bash
-# ユニットテスト（23件）
+# ユニットテスト（24件）
 cd src && python -m pytest tests/ -v
 
 # Lambda 手動実行（dry_run: S3保存・SES送信・SSM書き込みをスキップし記事生成のみプレビュー）
@@ -139,10 +139,10 @@ bash scripts/download_article.sh
 | サービス                                 | 月額                 |
 | ---------------------------------------- | -------------------- |
 | Lambda 実行（2回/月 × ~90秒 × 256MB）    | ~$0.001              |
-| Bedrock Claude Haiku（~8,000 tokens/回） | ~$0.12               |
+| Bedrock Claude Haiku（~$0.006/回 実測）  | ~$0.012              |
 | S3 ストレージ・PUT                       | ~$0.01               |
 | SES 送信（2通/月）                       | ~$0                  |
-| **合計**                                 | **~$0.16（約24円）** |
+| **合計**                                 | **~$0.02（約3円）**  |
 
 ## 変更履歴
 

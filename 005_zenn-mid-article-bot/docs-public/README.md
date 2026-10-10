@@ -5,7 +5,7 @@
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20S3-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
 [![Zenn](https://img.shields.io/badge/Zenn-zenn.dev%2Fzer0__infra-3EA8FF)](https://zenn.dev/zer0_infra)
-[![Cost](https://img.shields.io/badge/月額-~%242.7-green)](https://aws.amazon.com/pricing)
+[![Cost](https://img.shields.io/badge/月額-~%240.13-green)](https://aws.amazon.com/pricing)
 
 ## 概要
 
@@ -17,7 +17,7 @@
 | 差別化セクション | 複数サービス構成の短いハンズオン（3〜4ステップ＋クリーンアップ）         |
 | 画像             | Botは生成しない。GPTに記事の質確認と画像生成・最適配置を依頼する運用（2026-09-08〜） |
 | 使用モデル       | Amazon Bedrock **Claude Sonnet 4.6**（`jp.anthropic.claude-sonnet-4-6`） |
-| 月額コスト       | ~$2.7（約410円）                                                         |
+| 月額コスト       | ~$0.13（約20円、稼働時。2026-10-10の記事短縮後）                         |
 
 > **一時停止:** 定期生成は2027年1月まで停止中です。EventBridgeからの起動はLambdaの冒頭で即時終了するため、Bedrock・S3・SSM・SESは呼び出しません。2027年2月1日（JST）から通常どおり自動再開します。手動実行と`dry_run`は継続して利用できます。
 
@@ -28,9 +28,8 @@
 ```text
 EventBridge（毎月1日・15日 21:00 JST）
   └─▶ Lambda（Python 3.14 / 512MB / 900秒）
-        ├─ Bedrock Claude Haiku（トピック選択: ~10 tokens）
-        ├─ SSM からトピック履歴取得（直近12件除外）
-        ├─ Bedrock Claude Sonnet（記事本文生成: ~12,000 tokens出力）
+        ├─ SSM からトピック履歴取得（直近12件除外）→ コード側の乱択でトピック決定
+        ├─ Bedrock Claude Sonnet（記事本文生成: 出力~2,500 tokens、上限8,000）
         ├─ S3 PUT（MD）
         ├─ SSM PUT（トピック履歴更新）
         └─ SES（生成完了メール通知）
@@ -43,9 +42,9 @@ EventBridge（毎月1日・15日 21:00 JST）
 | ターゲット     | AWS 入門者           | AWS 実務経験者                               |
 | 文字数         | 500 文字程度         | 文章 1,000 文字程度（コード除く）            |
 | 使用モデル     | Claude Haiku 4.5     | Claude Sonnet 4.6                            |
-| トピック数     | 22種（単一サービス） | 16種（複合アーキテクチャ）                   |
+| トピック数     | 28種（単一サービス） | 24種（複合アーキテクチャ・ユースケース）     |
 | ハンズオン     | なし                 | あり（3〜4ステップ）                         |
-| 月額コスト     | ~$0.16               | ~$2.7                                        |
+| 月額コスト     | ~$0.02               | ~$0.13（稼働時）                             |
 | Lambda メモリ  | 256MB                | 512MB                                        |
 
 ## 対応トピック（24種）
@@ -75,7 +74,7 @@ EventBridge（毎月1日・15日 21:00 JST）
 
 ### 2. 512MB メモリ設定の根拠
 
-中級記事では matplotlib で生成する構成図が複合アーキテクチャのため複雑化し、256MB では OOM エラーが発生。プロファイリングにより 380〜420MB が実使用量であることを確認し、512MB に設定。
+中級記事では matplotlib で生成する構成図が複合アーキテクチャのため複雑化し、256MB では OOM エラーが発生。プロファイリングにより 380〜420MB が実使用量であることを確認し、512MB に設定。※2026-09-08に構成図の自動生成を廃止したためこの制約は解消済み（メモリは512MBのまま据え置き）。
 
 ### 3. 初級Botとのコードベース分離
 
@@ -91,11 +90,11 @@ EventBridge（毎月1日・15日 21:00 JST）
 005_Zenn_Mid_Article_Bot/
 ├── src/
 │   ├── lambda_function.py            # メインロジック
-│   ├── diagram_generator.py          # matplotlib 図生成エンジン
+│   ├── diagram_generator.py          # matplotlib 図生成エンジン（2026-09-08以降は未使用・残置）
 │   ├── deploy.sh                     # デプロイスクリプト
 │   ├── cfn-mid-article-generator.yaml
 │   └── tests/
-│       └── test_lambda.py            # ユニットテスト（22件）
+│       └── test_lambda.py            # ユニットテスト（24件）
 ├── docs/                             # 非公開（システム仕様書）
 ├── docs-public/                      # 公開（README・CHANGELOG）
 ├── scripts/                          # 補助スクリプト（Layer構築・テスト実行等）
@@ -116,11 +115,11 @@ SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
 ## テスト / 動作確認
 
 ```bash
-# ユニットテスト（22件）
+# ユニットテスト（24件）
 cd src && python -m pytest tests/ -v
 
 # Function URL でテスト実行（AWS_IAM 認証）
-aws lambda invoke --function-name zenn-mid-article-generator \
+aws lambda invoke --function-name ZennMidArticleGenerator \
   --payload '{"dry_run": true}' /tmp/out.json --region ap-northeast-1
 ```
 
@@ -129,10 +128,10 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 | サービス                                             | 月額                 |
 | ---------------------------------------------------- | -------------------- |
 | Lambda 実行（2回/月 × ~120秒 × 512MB）               | ~$0.002              |
-| Bedrock Claude Sonnet（~12,000 tokens/回・記事本文生成のみ） | ~$2.7                |
+| Bedrock Claude Sonnet（~$0.063/回 実測・記事本文生成のみ） | ~$0.13               |
 | S3 ストレージ・PUT                                   | ~$0.01               |
 | SES 送信（2通/月）                                   | ~$0                  |
-| **合計**                                             | **~$2.7（約410円）** |
+| **合計**                                             | **~$0.14（約20円、稼働時）** |
 
 ## 変更履歴
 

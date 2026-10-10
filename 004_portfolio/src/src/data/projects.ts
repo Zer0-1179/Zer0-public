@@ -79,7 +79,7 @@ export const projects: Project[] = [
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '📝',
     featured: false,
-    monthlyCost: '~$0.16',
+    monthlyCost: '~$0.02',
   },
   {
     slug: 'x-ai-bot',
@@ -169,7 +169,7 @@ export const projects: Project[] = [
     services: ['Lambda', 'Amazon Bedrock', 'S3', 'SES', 'SSM Parameter Store', 'CloudFormation'],
     emoji: '🏗️',
     featured: false,
-    monthlyCost: '~$2.8',
+    monthlyCost: '~$0.13',
   },
   {
     slug: 'cryptobot',
