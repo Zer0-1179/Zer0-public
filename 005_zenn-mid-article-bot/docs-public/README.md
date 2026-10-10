@@ -151,3 +151,4 @@ aws lambda invoke --function-name zenn-mid-article-generator \
 - `ARTICLE_MAX_TOKENS`を24000から8000に縮小した。
 - 本番と同じSonnet 4.6でサンプルを生成し、文章約1,000文字（コード込み約4,600文字）になることを確認した。
 - ユニットテスト24件パス、`update-function-code`で`ZennMidArticleGenerator`へ反映済み（定期実行は2027-02まで停止中のまま）。
+- 本番Lambdaのdry_run（Sonnet 4.6、1件・約$0.063）で5,661文字（コード込み）を確認した。品質チェックの指摘1件は内容がログに出ない作りだったため、指摘内容と文章の文字数をログに出すよう修正し再デプロイした（指摘の中身は未確認）。

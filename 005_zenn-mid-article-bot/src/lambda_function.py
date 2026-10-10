@@ -1136,6 +1136,7 @@ def validate_article_quality(article_text: str) -> list[str]:
 
     # 2026-10-10〜 目安は文章（コードブロック除く）1,000文字程度。超過・不足とも検出のみ
     prose_chars = count_prose_chars(article_text)
+    print(f"[品質検証] 文章（コード除く）{prose_chars:,}文字")
     if prose_chars < 500:
         issues.append(f"文章（コード除く）が{prose_chars:,}文字と少なすぎます（生成失敗の可能性）")
     elif prose_chars > 1500:
@@ -1519,6 +1520,9 @@ def lambda_handler(event, context):
         cfn_issues = validate_cli_in_article(article) + validate_article_quality(article)
         if cfn_issues:
             print(f"  ⚠️ 検証問題: {len(cfn_issues)}件 [{time.time()-_t:.1f}s]")
+            # dry_runではメールが送られず内容を確認できないため、ログにも出す（2026-10-11）
+            for issue in cfn_issues:
+                print(f"    - {issue}")
         else:
             print(f"  ✓ 検証問題なし [{time.time()-_t:.1f}s]")
     except Exception as e:
