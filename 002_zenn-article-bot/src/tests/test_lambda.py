@@ -132,18 +132,24 @@ def test_validate_article_detects_real_h1_heading():
 
 
 def test_validate_article_flags_too_short():
-    """3,000文字未満（内容不足・生成異常の兆候）を検出すること"""
-    article = "## はじめに\naws s3 ls --region ap-northeast-1\n\n## まとめ\n"
+    """250文字未満（内容不足・生成異常の兆候）を検出すること"""
+    article = "## はじめに\n\n## まとめ\n"
     issues = lambda_function.validate_article(article, 200)
     assert any("文字数" in i for i in issues)
 
 
-def test_validate_article_allows_long_article():
-    """内容充実を優先する方針のため、目安(4,000〜8,000文字)を超える長文は文字数エラーにしないこと
-    （2026-07-05確認: 実測で8,000〜9,500文字台の記事が生成されるため、上限超過は許容する）"""
-    article = "## はじめに\naws s3 ls --region ap-northeast-1\n\n## まとめ\n"
-    issues = lambda_function.validate_article(article, 9500)
-    assert not any("文字数" in i for i in issues)
+def test_validate_article_flags_too_long():
+    """目安(400〜500文字)を大きく超える記事（800文字超）を警告すること（2026-10-10〜）"""
+    article = "## はじめに\n\n## まとめ\n"
+    issues = lambda_function.validate_article(article, 1200)
+    assert any("超えています" in i for i in issues)
+
+
+def test_validate_article_accepts_target_length_without_cli():
+    """ハンズオン廃止によりAWS CLIコマンドが無くても、目安文字数内なら問題なしとすること"""
+    article = "## はじめに\n\n## ポイント\n\n## まとめ\n"
+    issues = lambda_function.validate_article(article, 480)
+    assert issues == []
 
 
 def test_auto_fix_replaces_old_runtime():
