@@ -104,7 +104,7 @@ if [ "$MODE" = "--full" ]; then
     aws cloudformation deploy \
         --template-file cfn-x-poster-zer0-infra.yaml \
         --stack-name "$STACK_NAME" \
-        "${OVERRIDES[@]}" \
+        ${OVERRIDES[@]+"${OVERRIDES[@]}"} \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$REGION"
     echo "  ✓ スタック デプロイ完了"

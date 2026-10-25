@@ -257,6 +257,13 @@ def test_is_noise_article_service_noise_wins_over_tokyo_exemption():
     assert lf.is_noise_article(article) is True
 
 
+def test_is_noise_article_false_for_cross_and_multi_region_ga():
+    for title in ("Amazon DynamoDB グローバルテーブルがマルチリージョン強整合性の一般提供を開始",
+                  "Amazon Aurora がクロスリージョンレプリカの一般提供を開始",
+                  "Amazon S3 がマルチリージョンアクセスポイントで新機能を提供開始"):
+        assert lf.is_noise_article({"title": title}) is False, title
+
+
 def test_is_noise_article_false_for_cross_region_feature():
     assert lf.is_noise_article({"title": "Amazon Aurora がクロスリージョンのスナップショットコピーを高速化"}) is False
 

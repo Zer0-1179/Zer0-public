@@ -47,8 +47,9 @@ INFRA_KEYWORDS = [
 # 候補から外すタイトル（地域）。他リージョン・政府/中国リージョン向けの提供拡大は東京・大阪の運用者に関係が薄い
 REGION_NOISE_PATTERNS = [
     r"GovCloud", r"Sovereign Cloud", r"中国",
-    r"リージョン.*(利用可能|提供開始|使用可能|一般提供)",
-    r"リージョン(が|を)?(拡大|増加|追加)",
+    # 「クロスリージョン」「マルチリージョン」は機能名なので地域の告知として扱わない
+    r"(?<!クロス)(?<!マルチ)リージョン.*(利用可能|提供開始|使用可能|一般提供)",
+    r"(?<!クロス)(?<!マルチ)リージョン(が|を)?(拡大|増加|追加)",
     r"(米国|欧州|アジアパシフィック|南米|カナダ|中東|アフリカ|メキシコ|イスラエル)[^(（]*[(（].*(利用可能|提供開始|使用可能|サポート|拡大)",
 ]
 # 候補から外すタイトル（サービス）。移行ツール・業界特化サービス等はインフラ系キーワードを含んでいても運用の話題ではない
@@ -725,7 +726,7 @@ def lambda_handler(event, context):
     history = load_history(ssm)
 
     # 投稿タイプをSSM履歴ベースで選択（FORCE_TYPE環境変数でテスト用に上書き可能）
-    post_type = pick_post_type(slot["types"], history.get("used_types", []))
+    post_type = pick_post_type(slot["types"], history.get("used_types") or [])
     force_type = os.environ.get("FORCE_TYPE")
     if force_type:
         if force_type in slot["types"]:
@@ -740,9 +741,9 @@ def lambda_handler(event, context):
     acc_token  = get_ssm(f"{prefix}/x-access-token")
     acc_secret = get_ssm(f"{prefix}/x-access-secret")
 
-    used_urls     = history.get("used_urls", [])
-    used_keywords = history.get("used_keywords", [])
-    used_services = history.get("used_services", {})
+    used_urls     = history.get("used_urls") or []
+    used_keywords = history.get("used_keywords") or []
+    used_services = history.get("used_services") or {}
 
     # 全RSSフィードが取得不能、またはインフラ系の記事が0件の場合のフォールバック。記事なしでも投稿自体は継続する
     # （欠投よりは、記事に依拠しない一般的なAWS Tipsを投稿する方が良いという判断）。
@@ -861,15 +862,16 @@ def lambda_handler(event, context):
             except Exception as e:
                 print(f"[X] URLリプライ投稿失敗（本文投稿は成功済みのため続行）: {e}")
 
+    save_err = None
     # スレッド途中エラーでも投稿済みツイートがあれば履歴を保存して重複防止
     if post_type != "thread_tips" or tweet_id:
         # フォールバック投稿は実記事を持たないため used_urls を汚さない
         updated_urls = used_urls + ([main["url"]] if main["url"] else [])
         history["used_urls"]  = updated_urls[-MAX_USED_URLS:]
-        updated_types = history.get("used_types", []) + [post_type]
+        updated_types = (history.get("used_types") or []) + [post_type]
         history["used_types"] = updated_types[-MAX_USED_TYPES:]
         new_keywords = extract_topic_keywords(main["title"])
-        history["used_keywords"] = (history.get("used_keywords", []) + new_keywords)[-MAX_USED_KEYWORDS:]
+        history["used_keywords"] = ((history.get("used_keywords") or []) + new_keywords)[-MAX_USED_KEYWORDS:]
         today_str = datetime.now(JST).date().isoformat()
         for kw in new_keywords:
             used_services[kw] = today_str
@@ -881,15 +883,19 @@ def lambda_handler(event, context):
             "post_type": post_type,
             "tweet_id":  tweet_id,
         }
-        history["post_log"] = (history.get("post_log", []) + [post_log_entry])[-MAX_POST_LOG:]
+        history["post_log"] = ((history.get("post_log") or []) + [post_log_entry])[-MAX_POST_LOG:]
         try:
             save_history(ssm, history)
         except Exception as e:
-            # 投稿は既に成功しているため、履歴保存の失敗で呼び出し全体を失敗扱いにしない
-            # （リトライは無効化済みだが、失敗扱いにすると誤ったアラート・調査コストを生む）
-            print(f"[History] 保存失敗（投稿は成功済みのため続行）: {e}")
+            # 投稿は成功済みだが、保存失敗を握りつぶすと投稿タイプの巡回・重複防止が気づかれないまま止まる
+            # （2026-09〜10月に6週間気づかなかった実例あり）。最後に例外を返して失敗扱いにし、SNSで通知させる。
+            # 非同期呼び出しのリトライは0なので、失敗扱いにしても二重投稿にはならない
+            print(f"[History] 保存失敗（投稿は成功済み）: {e}")
+            save_err = e
 
     if post_type == "thread_tips" and post_err:
         raise post_err
+    if save_err:
+        raise RuntimeError(f"投稿は成功したが履歴の保存に失敗: {save_err}")
 
     return {"statusCode": 200, "post_type": post_type, "tweet_id": tweet_id}

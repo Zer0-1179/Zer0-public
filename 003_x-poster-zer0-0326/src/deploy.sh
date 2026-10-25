@@ -42,7 +42,7 @@ aws cloudformation deploy \
     --parameter-overrides \
         "BedrockModelId=${BEDROCK_MODEL_ID}" \
         "SsmPrefix=${SSM_PREFIX}" \
-        "${EMAIL_OVERRIDE[@]}"
+        ${EMAIL_OVERRIDE[@]+"${EMAIL_OVERRIDE[@]}"}
 
 # Step 2: Package Lambda code into a local zip
 echo "[2/3] Packaging Lambda code..."
