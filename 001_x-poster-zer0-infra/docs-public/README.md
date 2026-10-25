@@ -181,3 +181,8 @@ bash src/deploy.sh
 - 投稿タイプを`infra_update`・`ops_benefit`・`ops_caution`・`thread_tips`の4種に刷新し、体験談の記述を禁止した
 - 公式ニュースはRSS本文、ブログは`<article>`内を事実検証の根拠に使うよう変更した
 - Xの公開アルゴリズムの重みを踏まえ、締め方の問いかけ比率を25%→40%に上げた
+
+#### 資料・構成の整合性修正
+
+- CFnテンプレートのDescriptionを現行仕様に直してスタックを更新し、`deploy.sh --full`が通知先を空文字で上書きしうる問題を修正した
+- 構成図のラベルを実装に合わせて修正し（Converse API→InvokeModel等）、使われていない旧構成図スクリプトを削除した

@@ -125,7 +125,7 @@
 
 ### 通知メールアドレスの変更
 
-- RecipientEmailを`(通知先メールアドレス)`から`(通知先メールアドレス)`に変更
+- RecipientEmail（Lambda失敗通知の宛先メールアドレス）を変更
 - CloudWatchアラーム用SNSトピック`x-poster-zer0-infra-alarms`の購読を新アドレスへ切替
 - CFnスタック`x-poster-zer0-infra`を`update-stack`でパラメータ更新・デプロイ
 
@@ -179,3 +179,12 @@
 
 - pytestを24件→53件に拡充した（巡回の偏り・履歴サイズ・地域除外・部分一致・本文抽出・HTMLエンティティ等）
 - Fable 5のコードレビューで指摘された高2件・中3件・低3件を反映した
+
+### 資料・構成の整合性修正
+
+- CFnテンプレートのDescription（「毎夜20時」「ニュース紹介系」等の旧記述）を現行仕様に直し、ResourcesとOutputsにセクションコメントを追加してスタックを更新した
+- `deploy.sh --full`が環境変数`RECIPIENT_EMAIL`未設定時に空文字で上書きし、SNS失敗通知の設定ごと削除する恐れがあったため、未設定なら前回値を引き継ぐよう修正した
+- 構成図のエッジラベルを実装に合わせて修正した（Converse API→InvokeModel、投稿済みURL→投稿履歴、RSS/Atom→RSS）
+- 使われていない旧構成図スクリプト`scripts/generate_diagram.py`と、Pythonのキャッシュフォルダを削除した
+- 公開CHANGELOGに記載されていた通知先の個人メールアドレスを伏せた
+
