@@ -232,9 +232,10 @@ aws ssm get-parameter --name "/ai_bot/reply_target_accounts" --region ap-northea
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-09-05
+### 2026-10-25
 
-#### 構成図をdraw.io「プラグイン様式」に更新
+#### 公開資料・スクリプトからの個人メールアドレス削除
 
-- 構成図の参照先を`003_architecture.png`から、より新しいdraw.io「AWS Diagramプラグイン」様式（サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル・アニメーション点線フロー）で作成した`003_architecture_plugin_flowdot.svg`に変更
-- 004ポートフォリオサイトにも同構成図を反映（PILでLANCZOS圧縮・256色パレット化したPNGとして埋め込み、本番URLとMD5一致を確認済み）
+- `src/deploy.sh`が通知先の個人メールアドレスを既定値として持っていたため削除し、環境変数`RECIPIENT_EMAIL`が未設定ならスタックの前回値を引き継ぐ方式に変更した
+- 公開CHANGELOGに記載されていた通知先メールアドレスを伏せ、公開リポジトリの過去の履歴からも削除した（001の資料監査で発見）
+- Bot自体は一時停止中のままで、AWSリソース・Lambdaコードの変更はない

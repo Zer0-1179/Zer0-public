@@ -199,3 +199,11 @@
 - 新しい構成図は`003_architecture_plugin.drawio`（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル付き）から作成・レビュー済み（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
 - 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/003_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
 - 旧`003_architecture.drawio`/`003_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）
+
+## 2026-10-25
+
+### 公開資料・スクリプトからの個人メールアドレス削除
+
+- `src/deploy.sh`が通知先の個人メールアドレスを既定値として持っていたため削除し、環境変数`RECIPIENT_EMAIL`が未設定ならスタックの前回値を引き継ぐ方式に変更した
+- 公開CHANGELOGに記載されていた通知先メールアドレスを伏せ、公開リポジトリの過去の履歴からも削除した（001の資料監査で発見）
+- Bot自体は一時停止中のままで、AWSリソース・Lambdaコードの変更はない
