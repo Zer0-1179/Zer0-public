@@ -230,7 +230,7 @@ def build_hashtags(main: dict) -> str:
             # 同義サービスの正式名称は略称タグに寄せる
             tag = {"#ElasticLoadBalancing": "#ELB", "#SystemsManager": "#SSM"}.get(tag, tag)
             norm = tag.upper()
-            # 「#Bedrock」と「#AmazonBedrock」のような包含関係の重複は最初の方（短い方）だけ残す
+            # 「#EBS」と「#ElasticBlockStore」のような同義・包含関係の重複は最初の方だけ残す
             if any(norm in s or s in norm for s in seen):
                 continue
             matched.append(tag)

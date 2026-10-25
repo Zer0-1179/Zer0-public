@@ -95,11 +95,16 @@ if [ "$MODE" = "--full" ]; then
 
     # ── 3. CloudFormation スタックをデプロイ ──────────────
     echo "[3/4] CloudFormation スタックをデプロイ..."
-    # RecipientEmail を渡すとLambda非同期呼び出し失敗時にSNSメール通知が有効になる（空なら未設定のままスキップ）
+    # RecipientEmail を渡すとLambda非同期呼び出し失敗時にSNSメール通知が有効になる。
+    # 環境変数が未設定なら上書きせず前回値を引き継ぐ（空文字で上書きするとSNS通知設定ごと削除されるため）
+    OVERRIDES=()
+    if [ -n "${RECIPIENT_EMAIL:-}" ]; then
+        OVERRIDES=(--parameter-overrides "RecipientEmail=${RECIPIENT_EMAIL}")
+    fi
     aws cloudformation deploy \
         --template-file cfn-x-poster-zer0-infra.yaml \
         --stack-name "$STACK_NAME" \
-        --parameter-overrides "RecipientEmail=${RECIPIENT_EMAIL:-}" \
+        "${OVERRIDES[@]}" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$REGION"
     echo "  ✓ スタック デプロイ完了"

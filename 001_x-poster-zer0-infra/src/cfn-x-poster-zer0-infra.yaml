@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: X Poster Bot (zer0-infra) - Lambda + EventBridge Rule (posts AWS tips to @Zer0_Infra every Mon/Thu at 20:00 JST)
+Description: X Poster Bot (zer0-infra) - Lambda + EventBridge Rule (posts AWS infrastructure updates from official JP RSS to @Zer0_Infra every Mon/Thu at 20:00 JST)
 
 # -----------------------------------------------
 # Parameters
@@ -18,6 +18,12 @@ Parameters:
 Conditions:
   HasRecipientEmail: !Not [!Equals [!Ref RecipientEmail, ""]]
 
+# -----------------------------------------------
+# Resources
+# Lambda本体・実行ロール・EventBridgeルール・失敗通知(SNS)・ロググループ。
+# ロググループはDeletionPolicy: Retainでスタック削除後もログを残す。
+# Lambdaのコードはプレースホルダーで、実コードはdeploy.shのupdate-function-codeで差し替える。
+# -----------------------------------------------
 Resources:
 
   # ── Lambda 実行ロール ────────────────────────────────
@@ -25,7 +31,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: x-poster-zer0-infra-role
-      Description: Lambda execution role for x-poster-zer0-infra (CloudWatch Logs, SSM, Bedrock)
+      Description: Lambda execution role for x-poster-zer0-infra (CloudWatch Logs, SSM, Bedrock, SNS)
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -63,7 +69,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: x-poster-zer0-infra
-      Description: BedrockでAWS技術情報ツイートを生成し、毎夜20時に@Zer0_InfraへXへ自動投稿するLambda関数
+      Description: AWS公式RSSのインフラ系アップデートをBedrockで投稿文にし、毎週月・木20時に@Zer0_InfraへXへ自動投稿するLambda関数
       Runtime: python3.14
       Handler: lambda_function.lambda_handler
       Role: !GetAtt PosterRole.Arn
@@ -84,7 +90,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: x-poster-zer0-infra-evening
-      Description: 毎週月・木 20時（JST）にURL付き・ニュース紹介系を投稿
+      Description: 毎週月・木 20時（JST）にAWS公式のインフラ系アップデートを紹介投稿
       ScheduleExpression: "cron(0 11 ? * MON,THU *)"
       State: ENABLED
       Targets:
@@ -157,6 +163,10 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${PosterFunction}"
       RetentionInDays: 7
 
+# -----------------------------------------------
+# Outputs
+# スタック作成後に参照するLambda関数名・ARN（Exportなし）。
+# -----------------------------------------------
 Outputs:
   LambdaFunctionName:
     Value: !Ref PosterFunction
