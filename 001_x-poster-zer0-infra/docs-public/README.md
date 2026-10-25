@@ -50,7 +50,7 @@ EventBridge ルール（月・木 20:00 JST）
 
 AWS公式ニュースは1日に10件以上出て、生成AIや業界特化サービスの告知が大半を占める。以前は各フィードの上位5件だけを見ていたため、インフラの話題がほとんど拾われなかった。
 
-- **全件取得してから絞り込み**: 公式ニュースは最大100件を取得し、EC2・VPC・CloudWatch・CloudFormation等の`INFRA_KEYWORDS`をタイトルに含む記事だけを候補にする
+- **全件取得してから絞り込み**: 公式ニュースは最大100件を取得し、EC2・VPC・CloudWatch・CloudFormation・ECS・Lambda等の`INFRA_KEYWORDS`をタイトルに含む記事だけを候補にする
 - **部分一致の誤検出防止**: 英数字の境界つきで判定し、「WebSocket」の中の「EBS」のような一致を拾わない
 - **関係の薄い告知の除外**: GovCloud・他リージョンへの提供拡大や、移行ツール等の運用と関係の薄いサービスを除外する。東京・大阪が対象に含まれる告知は残す
 
@@ -185,4 +185,5 @@ bash src/deploy.sh
 #### 資料・構成の整合性修正
 
 - CFnテンプレートのDescriptionを現行仕様に直してスタックを更新し、`deploy.sh --full`が通知先を空文字で上書きしうる問題を修正した
-- 構成図のラベルを実装に合わせて修正し（Converse API→InvokeModel等）、使われていない旧構成図スクリプトを削除した
+- 構成図のラベルを実装に合わせて修正し（Converse API→InvokeModel等）、使われていない旧構成図スクリプトと`images/old/`を削除した
+- 運用に直結する更新も拾うため、ECS・EKS・Fargate・Lambda・EventBridgeをインフラ系キーワードに追加した

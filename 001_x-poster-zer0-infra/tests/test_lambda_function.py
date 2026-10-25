@@ -139,6 +139,11 @@ def test_extract_topic_keywords_matches_full_load_balancer_name():
     assert "LOAD BALANCER" in lf.extract_topic_keywords("Application Load Balancer がヘッダー変換をサポート")
 
 
+def test_extract_topic_keywords_matches_container_and_serverless():
+    keywords = lf.extract_topic_keywords("Amazon ECS が LiveTaskCount を追加、AWS Lambda の再帰ループ検出が EventBridge に対応")
+    assert {"ECS", "LAMBDA", "EVENTBRIDGE"} <= set(keywords)
+
+
 def test_extract_topic_keywords_ignores_non_infra_services():
     assert lf.extract_topic_keywords("Amazon Polly に新しい音声が追加") == []
 

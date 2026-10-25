@@ -185,6 +185,11 @@
 - CFnテンプレートのDescription（「毎夜20時」「ニュース紹介系」等の旧記述）を現行仕様に直し、ResourcesとOutputsにセクションコメントを追加してスタックを更新した
 - `deploy.sh --full`が環境変数`RECIPIENT_EMAIL`未設定時に空文字で上書きし、SNS失敗通知の設定ごと削除する恐れがあったため、未設定なら前回値を引き継ぐよう修正した
 - 構成図のエッジラベルを実装に合わせて修正した（Converse API→InvokeModel、投稿済みURL→投稿履歴、RSS/Atom→RSS）
-- 使われていない旧構成図スクリプト`scripts/generate_diagram.py`と、Pythonのキャッシュフォルダを削除した
-- 公開CHANGELOGに記載されていた通知先の個人メールアドレスを伏せた
+- 使われていない旧構成図スクリプト`scripts/generate_diagram.py`、旧構成図を残していた`images/old/`、Pythonのキャッシュフォルダを削除した
+- 公開CHANGELOGに記載されていた通知先の個人メールアドレスを伏せた（003・006・007の公開資料と003の`deploy.sh`の既定値も同様に削除）
+
+### 対象サービスの追加
+
+- ECSのメトリクス無料化・Lambdaの再帰ループ検出など運用に直結する更新も拾うため、ECS・EKS・Fargate・Lambda・EventBridgeを`INFRA_KEYWORDS`に追加した
+- 2026-10-25時点のフィードで、インフラ系の候補記事が24件から31件に増えた
 

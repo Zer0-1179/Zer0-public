@@ -37,6 +37,7 @@ INFRA_KEYWORDS = [
     "Route 53", "CloudFront", "Network Firewall", "WAF", "Shield",
     "S3", "EFS", "Elastic File System", "FSx", "AWS Backup", "Storage Gateway",
     "RDS", "Aurora", "DynamoDB", "ElastiCache",
+    "ECS", "EKS", "Fargate", "Lambda", "EventBridge",
     "IAM", "Organizations", "Control Tower", "KMS", "Key Management Service", "Secrets Manager", "Certificate Manager",
     "GuardDuty", "Security Hub", "Inspector", "CloudTrail", "AWS Config",
     "CloudWatch", "CloudFormation", "Systems Manager", "SSM", "AWS Health",

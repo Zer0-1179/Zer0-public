@@ -224,7 +224,7 @@
 
 ### 通知メールアドレスの変更
 
-- AlarmEmailを`(通知先メールアドレス)`から`(通知先メールアドレス)`に変更
+- AlarmEmail（アラーム通知の宛先メールアドレス）を変更
 - CloudWatchアラーム用SNSトピック`Zer0-touring-alarms`の購読を新アドレスへ切替
 - CFnスタック`zer0-touring`を`update-stack`（`CertificateArn`/`AdminToken`/`EdgeSecret`は`UsePreviousValue=true`）でデプロイ
 

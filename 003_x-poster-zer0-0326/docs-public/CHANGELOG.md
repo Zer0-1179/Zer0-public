@@ -187,7 +187,7 @@
 
 ### 通知メールアドレスの変更
 
-- RecipientEmailを`(通知先メールアドレス)`から`(通知先メールアドレス)`に変更
+- RecipientEmail（失敗通知の宛先メールアドレス）を変更
 - CloudWatchアラーム用SNSトピック`x-poster-zer0-0326-alarms`の購読を新アドレスへ切替
 - CFnスタック`x-poster-zer0-0326`を`update-stack`でパラメータ更新・デプロイ。`src/deploy.sh`のデフォルト値も追従して修正
 
