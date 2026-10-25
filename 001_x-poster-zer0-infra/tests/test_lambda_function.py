@@ -60,6 +60,25 @@ def test_pick_post_type_falls_back_to_oldest_when_all_recent():
     assert lf.pick_post_type(types, used) == "b"
 
 
+def test_pick_post_type_picks_least_recently_used():
+    # 先頭の "a" は末尾でも使われているため、最後の使用が最も古い "b" を選ぶ
+    assert lf.pick_post_type(["a", "b", "c", "d"], ["a", "b", "c", "d", "c", "a"]) == "b"
+
+
+def test_pick_post_type_rotates_evenly_from_legacy_history():
+    # 本番の凍結履歴（旧タイプ名）から始めて、4回ごとに全タイプが1回ずつ出て連続しないこと
+    types = lf.SLOTS["evening"]["types"]
+    used = ["news_intro", "classmethod_reaction", "aws_failure", "aws_failure", "news_comparison", "thread_tips"]
+    picked = []
+    for _ in range(12):
+        t = lf.pick_post_type(types, used)
+        picked.append(t)
+        used = (used + [t])[-lf.MAX_USED_TYPES:]
+    for i in range(0, 12, 4):
+        assert sorted(picked[i:i + 4]) == sorted(types)
+    assert all(a != b for a, b in zip(picked, picked[1:]))
+
+
 # ── build_hashtags ──────────────────────────────────────────────────
 def test_build_hashtags_returns_empty_when_random_below_threshold(monkeypatch):
     monkeypatch.setattr(lf.random, "random", lambda: 0.1)  # < 0.35 → タグなし
@@ -70,6 +89,12 @@ def test_build_hashtags_returns_empty_when_random_below_threshold(monkeypatch):
 def test_build_hashtags_falls_back_to_aws_when_no_keyword_match(monkeypatch):
     monkeypatch.setattr(lf.random, "random", lambda: 0.9)  # >= 0.35 → タグ判定に進む
     article = {"title": "何か関係ないニュース", "desc": ""}
+    assert lf.build_hashtags(article) == "#AWS"
+
+
+def test_build_hashtags_ignores_partial_word_match(monkeypatch):
+    monkeypatch.setattr(lf.random, "random", lambda: 0.9)
+    article = {"title": "AgentCore Runtime が WebSocket をサポート", "desc": ""}
     assert lf.build_hashtags(article) == "#AWS"
 
 
@@ -104,6 +129,14 @@ def test_extract_topic_keywords_matches_infra_services():
     keywords = lf.extract_topic_keywords("Amazon S3 と Amazon EC2 の連携")
     assert "S3" in keywords
     assert "EC2" in keywords
+
+
+def test_extract_topic_keywords_requires_word_boundary():
+    assert lf.extract_topic_keywords("OpenSearch Dashboards の assessment 機能") == []
+
+
+def test_extract_topic_keywords_matches_full_load_balancer_name():
+    assert "LOAD BALANCER" in lf.extract_topic_keywords("Application Load Balancer がヘッダー変換をサポート")
 
 
 def test_extract_topic_keywords_ignores_non_infra_services():
@@ -159,9 +192,13 @@ def test_pick_infra_article_skips_non_infra():
     assert "CloudFormation" in lf.pick_infra_article(articles)["title"]
 
 
-def test_pick_infra_article_falls_back_when_no_infra():
+def test_pick_infra_article_raises_when_no_infra():
     articles = [{"source": "aws_news", "title": "Amazon Polly の新しい音声", "desc": ""}]
-    assert lf.pick_infra_article(articles)["title"] == "Amazon Polly の新しい音声"
+    try:
+        lf.pick_infra_article(articles)
+        assert False, "should have raised"
+    except RuntimeError:
+        pass
 
 
 def test_pick_infra_article_skips_other_region_expansion():
@@ -187,6 +224,32 @@ def test_is_noise_article_false_for_feature_update():
 
 def test_is_noise_article_true_for_parenthesized_region():
     assert lf.is_noise_article({"title": "Amazon EC2 T8i インスタンスが南米 (サンパウロ) で利用可能に"}) is True
+
+
+def test_is_noise_article_true_for_region_expansion_wording():
+    assert lf.is_noise_article({"title": "Amazon EC2 R8gd インスタンスを利用可能なリージョンが拡大"}) is True
+
+
+def test_is_noise_article_false_for_non_region_parentheses():
+    assert lf.is_noise_article({"title": "Amazon EC2 Auto Scaling (ASG) でウォームプールをサポート"}) is False
+
+
+def test_is_noise_article_false_for_generic_expansion_including_tokyo():
+    article = {"title": "Amazon CloudWatch Omni がいくつかの AWS リージョンで新たに提供開始",
+               "body": "アジアパシフィック (東京) などで利用できるようになりました"}
+    assert lf.is_noise_article(article) is False
+
+
+def test_is_noise_article_true_for_generic_expansion_without_tokyo():
+    article = {"title": "Amazon S3 Metadata が 6 つの AWS リージョンで新たに利用可能に",
+               "body": "欧州 (ミラノ) などで利用できるようになりました"}
+    assert lf.is_noise_article(article) is True
+
+
+def test_is_noise_article_service_noise_wins_over_tokyo_exemption():
+    article = {"title": "AWS Transform が Aurora PostgreSQL のクロスリージョンデプロイをさらに 7 つのリージョンでサポート",
+               "body": "アジアパシフィック (東京) を含む"}
+    assert lf.is_noise_article(article) is True
 
 
 def test_is_noise_article_false_for_cross_region_feature():
@@ -215,25 +278,76 @@ def _big_history():
 
 def test_fit_history_shrinks_under_limit():
     import json
-    h = lf.fit_history(_big_history(), max_chars=2000)
-    assert len(json.dumps(h, ensure_ascii=False)) <= 2000
+    h = lf.fit_history(_big_history(), max_bytes=2000)
+    assert len(json.dumps(h, ensure_ascii=False).encode("utf-8")) <= 2000
     assert h["used_types"] == ["infra_update", "ops_benefit", "ops_caution", "thread_tips"]
 
 
-def test_fit_history_drops_post_log_before_urls():
+def test_fit_history_drops_urls_before_post_log():
     import json
     h = _big_history()
-    limit = len(json.dumps(h, ensure_ascii=False)) - 100
-    lf.fit_history(h, max_chars=limit)
-    assert len(h["used_urls"]) == 28
-    assert len(h["post_log"]) < 20
+    limit = len(json.dumps(h, ensure_ascii=False).encode("utf-8")) - 100
+    lf.fit_history(h, max_bytes=limit)
+    assert len(h["used_urls"]) < 28
+    assert len(h["post_log"]) == 20
 
 
-def test_fit_history_keeps_newest_urls():
-    h = lf.fit_history(_big_history(), max_chars=1200)
+def test_fit_history_keeps_minimums():
+    h = lf.fit_history(_big_history(), max_bytes=1200)
+    assert len(h["used_urls"]) >= 6
+    assert len(h["post_log"]) >= 5
     assert h["used_urls"][-1].endswith("item-027/")
+
+
+def test_fit_history_handles_none_lists():
+    h = lf.fit_history({"used_urls": None, "used_types": [], "post_log": None})
+    assert h["used_urls"] == [] and h["post_log"] == []
+
+
+def test_fit_history_steady_state_keeps_post_log():
+    # 実運用相当（実フィードの平均URL長≒100文字・キーワード12件・30日内のサービス12件・post_log20件）で
+    # 上限内に収まり、post_logが削られないこと
+    import json
+    h = {
+        "used_urls": ["https://aws.amazon.com/jp/about-aws/whats-new/2026/10/" + "x" * 45 + f"{i}/" for i in range(lf.MAX_USED_URLS)],
+        "used_types": ["infra_update"] * lf.MAX_USED_TYPES,
+        "used_keywords": ["CLOUDWATCH"] * lf.MAX_USED_KEYWORDS,
+        "used_services": {f"SERVICE{i}": "2026-10-22" for i in range(12)},
+        "post_log": [{"date": "2026-10-22", "post_type": "ops_caution", "tweet_id": "2113223952919310669"}] * lf.MAX_POST_LOG,
+        "last_updated": "2026-10-22T20:00:30.925744+09:00",
+    }
+    before = json.dumps(h)
+    lf.fit_history(h)
+    assert json.dumps(h) == before
 
 
 def test_fit_history_unchanged_when_small():
     h = {"used_urls": ["u"], "used_types": ["a"], "used_keywords": [], "post_log": []}
     assert lf.fit_history(dict(h)) == h
+
+
+# ── html_to_text / fetch_article_text ──────────────────────────────────
+def test_html_to_text_unescapes_entities():
+    assert lf.html_to_text("<p>A&nbsp;&amp;&nbsp;B</p>") == "A & B"
+
+
+class _Resp:
+    def __init__(self, body):
+        self.body = body.encode("utf-8")
+    def read(self):
+        return self.body
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+
+def test_fetch_article_text_prefers_article_tag(monkeypatch):
+    page = "<nav>メニュー" + "x" * 3000 + "</nav><article><p>本文です</p></article>"
+    monkeypatch.setattr(lf.urllib.request, "urlopen", lambda req, timeout: _Resp(page))
+    assert lf.fetch_article_text("https://example.com") == "本文です"
+
+
+def test_fetch_article_text_without_article_uses_whole_page(monkeypatch):
+    monkeypatch.setattr(lf.urllib.request, "urlopen", lambda req, timeout: _Resp("<p>全体</p>"))
+    assert lf.fetch_article_text("https://example.com") == "全体"

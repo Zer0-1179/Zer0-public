@@ -1,4 +1,4 @@
-import os, json, boto3, urllib.request, xml.etree.ElementTree as ET, random, re
+import os, json, boto3, urllib.request, xml.etree.ElementTree as ET, random, re, html
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from requests_oauthlib import OAuth1
@@ -6,15 +6,16 @@ import requests
 
 JST = timezone(timedelta(hours=9))
 HISTORY_PARAM = "/xposter/posted-history"
-MAX_USED_URLS       = 28
+MAX_USED_URLS       = 10  # 14日超の記事はis_too_oldで除外されるため、週2回投稿なら直近数件で重複防止に足りる
 MAX_USED_TYPES      = 6
+MAX_USED_KEYWORDS   = 12  # 直近約6投稿分。インフラ系に絞った後は長すぎると同じサービスの記事を長期間選べなくなる
 MAX_ARTICLE_AGE_DAYS = 14
 TWEET_MAX_LEN       = 280
 MAX_POST_LOG        = 20  # 投稿タイプ別の効果測定用ログ（選択ロジックには使わない）
 URL_WEIGHTED_LEN    = 23  # Xはt.co変換で全URLを実際の長さに関わらず一律この重みで数える
-# SSM標準パラメータの上限は4096文字。超えると保存に失敗し、投稿タイプの巡回・重複防止が止まる
-# （2026-09〜10月に実際に発生し、投稿タイプがnews_introに固定された）。余裕を持たせて切り詰める
-HISTORY_MAX_CHARS   = 3800
+# SSM標準パラメータの上限は4KB。超えると保存に失敗し、投稿タイプの巡回・重複防止が止まる
+# （2026-09〜10月に実際に発生し、投稿タイプがnews_introに固定された）。余裕を持たせてバイト数で切り詰める
+HISTORY_MAX_BYTES   = 3800
 ARTICLE_BODY_CHARS  = 2500
 
 # boto3クライアントはコールドスタート時に1度だけ生成して使い回す（関数内生成を避ける）
@@ -28,29 +29,32 @@ RSS_FEEDS = [
     {"url": "https://aws.amazon.com/jp/blogs/news/feed/", "source": "aws_blog", "label": "AWSブログ", "limit": 20},
 ]
 
-# インフラ運用でよく使うサービスのキーワード（1つ以上含む記事だけを候補にし、マッチ数が多い記事を優先する）。
-# タイトル+概要への大文字部分一致で判定するため、「Config」「NAT」等の一般語に一致しやすい語は正式名称で書く
+# インフラ運用でよく使うサービスのキーワード（タイトルに1つ以上含む記事だけを候補にし、マッチ数が多い記事を優先する）。
+# 英数字の境界つきで一致判定する（「WEBSOCKET」の中のEBS等を拾わない）。「Config」等の一般語は正式名称で書く
 INFRA_KEYWORDS = [
-    "EC2", "EBS", "VPC", "Transit Gateway", "NAT Gateway", "Direct Connect", "VPN",
-    "Elastic Load Balancing", "ELB", "ALB", "NLB", "Auto Scaling",
+    "EC2", "EBS", "Elastic Block Store", "VPC", "Transit Gateway", "NAT Gateway", "Direct Connect", "VPN",
+    "Elastic Load Balancing", "Load Balancer", "ELB", "ALB", "NLB", "Auto Scaling",
     "Route 53", "CloudFront", "Network Firewall", "WAF", "Shield",
-    "S3", "EFS", "FSx", "AWS Backup", "Storage Gateway",
+    "S3", "EFS", "Elastic File System", "FSx", "AWS Backup", "Storage Gateway",
     "RDS", "Aurora", "DynamoDB", "ElastiCache",
-    "IAM", "Organizations", "Control Tower", "KMS", "Secrets Manager", "Certificate Manager",
+    "IAM", "Organizations", "Control Tower", "KMS", "Key Management Service", "Secrets Manager", "Certificate Manager",
     "GuardDuty", "Security Hub", "Inspector", "CloudTrail", "AWS Config",
     "CloudWatch", "CloudFormation", "Systems Manager", "SSM", "AWS Health",
     "Trusted Advisor", "Cost Explorer", "AWS Budgets", "Savings Plans", "Amazon Linux",
 ]
 
-# 候補から外すタイトル。他リージョン・政府/中国リージョン向けの提供拡大は東京・大阪の運用者に関係が薄く、
-# 移行ツール・業界特化サービス等はインフラ系キーワード（VPC等）を含んでいても運用の話題ではない
-NOISE_TITLE_PATTERNS = [
+# 候補から外すタイトル（地域）。他リージョン・政府/中国リージョン向けの提供拡大は東京・大阪の運用者に関係が薄い
+REGION_NOISE_PATTERNS = [
     r"GovCloud", r"Sovereign Cloud", r"中国",
     r"リージョン.*(利用可能|提供開始|使用可能|一般提供)",
-    r"\([^)]*\)\s*(リージョン)?\s*(で|に|において).*(利用可能|提供開始|使用可能|サポート|拡大)",
-    r"AWS Health(Omics|Lake|Imaging)", r"AWS Transform", r"Vercel", r"パートナー",
+    r"リージョン(が|を)?(拡大|増加|追加)",
+    r"(米国|欧州|アジアパシフィック|南米|カナダ|中東|アフリカ|メキシコ|イスラエル)[^(（]*[(（].*(利用可能|提供開始|使用可能|サポート|拡大)",
 ]
+# 候補から外すタイトル（サービス）。移行ツール・業界特化サービス等はインフラ系キーワードを含んでいても運用の話題ではない
+SERVICE_NOISE_PATTERNS = [r"AWS Health(Omics|Lake|Imaging)", r"AWS Transform", r"Vercel", r"パートナー"]
 LOCAL_REGION_WORDS = ("東京", "大阪", "すべての", "全ての", "全商用")
+# 地域名を挙げない提供拡大告知（「いくつかの」「追加の」「N つの」リージョン）は、本文に東京・大阪があれば対象にする
+GENERIC_REGION_PATTERN = r"(いくつかの|追加の|\d+\s*つの).*リージョン"
 
 SLOTS = {
     "morning": {
@@ -78,26 +82,28 @@ FEW_SHOT_EVENING = """・「今回のプロジェクトでわざわざ指定時�
 
 # 末尾の締め方パターン（投稿ごとに1つ抽選してプロンプトに注入する）
 ENDING_PATTERNS = {
-    "question": """- 締め方：読者に反応を促す問いかけで終える
-  例：「みんなどこに落ち着いてる？」「同じ経験ある人いる？」「どう対処してる？」
+    "question": """- 締め方：インフラ運用者が自分の環境を思い浮かべて答えたくなる、具体的な問いかけで終える
+  例：「みんなの環境だとこれ使う場面ある？」「今までどうやって回避してた？」「本番に入れる前に何を確認する？」
       「現場でもこんな感じ？」「もっといい方法あったら教えて」
   ※ 不自然になる場合は無理に入れなくてよい""",
     "empathy": """- 締め方：読者が「わかる」と思う一言で終える
-  例：「地味にハマりポイントなんだよな」「こういうの誰も教えてくれないやつ」
+  例：「地味に効いてきそう」「こういうの誰も教えてくれないやつ」
       「知ってると知らないとで結構差が出る」「わかる人にはわかる」""",
     "plain": """- 締め方：感想や気づきをそのまま言って普通に終わる。まとめようとしない
   例：「もっと早く知りたかった」「これは覚えておきたい」「少し試してみたくなった」
-      「思ったより簡単だった」「これ結構使えそう」""",
+      「思ったより手軽そう」「これ結構使えそう」""",
     "open": """- 締め方：きれいに締めない。言い切らずに余韻で終わってよい
   例：「まあ様子見かな」「どうなんだろな」「あとで調べる」「うーん」""",
 }
 
 
 def pick_ending_rule() -> str:
-    """締め方パターンを重み付きで1つ選ぶ（問いかけ偏重を防ぐ）。"""
+    """締め方パターンを重み付きで1つ選ぶ。
+    Xの公開アルゴリズム（xai-org/x-algorithm）ではリプライの重み（5.0）がいいね（0.66）の約7倍のため
+    問いかけを最多にする。ただし毎回だとBot感が出て「興味なし」（-52）を招くため他パターンも残す。"""
     key = random.choices(
         ["question", "empathy", "plain", "open"],
-        weights=[25, 25, 35, 15],
+        weights=[40, 25, 25, 10],
     )[0]
     return ENDING_PATTERNS[key]
 
@@ -114,22 +120,33 @@ FACT_RULE = """- 事実の正確性が最優先。サービス仕様・対応リ
 
 # インフラ運用者の目線（evening系の全タイプ共通）
 INFRA_RULE = """- 読み手はAWSのインフラ運用・保守をしているエンジニア。「運用で何が楽になるか」「何に気をつけるか」の目線で書く
+- 書き出しで「どのサービスの何が変わったか」が分かるようにする（タイムラインで流し読みされても内容が伝わるように）
 - 自分が実際に使った・試した・ハマった等の体験談は書かない（まだ試していないため）。記事を読んだ感想・気づきとして書く"""
 
 
 def is_noise_article(article: dict) -> bool:
     """他リージョンへの提供拡大など、東京・大阪の運用者に関係が薄い告知ならTrue。"""
     title = article.get("title", "")
+    if any(re.search(p, title) for p in SERVICE_NOISE_PATTERNS):
+        return True
     if any(w in title for w in LOCAL_REGION_WORDS):
         return False
-    return any(re.search(p, title) for p in NOISE_TITLE_PATTERNS)
+    if re.search(GENERIC_REGION_PATTERN, title) and any(w in article.get("body", "") for w in ("東京", "大阪")):
+        return False
+    return any(re.search(p, title) for p in REGION_NOISE_PATTERNS)
+
+
+def match_keywords(text: str) -> list:
+    """textに含まれるINFRA_KEYWORDSを大文字で返す。英数字の境界で区切られた一致のみ数える。"""
+    upper = text.upper()
+    return [kw.upper() for kw in INFRA_KEYWORDS
+            if re.search(rf"(?<![A-Z0-9]){re.escape(kw.upper())}(?![A-Z0-9])", upper)]
 
 
 def infra_score(article: dict) -> int:
     """タイトルに含むインフラ系キーワード数。0なら非インフラ記事として扱う。
     概要文だけに出るキーワード（例: 業界特化サービスの説明中の「VPC」）では主題と言えないため数えない。"""
-    title = article.get("title", "").upper()
-    return sum(1 for kw in INFRA_KEYWORDS if kw.upper() in title)
+    return len(match_keywords(article.get("title", "")))
 
 
 def is_infra_article(article: dict) -> bool:
@@ -137,14 +154,10 @@ def is_infra_article(article: dict) -> bool:
 
 
 def pick_infra_article(articles: list) -> dict:
-    """インフラ系キーワードを含む記事からスコア最大を選ぶ。該当0件なら全記事から選ぶ。"""
-    if not articles:
-        raise RuntimeError("全RSSフィードから記事が取得できませんでした")
-    scored = [(infra_score(a), a) for a in articles]
-    filtered = [(s, a) for s, a in scored if is_infra_article(a)]
+    """インフラ系キーワードを含む記事からスコア最大を選ぶ。該当0件ならRuntimeError（記事なしフォールバックへ）。"""
+    filtered = [(infra_score(a), a) for a in articles if is_infra_article(a)]
     if not filtered:
-        print("[Pick] インフラ系の記事なし。全記事から選択")
-        filtered = scored
+        raise RuntimeError("インフラ系の記事が取得できませんでした")
     filtered.sort(key=lambda x: x[0], reverse=True)
     best_score, best_article = filtered[0]
     print(f"[Pick] score={best_score} / {best_article['title'][:60]}")
@@ -164,17 +177,18 @@ def load_history(ssm_client) -> dict:
         return {"used_urls": [], "used_types": [], "used_keywords": [], "last_updated": None}
 
 
-def fit_history(history: dict, max_chars: int = HISTORY_MAX_CHARS) -> dict:
-    """JSON化した履歴がmax_chars以内に収まるまで、重要度の低い古い要素から削る。"""
+def fit_history(history: dict, max_bytes: int = HISTORY_MAX_BYTES) -> dict:
+    """JSON化した履歴がmax_bytes以内に収まるまで、古い要素から削る。"""
     def size():
-        return len(json.dumps(history, ensure_ascii=False))
-    # 効果測定ログ → 使用済みURL → キーワード の順に削る（used_typesは巡回に必須なので削らない）
-    for key, keep_min in (("post_log", 0), ("used_urls", 6), ("used_keywords", 0)):
-        items = history.get(key, [])
-        while size() > max_chars and len(items) > keep_min:
+        return len(json.dumps(history, ensure_ascii=False).encode("utf-8"))
+    # 使用済みURL → 効果測定ログ → キーワード の順に、下限を残して削る（used_typesは巡回に必須なので削らない）
+    for key, keep_min in (("used_urls", 6), ("post_log", 5), ("used_keywords", 0)):
+        items = history.get(key) or []
+        history[key] = items
+        while size() > max_bytes and len(items) > keep_min:
             items.pop(0)
-    if size() > max_chars:
-        print(f"[History] 切り詰め後も{size()}文字（上限{max_chars}）")
+    if size() > max_bytes:
+        print(f"[History] 切り詰め後も{size()}バイト（上限{max_bytes}）")
     return history
 
 
@@ -196,22 +210,22 @@ def pick_post_type(slot_types: list, used_types: list) -> str:
     unused = [t for t in slot_types if t not in recent]
     if unused:
         return random.choice(unused)
-    # 全タイプが直近に含まれている場合：recent は古い順なので先頭から探す
-    for t in recent:
-        if t in slot_types:
-            return t
-    return random.choice(slot_types)
+    # 全タイプが直近に含まれている場合：最後に使った位置が最も古いタイプを選ぶ
+    # （recentの先頭を返すと、連続で使われたタイプが先頭に残り続けて同じタイプが連投される）
+    def last_used(t):
+        return max(i for i, x in enumerate(recent) if x == t)
+    return min(slot_types, key=last_used)
 
 
 def build_hashtags(main: dict) -> str:
     """複数タグはBot感シグナルのため最大1個・35%はタグなし。"""
     if random.random() < 0.35:
         return ""
-    text = (main.get("title", "") + " " + main.get("desc", "")).upper()
+    found = match_keywords(main.get("title", "") + " " + main.get("desc", ""))
     matched = []
     seen = set()
     for kw in INFRA_KEYWORDS:
-        if kw.upper() in text:
+        if kw.upper() in found:
             tag = "#" + kw.replace(" ", "")
             # 同義サービスの正式名称は略称タグに寄せる
             tag = {"#ElasticLoadBalancing": "#ELB", "#SystemsManager": "#SSM"}.get(tag, tag)
@@ -230,14 +244,14 @@ def is_japanese(text: str) -> bool:
 
 def extract_topic_keywords(title: str) -> list:
     text = title.upper()
-    return [kw.upper() for kw in INFRA_KEYWORDS if kw.upper() in text]
+    return match_keywords(text)
 
 
 def is_topic_duplicate(article: dict, used_keywords: list) -> bool:
     keywords = extract_topic_keywords(article.get("title", ""))
     if not keywords:
         return False
-    recent = used_keywords[-40:]
+    recent = used_keywords[-MAX_USED_KEYWORDS:]
     overlap = sum(1 for kw in keywords if kw in recent)
     return overlap >= 1
 
@@ -275,9 +289,9 @@ def is_too_old(article: dict) -> bool:
     return pub < cutoff
 
 
-def html_to_text(html: str) -> str:
-    html = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
-    text = re.sub(r"<[^>]+>", " ", html)
+def html_to_text(raw: str) -> str:
+    raw = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw, flags=re.S | re.I)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", raw))
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -311,7 +325,8 @@ def verify_tweet(bedrock, body: str, title: str, article_excerpt: str, max_len: 
 【検証ルール】
 - サービス仕様・対応リージョン・料金・制限値・機能の有無などの事実主張が、根拠と矛盾していないか確認する
 - 根拠に書かれておらず、AWSの一般知識としても確実といえない事実主張は、削除するか感想・疑問の形に書き換える
-- 個人の感想・体験談・問いかけ・口調・文体・絵文字・改行はそのまま維持する
+- 投稿者自身が実際に使った・試した・ハマった等の体験の記述は、感想・疑問の形に書き換える（投稿者はまだ試していないため）
+- 個人の感想・問いかけ・口調・文体・絵文字・改行はそのまま維持する
 - {max_len}文字以内を維持する
 
 【出力形式】
@@ -372,7 +387,8 @@ def verify_thread(bedrock, tweets: list, title: str, article_excerpt: str) -> li
 【検証ルール】
 - サービス仕様・対応リージョン・料金・制限値・機能の有無などの事実主張が、根拠と矛盾していないか確認する
 - 根拠に書かれておらず、AWSの一般知識としても確実といえない事実主張は、削除するか感想・疑問の形に書き換える
-- 個人の感想・体験談・口調・文体・絵文字は維持し、ツイートの数も変えない
+- 投稿者自身が実際に使った・試した・ハマった等の体験の記述は、感想・疑問の形に書き換える（投稿者はまだ試していないため）
+- 個人の感想・口調・文体・絵文字は維持し、ツイートの数も変えない
 
 【出力形式】
 JSONのみを出力する。説明・修正理由は一切書かない。
@@ -550,7 +566,7 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 {article_excerpt}
 
 【ルール】
-- 「何ができるようになったか」を1つに絞って、専門外の人にも分かる言葉で一言で伝える
+- 「何ができるようになったか」を1つに絞って、インフラ運用者がすぐ分かる言葉で一言で伝える
 - そのあとに一言だけ感想を添える
 {INFRA_RULE}
 - 上の投稿例の人が書いたような自然な口調で
@@ -579,7 +595,7 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 
 【ルール】
 - 「これまでは〜だったのが、これからは〜」の形で、運用・保守の手間がどう変わるかを書く
-- 「これまで」の部分も記事に書いてあること、またはAWSの一般知識として確実なことだけを使う
+- 「これまで」の部分も記事に書いてあることだけを使う。記事に書いていなければ「これまでより〜」のような比較表現に留める
 {INFRA_RULE}
 - 上の投稿例の人が書いたような自然な口調で
 - 「です・ます」は使わない（常体・口語）
@@ -727,7 +743,7 @@ def lambda_handler(event, context):
     used_keywords = history.get("used_keywords", [])
     used_services = history.get("used_services", {})
 
-    # 全RSSフィードが同時に取得不能な場合のフォールバック。記事なしでも投稿自体は継続する
+    # 全RSSフィードが取得不能、またはインフラ系の記事が0件の場合のフォールバック。記事なしでも投稿自体は継続する
     # （欠投よりは、記事に依拠しない一般的なAWS Tipsを投稿する方が良いという判断）。
     is_fallback = False
     try:
@@ -735,10 +751,8 @@ def lambda_handler(event, context):
         articles = [a for a in articles if not is_too_old(a)]
         print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
         # 重複判定より先にインフラ系へ絞る（後で絞ると、重複判定で弾かれなかった非インフラ記事だけが残りうる）
-        infra = [a for a in articles if is_infra_article(a)]
-        print(f"[RSS] インフラ系{len(infra)}件")
-        if infra:
-            articles = infra
+        articles = [a for a in articles if is_infra_article(a)]
+        print(f"[RSS] インフラ系{len(articles)}件")
         unused = [a for a in articles if a["url"] not in used_urls
                   and not is_topic_duplicate(a, used_keywords)
                   and not is_service_in_cooldown(a, used_services)]
@@ -757,12 +771,12 @@ def lambda_handler(event, context):
         other_pool = [a for a in pool if a["url"] != main["url"] and is_infra_article(a)]
         news_text = "\n".join(f"[{a['label']}] {a['title']}" for a in ([main] + other_pool)[:3])
     except RuntimeError as e:
-        print(f"[Fallback] 全RSSフィード取得不可のため記事なしモードに切替: {e}")
+        print(f"[Fallback] 記事なしモードに切替: {e}")
         is_fallback = True
         post_type = "aws_tips"
         with_url  = False
         main      = {"source": "fallback", "label": "フォールバック", "title": "(記事取得不可)", "url": "", "desc": ""}
-        news_text = "（本日はRSSフィードが全て取得できませんでした。記事に依拠せず、一般的なAWS運用Tipsを書いてください）"
+        news_text = "（本日は対象の記事を取得できませんでした。記事に依拠せず、一般的なAWS運用Tipsを書いてください）"
 
     # メイン記事の本文を取得（生成のグラウンディング＋事実検証の根拠に使う）。
     # 公式ニュースはRSSの本文で足りる。ブログはRSSが冒頭の要約だけなのでページから取得する
@@ -854,13 +868,13 @@ def lambda_handler(event, context):
         updated_types = history.get("used_types", []) + [post_type]
         history["used_types"] = updated_types[-MAX_USED_TYPES:]
         new_keywords = extract_topic_keywords(main["title"])
-        history["used_keywords"] = (history.get("used_keywords", []) + new_keywords)[-40:]
+        history["used_keywords"] = (history.get("used_keywords", []) + new_keywords)[-MAX_USED_KEYWORDS:]
         today_str = datetime.now(JST).date().isoformat()
         for kw in new_keywords:
             used_services[kw] = today_str
         cutoff = (datetime.now(JST).date() - timedelta(days=30)).isoformat()
         history["used_services"] = {k: v for k, v in used_services.items() if v > cutoff}
-        # 投稿タイプ別の効果測定用ログ（直近30件）。選択ロジック（used_types）には使わない
+        # 投稿タイプ別の効果測定用ログ（直近MAX_POST_LOG件）。選択ロジック（used_types）には使わない
         post_log_entry = {
             "date":      datetime.now(JST).date().isoformat(),
             "post_type": post_type,
