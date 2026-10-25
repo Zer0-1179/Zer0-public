@@ -204,10 +204,11 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](../CHANGELOG.md) を参照。
 
-### 2026-09-22
+### 2026-10-25
 
-#### 構成図ダークモード対策が再発していたのを発見・再修正（本番）
+#### 公開資料の個人情報と仕様書の目次
 
-- 非公開プロジェクトの構成図調査を機に001〜008を横断確認したところ、本番公開SVG（004_portfolioの`src/public/images/007_architecture.svg`）に`light-dark(`が23箇所残存し、2026-09-07に修正したはずのダークモード表示崩れバグ（そもそも007で最初に見つかったバグ）が再発していたことが判明した
-- 原因はプロジェクトローカル版`build_architecture_flowdot.py`の`force_light_mode()`が2026-09-07の`_strip_light_dark()`強化を取り込んでおらず、後日の構成図再編集時に古いロジックで再生成し修正が上書きされていたこと。`_strip_light_dark()`を直接適用して除去（23箇所→0）、ローカル版スクリプトも最新ロジックへ更新した
-- `bash 004_portfolio/scripts/deploy.sh`で本番デプロイ後、本番URLから画像を取得しローカルとのMD5一致・`light-dark(`残存数0件を確認済み。詳細は[CHANGELOG.md](../CHANGELOG.md)参照
+- 公開CHANGELOGに記載されていたアラーム通知の個人アドレスを伏せ、公開リポジトリの過去の履歴からも削除した（001の資料監査で発見）
+- 仕様書の目次`docs/システム仕様書.md`を、同名フォルダ内の`docs/システム仕様書/README.md`に移した（同名のファイルとフォルダを並べないルールへの準拠）
+- CHANGELOGが400行の上限を超えるため、期間別のファイルに分割した（2026-08-09分の詳細版と重複していた要約版は削除）
+- アプリ・AWSリソースの変更はない

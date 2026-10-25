@@ -363,3 +363,27 @@ def test_fetch_article_text_prefers_article_tag(monkeypatch):
 def test_fetch_article_text_without_article_uses_whole_page(monkeypatch):
     monkeypatch.setattr(lf.urllib.request, "urlopen", lambda req, timeout: _Resp("<p>全体</p>"))
     assert lf.fetch_article_text("https://example.com") == "全体"
+
+
+# ── lambda_handler: スレッド生成失敗時のフォールバック ─────────────────────
+def test_thread_generation_failure_falls_back_to_single_post(monkeypatch):
+    monkeypatch.setenv("FORCE_TYPE", "thread_tips")
+    monkeypatch.setenv("DRY_RUN", "true")
+    monkeypatch.setattr(lf, "load_history", lambda ssm: {"used_urls": [], "used_types": []})
+    monkeypatch.setattr(lf, "get_ssm", lambda name: "x")
+    monkeypatch.setattr(lf, "fetch_rss", lambda sources: [
+        {"source": "aws_news", "label": "AWS公式ニュース", "title": "Amazon EC2 の新機能",
+         "url": "https://example.com/a", "desc": "", "body": "本文" * 150, "pub_date": ""}])
+    def boom(bedrock, prompt):
+        raise ValueError("JSON parse error")
+    monkeypatch.setattr(lf, "generate_thread", boom)
+
+    class _Body:
+        def read(self):
+            return b'{"content": [{"text": "\\u672c\\u6587\\"}"}]}'
+    class _Bedrock:
+        def invoke_model(self, modelId, body):
+            return {"body": _Body()}
+    monkeypatch.setattr(lf, "BEDROCK", _Bedrock())
+    result = lf.lambda_handler({}, None)
+    assert result["post_type"] == "infra_update"

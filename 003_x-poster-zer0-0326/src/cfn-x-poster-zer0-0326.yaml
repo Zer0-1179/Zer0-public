@@ -73,6 +73,20 @@ Resources:
                   # 同じ範囲(ai_bot/*)まで許可範囲を広げた（history/*限定のままだとAccessDeniedになる）
                   - !Sub arn:aws:ssm:ap-northeast-1:${AWS::AccountId}:parameter/ai_bot/*
 
+        # OnFailure通知はこのFunction実行ロールの権限でSNSへpublishするため、RecipientEmail設定時のみ付与する。
+        # 以前は条件付きのAWS::IAM::Policyリソース＋DependsOnだったが、RecipientEmailが空のまま新規作成すると
+        # 「Unresolved resource dependencies」で失敗するため、ロール内に!Ifで持たせる形にした（2026-10-25）。
+        # 旧リソースと同名にすると、更新時の旧リソース削除で新しい権限まで消えるため別名にしている。
+        - !If
+          - HasRecipientEmail
+          - PolicyName: x-poster-zer0-0326-sns
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: sns:Publish
+                  Resource: !Ref PosterAlarmTopic
+          - !Ref AWS::NoValue
   # Lambda function (code deployed separately via update-function-code)
   PosterFunction:
     Type: AWS::Lambda::Function
@@ -100,9 +114,8 @@ Resources:
   # 非同期呼び出しデフォルトリトライ（2回）も無効化する（二重投稿防止の多重防御）
   PosterEventInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
-    # sns:Publish権限がIAMに伝播する前にLambdaが宛先権限を検証し失敗することがあるため、
-    # ポリシーアタッチ後に作成されるよう明示的に依存させる。
-    DependsOn: PosterSnsPublishPolicy
+    # sns:Publish権限はPosterRoleのインラインポリシーに条件付きで含めている。ロール作成時に付くため、
+    # Function→Roleの暗黙の依存だけで本リソースより先に権限が存在する（DependsOn不要）。
     Properties:
       FunctionName: !Ref PosterFunction
       Qualifier: $LATEST
@@ -128,22 +141,6 @@ Resources:
       TopicArn: !Ref PosterAlarmTopic
       Protocol: email
       Endpoint: !Ref RecipientEmail
-
-  # OnFailure通知はこのFunction実行ロールの権限でDestinationConfig先へpublishするため、
-  # 実行ロール側にsns:Publish権限が必要（RecipientEmail設定時のみ）。
-  PosterSnsPublishPolicy:
-    Type: AWS::IAM::Policy
-    Condition: HasRecipientEmail
-    Properties:
-      PolicyName: x-poster-zer0-0326-sns-publish
-      Roles:
-        - !Ref PosterRole
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action: sns:Publish
-            Resource: !Ref PosterAlarmTopic
 
   # CloudWatch log group
   PosterLogGroup:

@@ -232,7 +232,8 @@ def build_hashtags(main: dict) -> str:
             # 同義サービスの正式名称は略称タグに寄せる
             tag = {"#ElasticLoadBalancing": "#ELB", "#SystemsManager": "#SSM"}.get(tag, tag)
             norm = tag.upper()
-            # 「#EBS」と「#ElasticBlockStore」のような同義・包含関係の重複は最初の方だけ残す
+            # 正規化後に同じになるタグ（例: 「#ElasticLoadBalancing」→「#ELB」と元からある「#ELB」）や、
+            # 一方が他方を含むタグは最初の方だけ残す
             if any(norm in s or s in norm for s in seen):
                 continue
             matched.append(tag)
@@ -792,9 +793,18 @@ def lambda_handler(event, context):
     bedrock = BEDROCK
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
 
+    # スレッド生成でモデル出力のJSONが読めない等の失敗時は、その回を欠投にせず通常投稿に切り替える
+    tweets = None
+    if post_type == "thread_tips":
+        try:
+            tweets = generate_thread(bedrock, prompt)
+        except Exception as e:
+            print(f"[Thread] スレッド生成失敗のため infra_update に切り替え: {e}")
+            post_type = "infra_update"
+            prompt    = build_prompt(post_type, main, news_text, article_text)
+
     if post_type == "thread_tips":
         # ── スレッド投稿：フック → 本文 → 締め＋URL の連投 ──
-        tweets = generate_thread(bedrock, prompt)
         tweets = verify_thread(bedrock, tweets, main["title"], article_text)
         # 各ツイートを280文字以内にクランプ（モデル出力が上限超過しX APIに拒否されるのを防ぐ）
         tweets = [clamp_tweet(t) for t in tweets]
