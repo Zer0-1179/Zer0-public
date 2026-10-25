@@ -33,7 +33,7 @@ export const projects: Project[] = [
     pointsJa: [
       'AWS公式RSSからインフラ系サービスの記事だけを抽出し、14日以内・未投稿の記事を段階的フィルタで絞り込み',
       '記事URLは本文に入れず投稿直後のリプライにぶら下げ、リンク入り投稿のリーチ抑制を回避',
-      'SSM Parameter Storeで投稿済みURLを管理し、重複投稿を完全排除',
+      'SSM Parameter Storeで投稿済みURLと投稿タイプを管理し、重複投稿を防止',
       'スレッド形式Tips連投（thread_tips）を投稿タイプに追加し、保存・フォロー転換を狙う',
     ],
     pointsEn: [
