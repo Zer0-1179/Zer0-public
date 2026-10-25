@@ -10,54 +10,58 @@ MAX_USED_URLS       = 28
 MAX_USED_TYPES      = 6
 MAX_ARTICLE_AGE_DAYS = 14
 TWEET_MAX_LEN       = 280
-MAX_POST_LOG        = 30  # 投稿タイプ別の効果測定用ログ（選択ロジックには使わない）
+MAX_POST_LOG        = 20  # 投稿タイプ別の効果測定用ログ（選択ロジックには使わない）
 URL_WEIGHTED_LEN    = 23  # Xはt.co変換で全URLを実際の長さに関わらず一律この重みで数える
+# SSM標準パラメータの上限は4096文字。超えると保存に失敗し、投稿タイプの巡回・重複防止が止まる
+# （2026-09〜10月に実際に発生し、投稿タイプがnews_introに固定された）。余裕を持たせて切り詰める
+HISTORY_MAX_CHARS   = 3800
+ARTICLE_BODY_CHARS  = 2500
 
 # boto3クライアントはコールドスタート時に1度だけ生成して使い回す（関数内生成を避ける）
 SSM     = boto3.client("ssm")
 BEDROCK = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
 
+# インフラ運用者向けの一次情報（AWS公式の日本語版）に絞る。
+# 公式ニュースは1日に10件以上出てAI系が大半を占めるため、上位数件ではなく全件を取得してからインフラ系で絞り込む
 RSS_FEEDS = [
-    {"url": "https://aws.amazon.com/jp/new/feed/", "source": "aws_news", "label": "AWS公式ニュース"},
-    {"url": "https://aws.amazon.com/jp/blogs/aws/feed/", "source": "aws_blog", "label": "AWSブログ"},
-    {"url": "https://dev.classmethod.jp/feed/", "source": "classmethod", "label": "クラスメソッド"},
-    {"url": "https://zenn.dev/topics/aws/feed", "source": "zenn", "label": "Zenn"},
-    {"url": "https://qiita.com/tags/aws/feed.atom", "source": "qiita", "label": "Qiita"},
+    {"url": "https://aws.amazon.com/jp/new/feed/", "source": "aws_news", "label": "AWS公式ニュース", "limit": 100},
+    {"url": "https://aws.amazon.com/jp/blogs/news/feed/", "source": "aws_blog", "label": "AWSブログ", "limit": 20},
 ]
 
-# 王道AWSサービスキーワード（マッチ数が多い記事を優先選択する）
-MAINSTREAM_KEYWORDS = [
-    "EC2", "S3", "Lambda", "RDS", "VPC", "IAM", "CloudWatch",
-    "ECS", "EKS", "Fargate", "DynamoDB", "CloudFront", "API Gateway",
-    "SQS", "SNS", "SES", "Bedrock", "CodePipeline", "CodeBuild",
+# インフラ運用でよく使うサービスのキーワード（1つ以上含む記事だけを候補にし、マッチ数が多い記事を優先する）。
+# タイトル+概要への大文字部分一致で判定するため、「Config」「NAT」等の一般語に一致しやすい語は正式名称で書く
+INFRA_KEYWORDS = [
+    "EC2", "EBS", "VPC", "Transit Gateway", "NAT Gateway", "Direct Connect", "VPN",
     "Elastic Load Balancing", "ELB", "ALB", "NLB", "Auto Scaling",
-    "Route 53", "CloudFormation", "Systems Manager", "SSM",
-    "Secrets Manager", "KMS", "WAF", "Shield", "GuardDuty",
-    "CloudTrail", "Config", "Trusted Advisor", "Cost Explorer",
-    "Glue", "Athena", "Redshift", "EMR", "Kinesis", "MSK",
-    "Step Functions", "EventBridge", "AppSync",
-    "Amazon Bedrock", "Amazon Q", "Amazon Connect",
-    "Amazon WorkSpaces", "Amazon Chime", "Amazon Lex",
-    "Amazon Polly", "Amazon Rekognition", "Amazon Transcribe",
-    "Amazon Translate", "Amazon Comprehend", "Amazon Kendra",
-    "Amazon SageMaker", "Amazon Aurora", "Amazon ElastiCache",
-    "Amazon MemoryDB", "Amazon OpenSearch", "Amazon Neptune",
-    "Amazon Timestream", "Amazon QLDB", "Amazon Macie",
-    "Amazon Inspector", "Amazon Detective", "Amazon Fraud Detector",
-    "Amazon CodeGuru", "Amazon DevOps Guru", "Amazon Lookout",
-    "Amazon Personalize", "Amazon Forecast", "Amazon Textract",
+    "Route 53", "CloudFront", "Network Firewall", "WAF", "Shield",
+    "S3", "EFS", "FSx", "AWS Backup", "Storage Gateway",
+    "RDS", "Aurora", "DynamoDB", "ElastiCache",
+    "IAM", "Organizations", "Control Tower", "KMS", "Secrets Manager", "Certificate Manager",
+    "GuardDuty", "Security Hub", "Inspector", "CloudTrail", "AWS Config",
+    "CloudWatch", "CloudFormation", "Systems Manager", "SSM", "AWS Health",
+    "Trusted Advisor", "Cost Explorer", "AWS Budgets", "Savings Plans", "Amazon Linux",
 ]
+
+# 候補から外すタイトル。他リージョン・政府/中国リージョン向けの提供拡大は東京・大阪の運用者に関係が薄く、
+# 移行ツール・業界特化サービス等はインフラ系キーワード（VPC等）を含んでいても運用の話題ではない
+NOISE_TITLE_PATTERNS = [
+    r"GovCloud", r"Sovereign Cloud", r"中国",
+    r"リージョン.*(利用可能|提供開始|使用可能|一般提供)",
+    r"\([^)]*\)\s*(リージョン)?\s*(で|に|において).*(利用可能|提供開始|使用可能|サポート|拡大)",
+    r"AWS Health(Omics|Lake|Imaging)", r"AWS Transform", r"Vercel", r"パートナー",
+]
+LOCAL_REGION_WORDS = ("東京", "大阪", "すべての", "全ての", "全商用")
 
 SLOTS = {
     "morning": {
-        "sources": ["aws_news", "aws_blog", "zenn", "qiita"],
+        "sources": ["aws_news", "aws_blog"],
         "with_url": False,
         "types": ["news_reaction", "aws_tips", "aws_question"],
     },
     "evening": {
-        "sources": ["aws_news", "aws_blog", "classmethod", "zenn", "qiita"],
+        "sources": ["aws_news", "aws_blog"],
         "with_url": True,
-        "types": ["news_intro", "aws_failure", "news_comparison", "classmethod_reaction", "thread_tips"],
+        "types": ["infra_update", "ops_benefit", "ops_caution", "thread_tips"],
     },
 }
 
@@ -108,40 +112,39 @@ HUMAN_RULE = """- 同じ言い回し・同じリズムを毎回使わない（�
 FACT_RULE = """- 事実の正確性が最優先。サービス仕様・対応リージョン・料金・制限値・機能の有無は、記事に書いてあることだけを使う
 - 記事に書かれていない仕様・数値を推測で断定しない。自信がない事実には触れない（感想・疑問の形ならOK）"""
 
-# classmethod_reaction の3パターン
-CLASSMETHOD_PATTERNS = [
-    "発見・得した系：「知らなかった、得した、これは使える」という気づきを自然に表現する",
-    "どっち派・現場どうしてる系：「みんなの現場では？」「どっち使ってる？」という問いかけを自然に盛り込む",
-    "共感・あるある系：「わかる〜」「自分もそう」という共感を誘う内容にする",
-]
+# インフラ運用者の目線（evening系の全タイプ共通）
+INFRA_RULE = """- 読み手はAWSのインフラ運用・保守をしているエンジニア。「運用で何が楽になるか」「何に気をつけるか」の目線で書く
+- 自分が実際に使った・試した・ハマった等の体験談は書かない（まだ試していないため）。記事を読んだ感想・気づきとして書く"""
 
 
-def pick_mainstream_article(articles: list) -> dict:
-    """zenn/qiita はスコア1以上のみ対象。候補0件なら公式ソースのみにフォールバック。"""
+def is_noise_article(article: dict) -> bool:
+    """他リージョンへの提供拡大など、東京・大阪の運用者に関係が薄い告知ならTrue。"""
+    title = article.get("title", "")
+    if any(w in title for w in LOCAL_REGION_WORDS):
+        return False
+    return any(re.search(p, title) for p in NOISE_TITLE_PATTERNS)
+
+
+def infra_score(article: dict) -> int:
+    """タイトルに含むインフラ系キーワード数。0なら非インフラ記事として扱う。
+    概要文だけに出るキーワード（例: 業界特化サービスの説明中の「VPC」）では主題と言えないため数えない。"""
+    title = article.get("title", "").upper()
+    return sum(1 for kw in INFRA_KEYWORDS if kw.upper() in title)
+
+
+def is_infra_article(article: dict) -> bool:
+    return infra_score(article) >= 1 and not is_noise_article(article)
+
+
+def pick_infra_article(articles: list) -> dict:
+    """インフラ系キーワードを含む記事からスコア最大を選ぶ。該当0件なら全記事から選ぶ。"""
     if not articles:
         raise RuntimeError("全RSSフィードから記事が取得できませんでした")
-    def score(article):
-        text = (article.get("title", "") + " " + article.get("desc", "")).upper()
-        return sum(1 for kw in MAINSTREAM_KEYWORDS if kw.upper() in text)
-
-    scored = [(score(a), a) for a in articles]
-
-    # zenn・qiita はスコア1以上のみ候補にする
-    filtered = [
-        (s, a) for s, a in scored
-        if a["source"] not in ("zenn", "qiita") or s >= 1
-    ]
-
-    # フォールバック：フィルタ後が空なら公式ソースのみに絞る
+    scored = [(infra_score(a), a) for a in articles]
+    filtered = [(s, a) for s, a in scored if is_infra_article(a)]
     if not filtered:
-        filtered = [
-            (s, a) for s, a in scored
-            if a["source"] in ("aws_news", "aws_blog")
-        ]
-    # 最終フォールバック：全記事
-    if not filtered:
+        print("[Pick] インフラ系の記事なし。全記事から選択")
         filtered = scored
-
     filtered.sort(key=lambda x: x[0], reverse=True)
     best_score, best_article = filtered[0]
     print(f"[Pick] score={best_score} / {best_article['title'][:60]}")
@@ -161,8 +164,23 @@ def load_history(ssm_client) -> dict:
         return {"used_urls": [], "used_types": [], "used_keywords": [], "last_updated": None}
 
 
+def fit_history(history: dict, max_chars: int = HISTORY_MAX_CHARS) -> dict:
+    """JSON化した履歴がmax_chars以内に収まるまで、重要度の低い古い要素から削る。"""
+    def size():
+        return len(json.dumps(history, ensure_ascii=False))
+    # 効果測定ログ → 使用済みURL → キーワード の順に削る（used_typesは巡回に必須なので削らない）
+    for key, keep_min in (("post_log", 0), ("used_urls", 6), ("used_keywords", 0)):
+        items = history.get(key, [])
+        while size() > max_chars and len(items) > keep_min:
+            items.pop(0)
+    if size() > max_chars:
+        print(f"[History] 切り詰め後も{size()}文字（上限{max_chars}）")
+    return history
+
+
 def save_history(ssm_client, history: dict):
     history["last_updated"] = datetime.now(JST).isoformat()
+    fit_history(history)
     ssm_client.put_parameter(
         Name=HISTORY_PARAM,
         Value=json.dumps(history, ensure_ascii=False),
@@ -192,7 +210,7 @@ def build_hashtags(main: dict) -> str:
     text = (main.get("title", "") + " " + main.get("desc", "")).upper()
     matched = []
     seen = set()
-    for kw in MAINSTREAM_KEYWORDS:
+    for kw in INFRA_KEYWORDS:
         if kw.upper() in text:
             tag = "#" + kw.replace(" ", "")
             # 同義サービスの正式名称は略称タグに寄せる
@@ -212,7 +230,7 @@ def is_japanese(text: str) -> bool:
 
 def extract_topic_keywords(title: str) -> list:
     text = title.upper()
-    return [kw.upper() for kw in MAINSTREAM_KEYWORDS if kw.upper() in text]
+    return [kw.upper() for kw in INFRA_KEYWORDS if kw.upper() in text]
 
 
 def is_topic_duplicate(article: dict, used_keywords: list) -> bool:
@@ -257,15 +275,21 @@ def is_too_old(article: dict) -> bool:
     return pub < cutoff
 
 
-def fetch_article_text(url: str, max_chars: int = 2500) -> str:
+def html_to_text(html: str) -> str:
+    html = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>", " ", html)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def fetch_article_text(url: str, max_chars: int = ARTICLE_BODY_CHARS) -> str:
     """本文取得。失敗時は空文字を返す（RSSのみで続行できるため）。"""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as r:
             html = r.read().decode("utf-8", errors="ignore")
-        html = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
-        text = re.sub(r"<[^>]+>", " ", html)
-        text = re.sub(r"\s+", " ", text).strip()
+        # AWSのページは先頭数千文字がナビゲーションで占められ、本文が抜粋に入らないため<article>内を優先する
+        m = re.search(r"<article[^>]*>(.*?)</article>", html, flags=re.S | re.I)
+        text = html_to_text(m.group(1) if m else html)
         print(f"[Article] 本文取得: {len(text)}文字 → 抜粋{min(len(text), max_chars)}文字")
         return text[:max_chars]
     except Exception as e:
@@ -512,13 +536,13 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 {ending_rule}
 - ツイート本文のみ出力"""
 
-    elif post_type == "news_intro":
-        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調・温度感を完全に真似してAWSニュースへのコメントを書いてください。
+    elif post_type == "infra_update":
+        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調・温度感を真似して、AWSのアップデートを紹介する投稿を書いてください。
 
-【実際の投稿例】
+【実際の投稿例（口調の参考）】
 {FEW_SHOT_EVENING}
 
-【今日のAWSニュース】
+【今日のAWSアップデート】
 メイン：{title}
 参考：{news_text}
 
@@ -526,34 +550,9 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 {article_excerpt}
 
 【ルール】
-- 上の投稿例の人が書いたような自然な口調で
-- 「です・ます」は使わない（常体・口語）
-- 感想や気づきをそのまま書く感じで
-- 大げさな表現・まとめっぽい締めは不要
-- 絵文字は0〜1個、多くても2個
-- URLは含めない（別途付加する）
-{length_rule}
-{HUMAN_RULE}
-{FACT_RULE}
-{ending_rule}
-- ツイート本文のみ出力"""
-
-    elif post_type == "aws_failure":
-        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調で、AWSニュースに関連した「ハマりポイント・失敗談・よくある落とし穴」を書いてください。
-
-【実際の投稿例】
-{FEW_SHOT_EVENING}
-
-【今日のAWSニュース】
-メイン：{title}
-参考：{news_text}
-
-【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
-{article_excerpt}
-
-【ルール】
-- このニュースに関連したサービスで自分がハマった・ヒヤッとした経験談や落とし穴を1つ
-- 「気をつけて」「これで詰まった」「やらかした」系の内容が理想
+- 「何ができるようになったか」を1つに絞って、専門外の人にも分かる言葉で一言で伝える
+- そのあとに一言だけ感想を添える
+{INFRA_RULE}
 - 上の投稿例の人が書いたような自然な口調で
 - 「です・ます」は使わない（常体・口語）
 - 大げさな表現・まとめっぽい締めは不要
@@ -565,13 +564,13 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 {ending_rule}
 - ツイート本文のみ出力"""
 
-    elif post_type == "news_comparison":
-        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調で、AWSニュースをもとに「比較・意見・どっち派？」系の投稿を書いてください。
+    elif post_type == "ops_benefit":
+        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調で、AWSのアップデートで「運用の何が楽になるか」を書いてください。
 
-【実際の投稿例】
+【実際の投稿例（口調の参考）】
 {FEW_SHOT_EVENING}
 
-【今日のAWSニュース】
+【今日のAWSアップデート】
 メイン：{title}
 参考：{news_text}
 
@@ -579,8 +578,37 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 {article_excerpt}
 
 【ルール】
-- このニュースに関連して「AとBどっちが好き？」「自分はこっち派」「こっちの方が実用的では？」系の意見や問いかけ
-- 読んだ人が思わず反応したくなる内容が理想
+- 「これまでは〜だったのが、これからは〜」の形で、運用・保守の手間がどう変わるかを書く
+- 「これまで」の部分も記事に書いてあること、またはAWSの一般知識として確実なことだけを使う
+{INFRA_RULE}
+- 上の投稿例の人が書いたような自然な口調で
+- 「です・ます」は使わない（常体・口語）
+- 大げさな表現・まとめっぽい締めは不要
+- 絵文字は0〜1個
+- URLは含めない（別途付加する）
+{length_rule}
+{HUMAN_RULE}
+{FACT_RULE}
+{ending_rule}
+- ツイート本文のみ出力"""
+
+    elif post_type == "ops_caution":
+        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調で、AWSのアップデートを使う前に「気をつけたい点・確認したい点」を書いてください。
+
+【実際の投稿例（口調の参考）】
+{FEW_SHOT_EVENING}
+
+【今日のAWSアップデート】
+メイン：{title}
+参考：{news_text}
+
+【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
+{article_excerpt}
+
+【ルール】
+- 対応リージョン・料金・前提条件・対象外のケースなど、使う前に確認したい点を1つ書く
+- 記事に該当する記述がない場合は、断定せず「〜は確認しておきたい」「〜はどうなんだろ」のような疑問の形にする
+{INFRA_RULE}
 - 上の投稿例の人が書いたような自然な口調で
 - 「です・ます」は使わない（常体・口語）
 - 大げさな表現・まとめっぽい締めは不要
@@ -593,22 +621,23 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 - ツイート本文のみ出力"""
 
     elif post_type == "thread_tips":
-        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調で、今日のAWSニュースに関連した実用Tips・ハマりポイントをスレッド（連投）形式で3〜4ツイート書いてください。
+        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調で、今日のAWSアップデートをインフラ運用者向けにスレッド（連投）形式で3〜4ツイートで解説してください。
 
 【実際の投稿例（口調の参考）】
 {FEW_SHOT_EVENING}
 
-【今日のAWSニュース】
+【今日のAWSアップデート】
 メイン：{title}
 
 【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
 {article_excerpt}
 
 【ルール】
-- 1ツイート目はスクロールを止めるフック（「〜で詰まった話」「〜する前に知っといた方がいいこと」「〜やらかした話」など）。末尾に「🧵」か「↓」を付ける
-- 2ツイート目以降は1ツイート1ポイントで具体的に。読んだ人が保存したくなる実用性を意識する
+- 1ツイート目はスクロールを止めるフック（「〜のアップデート、運用目線で整理してみる」「〜できるようになったの地味に大きい」など）。末尾に「🧵」か「↓」を付ける
+- 2ツイート目以降は1ツイート1ポイント（何が変わったか／運用で何が楽になるか／使う前の確認点 など）
 - 最後のツイートは軽い感想・余韻で締める（きれいにまとめない）
 - 各ツイートは120文字以内
+{INFRA_RULE}
 - 上の投稿例の口調（常体・口語）。「です・ます」禁止
 - 絵文字はスレッド全体で0〜2個
 - ハッシュタグは付けない
@@ -618,35 +647,6 @@ def build_prompt(post_type: str, main: dict, news_text: str, article_excerpt: st
 
 【出力形式】
 JSONのみ: {{"tweets": ["1ツイート目", "2ツイート目", "3ツイート目"]}}"""
-
-    elif post_type == "classmethod_reaction":
-        pattern = random.choice(CLASSMETHOD_PATTERNS)
-        return f"""以下はAWSインフラエンジニア（@Zer0_Infra）の実際のXの投稿例です。この人の口調・温度感を完全に真似して、クラスメソッドの技術記事への反応を書いてください。
-
-【実際の投稿例】
-{FEW_SHOT_EVENING}
-
-【今日の記事】
-タイトル：{title}
-参考：{news_text}
-
-【メイン記事の本文抜粋（事実はこの範囲内のことだけ書く）】
-{article_excerpt}
-
-【今回の投稿パターン】
-{pattern}
-
-【ルール】
-- 上の投稿例の人が書いたような自然な口調で
-- 「です・ます」は使わない（常体・口語）
-- 大げさな表現・まとめっぽい締めは不要
-- 絵文字は0〜1個
-- URLは含めない（別途付加する）
-{length_rule}
-{HUMAN_RULE}
-{FACT_RULE}
-{ending_rule}
-- ツイート本文のみ出力"""
 
     return ""
 
@@ -665,15 +665,18 @@ def fetch_rss(sources):
             with urllib.request.urlopen(req, timeout=10) as r:
                 tree = ET.parse(r)
             # RSS 2.0形式
-            for item in tree.findall(".//item")[:5]:
+            limit = feed.get("limit", 5)
+            for item in tree.findall(".//item")[:limit]:
                 title    = item.findtext("title", "").strip()
                 link     = item.findtext("link", "").strip()
-                desc     = item.findtext("description", "").strip()[:150]
+                # AWS公式ニュースはdescriptionに告知本文が丸ごと入っているため、生成・事実確認の根拠に使う
+                body     = html_to_text(item.findtext("description", ""))
                 pub_date = item.findtext("pubDate", "").strip()
                 if title and link:
-                    articles.append({"source": feed["source"], "label": feed["label"], "title": title, "url": link, "desc": desc, "pub_date": pub_date})
-            # Atom形式（Qiita等）
-            for entry in tree.findall(".//{http://www.w3.org/2005/Atom}entry")[:5]:
+                    articles.append({"source": feed["source"], "label": feed["label"], "title": title, "url": link,
+                                     "desc": body[:150], "body": body[:ARTICLE_BODY_CHARS], "pub_date": pub_date})
+            # Atom形式
+            for entry in tree.findall(".//{http://www.w3.org/2005/Atom}entry")[:limit]:
                 title = (entry.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
                 link  = ""
                 for lk in entry.findall("{http://www.w3.org/2005/Atom}link"):
@@ -728,43 +731,30 @@ def lambda_handler(event, context):
     # （欠投よりは、記事に依拠しない一般的なAWS Tipsを投稿する方が良いという判断）。
     is_fallback = False
     try:
-        # classmethod_reaction は classmethod ソース固定・日本語優先
-        if post_type == "classmethod_reaction":
-            articles = fetch_rss(["classmethod"])
-            articles = [a for a in articles if not is_too_old(a)]
-            print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
+        articles = fetch_rss(slot["sources"])
+        articles = [a for a in articles if not is_too_old(a)]
+        print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
+        # 重複判定より先にインフラ系へ絞る（後で絞ると、重複判定で弾かれなかった非インフラ記事だけが残りうる）
+        infra = [a for a in articles if is_infra_article(a)]
+        print(f"[RSS] インフラ系{len(infra)}件")
+        if infra:
+            articles = infra
+        unused = [a for a in articles if a["url"] not in used_urls
+                  and not is_topic_duplicate(a, used_keywords)
+                  and not is_service_in_cooldown(a, used_services)]
+        if not unused:
             unused = [a for a in articles if a["url"] not in used_urls
-                      and not is_topic_duplicate(a, used_keywords)
                       and not is_service_in_cooldown(a, used_services)]
-            if not unused:
-                unused = [a for a in articles if a["url"] not in used_urls
-                          and not is_service_in_cooldown(a, used_services)]
-            if not unused:
-                unused = [a for a in articles if a["url"] not in used_urls]
-            print(f"[Filter] pool={len(unused)}件")
-            pool   = unused if unused else articles
-            jp     = [a for a in pool if is_japanese(a["title"])]
-            main   = pick_mainstream_article(jp if jp else pool)
-        else:
-            articles = fetch_rss(slot["sources"])
-            articles = [a for a in articles if not is_too_old(a)]
-            print(f"[RSS] {len(articles)}件取得（{MAX_ARTICLE_AGE_DAYS}日以内）")
-            unused = [a for a in articles if a["url"] not in used_urls
-                      and not is_topic_duplicate(a, used_keywords)
-                      and not is_service_in_cooldown(a, used_services)]
-            if not unused:
-                unused = [a for a in articles if a["url"] not in used_urls
-                          and not is_service_in_cooldown(a, used_services)]
-            if not unused:
-                unused = [a for a in articles if a["url"] not in used_urls]
-            print(f"[Filter] pool={len(unused)}件")
-            pool   = unused if unused else articles
-            jp     = [a for a in pool if is_japanese(a["title"])]
-            if jp:
-                pool = jp
-            main   = pick_mainstream_article(pool)
+        if not unused:
+            unused = [a for a in articles if a["url"] not in used_urls]
+        print(f"[Filter] pool={len(unused)}件")
+        pool   = unused if unused else articles
+        jp     = [a for a in pool if is_japanese(a["title"])]
+        if jp:
+            pool = jp
+        main   = pick_infra_article(pool)
 
-        other_pool = [a for a in pool if a["url"] != main["url"]]
+        other_pool = [a for a in pool if a["url"] != main["url"] and is_infra_article(a)]
         news_text = "\n".join(f"[{a['label']}] {a['title']}" for a in ([main] + other_pool)[:3])
     except RuntimeError as e:
         print(f"[Fallback] 全RSSフィード取得不可のため記事なしモードに切替: {e}")
@@ -774,8 +764,13 @@ def lambda_handler(event, context):
         main      = {"source": "fallback", "label": "フォールバック", "title": "(記事取得不可)", "url": "", "desc": ""}
         news_text = "（本日はRSSフィードが全て取得できませんでした。記事に依拠せず、一般的なAWS運用Tipsを書いてください）"
 
-    # メイン記事の本文を取得（生成のグラウンディング＋事実検証の根拠に使う）
-    article_text = fetch_article_text(main["url"])
+    # メイン記事の本文を取得（生成のグラウンディング＋事実検証の根拠に使う）。
+    # 公式ニュースはRSSの本文で足りる。ブログはRSSが冒頭の要約だけなのでページから取得する
+    if main.get("source") == "aws_news" and len(main.get("body", "")) >= 200:
+        article_text = main["body"]
+        print(f"[Article] RSS本文を使用: {len(article_text)}文字")
+    else:
+        article_text = fetch_article_text(main["url"])
 
     prompt  = build_prompt(post_type, main, news_text, article_text)
     bedrock = BEDROCK

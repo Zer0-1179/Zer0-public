@@ -100,10 +100,14 @@ def test_is_too_old_false_when_unparseable():
 
 
 # ── extract_topic_keywords / is_topic_duplicate ────────────────────────
-def test_extract_topic_keywords_matches_mainstream_services():
-    keywords = lf.extract_topic_keywords("Amazon S3 と Lambda の連携")
+def test_extract_topic_keywords_matches_infra_services():
+    keywords = lf.extract_topic_keywords("Amazon S3 と Amazon EC2 の連携")
     assert "S3" in keywords
-    assert "LAMBDA" in keywords
+    assert "EC2" in keywords
+
+
+def test_extract_topic_keywords_ignores_non_infra_services():
+    assert lf.extract_topic_keywords("Amazon Polly に新しい音声が追加") == []
 
 
 def test_is_topic_duplicate_true_on_overlap():
@@ -129,28 +133,107 @@ def test_is_service_in_cooldown_false_after_window():
     assert lf.is_service_in_cooldown(article, {"S3": old}) is False
 
 
-# ── pick_mainstream_article ────────────────────────────────────────────
-def test_pick_mainstream_article_raises_on_empty():
+# ── pick_infra_article ─────────────────────────────────────────────────
+def test_pick_infra_article_raises_on_empty():
     try:
-        lf.pick_mainstream_article([])
+        lf.pick_infra_article([])
         assert False, "should have raised"
     except RuntimeError:
         pass
 
 
-def test_pick_mainstream_article_prefers_higher_keyword_score():
+def test_pick_infra_article_prefers_higher_keyword_score():
     articles = [
-        {"source": "aws_news", "title": "何かのお知らせ", "desc": ""},
-        {"source": "aws_news", "title": "Amazon EC2 と S3 の統合", "desc": "Lambda対応"},
+        {"source": "aws_news", "title": "Amazon EC2 の新機能", "desc": ""},
+        {"source": "aws_news", "title": "Amazon EC2 と Amazon EBS の統合", "desc": ""},
     ]
-    picked = lf.pick_mainstream_article(articles)
-    assert "EC2" in picked["title"]
+    picked = lf.pick_infra_article(articles)
+    assert "EBS" in picked["title"]
 
 
-def test_pick_mainstream_article_filters_low_score_zenn_qiita():
+def test_pick_infra_article_skips_non_infra():
     articles = [
-        {"source": "zenn", "title": "個人の日記", "desc": ""},
-        {"source": "aws_news", "title": "AWS re:Invent の話", "desc": ""},
+        {"source": "aws_news", "title": "Amazon Bedrock で構造化出力が利用可能に", "desc": ""},
+        {"source": "aws_news", "title": "AWS CloudFormation がロールバック操作を簡素化", "desc": ""},
     ]
-    picked = lf.pick_mainstream_article(articles)
-    assert picked["source"] == "aws_news"
+    assert "CloudFormation" in lf.pick_infra_article(articles)["title"]
+
+
+def test_pick_infra_article_falls_back_when_no_infra():
+    articles = [{"source": "aws_news", "title": "Amazon Polly の新しい音声", "desc": ""}]
+    assert lf.pick_infra_article(articles)["title"] == "Amazon Polly の新しい音声"
+
+
+def test_pick_infra_article_skips_other_region_expansion():
+    articles = [
+        {"source": "aws_news", "title": "Amazon S3 サーバーアクセスログが 5 つの追加リージョンで利用可能に", "desc": "Amazon S3 Amazon S3"},
+        {"source": "aws_news", "title": "Amazon CloudWatch アラームがタグをサポート", "desc": ""},
+    ]
+    assert "CloudWatch" in lf.pick_infra_article(articles)["title"]
+
+
+# ── is_noise_article ───────────────────────────────────────────────────
+def test_is_noise_article_true_for_govcloud():
+    assert lf.is_noise_article({"title": "Amazon Cognito が GovCloud (US) リージョンに拡張"}) is True
+
+
+def test_is_noise_article_false_when_tokyo_included():
+    assert lf.is_noise_article({"title": "Amazon EC2 T8i が東京リージョンで利用可能に"}) is False
+
+
+def test_is_noise_article_false_for_feature_update():
+    assert lf.is_noise_article({"title": "AWS Transit Gateway が 1:1 NAT をサポート"}) is False
+
+
+def test_is_noise_article_true_for_parenthesized_region():
+    assert lf.is_noise_article({"title": "Amazon EC2 T8i インスタンスが南米 (サンパウロ) で利用可能に"}) is True
+
+
+def test_is_noise_article_false_for_cross_region_feature():
+    assert lf.is_noise_article({"title": "Amazon Aurora がクロスリージョンのスナップショットコピーを高速化"}) is False
+
+
+def test_infra_score_ignores_desc_only_match():
+    assert lf.infra_score({"title": "Amazon Polly の新機能", "desc": "Amazon VPC で動作"}) == 0
+
+
+def test_is_noise_article_true_for_healthomics_even_with_health_keyword():
+    assert lf.is_noise_article({"title": "AWS HealthOmics が共有 VPC のサポートを開始"}) is True
+
+
+# ── fit_history ────────────────────────────────────────────────────────
+def _big_history():
+    return {
+        "used_urls": [f"https://aws.amazon.com/jp/about-aws/whats-new/2026/10/item-{i:03d}/" for i in range(28)],
+        "used_types": ["infra_update", "ops_benefit", "ops_caution", "thread_tips"],
+        "used_keywords": ["EC2"] * 40,
+        "used_services": {"EC2": "2026-10-22"},
+        "post_log": [{"date": "2026-10-22", "post_type": "infra_update", "tweet_id": "2113223952919310669"}] * 20,
+        "last_updated": "2026-10-22T20:00:30.925744+09:00",
+    }
+
+
+def test_fit_history_shrinks_under_limit():
+    import json
+    h = lf.fit_history(_big_history(), max_chars=2000)
+    assert len(json.dumps(h, ensure_ascii=False)) <= 2000
+    assert h["used_types"] == ["infra_update", "ops_benefit", "ops_caution", "thread_tips"]
+
+
+def test_fit_history_drops_post_log_before_urls():
+    import json
+    h = _big_history()
+    limit = len(json.dumps(h, ensure_ascii=False)) - 100
+    lf.fit_history(h, max_chars=limit)
+    assert len(h["used_urls"]) == 28
+    assert len(h["post_log"]) < 20
+
+
+def test_fit_history_keeps_newest_urls():
+    h = lf.fit_history(_big_history(), max_chars=1200)
+    assert h["used_urls"][-1].endswith("item-027/")
+
+
+def test_fit_history_unchanged_when_small():
+    h = {"used_urls": ["u"], "used_types": ["a"], "used_keywords": [], "post_log": []}
+    assert lf.fit_history(dict(h)) == h
