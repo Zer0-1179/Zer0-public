@@ -167,3 +167,4 @@ bash scripts/deploy.sh
 - 初級版`cfn-lambda-basic.yaml`はConditionsを使わない方針のため、選択肢をPython（3.12〜3.14）だけにした
 - Templatesページの説明文に対応ランタイムを追記し、2つのテンプレートの更新日を2026-10-29にして本番へデプロイした
 - 検証用のスタック・関数・IAMロール・ロググループはすべて削除した
+- 上級版のコード更新手順のコメントが`zip lambda.zip lambda_function.py`のままでHandler（`index.lambda_handler`）と合っていなかったため、`index.py`（Node.jsは`index.js`）に直した

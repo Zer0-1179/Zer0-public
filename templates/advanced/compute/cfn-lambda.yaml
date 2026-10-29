@@ -16,7 +16,7 @@ Description: "General-purpose Lambda function with execution role and CloudWatch
 # FunctionSuffix examples: api, worker, batch, notify, 01
 #
 # Update Lambda code after deploy:
-#   zip lambda.zip index.py
+#   zip lambda.zip index.py      # Node.js: zip lambda.zip index.js
 #   aws lambda update-function-code \
 #     --function-name my-project-dev-lambda-api \
 #     --zip-file fileb://lambda.zip
@@ -303,7 +303,7 @@ Resources:
       Code:
         # Replace the inline code below with your own logic.
         # After deploy, update with:
-        #   zip lambda.zip lambda_function.py
+        #   zip lambda.zip index.py      # Node.js: zip lambda.zip index.js
         #   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
         # The inline file is index.py or index.js depending on Runtime, so the same
         # Handler (index.lambda_handler) works for both.
