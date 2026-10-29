@@ -197,7 +197,8 @@
 
 - README.md・システム仕様書.mdの構成図埋め込みを`003_architecture.png`から`003_architecture_plugin_flowdot.svg`に変更
 - 新しい構成図は`003_architecture_plugin.drawio`（draw.io「AWS Diagramプラグイン」様式、サービスカテゴリ別のグルーピング・番号バッジ・凡例パネル付き）から作成・レビュー済み（2026-09-03セッションで内容確認完了、本日ドキュメント側の参照を切替）
-- 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/003_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。`bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
+- 004ポートフォリオサイトの`projects.ts`が参照する画像（`004_portfolio/src/public/images/003_architecture.png`）もPIL（LANCZOS+ADAPTIVE 256色パレット、幅上限2600px）で圧縮し新構成図に差し替え。
+- `bash scripts/deploy.sh`で本番デプロイし、本番URLの画像とローカルのMD5一致を確認済み
 - 旧`003_architecture.drawio`/`003_architecture.png`は`images/`配下にそのまま残置（削除せず、参照のみ切替）
 
 ## 2026-10-25
@@ -218,3 +219,9 @@
 ### 仕様書の目次の移動
 
 - 仕様書の目次`docs/システム仕様書.md`を、同名フォルダ内の`docs/システム仕様書/README.md`に移した（同名のファイルとフォルダを並べないルールへの準拠）
+
+## 2026-10-29
+
+### 変更履歴の長い箇条書きを分割
+
+- 200文字を超えていた箇条書きを「。」の区切りで複数の箇条書きに分けた（文言の変更なし、機械的に内容の一致を確認）。
