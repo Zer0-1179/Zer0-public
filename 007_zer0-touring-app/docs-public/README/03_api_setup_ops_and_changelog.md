@@ -211,3 +211,13 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 - ローカル開発環境をUbuntu 26.04・Node.js v24.22.2へ更新したことに合わせ、`frontend/.nvmrc`を24.18.0から24.22.2に揃えた
 - Node.js v24.22.2で`npm ci`と`npm run build`が成功することを確認した
 - 本番のLambda実行環境とAWSリソースの変更はない（ローカルのビルド用バージョン指定のみ）
+
+#### ユニットテストのpytest 9対応
+
+- ローカル環境の更新でpytestが9.2になり、`backend/tests/test_lambda_function.py`の7件が失敗するようになった
+- pytest 9のmonkeypatchは、MagicMockの子属性を差し替えた後の復元で属性を削除するため、共有のBedrockモックで次のテストの`invoke_model`が見つからなくなっていた
+- `backend/tests/conftest.py`の`module`フィクスチャでBedrockクライアントのモックを毎回作り直すようにし、全69件の成功を確認した（本番コードの変更なし）
+
+#### 変更履歴の整理
+
+- 本ファイルで2026-09-05が「## 2026-09-05（2）」と2つの日付見出しに分かれていたため、1つの日付見出しの下にまとめた
