@@ -82,9 +82,7 @@ Parameters:
       - python3.14
       - python3.13
       - python3.12
-      - nodejs24.x
-      - nodejs22.x
-    Description: "Lambda runtime."
+    Description: "Lambda runtime. The inline sample code is Python. For Node.js, use the advanced template."
 
   Timeout:
     Type: Number

@@ -105,7 +105,7 @@ Parameters:
       - python3.12
       - nodejs24.x
       - nodejs22.x
-    Description: "Lambda runtime."
+    Description: "Lambda runtime. The inline sample code switches between Python and Node.js automatically."
 
   Handler:
     Type: String
@@ -233,6 +233,7 @@ Conditions:
   HasDlq:                   !Not [!Equals [!Ref DlqArn, ""]]
   HasVpcConfig:             !Equals [!Ref EnableVpcConfig, "true"]
   HasReservedConcurrency:   !Not [!Equals [!Ref ReservedConcurrentExecutions, ""]]
+  IsNodejsRuntime:          !Or [!Equals [!Ref Runtime, "nodejs24.x"], !Equals [!Ref Runtime, "nodejs22.x"]]
 
 # -----------------------------------------------
 # Resources
@@ -304,10 +305,19 @@ Resources:
         # After deploy, update with:
         #   zip lambda.zip lambda_function.py
         #   aws lambda update-function-code --function-name <FunctionName> --zip-file fileb://lambda.zip
-        ZipFile: |
-          def lambda_handler(event, context):
-              print("Hello from Lambda")
-              return {"statusCode": 200, "body": "OK"}
+        # The inline file is index.py or index.js depending on Runtime, so the same
+        # Handler (index.lambda_handler) works for both.
+        ZipFile: !If
+          - IsNodejsRuntime
+          - |
+            exports.lambda_handler = async (event, context) => {
+              console.log("Hello from Lambda");
+              return { statusCode: 200, body: "OK" };
+            };
+          - |
+            def lambda_handler(event, context):
+                print("Hello from Lambda")
+                return {"statusCode": 200, "body": "OK"}
       Tags:
         - Key: Project
           Value: !Ref ProjectName
