@@ -413,7 +413,7 @@ EC2のAMIにディストリビューション名を出す場合、**サポート
 - サービスの「できないこと・注意点」も「できること」と同等に扱う
 - **NATゲートウェイ**: 「数百円/月」のような過小な金額を書かない（24時間稼働なら東京リージョンで月数千円規模）
 - **ALB自体は台数を自動増減しない**。インスタンスの自動追加はAuto Scalingの役割であり、両者を混同しない
-- **Lambda Runtime**に触れる場合は最新安定版（`python3.14` / `nodejs22.x`）を使う
+- **Lambda Runtime**に触れる場合は最新安定版（`python3.14` / `nodejs24.x`）を使う
 """
 
 
@@ -727,9 +727,9 @@ def upload_to_s3(md_path: str, png_paths: list[str], s3_folder: str) -> str:
 # ─── 記事の軽微な自動修正（Bedrock再呼び出し不要・コストゼロ） ──────────────────
 
 _OLD_RUNTIME_MAP = {
-    "python3.12": "python3.13", "python3.11": "python3.13",
-    "python3.10": "python3.13", "python3.9": "python3.13",
-    "nodejs20.x": "nodejs22.x", "nodejs18.x": "nodejs22.x",
+    "python3.13": "python3.14", "python3.12": "python3.14", "python3.11": "python3.14",
+    "python3.10": "python3.14", "python3.9": "python3.14",
+    "nodejs22.x": "nodejs24.x", "nodejs20.x": "nodejs24.x", "nodejs18.x": "nodejs24.x",
 }
 
 
@@ -834,7 +834,7 @@ def validate_article(article_text: str, char_count: int) -> list[str]:
     if h1_found:
         issues.append("h1見出し（# ）が混入しています（見出しは##以下を使うルール）")
 
-    for old_runtime in ("python3.12", "python3.11", "python3.10", "python3.9", "nodejs20.x", "nodejs18.x"):
+    for old_runtime in ("python3.13", "python3.12", "python3.11", "python3.10", "python3.9", "nodejs22.x", "nodejs20.x", "nodejs18.x"):
         if old_runtime in article_text:
             issues.append(f"古いLambdaランタイム記載が見つかりました: {old_runtime}")
 

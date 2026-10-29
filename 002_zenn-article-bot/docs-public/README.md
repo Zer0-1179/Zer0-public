@@ -98,7 +98,7 @@ EventBridge Scheduler（第1・第3木曜 21:00 JST）
 │   ├── diagram_generator.py  # matplotlib 図生成エンジン（2026-09-08〜未使用、削除せず保管）
 │   ├── deploy.sh             # デプロイスクリプト
 │   └── tests/
-│       └── test_lambda.py    # ユニットテスト（24件）
+│       └── test_lambda.py    # ユニットテスト（25件）
 ├── scripts/
 │   ├── build_layer.sh        # Lambda Layer ビルド
 │   ├── download_article.sh   # S3 から生成記事をローカルに取得
@@ -121,7 +121,7 @@ SENDER_EMAIL=your@email.com RECIPIENT_EMAIL=your@email.com ./src/deploy.sh
 ## テスト / 動作確認
 
 ```bash
-# ユニットテスト（24件）
+# ユニットテスト（25件）
 cd src && python -m pytest tests/ -v
 
 # Lambda 手動実行（dry_run: S3保存・SES送信・SSM書き込みをスキップし記事生成のみプレビュー）

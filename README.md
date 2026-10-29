@@ -14,7 +14,8 @@
 ├── 005_Zenn_Mid_Article_Bot/      # Zenn中級者向け技術記事自動生成ボット（毎月2回）
 ├── 006_Zer0_CryptoBot/            # 仮想通貨自動売買Bot（BTC/ETH/SOL・信用取引・30分毎ポジション管理）
 ├── 007_Zer0_TouringApp/           # 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）
-└── 008_Nyusatsu_Notify_Bot/       # 入札情報ウォッチ（清掃業向け入札情報通知サブスク、横浜市パイロット）
+├── 008_Nyusatsu_Notify_Bot/       # 入札情報ウォッチ（清掃業向け入札情報通知サブスク、横浜市パイロット）
+└── 009_CloudNote/                 # Notebook/Section/Page階層のノートアプリ（計画・ローカルUI試作のみ）
 ```
 
 ## 運用ルール
@@ -35,3 +36,4 @@
 | `006_Zer0_CryptoBot`        | BTC/ETH/SOLをBinanceシグナル+bitbank信用取引で自動売買（4時間毎シグナル・30分毎ポジション管理） | 稼働中     |
 | `007_Zer0_TouringApp`       | 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）                                   | 稼働中     |
 | `008_Nyusatsu_Notify_Bot`   | 横浜市の入札情報を収集しメール/LINEで自動通知するサブスクサービス（入札情報ウォッチ）           | パイロット運用中 |
+| `009_CloudNote`             | Notebook/Section/Page階層・タグ・検索・自動保存のノートアプリ（設計とローカルUI試作のみ、AWS未実装） | 計画段階   |

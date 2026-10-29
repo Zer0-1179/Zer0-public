@@ -654,8 +654,8 @@ AWSの基本サービス（EC2/S3/IAM）は使ったことがある中級者。
 - 同一ステートメントにリソース条件対応・非対応のアクションを混在させない（条件が正しく評価されない）
 
 ### Lambda Runtime
-- Lambda の Runtime は現時点の最新安定版を使う: `python3.14`（Python）/ `nodejs22.x`（Node.js）
-- `python3.13` 以前や `nodejs20.x` 等の旧バージョンは使わない
+- Lambda の Runtime は現時点の最新安定版を使う: `python3.14`（Python）/ `nodejs24.x`（Node.js）
+- `python3.13` 以前や `nodejs22.x` 以前の旧バージョンは使わない
 
 ### AWS CLI コマンドの正確性
 - 記事内のAWS CLIコマンドは**実際に実行できるもの**を書く（オプション名・引数の誤記に注意）
@@ -1098,7 +1098,7 @@ def validate_cli_in_article(article_text: str) -> list[str]:
 
 _REQUIRED_HEADING_KEYWORDS = ["はじめに", "構成", "ハンズオン", "まとめ", "参考"]
 _BANNED_PHRASES = ["することができます", "本記事では", "ぜひ試してみてください"]
-_OUTDATED_RUNTIME_PATTERNS = ["python3.13", "python3.12", "python3.11", "nodejs20.x", "nodejs18.x"]
+_OUTDATED_RUNTIME_PATTERNS = ["python3.13", "python3.12", "python3.11", "nodejs22.x", "nodejs20.x", "nodejs18.x"]
 
 
 def count_prose_chars(article_text: str) -> int:

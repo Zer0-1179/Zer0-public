@@ -157,8 +157,16 @@ def test_auto_fix_replaces_old_runtime():
     article = "```bash\naws lambda create-function --runtime python3.12\n```"
     fixed, fixes = lambda_function._auto_fix_article(article)
     assert "python3.12" not in fixed
-    assert "python3.13" in fixed
+    assert "python3.14" in fixed
     assert any("python3.12" in f for f in fixes)
+
+
+def test_auto_fix_replaces_previous_latest_runtime():
+    """1つ前の最新版（python3.13 / nodejs22.x）も最新版に置換すること"""
+    article = "```bash\naws lambda create-function --runtime python3.13\naws lambda create-function --runtime nodejs22.x\n```"
+    fixed, _ = lambda_function._auto_fix_article(article)
+    assert "python3.13" not in fixed and "nodejs22.x" not in fixed
+    assert "python3.14" in fixed and "nodejs24.x" in fixed
 
 
 def test_auto_fix_promotes_h1_outside_code_block():
