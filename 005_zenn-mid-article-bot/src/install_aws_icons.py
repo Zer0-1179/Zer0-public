@@ -17,7 +17,7 @@ try:
     _DIAGRAMS_BASE = os.path.dirname(os.path.dirname(_diagrams.__file__))
     _DIAGRAMS_RES = os.path.join(_DIAGRAMS_BASE, 'resources', 'aws')
 except ImportError:
-    _DIAGRAMS_RES = '/usr/local/lib/python3.12/dist-packages/resources/aws'
+    _DIAGRAMS_RES = '/usr/local/lib/python3.14/dist-packages/resources/aws'
 
 # 内部名 -> (カテゴリ, ファイル名) のマッピング
 ICON_MAP: dict[str, tuple[str, str]] = {
