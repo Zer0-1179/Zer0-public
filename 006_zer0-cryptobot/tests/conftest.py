@@ -51,6 +51,9 @@ def executor():
     """executor_lambda_function モジュールを返す。DynamoDBは使わずSSM/bitbank/SESを
     テスト間で毎回リセットする（副作用の持ち越し防止）。"""
     _executor.send_email = MagicMock()
+    # pytest 9以降のmonkeypatchは、MagicMockの子属性を差し替えた後の復元でdelattrするため、
+    # 共有のMagicMockを使い回すと次のテストで put_object 等が「存在しない属性」になる。毎回作り直す。
+    _executor._s3 = MagicMock()
     return _executor
 
 

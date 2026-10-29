@@ -18,6 +18,9 @@ with patch("boto3.client", return_value=MagicMock()):
 def module():
     """lambda_function モジュール（boto3クライアントはモック済み）を返す。
     テスト間の副作用を避けるため、DynamoDB/外部APIコール系のモックを都度リセットする。"""
+    # pytest 9以降のmonkeypatchは、MagicMockの子属性を差し替えた後の復元でdelattrするため、
+    # 共有のMagicMockを使い回すと次のテストで invoke_model 等が「存在しない属性」になる。毎回作り直す。
+    lf.bedrock = MagicMock()
     lf.dynamodb.get_item = MagicMock(return_value={})
     lf.dynamodb.put_item = MagicMock()
     lf.dynamodb.query = MagicMock(return_value={"Items": []})
