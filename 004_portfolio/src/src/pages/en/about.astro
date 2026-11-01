@@ -26,6 +26,8 @@ const awsCerts = [
 ];
 
 const otherCerts = [
+  { name: 'Google Cloud Associate Cloud Engineer', year: '2025' },
+  { name: 'Google Cloud Digital Leader', year: '2025' },
   { name: 'LPIC-3 Exam 303: Security', year: '2026' },
   { name: 'LPIC-3 Exam 304: Virtualization & High Availability', year: '2022' },
   { name: 'LPIC Level 2 (201・202)', year: '2022' },
@@ -40,44 +42,73 @@ const career = [
   {
     period: '2026.03 — Present',
     title: 'Personal Projects (Serverless Automation Systems)',
-    desc: 'Designed and built 7 serverless automation systems combining Lambda, Amazon Bedrock, and EventBridge, all running unattended (auto-posting bots, article generation bots, an auto-trading bot, a PWA, and more). Published 64 free CloudFormation templates. Uses this as a hands-on space to practice generative AI and serverless design that come up less often in day-to-day work.',
+    desc: [
+      'Designed and built 8 serverless automation systems combining Lambda, Amazon Bedrock, and EventBridge (auto-posting bots, article generation bots, an auto-trading bot, a PWA, a bid notification service, and more).',
+      '7 are in operation; 1 (X Poster Bot @Zer0_0326) is paused based on engagement.',
+      'Published 64 free CloudFormation templates.',
+      'Uses this as a hands-on space to practice generative AI and serverless design that come up less often in day-to-day work.',
+    ],
     tags: ['Lambda', 'Amazon Bedrock', 'EventBridge', 'CloudFormation', 'Astro'],
     link: { href: '/en/projects/', label: 'View Projects →' },
   },
   {
     period: '2024.11 — Present',
     title: 'Major Financial Institution — System Integration & Mobile App Feature Addition',
-    desc: 'Provided parallel technical support for 2 AWS projects under the PL. Led CloudFormation IaC adoption, reducing environment build and change effort by ~40%. Designed automated monitoring with CloudWatch/EventBridge/Lambda, replacing manual nightly checks with instant alert delivery. Also joined requirements discussions and client negotiations.',
+    desc: [
+      'Provided parallel technical support for 2 AWS projects under the PL.',
+      'Completed Phase 1 and now continuing into Phase 2.',
+      'Led CloudFormation IaC adoption, reducing environment build and change effort by ~40%.',
+      'Designed automated monitoring with CloudWatch/EventBridge/Lambda, replacing manual nightly checks with instant alert delivery.',
+      'Also joined requirements discussions and client negotiations.',
+    ],
     tags: ['EC2', 'RDS/Aurora', 'ALB/NLB', 'CloudFormation', 'CloudWatch', 'EventBridge', 'Lambda', 'HULFT', 'OpenLiberty'],
   },
   {
     period: '2023.08 — 2024.08',
     title: 'Major Financial Institution — Customer-Facing Website Infrastructure',
-    desc: 'Built high-availability web infrastructure with ECS + Auto Scaling. Fully automated multi-environment deployments via CloudFormation IaC, cutting release prep from 1 week to 1 day. Designed CloudWatch alerting and authored incident runbooks, enabling a smooth handover to the operations team.',
+    desc: [
+      'Built high-availability web infrastructure with ECS + Auto Scaling.',
+      'Fully automated multi-environment deployments via CloudFormation IaC, cutting release prep from 1 week to 1 day.',
+      'Designed CloudWatch alerting and authored incident runbooks, enabling a smooth handover to the operations team.',
+    ],
     tags: ['ECS/ECR', 'RDS/Aurora', 'ElastiCache', 'CloudFront', 'ALB/NLB', 'CloudFormation', 'Docker', 'Tomcat'],
   },
   {
     period: '2023.04 — 2023.07',
     title: 'Internal AWS Infrastructure Build & Operations',
-    desc: 'Delivered cost reduction through Cost Explorer visibility. Automated VPC/EC2/S3/IAM provisioning with AWS CLI scripts, significantly compressing manual setup time and configuration errors.',
+    desc: [
+      'Delivered cost reduction through Cost Explorer visibility.',
+      'Automated VPC/EC2/S3/IAM provisioning with AWS CLI scripts, significantly compressing manual setup time and configuration errors.',
+    ],
     tags: ['VPC', 'EC2', 'S3', 'IAM', 'CloudFormation', 'AWS CLI'],
   },
   {
     period: '2022.10 — 2022.11',
     title: 'Network Equipment Upgrade Test Environment Design & Build',
-    desc: 'Designed and built a FortiGate upgrade test environment in one week. Created network diagrams and presentation materials, leading technical explanations and proposals to stakeholders.',
+    desc: [
+      'Designed and built a FortiGate upgrade test environment in one week.',
+      'Created network diagrams and presentation materials, leading technical explanations and proposals to stakeholders.',
+    ],
     tags: ['FortiGate', 'Linux', 'draw.io'],
   },
   {
     period: '2021.09 — 2022.09',
     title: 'Data Center Network Operations & Monitoring (Telecom Carrier)',
-    desc: 'Monitored and operated physical servers and network equipment at a telecom carrier DC. Handled incident escalation and logging, gaining hands-on experience with incident management workflows. Managed fixed asset records, keeping inventory documentation accurate.',
+    desc: [
+      'Monitored and operated physical servers and network equipment at a telecom carrier DC.',
+      'Handled incident escalation and logging, gaining hands-on experience with incident management workflows.',
+      'Managed fixed asset records, keeping inventory documentation accurate.',
+    ],
     tags: ['Linux', 'VMware'],
   },
   {
     period: '2021.05 — 2021.07',
     title: 'Oracle Database Build & Operations',
-    desc: 'Handled Oracle 19c environment build and configuration tasks. Participated in 12c→19c migration validation using RAT. Documented the build procedure on RHEL 8.2 and put together the team runbook.',
+    desc: [
+      'Handled Oracle 19c environment build and configuration tasks.',
+      'Participated in 12c→19c migration validation using RAT.',
+      'Documented the build procedure on RHEL 8.2 and put together the team runbook.',
+    ],
     tags: ['Oracle 19c', 'RHEL 8.2', 'RAT'],
   },
 ];
@@ -100,7 +131,7 @@ const career = [
         <div>
           <h3 class="text-xl font-bold text-white mb-1">Zer0_Infra</h3>
           <p class="text-accent text-sm mb-3">Cloud Engineer / Infrastructure Engineer</p>
-          <p class="text-slate-300 leading-relaxed mb-4">{t('about.profile.text')}</p>
+          <p class="text-slate-300 leading-relaxed mb-4 whitespace-pre-line">{t('about.profile.text')}</p>
           <div class="flex gap-3">
             <a href={socialLinks.github} target="_blank" rel="noopener noreferrer"
                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/60 hover:bg-slate-600/60 text-slate-200 text-xs rounded border border-slate-600/50 transition-colors">
@@ -178,7 +209,7 @@ const career = [
     <!-- Career -->
     <section>
       <h2 class="text-accent text-xs uppercase tracking-wider mb-4">{t('about.career')}</h2>
-      <p class="text-slate-400 text-sm leading-relaxed mb-8 max-w-2xl">{t('about.career.summary')}</p>
+      <p class="text-slate-400 text-sm leading-relaxed mb-8 max-w-2xl whitespace-pre-line">{t('about.career.summary')}</p>
       <div class="relative">
         <div class="absolute left-4 top-0 bottom-0 w-px bg-navy-700/60"></div>
         <div class="space-y-8">
@@ -187,7 +218,11 @@ const career = [
               <div class="absolute left-3 top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-navy-900 -translate-x-1/2"></div>
               <div class="text-accent text-xs mb-1">{period}</div>
               <h3 class="text-white font-semibold mb-2">{title}</h3>
-              <p class="text-slate-400 text-sm leading-relaxed mb-3">{desc}</p>
+              <ul class="list-disc pl-5 space-y-1 text-slate-400 text-sm leading-relaxed mb-3 marker:text-accent/60">
+                {desc.map((line) => (
+                  <li>{line}</li>
+                ))}
+              </ul>
               <div class="flex flex-wrap items-center gap-2">
                 {tags.map((tag) => (
                   <span class="px-2 py-0.5 bg-navy-700/60 text-slate-300 text-xs rounded border border-navy-600/50">{tag}</span>
