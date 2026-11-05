@@ -360,3 +360,13 @@ def test_run_falls_back_to_evergreen_when_no_news(monkeypatch):
     lambda_function.run(dry_run=True, mode="news")
     assert calls["news"] is None
     assert calls["angle"].startswith("【新機能の候補なしのため定番解説】")
+
+
+def test_news_service_rejects_title_led_by_other_service():
+    """タイトル先頭が対象外サービス（DataSync）なら、関連タグのFSxで拾わないこと"""
+    cats = "general:products/aws-datasync,general:products/amazon-fsx-for-windows-file-server"
+    title = "AWS DataSync の拡張モードで Amazon FSx for Windows File Server のサポートが開始"
+    assert lambda_function._news_service(cats, title) is None
+    cats2 = "general:products/amazon-ec2,general:products/amazon-ec2-auto-scaling"
+    assert lambda_function._news_service(cats2, "Amazon EC2 Auto Scaling が新機能")[0] == "auto_scaling"
+    assert lambda_function._news_service("general:products/amazon-bedrock", "OpenAI の GPT が Amazon Bedrock で一般提供開始")[0] == "bedrock"

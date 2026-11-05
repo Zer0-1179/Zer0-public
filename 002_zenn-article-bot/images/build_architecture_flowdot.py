@@ -31,6 +31,7 @@ BASE = Path(__file__).resolve().parent
 NUM = "002"
 HOPS = [
             ["e-eventbridge-lambda"],
+            ["e-lambda-rss"],
             ["e-lambda-bedrock"],
             ["e-lambda-s3"],
             ["e-lambda-ses"],

@@ -459,7 +459,12 @@ AWSの新機能の発表を、AWSを使い始めたばかりのエンジニア�
 
 **最重要: 新機能の内容は、下の「発表内容（根拠情報）」に書かれている事実だけを書くこと。**
 発表に書かれていない仕様・料金・対応リージョン・提供開始日・数値を推測で補わない。分からないことは書かないか「詳細は公式発表を確認してください」とする。
+特に次の書き方は禁止する（発表に明記されている場合を除く）:
+- 「これまでは〜できなかった」「従来は〜が限定的だった」など、以前の状態についての主張
+- プロトコル名・内部の仕組み・セキュリティ上の性質など、発表にない技術的な詳細の付け足し
+- 発表に出てくる技術用語（製品名・機能名）の意味を、確信がないまま言い換えること
 サービスの基本的な説明（そのサービスが何をするものか）だけは、一般に確立した知識の範囲で補ってよい。
+「どんな場面で役立つか」は、発表本文から素直に読み取れる利用シーンに留める。
 
 ## 出力形式（必須）
 出力の**1行目**を次の形式にしてください。
@@ -727,7 +732,14 @@ def _news_service(categories: str, title: str) -> tuple[str, str] | None:
                 key = (m.start(), -len(alias), hit)
                 if best is None or key < best:
                     best = key
-    return best[2] if best else None
+    if not best:
+        return None
+    # タイトルの先頭に別のAWSサービスが出る発表（例: 「AWS DataSync の拡張モードで Amazon FSx …」）は、
+    # 主役が対象外サービスなので採用しない（関連サービス側の記事として誤って書かせない）
+    first = _re.search(r"(Amazon|AWS) ", title)
+    if first and best[0] > first.end():
+        return None
+    return best[2]
 
 
 def _parse_news_date(pub_date: str) -> str:
