@@ -132,23 +132,23 @@ def test_validate_article_detects_real_h1_heading():
 
 
 def test_validate_article_flags_too_short():
-    """1,200文字未満（内容不足・生成異常の兆候）を検出すること"""
+    """2,800文字未満（内容不足・生成異常の兆候）を検出すること"""
     article = "## はじめに\n\n## まとめ\n"
-    issues = lambda_function.validate_article(article, 1000)
+    issues = lambda_function.validate_article(article, 2500)
     assert any("文字数" in i for i in issues)
 
 
 def test_validate_article_flags_too_long():
-    """目安(2,000文字程度)を大きく超える記事（2,800文字超）を警告すること（2026-11-05〜）"""
+    """目安(4,000文字程度)を大きく超える記事（5,500文字超）を警告すること（2026-11-05〜）"""
     article = "## はじめに\n\n## まとめ\n"
-    issues = lambda_function.validate_article(article, 3000)
+    issues = lambda_function.validate_article(article, 6000)
     assert any("超えています" in i for i in issues)
 
 
 def test_validate_article_accepts_target_length_without_cli():
     """ハンズオン廃止によりAWS CLIコマンドが無くても、目安文字数内なら問題なしとすること"""
     article = "## はじめに\n\n## ポイント\n\n## まとめ\n"
-    issues = lambda_function.validate_article(article, 1900)
+    issues = lambda_function.validate_article(article, 3900)
     assert issues == []
 
 
@@ -256,7 +256,7 @@ def test_diagram_vpc_1_cluster_not_clipped_by_xlim(tmp_path):
 _FEED = """<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>
 <item><title>Amazon SageMaker AI で SOCI インデックス付きイメージがサポート</title>
 <link>https://aws.amazon.com/about-aws/whats-new/2026/10/a/</link>
-<description>&lt;p&gt;{body}&lt;/p&gt;</description><pubDate>Wed, 29 Oct 2026 20:00:00 GMT</pubDate>
+<description>&lt;p&gt;{body} &lt;a href="https://docs.aws.amazon.com/sagemaker/latest/dg/x.html#y"&gt;doc&lt;/a&gt; &lt;a href="https://aws.amazon.com/sagemaker/"&gt;p&lt;/a&gt;&lt;/p&gt;</description><pubDate>Wed, 29 Oct 2026 20:00:00 GMT</pubDate>
 <category>general:products/amazon-ecr,general:products/amazon-sagemaker</category></item>
 <item><title>Amazon EC2 Auto Scaling が終了前の起動をサポート</title>
 <link>https://aws.amazon.com/about-aws/whats-new/2026/10/b/</link>
@@ -288,6 +288,7 @@ def test_fetch_news_uses_title_service_and_filters_noise(tmp_path, monkeypatch):
     a = next(i for i in items if i["topic_id"] == "sagemaker")
     assert a["date"] == "2026-10-30"  # GMT 20:00 → JST翌日
     assert "<p>" not in a["body"]
+    assert a["doc_urls"] == ["https://docs.aws.amazon.com/sagemaker/latest/dg/x.html"]
 
 
 def test_select_news_skips_used_urls_and_prefers_new_services():
@@ -310,7 +311,7 @@ def test_select_news_skips_used_urls_and_prefers_new_services():
 def test_news_prompt_formats_without_key_error():
     result = lambda_function.NEWS_ARTICLE_PROMPT_TEMPLATE.format(
         service_name="Amazon EKS", news_title="T", news_date="2026-10-29",
-        news_body="本文", docs_section="", today="2026-11-05",
+        news_body="本文", news_docs_section="", docs_section="", today="2026-11-05",
     )
     assert "Amazon EKS" in result and "本文" in result
     assert "切り口" not in result
@@ -333,6 +334,7 @@ def test_generate_article_news_appends_source(monkeypatch):
     mock_bedrock.invoke_model.return_value = {"body": body}
     monkeypatch.setattr(lambda_function, "bedrock", mock_bedrock)
     monkeypatch.setattr(lambda_function, "fetch_aws_docs", lambda *a, **k: "")
+    monkeypatch.setattr(lambda_function, "fetch_news_docs", lambda urls: "DOC本文")
     news = {"title": "発表", "url": "https://example.com/n", "date": "2026-10-29", "body": "本文"}
     topic = {"id": "eks", "name": "Amazon EKS", "subtitle": "発表", "keywords": ""}
     text, title, _, _ = lambda_function.generate_article(topic, "2026-11-05", "", news=news)
@@ -340,6 +342,7 @@ def test_generate_article_news_appends_source(monkeypatch):
     assert text.rstrip().endswith("**出典**: [発表](https://example.com/n)（AWS 最新情報、2026-10-29）")
     sent = json.loads(mock_bedrock.invoke_model.call_args.kwargs["body"])["messages"][0]["content"]
     assert "発表内容（根拠情報）" in sent
+    assert "関連する公式ドキュメント" in sent and "DOC本文" in sent
 
 
 def test_run_falls_back_to_evergreen_when_no_news(monkeypatch):

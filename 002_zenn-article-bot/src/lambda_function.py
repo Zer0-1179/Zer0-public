@@ -330,7 +330,7 @@ ARTICLE_PROMPT_TEMPLATE = """
 あなたはZennで多くの「いいね」を獲得している技術ライターです。
 「読んでよかった」と思わせる記事を書いてください。テンプレートを埋める作業ではなく、読者の課題を解決する記事です。
 
-**最優先事項: 文字数は見出し・コードも含めた記事全体で1,400〜1,700文字程度（長くても2,000文字以内）。
+**最優先事項: 文字数は見出し・コードも含めた記事全体で3,500〜4,000文字程度（長くても4,500文字以内）。
 見出し（##）は「はじめに」「ポイント」「まとめ」の3つだけにし、ハンズオン（操作手順）は書かない。
 ただし中身は薄くしない。「ポイント」では各要点を具体例・数字・理由まで踏み込んで書き、読者が仕事で使える判断材料を渡すこと。
 超えそうな場合は要点の数を減らして収める（1つ1つの説明を浅くして数を増やすのは避ける）。**
@@ -392,7 +392,7 @@ TITLE: ここに記事タイトルを書く
 
 - `:::message`（読者が見落としやすい重要ポイント）または `:::message alert`（コスト・セキュリティの具体的な注意）を**最大1つ**まで使ってよい。前後に必ず空行を入れる
 - テーブル・`:::details`は使わない
-- コードブロックは設定例やコマンド例として説明に必要な場合のみ、最大2つ・各5行以内で、言語名を指定する（手順の羅列にはしない）
+- コードブロックは設定例やコマンド例として説明に必要な場合のみ、最大2つ・各15行以内で、言語名を指定する（手順の羅列にはしない）
 
 ---
 
@@ -404,7 +404,7 @@ TITLE: ここに記事タイトルを書く
 
 ### ## ポイント
 - 今回の切り口に沿った要点3つを、それぞれ `### ` の小見出しを付けて書く（小見出しは3つまで）
-- 各要点は「何か → なぜ大事か（理由・仕組み） → 具体例（数字・設定値・よくある構成）」の順で、1要点あたり300〜400文字程度で書く
+- 各要点は「何か → なぜ大事か（理由・仕組み） → 具体例（数字・設定値・よくある構成）」の順で、1要点あたり900〜1,100文字程度で書く（設定例があれば短いコードブロックで示してよい）
 - 3つのうち1つは、初心者がつまずきやすい点またはコスト・セキュリティの注意にする
 - 操作手順・ハンズオン・前提条件・後片付けは書かない
 
@@ -438,7 +438,7 @@ EC2のAMIにディストリビューション名を出す場合、**サポート
 - 重要な用語は**太字**で強調する
 - 料金に触れる場合は断定せず幅を持たせる（「〜円程度」「〜$以下」形式）
 - 日付に触れる場合は本日の日付（{today}）を基準にする
-- **文字数**: 記事全体で1,400〜1,700文字程度（長くても2,000文字以内）
+- **文字数**: 記事全体で3,500〜4,000文字程度（長くても4,500文字以内）
 
 ---
 
@@ -454,17 +454,18 @@ NEWS_ARTICLE_PROMPT_TEMPLATE = """
 あなたはZennで多くの「いいね」を獲得している技術ライターです。
 AWSの新機能の発表を、AWSを使い始めたばかりのエンジニア向けに分かりやすく紹介する記事を書いてください。
 
-**最優先事項: 文字数は見出し・コードも含めた記事全体で1,400〜1,700文字程度（長くても2,000文字以内）。
+**最優先事項: 文字数は見出し・コードも含めた記事全体で3,500〜4,000文字程度（長くても4,500文字以内）。
 見出し（##）は「はじめに」「ポイント」「まとめ」の3つだけにし、ハンズオン（操作手順）は書かない。**
 
-**最重要: 新機能の内容は、下の「発表内容（根拠情報）」に書かれている事実だけを書くこと。**
-発表に書かれていない仕様・料金・対応リージョン・提供開始日・数値を推測で補わない。分からないことは書かないか「詳細は公式発表を確認してください」とする。
-特に次の書き方は禁止する（発表に明記されている場合を除く）:
+**最重要: 新機能の内容は、下の「発表内容（根拠情報）」と「関連する公式ドキュメント」に書かれている事実だけを書くこと。**
+公式ドキュメントが英語の場合は、内容を正確に日本語にして使う。記事を厚くするための材料は、推測ではなく公式ドキュメントから取ること。
+根拠情報に書かれていない仕様・料金・対応リージョン・提供開始日・数値を推測で補わない。分からないことは書かないか「詳細は公式発表を確認してください」とする。
+特に次の書き方は禁止する（根拠情報に明記されている場合を除く）:
 - 「これまでは〜できなかった」「従来は〜が限定的だった」など、以前の状態についての主張
-- プロトコル名・内部の仕組み・セキュリティ上の性質など、発表にない技術的な詳細の付け足し
+- プロトコル名・内部の仕組み・セキュリティ上の性質など、根拠情報にない技術的な詳細の付け足し
 - 発表に出てくる技術用語（製品名・機能名）の意味を、確信がないまま言い換えること
 サービスの基本的な説明（そのサービスが何をするものか）だけは、一般に確立した知識の範囲で補ってよい。
-「どんな場面で役立つか」は、発表本文から素直に読み取れる利用シーンに留める。
+「どんな場面で役立つか」は、根拠情報から素直に読み取れる利用シーンに留める。
 
 ## 出力形式（必須）
 出力の**1行目**を次の形式にしてください。
@@ -487,10 +488,11 @@ TITLE: ここに記事タイトルを書く
 
 {news_body}
 
+{news_docs_section}
 {docs_section}
 ## 読者像
 プログラミング経験はあるが、AWSをほぼ使ったことがない初級エンジニア。
-3〜4分で読める記事で、この新機能が自分に関係あるかを判断したい。
+7〜8分で読める記事で、この新機能が自分に関係あるか、使うなら何をすればよいかを判断したい。
 
 ---
 
@@ -518,7 +520,7 @@ TITLE: ここに記事タイトルを書く
 
 - `:::message`（読者が見落としやすい重要ポイント）または `:::message alert`（コスト・セキュリティの具体的な注意）を**最大1つ**まで使ってよい。前後に必ず空行を入れる
 - テーブル・`:::details`は使わない
-- コードブロックは設定例やコマンド例として説明に必要な場合のみ、最大2つ・各5行以内で、言語名を指定する（手順の羅列にはしない）
+- コードブロックは設定例やコマンド例として説明に必要な場合のみ、最大2つ・各15行以内で、言語名を指定する（手順の羅列にはしない）
 
 ---
 
@@ -530,12 +532,14 @@ TITLE: ここに記事タイトルを書く
 - 「この記事では〜を解説します」という宣言は使わない
 
 ### ## ポイント
-- 次の3つを、それぞれ `### ` の小見出しを付けて書く（小見出しは3つまで）
-  1. 何が変わったのか（これまでとの違い。発表内容に書かれている範囲で）
-  2. どんな場面で役立つか（初級者がイメージしやすい利用シーン）
-  3. 使う前に知っておきたいこと（対象リージョン・料金・前提条件・制約のうち、発表に書かれているもの）
-- 各要点は300〜400文字程度。理由と具体例まで書く
-- 操作手順・ハンズオン・前提条件の羅列・後片付けは書かない
+- 次の5つを、それぞれ `### ` の小見出しを付けて書く（小見出しは5つまで。順番もこのとおり）
+  1. 背景（この機能が関係する仕組みの基本と、何を解決するための機能か。以前の課題は根拠情報に書かれている場合のみ）
+  2. 何が変わったのか（新機能の中身。主な機能・対応範囲を具体的に）
+  3. 使い方のイメージ（公式ドキュメントにある設定例・マニフェスト・コマンド例を1〜2個、短いコードブロックで示し、各行が何をしているかを説明する。根拠情報に例がない場合はコードを書かず、設定の流れを文章で説明する）
+  4. どんな場面で役立つか（初級者がイメージしやすい利用シーンを2つ程度）
+  5. 使う前に知っておきたいこと（前提条件・制約・料金・対象リージョン・考慮事項のうち、根拠情報に書かれているもの）
+- 各要点は600〜800文字程度。理由と具体例まで書く
+- 「使い方のイメージ」は理解のための例示に留め、手順を1から10まで並べるハンズオンにはしない。後片付けは書かない
 
 ### ## まとめ（2〜3文）
 - **「次に何をすべきか」を書く**（自分の環境で関係しそうか確認する、公式発表を読む、等）
@@ -568,7 +572,7 @@ EC2のAMIにディストリビューション名を出す場合、**サポート
 - 重要な用語は**太字**で強調する
 - 料金に触れる場合は断定せず幅を持たせる（「〜円程度」「〜$以下」形式）
 - 日付に触れる場合は本日の日付（{today}）を基準にする
-- **文字数**: 記事全体で1,400〜1,700文字程度（長くても2,000文字以内）
+- **文字数**: 記事全体で3,500〜4,000文字程度（長くても4,500文字以内）
 
 ---
 
@@ -589,6 +593,10 @@ NEWS_FEED_URL = os.environ.get("NEWS_FEED_URL", "https://aws.amazon.com/jp/new/f
 SSM_NEWS_URL_PARAM_PATH = "/zenn-article-bot/recent-news-urls"
 RECENT_NEWS_URLS_LIMIT = 60
 NEWS_BODY_MAX_CHARS = 4000
+# 発表本文は1件1,000文字前後しかなく4,000文字の記事の根拠には足りないため、
+# 発表本文にリンクされた公式ドキュメント（docs.aws.amazon.com、約97%の発表にある）も取得して根拠に加える
+NEWS_DOCS_MAX_PAGES = 2
+NEWS_DOCS_MAX_CHARS_PER_PAGE = 7000
 # 直近のトピック（サービス）を避ける段階。候補が尽きたら緩める（全除外→直近5件のみ除外→除外なし）
 NEWS_RECENT_TOPIC_TIERS = (20, 5, 0)
 
@@ -774,11 +782,18 @@ def fetch_news_items() -> list[dict]:
         service = _news_service(item.findtext("category") or "", title)
         if not service:
             continue
-        body = _html_to_text(item.findtext("description") or "")
+        raw_desc = item.findtext("description") or ""
+        body = _html_to_text(raw_desc)
+        doc_urls = []
+        for u in _re.findall(r'href="([^"]+)"', raw_desc):
+            u = u.split("#")[0]
+            if u.startswith("https://docs.aws.amazon.com/") and u not in doc_urls:
+                doc_urls.append(u)
         items.append({
             "title": title, "url": link, "body": body[:NEWS_BODY_MAX_CHARS],
             "date": _parse_news_date(item.findtext("pubDate") or ""),
             "topic_id": service[0], "service_name": service[1],
+            "doc_urls": doc_urls[:NEWS_DOCS_MAX_PAGES],
         })
     print(f"[News] RSS {len(all_items)}件中、対象サービスの発表 {len(items)}件")
     return items
@@ -796,6 +811,33 @@ def select_news(items: list[dict], recent_urls: list[str], recent_topics: list[s
         if cands:
             return random.choice(cands)
     return None
+
+
+def fetch_news_docs(doc_urls: list[str]) -> str:
+    """発表本文にリンクされた公式ドキュメントを取得してテキストで返す。日本語版（/ja_jp/）を先に試し、
+    取れなければ元のURL。新機能のページは日本語版が未翻訳で英語のことが多い。失敗したページは飛ばす"""
+    import re as _re
+    import urllib.request
+    parts = []
+    for url in doc_urls:
+        cands = [url.replace("https://docs.aws.amazon.com/", "https://docs.aws.amazon.com/ja_jp/", 1), url]
+        if "/ja_jp/" in url:
+            cands = [url]
+        for u in cands:
+            try:
+                req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0 (compatible)"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    raw = resp.read().decode("utf-8", errors="ignore")
+                m = _re.search(r"<main[^>]*>(.*?)</main>", raw, _re.S | _re.I)
+                text = _html_to_text(m.group(1) if m else raw)
+                if len(text) < 300:
+                    continue
+                parts.append(f"### {u}\n{text[:NEWS_DOCS_MAX_CHARS_PER_PAGE]}")
+                print(f"[NewsDocs] {len(text)}文字取得 → {min(len(text), NEWS_DOCS_MAX_CHARS_PER_PAGE)}文字使用 ({u})")
+                break
+            except Exception as e:
+                print(f"[NewsDocs] 取得エラー（スキップ）: {u}: {e}")
+    return "\n\n".join(parts)
 
 
 def news_to_topic(news: dict) -> dict:
@@ -949,7 +991,15 @@ def generate_article(topic: dict, today: str, angle: str, news: dict | None = No
                 "## AWS公式ドキュメント（根拠情報）",
                 "## サービスの基本（AWS公式ドキュメント、サービス説明の補足用）",
             )
+        news_docs = fetch_news_docs(news.get("doc_urls") or [])
+        news_docs_section = (
+            "## 関連する公式ドキュメント（根拠情報・詳細）\n"
+            "発表本文にリンクされていたAWS公式ドキュメントです。新機能の詳細・設定例・制約はここから取ってください。\n\n"
+            f"{news_docs}\n\n---\n"
+            if news_docs else ""
+        )
         prompt = NEWS_ARTICLE_PROMPT_TEMPLATE.format(
+            news_docs_section=news_docs_section,
             service_name=topic["name"],
             news_title=news["title"],
             news_date=news.get("date") or "不明",
@@ -974,7 +1024,7 @@ def generate_article(topic: dict, today: str, angle: str, news: dict | None = No
         accept="application/json",
         body=json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "messages": [{"role": "user", "content": prompt}],
         }),
     )
@@ -1028,7 +1078,7 @@ def generate_article(topic: dict, today: str, angle: str, news: dict | None = No
         "stop_reason": stop_reason,
         "in_tokens": in_tok,
         "out_tokens": out_tok,
-        "docs_chars": len(docs_content),
+        "docs_chars": len(docs_content) + (len(news_docs) if news else 0),
         "angle": angle,
     }
     return text, title, is_truncated, meta
@@ -1215,12 +1265,12 @@ def validate_article(article_text: str, char_count: int) -> list[str]:
     issues = []
     lines = article_text.splitlines()
 
-    # 2026-11-05〜 目安は2,000文字程度（ハンズオンなし）。2026-10-10〜の500文字では内容が薄く投稿できなかったため変更。
+    # 2026-11-05〜 目安は4,000文字程度（ハンズオンなし）。500文字→2,000文字でもまだ薄いとのユーザー判断で4,000文字に戻した。
     # AWS CLIコマンドの必須チェックは廃止したまま。超過・不足とも止めずにメールで警告だけ出す
-    if char_count < 1200:
-        issues.append(f"文字数が目安(2,000文字程度)に対して少なすぎます: {char_count:,}文字")
-    elif char_count > 2800:
-        issues.append(f"文字数が目安(2,000文字程度)を大きく超えています: {char_count:,}文字")
+    if char_count < 2800:
+        issues.append(f"文字数が目安(4,000文字程度)に対して少なすぎます: {char_count:,}文字")
+    elif char_count > 5500:
+        issues.append(f"文字数が目安(4,000文字程度)を大きく超えています: {char_count:,}文字")
     if "aws " in article_text and "--region" not in article_text:
         issues.append("AWS CLIコマンドに --region の明示が見当たりません")
 
@@ -1518,7 +1568,7 @@ def run(dry_run: bool = False, mode: str = "news"):
 
     # Step 3: 記事生成
     _t = time.time()
-    print("Step 3: 記事を生成中（2,000文字程度）...")
+    print("Step 3: 記事を生成中（4,000文字程度）...")
     article, title, is_truncated, gen_meta = generate_article(topic, today, angle, news=news)
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")
