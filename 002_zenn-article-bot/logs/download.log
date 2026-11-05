@@ -1,0 +1,27 @@
+=== Zenn記事ダウンロード ===
+ダウンロード対象フォルダ:
+zenn-articles/20261105_210019_s3_lifecycle/
+
+ダウンロード中: 016_20261105_210019_s3_lifecycle
+  保存先: /root/Zer0/002_Zenn_Auto_Article_Bot/output/016_20261105_210019_s3_lifecycle/20261105_210019_s3_lifecycle.md
+  S3から削除中...
+  完了: s3://zer0-dev-s3/zenn-articles/20261105_210019_s3_lifecycle/ を削除しました
+
+=== ダウンロード完了 ===
+保存先: /root/Zer0/002_Zenn_Auto_Article_Bot/output
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/001_20260423_210045_kinesis
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/002_20260430_210044_lambda
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/003_20260507_210045_sagemaker
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/004_20260514_210045_rekognition
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/005_20260520_105356_dynamodb
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/006_20260521_210015_bedrock
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/007_20260604_210022_kinesis
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/008_20260618_210015_lambda
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/009_20260716_210015_vpc
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/010_20260806_210022_lambda_layers
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/011_20260820_210015_cloudwatch
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/012_20260903_210022_api_gateway
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/013_20260917_210012_cloudfront
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/014_20261001_210019_rds
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/015_20261015_210012_cloudtrail
+/root/Zer0/002_Zenn_Auto_Article_Bot/output/016_20261105_210019_s3_lifecycle
