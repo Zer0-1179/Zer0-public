@@ -249,3 +249,114 @@ def test_diagram_vpc_1_cluster_not_clipped_by_xlim(tmp_path):
     assert captured["figsize"][0] > 13.0, (
         "xlim自動拡張が発動していません。クラスター枠がクリップされる可能性があります"
     )
+
+
+# ─── 新機能記事モード（2026-11-05〜） ───────────────────────────────────────────
+
+_FEED = """<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>
+<item><title>Amazon SageMaker AI で SOCI インデックス付きイメージがサポート</title>
+<link>https://aws.amazon.com/about-aws/whats-new/2026/10/a/</link>
+<description>&lt;p&gt;{body}&lt;/p&gt;</description><pubDate>Wed, 29 Oct 2026 20:00:00 GMT</pubDate>
+<category>general:products/amazon-ecr,general:products/amazon-sagemaker</category></item>
+<item><title>Amazon EC2 Auto Scaling が終了前の起動をサポート</title>
+<link>https://aws.amazon.com/about-aws/whats-new/2026/10/b/</link>
+<description>{body}</description><pubDate>Mon, 26 Oct 2026 01:00:00 GMT</pubDate>
+<category>general:products/amazon-ec2,general:products/amazon-ec2-auto-scaling</category></item>
+<item><title>AWS GovCloud (米国) の Amazon Bedrock で新モデル</title>
+<link>https://aws.amazon.com/about-aws/whats-new/2026/10/c/</link>
+<description>{body}</description><pubDate>Mon, 26 Oct 2026 01:00:00 GMT</pubDate>
+<category>general:products/amazon-bedrock</category></item>
+<item><title>Amazon Connect で新機能</title>
+<link>https://aws.amazon.com/about-aws/whats-new/2026/10/d/</link>
+<description>{body}</description><pubDate>Mon, 26 Oct 2026 01:00:00 GMT</pubDate>
+<category>general:products/amazon-connect</category></item>
+</channel></rss>""".replace("{body}", "発表本文。" * 60)
+
+
+def _fetch_from(tmp_path, monkeypatch):
+    f = tmp_path / "feed.xml"
+    f.write_text(_FEED, encoding="utf-8")
+    monkeypatch.setattr(lambda_function, "NEWS_FEED_URL", f.as_uri())
+    return lambda_function.fetch_news_items()
+
+
+def test_fetch_news_uses_title_service_and_filters_noise(tmp_path, monkeypatch):
+    """製品タグのうちタイトルに出るサービスを主役にし、GovCloud・対象外サービスを除くこと"""
+    items = _fetch_from(tmp_path, monkeypatch)
+    got = {i["url"].rsplit("/", 2)[-2]: i["topic_id"] for i in items}
+    assert got == {"a": "sagemaker", "b": "auto_scaling"}
+    a = next(i for i in items if i["topic_id"] == "sagemaker")
+    assert a["date"] == "2026-10-30"  # GMT 20:00 → JST翌日
+    assert "<p>" not in a["body"]
+
+
+def test_select_news_skips_used_urls_and_prefers_new_services():
+    items = [
+        {"url": "u1", "topic_id": "ec2", "body": "x" * 300},
+        {"url": "u2", "topic_id": "s3", "body": "x" * 300},
+        {"url": "u3", "topic_id": "rds", "body": "x" * 100},  # 本文が短すぎる
+    ]
+    for _ in range(20):
+        assert lambda_function.select_news(items, ["u1"], [])["url"] == "u2"
+    # 直近に扱ったサービスは避ける（他に候補がある場合）
+    items.append({"url": "u4", "topic_id": "vpc", "body": "x" * 300})
+    for _ in range(20):
+        assert lambda_function.select_news(items, [], ["ec2", "s3"])["url"] == "u4"
+    # 全サービスが直近でも、未使用URLがあれば選ぶ
+    assert lambda_function.select_news(items[:1], [], ["ec2"])["url"] == "u1"
+    assert lambda_function.select_news(items[:1], ["u1"], []) is None
+
+
+def test_news_prompt_formats_without_key_error():
+    result = lambda_function.NEWS_ARTICLE_PROMPT_TEMPLATE.format(
+        service_name="Amazon EKS", news_title="T", news_date="2026-10-29",
+        news_body="本文", docs_section="", today="2026-11-05",
+    )
+    assert "Amazon EKS" in result and "本文" in result
+    assert "切り口" not in result
+
+
+def test_all_news_services_have_zenn_meta():
+    ids = {v[0] for v in lambda_function.NEWS_PRODUCT_MAP.values()}
+    assert ids <= set(lambda_function._ZENN_META)
+
+
+def test_generate_article_news_appends_source(monkeypatch):
+    """新機能記事では出典リンクをコード側で末尾に付けること"""
+    from unittest.mock import MagicMock
+    body = MagicMock()
+    body.read.return_value = json.dumps({
+        "content": [{"text": "TITLE: タイトル\n\n## はじめに\n本文\n\n## まとめ\n次へ"}],
+        "usage": {"input_tokens": 1, "output_tokens": 1}, "stop_reason": "end_turn",
+    }).encode()
+    mock_bedrock = MagicMock()
+    mock_bedrock.invoke_model.return_value = {"body": body}
+    monkeypatch.setattr(lambda_function, "bedrock", mock_bedrock)
+    monkeypatch.setattr(lambda_function, "fetch_aws_docs", lambda *a, **k: "")
+    news = {"title": "発表", "url": "https://example.com/n", "date": "2026-10-29", "body": "本文"}
+    topic = {"id": "eks", "name": "Amazon EKS", "subtitle": "発表", "keywords": ""}
+    text, title, _, _ = lambda_function.generate_article(topic, "2026-11-05", "", news=news)
+    assert title == "タイトル"
+    assert text.rstrip().endswith("**出典**: [発表](https://example.com/n)（AWS 最新情報、2026-10-29）")
+    sent = json.loads(mock_bedrock.invoke_model.call_args.kwargs["body"])["messages"][0]["content"]
+    assert "発表内容（根拠情報）" in sent
+
+
+def test_run_falls_back_to_evergreen_when_no_news(monkeypatch):
+    """新機能の候補が無いときは定番解説で生成を続けること"""
+    calls = {}
+    monkeypatch.setattr(lambda_function, "_pick_news", lambda recent: None)
+    monkeypatch.setattr(lambda_function, "get_recent_topics", lambda: [])
+    monkeypatch.setattr(lambda_function, "get_recent_angles", lambda: [])
+    monkeypatch.setattr(lambda_function, "_save_recent_id", lambda *a, **k: None)
+    monkeypatch.setattr(lambda_function, "_prepare_article_paths", lambda *a, **k: ("/tmp/x.md", "/tmp/x"))
+    monkeypatch.setattr(lambda_function, "save_to_local", lambda *a, **k: None)
+
+    def fake_generate(topic, today, angle, news=None):
+        calls["news"] = news
+        calls["angle"] = angle
+        return "## はじめに\n本文\n## まとめ\n", "t", False, {}
+    monkeypatch.setattr(lambda_function, "generate_article", fake_generate)
+    lambda_function.run(dry_run=True, mode="news")
+    assert calls["news"] is None
+    assert calls["angle"].startswith("【新機能の候補なしのため定番解説】")

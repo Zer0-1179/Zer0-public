@@ -294,6 +294,36 @@ _ZENN_META: dict[str, dict] = {
     "s3_lifecycle":        {"emoji": "♻️",  "topics": ["aws", "s3", "コスト最適化", "クラウド"]},
     "vpc_endpoint":        {"emoji": "🔒",  "topics": ["aws", "vpc", "privatelink", "ネットワーク"]},
     "cloudwatch_insights": {"emoji": "🔎",  "topics": ["aws", "cloudwatch", "ログ分析", "監視"]},
+    # 新機能記事モード（2026-11-05〜）で追加したインフラ系サービス
+    "systems_manager":     {"emoji": "🛠️",  "topics": ["aws", "ssm", "運用", "インフラ"]},
+    "aurora":              {"emoji": "🌅",  "topics": ["aws", "aurora", "データベース", "クラウド"]},
+    "eks":                 {"emoji": "☸️",  "topics": ["aws", "eks", "kubernetes", "コンテナ"]},
+    "fargate":             {"emoji": "🚢",  "topics": ["aws", "fargate", "コンテナ", "サーバーレス"]},
+    "ecr":                 {"emoji": "📦",  "topics": ["aws", "ecr", "コンテナ", "docker"]},
+    "elb":                 {"emoji": "⚖️",  "topics": ["aws", "elb", "ネットワーク", "インフラ"]},
+    "auto_scaling":        {"emoji": "📈",  "topics": ["aws", "autoscaling", "ec2", "インフラ"]},
+    "efs":                 {"emoji": "🗂️",  "topics": ["aws", "efs", "ストレージ", "インフラ"]},
+    "fsx":                 {"emoji": "🗄️",  "topics": ["aws", "fsx", "ストレージ", "インフラ"]},
+    "backup":              {"emoji": "💾",  "topics": ["aws", "backup", "バックアップ", "インフラ"]},
+    "kms":                 {"emoji": "🔑",  "topics": ["aws", "kms", "暗号化", "セキュリティ"]},
+    "secrets_manager":     {"emoji": "🤫",  "topics": ["aws", "secretsmanager", "セキュリティ", "インフラ"]},
+    "acm":                 {"emoji": "📜",  "topics": ["aws", "acm", "ssl", "セキュリティ"]},
+    "waf":                 {"emoji": "🛡️",  "topics": ["aws", "waf", "セキュリティ", "ネットワーク"]},
+    "shield":              {"emoji": "🛡️",  "topics": ["aws", "shield", "セキュリティ", "ddos"]},
+    "network_firewall":    {"emoji": "🧱",  "topics": ["aws", "networkfirewall", "セキュリティ", "ネットワーク"]},
+    "guardduty":           {"emoji": "👮",  "topics": ["aws", "guardduty", "セキュリティ", "監視"]},
+    "security_hub":        {"emoji": "🛡️",  "topics": ["aws", "securityhub", "セキュリティ", "監視"]},
+    "config":              {"emoji": "📋",  "topics": ["aws", "awsconfig", "ガバナンス", "セキュリティ"]},
+    "cloudformation":      {"emoji": "🏗️",  "topics": ["aws", "cloudformation", "iac", "インフラ"]},
+    "organizations":       {"emoji": "🏢",  "topics": ["aws", "organizations", "ガバナンス", "マルチアカウント"]},
+    "control_tower":       {"emoji": "🗼",  "topics": ["aws", "controltower", "ガバナンス", "マルチアカウント"]},
+    "identity_center":     {"emoji": "🪪",  "topics": ["aws", "iam", "sso", "セキュリティ"]},
+    "transit_gateway":     {"emoji": "🔀",  "topics": ["aws", "transitgateway", "ネットワーク", "vpc"]},
+    "direct_connect":      {"emoji": "🔌",  "topics": ["aws", "directconnect", "ネットワーク", "インフラ"]},
+    "vpn":                 {"emoji": "🔐",  "topics": ["aws", "vpn", "ネットワーク", "インフラ"]},
+    "eventbridge":         {"emoji": "📡",  "topics": ["aws", "eventbridge", "サーバーレス", "イベント駆動"]},
+    "cost_management":     {"emoji": "💰",  "topics": ["aws", "コスト最適化", "請求", "クラウド"]},
+    "amazon_linux":        {"emoji": "🐧",  "topics": ["aws", "amazonlinux", "linux", "インフラ"]},
 }
 
 ARTICLE_PROMPT_TEMPLATE = """
@@ -420,6 +450,352 @@ EC2のAMIにディストリビューション名を出す場合、**サポート
 """
 
 
+NEWS_ARTICLE_PROMPT_TEMPLATE = """
+あなたはZennで多くの「いいね」を獲得している技術ライターです。
+AWSの新機能の発表を、AWSを使い始めたばかりのエンジニア向けに分かりやすく紹介する記事を書いてください。
+
+**最優先事項: 文字数は見出し・コードも含めた記事全体で1,400〜1,700文字程度（長くても2,000文字以内）。
+見出し（##）は「はじめに」「ポイント」「まとめ」の3つだけにし、ハンズオン（操作手順）は書かない。**
+
+**最重要: 新機能の内容は、下の「発表内容（根拠情報）」に書かれている事実だけを書くこと。**
+発表に書かれていない仕様・料金・対応リージョン・提供開始日・数値を推測で補わない。分からないことは書かないか「詳細は公式発表を確認してください」とする。
+サービスの基本的な説明（そのサービスが何をするものか）だけは、一般に確立した知識の範囲で補ってよい。
+
+## 出力形式（必須）
+出力の**1行目**を次の形式にしてください。
+
+TITLE: ここに記事タイトルを書く
+
+タイトルのルール:
+- サービス名と新機能の中身が分かる具体的な表現にする（発表タイトルの丸写しは避ける）
+- 30〜50文字程度
+- 例: 「Amazon EKS Auto ModeがGateway APIに対応、Ingressとの違いと使いどころ」
+
+その後、空行を1行挟んで記事本文（## はじめに から始まる）を書いてください。
+
+---
+
+## 発表内容（根拠情報）
+- サービス: {service_name}
+- 発表タイトル: {news_title}
+- 発表日: {news_date}
+
+{news_body}
+
+{docs_section}
+## 読者像
+プログラミング経験はあるが、AWSをほぼ使ったことがない初級エンジニア。
+3〜4分で読める記事で、この新機能が自分に関係あるかを判断したい。
+
+---
+
+## 品質の原則
+
+**書くこと**
+- 冒頭で「誰の・どんな問題を・どう解決するか」を1段落以内に伝える
+- 具体的な数字で語る（「高速です」ではなく「〜ms以下」）
+- 1文1意。「〜し、〜であり、〜するため」は分割する
+- 「〜できます」（「〜することができます」は使わない）
+- 要点には「なぜそうするか」の理由を一言添える
+
+**書かないこと・避けること**
+- 「本記事では〜について解説します」（宣言型の導入）
+- 「非常に重要です」「ぜひ試してみてください」（根拠のない煽り文句）
+- 読者が知っていることの説明（「AWSはクラウドです」等の自明な前提）
+- 前セクションをそのままなぞるだけのまとめ
+- 根拠のない最上級表現（「最も優れた」「業界標準」）
+- 文章で書けるのに箇条書きに逃げる（流れを作れる部分は文章で書く）
+- 手順を示さずに「〜は簡単です」と言う
+
+---
+
+## Zenn Markdown記法（最小限にする）
+
+- `:::message`（読者が見落としやすい重要ポイント）または `:::message alert`（コスト・セキュリティの具体的な注意）を**最大1つ**まで使ってよい。前後に必ず空行を入れる
+- テーブル・`:::details`は使わない
+- コードブロックは設定例やコマンド例として説明に必要な場合のみ、最大2つ・各5行以内で、言語名を指定する（手順の羅列にはしない）
+
+---
+
+## 記事の見出し構成（この3見出しのみ。他の見出しは追加しない）
+
+### ## はじめに（3〜5文）
+- **冒頭の1文で「何が発表されたか」と「誰にうれしいか」を伝える**
+- サービス自体を知らない初級者にも分かるよう、{service_name} が何をするサービスかを1文で添える
+- 「この記事では〜を解説します」という宣言は使わない
+
+### ## ポイント
+- 次の3つを、それぞれ `### ` の小見出しを付けて書く（小見出しは3つまで）
+  1. 何が変わったのか（これまでとの違い。発表内容に書かれている範囲で）
+  2. どんな場面で役立つか（初級者がイメージしやすい利用シーン）
+  3. 使う前に知っておきたいこと（対象リージョン・料金・前提条件・制約のうち、発表に書かれているもの）
+- 各要点は300〜400文字程度。理由と具体例まで書く
+- 操作手順・ハンズオン・前提条件の羅列・後片付けは書かない
+
+### ## まとめ（2〜3文）
+- **「次に何をすべきか」を書く**（自分の環境で関係しそうか確認する、公式発表を読む、等）
+- 出典リンクはシステムが記事末尾に自動で付けるので、本文に出典URLを書かない
+
+---
+
+## AWSサービス名の最新化（必須）
+
+記事内では**必ず現在の正式名称**を使うこと。
+
+| 現在の正式名称 | 旧称 | 改名時期 |
+| --- | --- | --- |
+| Amazon SageMaker AI | Amazon SageMaker | 2024年11月 |
+| Amazon Q Business | Amazon Kendra Intelligent Ranking（一部機能） | 2024年 |
+
+## OS・AMIの鮮度（必須）
+
+EC2のAMIにディストリビューション名を出す場合、**サポート終了（EOL）済みのバージョンを新規構築の例に使わない**こと。
+
+| 対象 | 状態 | 記事での扱い |
+| --- | --- | --- |
+| Amazon Linux 2 | 2026年6月30日でEOL済み | 新規構築の例には使わない。使うなら**Amazon Linux 2023**（AMIフィルタ例: `al2023-ami-*-x86_64`）を使う |
+
+---
+
+## 注意事項
+- **記事の先頭にYAML frontmatter（--- で囲まれたブロック）を書かない**（frontmatterはシステムが自動付与する）
+- 見出しは ## や ### を使ったMarkdown形式で書く（# は使わない）
+- 重要な用語は**太字**で強調する
+- 料金に触れる場合は断定せず幅を持たせる（「〜円程度」「〜$以下」形式）
+- 日付に触れる場合は本日の日付（{today}）を基準にする
+- **文字数**: 記事全体で1,400〜1,700文字程度（長くても2,000文字以内）
+
+---
+
+## 技術的な正確性
+- サービスの「できないこと・注意点」も「できること」と同等に扱う
+- **NATゲートウェイ**: 「数百円/月」のような過小な金額を書かない（24時間稼働なら東京リージョンで月数千円規模）
+- **ALB自体は台数を自動増減しない**。インスタンスの自動追加はAuto Scalingの役割であり、両者を混同しない
+- **Lambda Runtime**に触れる場合は最新安定版（`python3.14` / `nodejs24.x`）を使う
+"""
+
+
+# ─── 新機能記事モード（2026-11-05〜、既定） ──────────────────────────────────────
+# 定番28トピック×切り口4種の解説は似た内容の記事が続くようになったため、
+# AWS公式「最新情報」（What's New 日本語版）RSSから新機能の発表を1件選んで紹介する記事に切り替えた。
+# 対象は従来の28トピックのサービス＋インフラ系サービスの発表に限る。
+# 候補が無い・RSSが取れない場合は従来の定番解説（evergreen）にフォールバックする。
+NEWS_FEED_URL = os.environ.get("NEWS_FEED_URL", "https://aws.amazon.com/jp/new/feed/")
+SSM_NEWS_URL_PARAM_PATH = "/zenn-article-bot/recent-news-urls"
+RECENT_NEWS_URLS_LIMIT = 60
+NEWS_BODY_MAX_CHARS = 4000
+# 直近のトピック（サービス）を避ける段階。候補が尽きたら緩める（全除外→直近5件のみ除外→除外なし）
+NEWS_RECENT_TOPIC_TIERS = (20, 5, 0)
+
+# RSSの<category>に入る製品タグ（general:products/xxx）→ (トピックID, 表示名)。
+# 従来28トピックのサービスは既存IDに寄せ（SSMの重複除外・Zennメタ・公式ドキュメントURLを共用するため）、
+# それ以外はインフラ分野のサービスだけを追加している。ここに無いサービスの発表は候補にしない。
+NEWS_PRODUCT_MAP: dict[str, tuple[str, str]] = {
+    # 従来28トピックのサービス
+    "amazon-ec2": ("ec2", "Amazon EC2"),
+    "amazon-s3": ("s3", "Amazon S3"),
+    "aws-iam": ("iam", "AWS IAM"),
+    "amazon-vpc": ("vpc", "Amazon VPC"),
+    "amazon-rds": ("rds", "Amazon RDS"),
+    "amazon-rds-for-mysql": ("rds", "Amazon RDS"),
+    "amazon-rds-for-postgresql": ("rds", "Amazon RDS"),
+    "amazon-rds-for-mariadb": ("rds", "Amazon RDS"),
+    "amazon-rds-for-oracle": ("rds", "Amazon RDS"),
+    "amazon-rds-for-sql-server": ("rds", "Amazon RDS"),
+    "aws-lambda": ("lambda", "AWS Lambda"),
+    "amazon-cloudwatch": ("cloudwatch", "Amazon CloudWatch"),
+    "amazon-ecs": ("ecs", "Amazon ECS"),
+    "amazon-dynamodb": ("dynamodb", "Amazon DynamoDB"),
+    "amazon-cloudfront": ("cloudfront", "Amazon CloudFront"),
+    "amazon-api-gateway": ("api_gateway", "Amazon API Gateway"),
+    "amazon-sqs": ("sqs", "Amazon SQS"),
+    "amazon-simple-queue-service": ("sqs", "Amazon SQS"),
+    "amazon-bedrock": ("bedrock", "Amazon Bedrock"),
+    "amazon-sagemaker": ("sagemaker", "Amazon SageMaker AI"),
+    "amazon-rekognition": ("rekognition", "Amazon Rekognition"),
+    "amazon-textract": ("textract", "Amazon Textract"),
+    "aws-step-functions": ("step_functions", "AWS Step Functions"),
+    "amazon-sns": ("sns", "Amazon SNS"),
+    "amazon-simple-notification-service": ("sns", "Amazon SNS"),
+    "amazon-elasticache": ("elasticache", "Amazon ElastiCache"),
+    "amazon-route-53": ("route53", "Amazon Route 53"),
+    "amazon-kinesis": ("kinesis", "Amazon Kinesis"),
+    "amazon-kinesis-data-streams": ("kinesis", "Amazon Kinesis"),
+    "amazon-data-firehose": ("kinesis", "Amazon Kinesis"),
+    "aws-cloudtrail": ("cloudtrail", "AWS CloudTrail"),
+    "amazon-elastic-block-store": ("ec2_ebs", "Amazon EBS"),
+    "amazon-ebs": ("ec2_ebs", "Amazon EBS"),
+    "aws-privatelink": ("vpc_endpoint", "AWS PrivateLink"),
+    # インフラ分野の追加サービス
+    "aws-systems-manager": ("systems_manager", "AWS Systems Manager"),
+    "amazon-aurora": ("aurora", "Amazon Aurora"),
+    "amazon-eks": ("eks", "Amazon EKS"),
+    "aws-fargate": ("fargate", "AWS Fargate"),
+    "amazon-ecr": ("ecr", "Amazon ECR"),
+    "elastic-load-balancing": ("elb", "Elastic Load Balancing"),
+    "amazon-ec2-auto-scaling": ("auto_scaling", "Amazon EC2 Auto Scaling"),
+    "aws-auto-scaling": ("auto_scaling", "AWS Auto Scaling"),
+    "amazon-efs": ("efs", "Amazon EFS"),
+    "amazon-fsx": ("fsx", "Amazon FSx"),
+    "amazon-fsx-for-windows-file-server": ("fsx", "Amazon FSx"),
+    "amazon-fsx-netapp-ontap": ("fsx", "Amazon FSx"),
+    "amazon-fsx-for-lustre": ("fsx", "Amazon FSx"),
+    "aws-backup": ("backup", "AWS Backup"),
+    "aws-kms": ("kms", "AWS KMS"),
+    "aws-secrets-manager": ("secrets_manager", "AWS Secrets Manager"),
+    "aws-certificate-manager": ("acm", "AWS Certificate Manager"),
+    "aws-waf": ("waf", "AWS WAF"),
+    "aws-shield": ("shield", "AWS Shield"),
+    "aws-network-firewall": ("network_firewall", "AWS Network Firewall"),
+    "amazon-guardduty": ("guardduty", "Amazon GuardDuty"),
+    "aws-security-hub": ("security_hub", "AWS Security Hub"),
+    "aws-config": ("config", "AWS Config"),
+    "aws-cloudformation": ("cloudformation", "AWS CloudFormation"),
+    "aws-organizations": ("organizations", "AWS Organizations"),
+    "aws-control-tower": ("control_tower", "AWS Control Tower"),
+    "aws-iam-identity-center": ("identity_center", "AWS IAM Identity Center"),
+    "aws-transit-gateway": ("transit_gateway", "AWS Transit Gateway"),
+    "aws-direct-connect": ("direct_connect", "AWS Direct Connect"),
+    "aws-site-to-site-vpn": ("vpn", "AWS Site-to-Site VPN"),
+    "amazon-eventbridge": ("eventbridge", "Amazon EventBridge"),
+    "aws-cost-explorer": ("cost_management", "AWS Cost Explorer"),
+    "aws-budgets": ("cost_management", "AWS Budgets"),
+    "amazon-linux": ("amazon_linux", "Amazon Linux"),
+}
+
+# 候補から外すタイトル。他リージョン・GovCloud等への提供拡大は日本の初級者の記事ネタにならない
+# （001 X投稿Botのフィルターと同じ考え方）
+NEWS_NOISE_PATTERNS = [
+    r"GovCloud", r"Sovereign Cloud", r"中国",
+    r"(?<!クロス)(?<!マルチ)リージョン.*(利用可能|提供開始|使用可能|一般提供)",
+    r"(?<!クロス)(?<!マルチ)リージョン(が|を)?(拡大|増加|追加)",
+    r"(米国|欧州|アジアパシフィック|南米|カナダ|中東|アフリカ|メキシコ|イスラエル)[^(（]*[(（].*(利用可能|提供開始|使用可能|サポート|拡大|追加)",
+    r"\d+\s*G(bps)?\s*の拡張",  # Direct Connect等の特定ロケーションの回線増強
+    r"パートナー", r"Marketplace", r"AWS Transform",
+    r"推奨パッチ", r"累積更新プログラム",  # DBエンジンの定例パッチ告知は記事ネタにならない
+    r"EMR on EKS",  # 分析基盤（EMR）の話題でEKS自体の新機能ではない
+]
+
+# タイトル中のサービス名の表記ゆれ。ここに無いIDは表示名から「Amazon 」「AWS 」を除いた名前で探す。
+# RSSの製品タグには関連サービスも並ぶため（例: 「SageMaker AIでSOCI…」にECRのタグ）、
+# タグで当たったサービスのうち「タイトルに名前が出てくるもの」だけを主役として採用する。
+NEWS_TITLE_ALIASES: dict[str, list[str]] = {
+    "sagemaker": ["SageMaker"],
+    "rds": ["RDS"],
+    "ec2_ebs": ["EBS", "Elastic Block Store"],
+    "vpc_endpoint": ["PrivateLink", "VPC エンドポイント", "VPCエンドポイント"],
+    "kinesis": ["Kinesis", "Data Firehose"],
+    "sqs": ["SQS", "Simple Queue Service"],
+    "sns": ["SNS", "Simple Notification Service"],
+    "auto_scaling": ["EC2 Auto Scaling", "Auto Scaling"],
+    "elb": ["Elastic Load Balancing", "Load Balancer", "ロードバランサー", "ALB", "NLB"],
+    "fsx": ["FSx"],
+    "kms": ["Key Management Service", "KMS"],
+    "acm": ["Certificate Manager", "ACM"],
+    "config": ["AWS Config"],
+    "identity_center": ["IAM アイデンティティセンター", "IAM Identity Center"],
+    "cost_management": ["Cost Explorer", "Budgets"],
+    "vpn": ["Site-to-Site VPN", "VPN"],
+}
+
+
+def _html_to_text(raw: str) -> str:
+    import html as _html
+    import re as _re
+    raw = _re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw, flags=_re.S | _re.I)
+    text = _html.unescape(_re.sub(r"<[^>]+>", " ", raw))
+    return _re.sub(r"\s+", " ", text).strip()
+
+
+def _news_service(categories: str, title: str) -> tuple[str, str] | None:
+    """RSSの<category>（カンマ区切り）の製品タグで当たったサービスのうち、タイトルで一番前に名前が出るものを返す。
+    同じ位置から始まる場合は長い名前を優先する（「EC2 Auto Scaling」をEC2ではなくAuto Scalingにする）"""
+    import re as _re
+    best = None  # (位置, -長さ, サービス)
+    for cat in (categories or "").split(","):
+        cat = _html_to_text(cat)
+        if not cat.startswith("general:products/"):
+            continue
+        hit = NEWS_PRODUCT_MAP.get(cat[len("general:products/"):])
+        if not hit:
+            continue
+        aliases = NEWS_TITLE_ALIASES.get(hit[0]) or [_re.sub(r"^(Amazon|AWS) ", "", hit[1])]
+        for alias in aliases:
+            # 英数字の途中で一致しない（「EBS」が「WEBSOCKET」に当たらない）よう境界つきで探す
+            m = _re.search(r"(?<![A-Za-z0-9])" + _re.escape(alias) + r"(?![A-Za-z0-9])", title)
+            if m:
+                key = (m.start(), -len(alias), hit)
+                if best is None or key < best:
+                    best = key
+    return best[2] if best else None
+
+
+def _parse_news_date(pub_date: str) -> str:
+    """RSSのpubDate（RFC 822, GMT）をJSTの YYYY-MM-DD にする。失敗時は空文字"""
+    from email.utils import parsedate_to_datetime
+    try:
+        dt = parsedate_to_datetime(pub_date)
+        return dt.astimezone(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
+def fetch_news_items() -> list[dict]:
+    """AWS公式「最新情報」RSSを取得し、対象サービスの新機能発表だけを返す。
+    RSSのdescriptionには発表本文がほぼ全文入っているため、それを記事の根拠に使う。"""
+    import re as _re
+    import urllib.request
+    import xml.etree.ElementTree as ET
+
+    req = urllib.request.Request(NEWS_FEED_URL, headers={"User-Agent": "Mozilla/5.0 (compatible)"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        tree = ET.parse(resp)
+    items = []
+    all_items = tree.findall(".//item")
+    for item in all_items:
+        title = (item.findtext("title") or "").strip()
+        link  = (item.findtext("link") or "").strip()
+        if not title or not link:
+            continue
+        if any(_re.search(p, title) for p in NEWS_NOISE_PATTERNS):
+            continue
+        service = _news_service(item.findtext("category") or "", title)
+        if not service:
+            continue
+        body = _html_to_text(item.findtext("description") or "")
+        items.append({
+            "title": title, "url": link, "body": body[:NEWS_BODY_MAX_CHARS],
+            "date": _parse_news_date(item.findtext("pubDate") or ""),
+            "topic_id": service[0], "service_name": service[1],
+        })
+    print(f"[News] RSS {len(all_items)}件中、対象サービスの発表 {len(items)}件")
+    return items
+
+
+def select_news(items: list[dict], recent_urls: list[str], recent_topics: list[str]) -> dict | None:
+    """使用済みURLを除き、直近に扱ったサービスをなるべく避けてランダムに1件選ぶ。
+    本文が短すぎる発表（根拠不足で推測が混ざりやすい）は外す。"""
+    pool = [i for i in items if i["url"] not in recent_urls and len(i["body"]) >= 200]
+    if not pool:
+        return None
+    for tier in NEWS_RECENT_TOPIC_TIERS:
+        avoid = set(recent_topics[-tier:]) if tier else set()
+        cands = [i for i in pool if i["topic_id"] not in avoid]
+        if cands:
+            return random.choice(cands)
+    return None
+
+
+def news_to_topic(news: dict) -> dict:
+    """選んだ発表を既存処理（ファイル名・Zennメタ・メール）で使うトピック形式に変換する"""
+    return {
+        "id": news["topic_id"],
+        "name": news["service_name"],
+        "subtitle": news["title"],
+        "keywords": "",
+    }
+
+
 # ─── AWS公式ドキュメント取得 ──────────────────────────────────────────────────
 
 def fetch_aws_docs(topic_id: str, max_chars: int = 6000) -> str:
@@ -543,8 +919,9 @@ def select_angle(excluded_angles: list[str]) -> str:
 
 # ─── 記事生成 ─────────────────────────────────────────────────────────────────
 
-def generate_article(topic: dict, today: str, angle: str) -> tuple[str, str, bool, dict]:
-    """Bedrock を使って記事を生成する。(article_text, title, is_truncated, meta) を返す"""
+def generate_article(topic: dict, today: str, angle: str, news: dict | None = None) -> tuple[str, str, bool, dict]:
+    """Bedrock を使って記事を生成する。(article_text, title, is_truncated, meta) を返す。
+    news を渡すと新機能紹介記事（発表本文を根拠にする）、None なら従来の定番解説記事を生成する"""
     docs_content = fetch_aws_docs(topic["id"])
     docs_section = (
         "## AWS公式ドキュメント（根拠情報）\n"
@@ -554,15 +931,30 @@ def generate_article(topic: dict, today: str, angle: str) -> tuple[str, str, boo
         if docs_content else ""
     )
     diagram_section = ""
-    prompt = ARTICLE_PROMPT_TEMPLATE.format(
-        topic_name=topic["name"],
-        topic_subtitle=topic["subtitle"],
-        keywords=topic["keywords"],
-        today=today,
-        docs_section=docs_section,
-        diagram_section=diagram_section,
-        angle=angle,
-    )
+    if news:
+        if docs_section:
+            docs_section = docs_section.replace(
+                "## AWS公式ドキュメント（根拠情報）",
+                "## サービスの基本（AWS公式ドキュメント、サービス説明の補足用）",
+            )
+        prompt = NEWS_ARTICLE_PROMPT_TEMPLATE.format(
+            service_name=topic["name"],
+            news_title=news["title"],
+            news_date=news.get("date") or "不明",
+            news_body=news["body"],
+            docs_section=docs_section,
+            today=today,
+        )
+    else:
+        prompt = ARTICLE_PROMPT_TEMPLATE.format(
+            topic_name=topic["name"],
+            topic_subtitle=topic["subtitle"],
+            keywords=topic["keywords"],
+            today=today,
+            docs_section=docs_section,
+            diagram_section=diagram_section,
+            angle=angle,
+        )
 
     response = bedrock.invoke_model(
         modelId=BEDROCK_ARTICLE_MODEL_ID,
@@ -613,6 +1005,11 @@ def generate_article(topic: dict, today: str, angle: str) -> tuple[str, str, boo
                 end = i + 1
                 break
         text = "".join(lines[end:]).lstrip()
+
+    # 新機能記事は出典（AWS公式の発表ページ）をコード側で必ず末尾に付ける（LLMにURLを書かせると誤記しうるため）
+    if news:
+        date_part = f"、{news['date']}" if news.get("date") else ""
+        text = text.rstrip() + f"\n\n**出典**: [{news['title']}]({news['url']})（AWS 最新情報{date_part}）\n"
 
     meta = {
         "cost_usd": cost_usd,
@@ -1045,7 +1442,28 @@ bash 002_Zenn_Auto_Article_Bot/scripts/download_article.sh
 
 # ─── メイン処理 ───────────────────────────────────────────────────────────────
 
-def run(dry_run: bool = False):
+def get_recent_news_urls() -> list[str]:
+    return _get_recent_ids(SSM_NEWS_URL_PARAM_PATH)
+
+
+def save_news_url_to_ssm(url: str, dry_run: bool = False) -> None:
+    _save_recent_id(SSM_NEWS_URL_PARAM_PATH, url, RECENT_NEWS_URLS_LIMIT, dry_run=dry_run)
+
+
+def _pick_news(recent_topics: list[str]) -> dict | None:
+    """新機能の発表を1件選ぶ。RSS取得失敗・候補なしは None（呼び出し側で定番解説にフォールバック）"""
+    try:
+        items = fetch_news_items()
+    except Exception as e:
+        print(f"[News] RSS取得エラー（定番解説にフォールバック）: {e}")
+        return None
+    news = select_news(items, get_recent_news_urls(), recent_topics)
+    if news is None:
+        print("[News] 未使用の対象発表がありません（定番解説にフォールバック）")
+    return news
+
+
+def run(dry_run: bool = False, mode: str = "news"):
     _total_start = time.time()
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     timestamp = now.strftime("%Y%m%d_%H%M%S")
@@ -1060,14 +1478,24 @@ def run(dry_run: bool = False):
     _t = time.time()
     print("Step 1: トピック・切り口を選択中...")
     recent_topics = get_recent_topics()
-    print(f"  除外トピック（直近{len(recent_topics)}件）: {recent_topics}")
-    topic = select_topic(excluded_ids=recent_topics)
-    save_topic_to_ssm(topic["id"], dry_run=dry_run)
-
-    recent_angles = get_recent_angles()
-    angle = select_angle(excluded_angles=recent_angles)
-    save_angle_to_ssm(angle, dry_run=dry_run)
-    print(f"  選択されたトピック: {topic['name']} / 切り口: {angle} [{time.time()-_t:.1f}s]")
+    print(f"  直近のトピック（{len(recent_topics)}件）: {recent_topics}")
+    news = _pick_news(recent_topics) if mode == "news" else None
+    if news:
+        topic = news_to_topic(news)
+        angle = f"新機能紹介（{news.get('date') or '日付不明'}発表: {news['url']}）"
+        save_topic_to_ssm(topic["id"], dry_run=dry_run)
+        save_news_url_to_ssm(news["url"], dry_run=dry_run)
+    else:
+        if mode == "news":
+            mode = "evergreen_fallback"
+        topic = select_topic(excluded_ids=recent_topics)
+        save_topic_to_ssm(topic["id"], dry_run=dry_run)
+        recent_angles = get_recent_angles()
+        angle = select_angle(excluded_angles=recent_angles)
+        save_angle_to_ssm(angle, dry_run=dry_run)  # 除外判定は素の切り口文字列で行うため、注記を付ける前に保存する
+        if mode == "evergreen_fallback":
+            angle = f"【新機能の候補なしのため定番解説】{angle}"
+    print(f"  モード: {mode} / トピック: {topic['name']} / {angle} [{time.time()-_t:.1f}s]")
 
     # Step 2: 出力先準備（画像はGPTに手動で依頼する運用のため、構成図PNGは生成しない）
     _t = time.time()
@@ -1079,7 +1507,7 @@ def run(dry_run: bool = False):
     # Step 3: 記事生成
     _t = time.time()
     print("Step 3: 記事を生成中（2,000文字程度）...")
-    article, title, is_truncated, gen_meta = generate_article(topic, today, angle)
+    article, title, is_truncated, gen_meta = generate_article(topic, today, angle, news=news)
     char_count = len(article)
     print(f"  記事生成完了: {char_count:,}文字 title={title!r} [{time.time()-_t:.1f}s]")
 
@@ -1137,6 +1565,8 @@ def run(dry_run: bool = False):
     # 構造化サマリーログ（CloudWatch Logs Insights での集計用）
     print(json.dumps({
         "metric": "zenn_article_generated",
+        "mode": mode,
+        "news_url": news["url"] if news else None,
         "topic": topic["id"],
         "angle": angle,
         "chars": char_count,
@@ -1156,7 +1586,12 @@ def run(dry_run: bool = False):
 
 def lambda_handler(event, context):
     dry_run = bool((event or {}).get("dry_run", False))
-    topic, char_count, md_path, png_paths, s3_url = run(dry_run=dry_run)
+    # 既定は新機能紹介（news）。{"mode": "evergreen"} で従来の定番解説を明示的に生成できる
+    mode = (event or {}).get("mode") or os.environ.get("ARTICLE_MODE", "news")
+    if mode not in ("news", "evergreen"):
+        print(f"[WARNING] 不明なmode={mode!r}。newsで実行します")
+        mode = "news"
+    topic, char_count, md_path, png_paths, s3_url = run(dry_run=dry_run, mode=mode)
     return {
         "statusCode": 200,
         "body": json.dumps(
