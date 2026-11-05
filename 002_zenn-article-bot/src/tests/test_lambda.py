@@ -132,23 +132,23 @@ def test_validate_article_detects_real_h1_heading():
 
 
 def test_validate_article_flags_too_short():
-    """250文字未満（内容不足・生成異常の兆候）を検出すること"""
+    """1,200文字未満（内容不足・生成異常の兆候）を検出すること"""
     article = "## はじめに\n\n## まとめ\n"
-    issues = lambda_function.validate_article(article, 200)
+    issues = lambda_function.validate_article(article, 1000)
     assert any("文字数" in i for i in issues)
 
 
 def test_validate_article_flags_too_long():
-    """目安(500文字程度)を大きく超える記事（800文字超）を警告すること（2026-10-10〜）"""
+    """目安(2,000文字程度)を大きく超える記事（2,800文字超）を警告すること（2026-11-05〜）"""
     article = "## はじめに\n\n## まとめ\n"
-    issues = lambda_function.validate_article(article, 1200)
+    issues = lambda_function.validate_article(article, 3000)
     assert any("超えています" in i for i in issues)
 
 
 def test_validate_article_accepts_target_length_without_cli():
     """ハンズオン廃止によりAWS CLIコマンドが無くても、目安文字数内なら問題なしとすること"""
     article = "## はじめに\n\n## ポイント\n\n## まとめ\n"
-    issues = lambda_function.validate_article(article, 480)
+    issues = lambda_function.validate_article(article, 1900)
     assert issues == []
 
 
