@@ -94,6 +94,8 @@ Resources:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/bitbank/api_secret"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/state"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cryptobot/mode"
+                  # 004 portfolio admin token: embedded in notification mail links (?admin=...)
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/portfolio/cryptobot-stats-auth"
               - Effect: Allow
                 Action:
                   - ssm:PutParameter

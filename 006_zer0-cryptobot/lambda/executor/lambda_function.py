@@ -77,6 +77,23 @@ ACCOUNT_CHECK_KEY   = "cryptobot/account_check.json"  # 同じ差額で毎回メ
 PENDING_ALERT_HOURS = 6                  # これ以上確定しない仮記録はメールで知らせる
 # 004ポートフォリオの非公開トレード実績ページ（要admin Cookie。通知メール本文への案内用）
 PORTFOLIO_STATS_URL = "https://www.zer0-infra.com/ja/cryptobot-stats"
+# 管理者トークン（004のmiddlewareと同じSSM SecureString）。メールのリンクを ?admin=<トークン> 付きにし、
+# Cookieが無い端末でもタップ1回で実績ページを開けるようにする（保護ページへの直接アクセスはリダイレクトなしで描画される）
+SSM_STATS_AUTH = os.environ.get("SSM_STATS_AUTH_PARAM_NAME", "/portfolio/cryptobot-stats-auth")
+_stats_url_cache: str | None = None
+
+
+def stats_url() -> str:
+    """メール用の実績ページURL（管理者トークン付き）。取得失敗時はトークンなしURLを返す（通知自体は止めない）。"""
+    global _stats_url_cache
+    if _stats_url_cache is None:
+        try:
+            token = _ssm.get_parameter(Name=SSM_STATS_AUTH, WithDecryption=True)["Parameter"]["Value"]
+            _stats_url_cache = f"{PORTFOLIO_STATS_URL}?admin={urllib.parse.quote(token, safe='')}"
+        except Exception as e:
+            log(f"管理者トークン取得失敗（トークンなしURLで通知）: {e}")
+            return PORTFOLIO_STATS_URL
+    return _stats_url_cache
 
 # TP/SL 倍率（v3.1: 現実コスト込みグリッドスイープ＋ウォークフォワード検証で最適化）
 TP1_MULT    = 1.25  # TP1 = entry ± ATR × 1.25
@@ -727,6 +744,10 @@ def send_email(subject: str, body: str, level: str | None = None, action: str | 
     level 未指定時は件名の 🚨/⚠️・「エラー/失敗/不一致」から自動判定、それ以外は「対応不要」。"""
     try:
         level = level or alert_mail.detect_level(subject)
+        if action is None and level == "info":
+            # 本文に実績ページのリンクが既にある場合（TP1約定メール等）はフッター側のリンクを省き、1通1リンクにする
+            action = (EXECUTOR_ACTION_INFO_NO_LINK if PORTFOLIO_STATS_URL in body
+                      else EXECUTOR_ACTION_INFO_NO_LINK + "最新の状況は実績ページで確認できます：" + stats_url())
         action = action or EXECUTOR_ACTIONS.get(level)
         subject = alert_mail.decorate_subject(subject, level)
         mail_body = {
@@ -753,9 +774,11 @@ def send_email(subject: str, body: str, level: str | None = None, action: str | 
         log(f"SES 送信失敗: {e}")
 
 
+EXECUTOR_ACTION_INFO_NO_LINK = "対応は不要です。Botが自動で管理しています。"
+
 # 重要度ごとの「あなたがすること」（本文に個別の指示がある場合もこれを末尾に添える）
 EXECUTOR_ACTIONS = {
-    "info":     "対応は不要です。Botが自動で管理しています。最新の状況は実績ページで確認できます：" + PORTFOLIO_STATS_URL,
+    "info":     EXECUTOR_ACTION_INFO_NO_LINK,  # リンク付きの文はsend_emailで組み立てる（管理者トークンを実行時に取得するため）
     "warning":  "内容を確認してください。1回だけで以後届かなければ様子見で構いません。"
                 "続けて届く場合は Executor のログ（CloudWatch Logs）で原因を確認してください。",
     "critical": "すぐに bitbank の管理画面でポジションと注文（SL）の状態を確認し、上の記載に従って対応してください。"
@@ -819,7 +842,7 @@ def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: flo
         f"　高値/安値から ATR×{TRAIL_MULT} 分反転すると、その時点のラインで残り70%が決済されます。\n"
         f"\n"
         f"最新の決済ライン・含み損益はいつでも実績ページで確認できます：\n"
-        f"{PORTFOLIO_STATS_URL}"
+        f"{stats_url()}"
     )
     send_email(subject, body)
 

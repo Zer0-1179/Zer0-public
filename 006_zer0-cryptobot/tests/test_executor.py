@@ -833,3 +833,40 @@ def test_sl_filled_with_tp1_also_filled_records_tp1_and_skips_residual(executor,
     reasons = [c.args[2] for c in rec.call_args_list]
     assert reasons == ["TP1部分利確", "損切り（SL約定）"]
     bb.create_market_order.assert_not_called()
+
+
+def _capture_ses(executor, monkeypatch, token="tok/en+1"):
+    sent = []
+    ssm = MagicMock()
+    ssm.get_parameter.return_value = {"Parameter": {"Value": token}}
+    monkeypatch.setattr(executor, "_ssm", ssm)
+    monkeypatch.setattr(executor, "_stats_url_cache", None)
+    ses = MagicMock()
+    ses.send_email.side_effect = lambda **k: sent.append(k)
+    monkeypatch.setattr(executor, "_ses", ses)
+    monkeypatch.setattr(executor, "send_email", executor._real_send_email)
+    return sent
+
+
+def test_tp1_mail_has_single_admin_link(executor, monkeypatch):
+    sent = _capture_ses(executor, monkeypatch)
+    executor.notify_trail_started("eth_jpy", "long", 500000, 510000, 512000, 3000, None)
+    text = sent[0]["Message"]["Body"]["Text"]["Data"]
+    html = sent[0]["Message"]["Body"]["Html"]["Data"]
+    admin_url = executor.PORTFOLIO_STATS_URL + "?admin=tok%2Fen%2B1"
+    assert text.count(executor.PORTFOLIO_STATS_URL) == 1
+    assert admin_url in text
+    assert html.count('href="' + admin_url) == 1
+
+
+def test_info_mail_footer_has_admin_link(executor, monkeypatch):
+    sent = _capture_ses(executor, monkeypatch)
+    executor.send_email("【CryptoBot】テスト", "本文のみ")
+    text = sent[0]["Message"]["Body"]["Text"]["Data"]
+    assert text.count(executor.PORTFOLIO_STATS_URL + "?admin=tok%2Fen%2B1") == 1
+
+
+def test_stats_url_falls_back_without_token(executor, monkeypatch):
+    _capture_ses(executor, monkeypatch)
+    executor._ssm.get_parameter.side_effect = Exception("AccessDenied")
+    assert executor.stats_url() == executor.PORTFOLIO_STATS_URL
