@@ -31,7 +31,8 @@ MIN_INVEST_JPY  = 1000          # 最小発注額（円）
 # 同時保有は2件まで・1件=受入保証金×POSITION_EQUITY_RATIO とし、合計を資金の1.2倍に抑える。
 # 0.6は1件あたりのリスクが従来（資金の約0.65倍）とほぼ同じで、「累計20件まで増額しない」方針を守る値。
 # 5年バックテスト: 成長+43.4%・最大DD20.1%・1回の最大損失7.2%（0.75なら+53.7%・24.7%・9.0%）。
-# 2件同時に過去最大の損切り幅（約12%）で決済されても保証金率は約81%で、追証ライン50%に届かない。
+# 2件同時に過去最大の損切り幅（約12%）まで逆行しても、保証金率はロングで約81%・ショートで約64%
+# （ショートは逆行で建玉評価額が増えるため低く出る。警告65%には掛かるが追証ライン50%には届かない）。
 # 増額時はこの値を上げる（0.75で合計1.5倍・同条件の保証金率約62%が上限の目安）。
 MAX_POSITIONS   = 2
 POSITION_EQUITY_RATIO = 0.6
@@ -109,6 +110,8 @@ SL_SLIPPAGE = 0.003 # stop_limit SL の price オフセット率（急落/急騰
 SL_ORDER_TYPE = "stop"
 # 安全網: 発動済みなのにこの秒数を過ぎても約定しないSL注文は、取り消して成行で決済する
 STALE_TRIGGER_S = 120
+# エントリー約定後のSL発注がこの回数続けて失敗したら、損切りなしで持ち続けず成行で決済する
+SL_FAIL_RESCUE_COUNT = 3
 FILL_POLL_INTERVAL_S = 2   # 成行約定待機ポーリング間隔（秒）
 FILL_POLL_TIMEOUT_S  = 20  # 成行約定待機タイムアウト（秒）（MAX_POSITIONS=2 時最大 40s / Lambda timeout 300s）
 
@@ -191,12 +194,37 @@ def get_ssm(name: str, decrypt: bool = False) -> str:
     return _ssm.get_parameter(Name=name, WithDecryption=decrypt)["Parameter"]["Value"]
 
 
+class StateLoadError(Exception):
+    """ポジション状態を読めなかった。空stateで続行すると最後のsave_stateで本物を上書きしてしまうため、
+    その回の処理は中止する（2026-11-15、入金前監査の指摘3）。"""
+    pass
+
+
 def load_state() -> dict:
+    """パラメータ未作成（初回）だけ空stateを返す。SSMの一時エラーや壊れたJSONは StateLoadError。
+    以前は全例外で空stateを返しており、一時エラー1回で既存ポジションが管理外になり、
+    さらに Phase B が追加で建てて建玉合計が資金の約1.8倍まで膨らむ経路があった。"""
     try:
         raw = get_ssm(SSM_STATE, decrypt=False)
-        return json.loads(raw)
-    except Exception:
-        return {"positions": {}}
+    except Exception as e:
+        if type(e).__name__ == "ParameterNotFound" or "ParameterNotFound" in str(e):
+            return {"positions": {}}
+        raise StateLoadError(f"SSM state 読み込み失敗: {e}") from e
+    try:
+        state = json.loads(raw)
+    except Exception as e:
+        raise StateLoadError(f"SSM state のJSONが壊れている: {e}") from e
+    if not isinstance(state, dict) or not isinstance(state.get("positions"), dict):
+        raise StateLoadError(f"SSM state の形式が不正: {raw[:200]}")
+    return state
+
+
+def save_state_now(state: dict):
+    """発注直後など、Lambdaがこの後で落ちてもstateを失わないよう途中で保存する（失敗しても処理は続ける）。"""
+    try:
+        _ssm.put_parameter(Name=SSM_STATE, Value=json.dumps(state), Type="String", Overwrite=True)
+    except Exception as e:
+        log(f"途中保存失敗（最後の save_state で再保存）: {e}")
 
 
 def get_bot_mode() -> str:
@@ -1054,27 +1082,45 @@ def _apply_entry_fill(bb: "BitbankClient", pair: str, pos: dict, order: dict, cf
     tp1_amount  = math.floor(amount * TP1_RATIO * (10 ** prec)) / (10 ** prec)
     trail_amount = round(amount - tp1_amount, prec)
 
+    # 失敗時の安全網（rescue_close）が実約定価格で記録できるよう先に入れておく
+    pos.setdefault("entry_price", entry)
+
+    # SL を TP1 より先に出す（2026-11-15、入金前監査の指摘4: 以前はTP1→SLの順で、SLだけ失敗すると
+    # 次回実行まで損切りなしだった）。order_id は verify の前に pos へ書く（指摘6: verify失敗で
+    # order_idが残らず、次回に同じ注文を二重発注する経路があった）。
+    if pos.get("sl_order_id") is None:
+        sl_trigger_str = round_price(sl_price, cfg["price_prec"])
+        sl_limit_f     = sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
+        sl_limit_str   = round_price(sl_limit_f, cfg["price_prec"])
+        try:
+            o_sl = bb.create_order(pair,
+                                   round_amount(trail_amount, cfg["amount_prec"]),
+                                   sl_limit_str,
+                                   close_side, position_side=direction,
+                                   trigger_price=sl_trigger_str)
+        except Exception as se:
+            pos["sl_fail_count"] = pos.get("sl_fail_count", 0) + 1
+            send_email(
+                f"【Zer0-CryptoBot】🚨SL発注失敗 - {pair.upper()}",
+                f"エントリーは約定しましたが、損切り（SL）注文の発注に失敗しました。今は損切りなしの状態です。\n"
+                f"次回の実行（最大30分後）で再試行し、{SL_FAIL_RESCUE_COUNT}回続けて失敗したら成行で決済します。\n"
+                f"至急bitbank管理画面で確認してください。\n\n"
+                f"コイン：{pair.upper()}\n方向：{direction}\n約定価格：{entry:,.4f}\n数量：{amount}\n"
+                f"失敗回数：{pos['sl_fail_count']}\nエラー：{se}",
+            )
+            raise
+        pos["sl_order_id"] = o_sl["order_id"]
+        pos.pop("sl_fail_count", None)
+        verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
+
     # TP1: pos に order_id が記録済みなら再試行のため既存注文を再利用（二重発注防止）
     if pos.get("tp1_order_id") is None:
         o_tp1 = bb.create_order(pair,
                                 round_amount(tp1_amount, cfg["amount_prec"]),
                                 round_price(tp1_price,   cfg["price_prec"]),
                                 close_side, position_side=direction)
-        verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
         pos["tp1_order_id"] = o_tp1["order_id"]
-
-    # SL: 同上
-    if pos.get("sl_order_id") is None:
-        sl_trigger_str = round_price(sl_price, cfg["price_prec"])
-        sl_limit_f     = sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
-        sl_limit_str   = round_price(sl_limit_f, cfg["price_prec"])
-        o_sl = bb.create_order(pair,
-                               round_amount(trail_amount, cfg["amount_prec"]),
-                               sl_limit_str,
-                               close_side, position_side=direction,
-                               trigger_price=sl_trigger_str)
-        verify_order(bb, pair, o_sl["order_id"], "初期SL注文")
-        pos["sl_order_id"] = o_sl["order_id"]
+        verify_order(bb, pair, o_tp1["order_id"], "TP1注文")
 
     pos.update({
         "status":        "active",
@@ -1198,6 +1244,31 @@ def _emergency_close_all(bb: BitbankClient, state: dict) -> list[str]:
                 log(f"{pair}: 緊急成行決済失敗: {e}")
                 failed_pairs.append(pair)  # 建玉が無防備なまま残っている
 
+    # stateに無い実建玉（孤児建玉）も決済する。緊急決済は「追証の手前で口座全体を守る」ためのもので、
+    # stateに載っていない建玉が残ると保証金率が戻らない（2026-11-15、入金前監査の指摘3）
+    try:
+        actual = bb.get_margin_positions()
+    except Exception as e:
+        log(f"緊急決済: 実建玉の取得失敗（孤児建玉は未確認）: {e}")
+        actual = []
+    for p in actual:
+        pair = p.get("pair")
+        side = p.get("position_side")
+        try:
+            amt = float(p.get("open_amount") or 0)
+        except (TypeError, ValueError):
+            amt = 0.0
+        if amt <= 0 or pair in state["positions"] or side not in ("long", "short"):
+            continue
+        cfg = PAIRS.get(pair, {"price_prec": 0, "amount_prec": 4})
+        try:
+            bb.create_market_order(pair, round_amount(amt, cfg["amount_prec"]),
+                                   "sell" if side == "long" else "buy", position_side=side)
+            log(f"{pair}: 緊急成行決済（stateに無い建玉） {side} {amt}")
+        except Exception as e:
+            log(f"{pair}: 緊急成行決済失敗（stateに無い建玉）: {e}")
+            failed_pairs.append(pair)
+
     return failed_pairs
 
 
@@ -1262,11 +1333,21 @@ def reconcile_positions(bb: BitbankClient, state: dict):
 
     if mismatches:
         log(f"建玉リコンサイル不一致検出: {mismatches}")
-        send_email(
-            "【Zer0-CryptoBot】⚠️state⇄実建玉の不一致検出",
-            "SSM stateとbitbank実建玉のズレを検出しました。自動修復は行っていません。手動確認をお願いします。\n\n"
-            + "\n".join(mismatches),
-        )
+        if actual_by_pair:
+            # 孤児建玉はBotがSLを管理していない＝損切りなしで放置されている。手動建玉の可能性もあるため
+            # 自動決済はせず、最優先の対応が必要な通知にする（2026-11-15、入金前監査の指摘2）
+            send_email(
+                "【Zer0-CryptoBot】🚨SLなしの建玉を検出（stateに記録なし）",
+                "bitbankに建玉がありますが、Botの記録（SSM state）にありません。損切り注文が置かれていない"
+                "可能性が高いため、至急bitbank管理画面で確認し、手動で決済するか逆指値を置いてください。\n\n"
+                + "\n".join(mismatches),
+            )
+        else:
+            send_email(
+                "【Zer0-CryptoBot】⚠️state⇄実建玉の不一致検出",
+                "SSM stateとbitbank実建玉のズレを検出しました。自動修復は行っていません。手動確認をお願いします。\n\n"
+                + "\n".join(mismatches),
+            )
     else:
         log("建玉リコンサイル: 一致確認OK")
 
@@ -1319,6 +1400,47 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     return True
 
 
+def _place_trail_order(bb: BitbankClient, pair: str, pos: dict, cfg: dict, price_f: float) -> dict:
+    direction = pos.get("direction", "long")
+    trig_str  = round_price(price_f, cfg["price_prec"])
+    limit_str = round_price(price_f * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE),
+                            cfg["price_prec"])
+    return bb.create_order(pair, round_amount(pos["trail_amount"], cfg["amount_prec"]), limit_str,
+                           "sell" if direction == "long" else "buy", position_side=direction,
+                           trigger_price=trig_str)
+
+
+def _replace_trail_sl(bb: BitbankClient, pair: str, pos: dict, cfg: dict, new_trail_f: float) -> bool:
+    """旧トレーリングSLを取り消した直後に呼ぶ。新しい価格で出せなければ、同じ回のうちに旧価格で出し直す
+    （2026-11-15、入金前監査の指摘5: 以前は新規発注の失敗がログだけで、次回の自己修復まで最大30分
+    残り70%が損切りなしだった）。両方失敗したら🚨メール（trail_sl_order_id=None のまま次回も自己修復）。
+    order_id は verify の前に pos へ書く（指摘6）。新価格で出せたら True。"""
+    old_price = pos["trail_sl_price"]
+    try:
+        o = _place_trail_order(bb, pair, pos, cfg, new_trail_f)
+    except Exception as e1:
+        log(f"{pair}: トレーリングSL更新の発注失敗 → 旧価格{old_price}で出し直す: {e1}")
+        try:
+            o = _place_trail_order(bb, pair, pos, cfg, old_price)
+        except Exception as e2:
+            log(f"{pair}: 旧価格での再発注も失敗: {e2}")
+            send_email(
+                f"【Zer0-CryptoBot】🚨SL不在 - {pair.upper()}",
+                f"トレーリングSLの更新で旧注文を取り消した後、新しい注文を出せませんでした。"
+                f"今は損切りなしの状態です。次回の実行（最大30分後）で再発注しますが、至急bitbank管理画面で"
+                f"確認してください。\n\nコイン：{pair.upper()}\n方向：{pos.get('direction')}\n"
+                f"新価格での失敗：{e1}\n旧価格({old_price})での失敗：{e2}",
+            )
+            return False
+        pos["trail_sl_order_id"] = o["order_id"]
+        verify_order(bb, pair, o["order_id"], "トレーリングSL（旧価格で再発注）")
+        return False
+    pos["trail_sl_order_id"] = o["order_id"]
+    pos["trail_sl_price"]    = price_val(round_price(new_trail_f, cfg["price_prec"]))
+    verify_order(bb, pair, o["order_id"], "トレーリングSL更新")
+    return True
+
+
 # ── Phase A: 既存ポジション管理 ───────────────────────────────────────────────
 def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict:
     to_delete = []
@@ -1353,6 +1475,22 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                     except ValueError as ve:
                         log(f"{pair}({direction}): {ve} → スキップ")
                         continue
+                    except OrderVerificationError:
+                        raise
+                    except Exception:
+                        if pos.get("sl_order_id") is None and pos.get("sl_fail_count"):
+                            # SL発注失敗（_apply_entry_fill 内で🚨メール済み）。続けて失敗したら成行で決済する
+                            if pos["sl_fail_count"] >= SL_FAIL_RESCUE_COUNT:
+                                if rescue_close(bb, pair, pos,
+                                                f"SL発注に{pos['sl_fail_count']}回続けて失敗", cfg):
+                                    to_delete.append(pair)
+                            continue
+                        raise
+
+                elif status.startswith("CANCELED") or status == "REJECTED":
+                    # 約定ゼロで終わったエントリー。建玉はないので枠を塞がず即 state から外す（監査の指摘8）
+                    log(f"{pair}({direction}): エントリー注文が約定せず終了 (status={status}) → state から削除")
+                    to_delete.append(pair)
 
                 elif time.time() - pos["buy_timestamp"] > CANCEL_AFTER_S:
                     log(f"{pair}({direction}): 24時間未約定 → キャンセル")
@@ -1446,18 +1584,37 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                         trail_sl_str      = round_price(trail_sl_price, cfg["price_prec"])
                         trail_limit_f     = trail_sl_price * (1 - SL_SLIPPAGE if direction == "long" else 1 + SL_SLIPPAGE)
                         trail_limit_str   = round_price(trail_limit_f, cfg["price_prec"])
-                        try:
-                            o_trail = bb.create_order(
-                                pair,
-                                round_amount(trail_amount, cfg["amount_prec"]),
-                                trail_limit_str,
-                                close_side, position_side=direction,
-                                trigger_price=trail_sl_str,
-                            )
-                            verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
-                        except Exception as te:
+                        o_trail = None
+                        te = None
+                        for attempt in range(2):  # 旧SLは取消済み＝今は損切りなし。一時エラーなら同じ回で1回だけ再試行
+                            try:
+                                o_trail = bb.create_order(
+                                    pair,
+                                    round_amount(trail_amount, cfg["amount_prec"]),
+                                    trail_limit_str,
+                                    close_side, position_side=direction,
+                                    trigger_price=trail_sl_str,
+                                )
+                                break
+                            except Exception as e_:
+                                te = e_
+                                if "60018" in str(e_):
+                                    break
+                                log(f"{pair}: トレーリングSL発注失敗({attempt + 1}/2): {e_}")
+                                if attempt == 0:
+                                    time.sleep(2)
+                        if o_trail is None:
                             if "60018" not in str(te):
-                                raise  # 一時的なエラーは従来どおり次回再試行（state は active のまま）
+                                # 一時的なエラーは次回再試行（state は active のまま）。旧SLは取消済みで残り70%が
+                                # 損切りなしのため、すぐ知らせる（2026-11-15、入金前監査の指摘5と同種）
+                                send_email(
+                                    f"【Zer0-CryptoBot】🚨SL不在 - {pair.upper()}",
+                                    f"TP1約定後、旧SLを取り消しましたがトレーリングSLを発注できませんでした。"
+                                    f"今は損切りなしの状態です。次回の実行（最大30分後）で再試行しますが、"
+                                    f"至急bitbank管理画面で確認してください。\n\nコイン：{pair.upper()}\n"
+                                    f"方向：{direction}\nエラー：{te}",
+                                )
+                                continue
                             # 価格がすでに建値を割っている（60018: 即時トリガーする価格は指定不可）等で
                             # トレーリングSLを出せないと、残り70%が無防備になる。TP1分を記録してから成行で決済する。
                             # TP1記録は注文IDでキーが固定されるため、次回再試行で重複しない
@@ -1468,6 +1625,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             if rescue_close(bb, pair, rest, f"TP1後のトレーリングSLを発注できない: {te}", cfg):
                                 to_delete.append(pair)
                             continue
+                        # trailing に切り替えてから verify する（verify失敗でも order_id を失わず、
+                        # 次回に同じトレーリングSLを二重発注しない。監査の指摘6）
                         state["positions"][pair] = {
                             "status":            "trailing",
                             "direction":         direction,
@@ -1492,6 +1651,10 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                      bb=bb, order_id=pos.get("tp1_order_id"))
                         notify_trail_started(pair, direction, entry, pos["tp1_price"],
                                              tp1_fill_price, realized_pnl, rec)
+                        try:
+                            verify_order(bb, pair, o_trail["order_id"], "トレーリングSL注文")
+                        except OrderVerificationError:
+                            pass  # メール送信済み。order_id は state に記録済みなので次回も同じ注文を照会する
                         continue
 
                     # TP1未約定: 取消済/拒否 検出（外部キャンセル・異常系）
@@ -1615,8 +1778,8 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             heal_side, position_side=direction,
                             trigger_price=heal_trig_str,
                         )
-                        verify_order(bb, pair, heal_order["order_id"], "トレーリングSL再発注（自己修復）")
                         pos["trail_sl_order_id"] = heal_order["order_id"]
+                        verify_order(bb, pair, heal_order["order_id"], "トレーリングSL再発注（自己修復）")
                         log(f"{pair}({direction}): トレーリングSL再発注成功 order_id={heal_order['order_id']}")
                     except Exception as heal_e:
                         log(f"{pair}: トレーリングSL再発注失敗（次回再試行）: {heal_e}")
@@ -1679,19 +1842,9 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue
-                                    new_trail_limit_str = round_price(new_trail_f * (1 - SL_SLIPPAGE), cfg["price_prec"])
-                                    new_order = bb.create_order(
-                                        pair,
-                                        round_amount(pos["trail_amount"], cfg["amount_prec"]),
-                                        new_trail_limit_str,
-                                        "sell", position_side="long",
-                                        trigger_price=new_trail_str,
-                                    )
-                                    verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
-                                    pos["trail_sl_order_id"] = new_order["order_id"]
-                                    pos["trail_sl_price"]    = new_trail_val
-                                    pos["highest_price"]     = new_highest
-                                    notify_trail_updated(pair, direction, new_trail_val, current)
+                                    if _replace_trail_sl(bb, pair, pos, cfg, new_trail_f):
+                                        pos["highest_price"] = new_highest
+                                        notify_trail_updated(pair, direction, new_trail_val, current)
 
                         else:  # short
                             if current < pos["lowest_price"]:
@@ -1714,19 +1867,9 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                                     except Exception as ce:
                                         log(f"{pair}: トレーリングSLキャンセル失敗 → 更新スキップ: {ce}")
                                         continue
-                                    new_trail_limit_str = round_price(new_trail_f * (1 + SL_SLIPPAGE), cfg["price_prec"])
-                                    new_order = bb.create_order(
-                                        pair,
-                                        round_amount(pos["trail_amount"], cfg["amount_prec"]),
-                                        new_trail_limit_str,
-                                        "buy", position_side="short",
-                                        trigger_price=new_trail_str,
-                                    )
-                                    verify_order(bb, pair, new_order["order_id"], "トレーリングSL更新")
-                                    pos["trail_sl_order_id"] = new_order["order_id"]
-                                    pos["trail_sl_price"]    = new_trail_val
-                                    pos["lowest_price"]      = new_lowest
-                                    notify_trail_updated(pair, direction, new_trail_val, current)
+                                    if _replace_trail_sl(bb, pair, pos, cfg, new_trail_f):
+                                        pos["lowest_price"] = new_lowest
+                                        notify_trail_updated(pair, direction, new_trail_val, current)
 
                     except Exception as te:
                         log(f"{pair}: トレーリング更新失敗: {te}")
@@ -1744,6 +1887,54 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
         state["positions"].pop(pair, None)
 
     return state
+
+
+def _close_unknown_entry(bb: BitbankClient, pair: str, direction: str, pre_open: float | None,
+                         cfg: dict, err: Exception):
+    """成行エントリーの発注が例外になった（order_id 不明）ときの後始末。数秒待って実建玉を確かめ、
+    発注前より増えていれば（＝取引所では約定していた）その分を成行で決済する。"""
+    log(f"{pair}: 成行エントリー発注で例外 → 約定有無を確認: {err}")
+    added = None
+    for _ in range(3):
+        time.sleep(3)
+        now_open = get_open_amount(bb, pair, direction)
+        if now_open is not None and pre_open is not None:
+            added = now_open - pre_open
+            if added > 0:
+                break
+    amt_str = round_amount(added, cfg["amount_prec"]) if added and added > 0 else None
+    if added is None:
+        send_email(f"【Zer0-CryptoBot】🚨発注結果が不明 - {pair.upper()}",
+                   f"成行エントリーの発注が例外になり、建玉の有無も確認できませんでした。約定していればSLなしの"
+                   f"建玉です。至急bitbank管理画面で確認してください。\n\n方向：{direction}\nエラー：{err}")
+        return
+    if amt_str is None or float(amt_str) <= 0:
+        log(f"{pair}: 建玉は増えていない（発注は不成立）")
+        send_email(f"【Zer0-CryptoBot】発注エラー - {pair.upper()}",
+                   f"コイン：{pair.upper()}\n方向：{direction}\nエラー：{err}\n建玉は増えていません（発注は不成立）。")
+        return
+    try:
+        mkt = bb.create_market_order(pair, amt_str, "sell" if direction == "long" else "buy",
+                                     position_side=direction)
+        log(f"{pair}: 発注結果不明の建玉 {amt_str} を成行決済")
+    except Exception as ce:
+        send_email(f"【Zer0-CryptoBot】🚨SLなしの建玉が残っています - {pair.upper()}",
+                   f"成行エントリーの発注が例外になり、取引所では約定していました（数量{amt_str}）。"
+                   f"成行決済も失敗しました。至急bitbank管理画面で手動決済してください。\n\n"
+                   f"方向：{direction}\n発注エラー：{err}\n決済エラー：{ce}")
+        return
+    # 決済の損益は bitbank の約定履歴（profit_loss）で記録されるので、口座照合もずれない。
+    # 建値は不明なので決済時の価格で代用する（pnl_jpy は約定履歴の実額が入る）
+    try:
+        est = get_bitbank_price(pair)
+    except Exception:
+        est = 0.0
+    rec = record_trade(pair, direction, "発注結果不明の建玉を即時決済", est, est, float(amt_str),
+                       f"{pair}-{int(time.time())}", estimated=True, bb=bb, order_id=(mkt or {}).get("order_id"))
+    send_email(f"【Zer0-CryptoBot】⚠️発注結果不明の建玉を決済 - {pair.upper()}",
+               f"成行エントリーの発注が例外になりましたが、取引所では約定していました（数量{amt_str}）。"
+               f"注文IDが分からずSLを管理できないため、成行で決済しました。\n\n"
+               f"方向：{direction}\nエラー：{err}\n{_net_pnl_lines(rec)}")
 
 
 # ── Phase B: 新規シグナル注文 ─────────────────────────────────────────────────
@@ -1815,8 +2006,17 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                 continue
 
             log(f"{pair}({direction}): 成行発注 amount={amount_str} market={bb_price:.0f}円 invest={invest_jpy:.0f}円")
-            order = bb.create_market_order(pair, amount_str, order_side, position_side=direction)
-            verify_order(bb, pair, order["order_id"], "エントリー注文")
+            # 発注前の同ペア・同方向の実建玉（手動建玉など）。発注が例外になった時に、今回の発注で
+            # 増えた分だけを判定するために使う
+            pre_open = get_open_amount(bb, pair, direction)
+            try:
+                order = bb.create_market_order(pair, amount_str, order_side, position_side=direction)
+            except Exception as oe:
+                # 通信タイムアウト・5xx だと、取引所では約定しているのに order_id が取れない。
+                # そのままだとSLなしの孤児建玉になるため、建玉が増えていたらその分を即成行で決済する
+                # （2026-11-15、入金前監査の指摘2）
+                _close_unknown_entry(bb, pair, direction, pre_open, cfg, oe)
+                continue
 
             pos = {
                 "status":             "buy_pending",
@@ -1831,38 +2031,60 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                 "sl_order_id":        None,
                 "tp1_filled":         False,
             }
+            # 発注できた時点で state に載せて即保存する（2026-11-15、入金前監査の指摘1: 以前は
+            # verify_order が失敗すると state に載らず、実在する建玉がTP1/SLなしで残った。
+            # 載せておけば verify に失敗しても次回の Phase A が buy_pending として拾って TP1/SL を出す）
             state["positions"][pair] = pos
+            save_state_now(state)
             active_count += 1
             if direction == "long":
                 long_count += 1
             else:
                 short_count += 1
+            verify_order(bb, pair, order["order_id"], "エントリー注文")
 
             # 成行約定を待って即時 TP1/SL 発注（最大 FILL_POLL_TIMEOUT_S 秒）
-            # タイムアウト時は buy_pending のまま → Phase A が次回定期実行で処理
+            # 全量約定（FULLY_FILLED）か、残りが取り消された（CANCELED_*）まで待つ。PARTIALLY_FILLED の
+            # 時点で確定すると後から約定した分がSL対象外になるため（指摘7）。待っても PARTIALLY_FILLED の
+            # ままなら、無防備な時間を作らないよう、その時点の約定数量で TP1/SL を出す
             filled_order = None
+            partial_order = None
+            canceled_unfilled = False
             deadline = time.time() + FILL_POLL_TIMEOUT_S
             while time.time() < deadline:
                 try:
                     o = bb.get_order(pair, order["order_id"])
                     status = o.get("status", "")
-                    # CANCELED_PARTIALLY_FILLED も部分約定分の建玉が実在するため filled 扱いにする
-                    if status in ("FULLY_FILLED", "PARTIALLY_FILLED", "CANCELED_PARTIALLY_FILLED") and order_fill(o):
+                    if status in ("FULLY_FILLED", "CANCELED_PARTIALLY_FILLED") and order_fill(o):
                         filled_order = o
                         break
-                    if status.startswith("CANCELED"):
-                        log(f"{pair}: 成行注文がキャンセルされた (status={status})")
+                    if status == "PARTIALLY_FILLED" and order_fill(o):
+                        partial_order = o
+                    elif status.startswith("CANCELED") or status == "REJECTED":
+                        log(f"{pair}: 成行注文が約定せず終了 (status={status})")
+                        canceled_unfilled = True
                         break
                 except Exception as pe:
                     log(f"{pair}: 約定ポーリングエラー: {pe}")
                 time.sleep(FILL_POLL_INTERVAL_S)
+            if filled_order is None and partial_order is not None and not canceled_unfilled:
+                log(f"{pair}: {FILL_POLL_TIMEOUT_S}秒たっても一部約定のまま → 約定分でTP1/SLを発注")
+                filled_order = partial_order
 
-            if filled_order:
-                log(f"{pair}({direction}): 成行即時約定確認 (status={filled_order.get('status')}) → TP1/SL即時発注")
+            if canceled_unfilled:
+                # 約定ゼロで終わった注文は建玉がないので、枠を塞がないよう即 state から外す（指摘8）
+                state["positions"].pop(pair, None)
+                active_count -= 1
+                if direction == "long":
+                    long_count -= 1
+                else:
+                    short_count -= 1
+            elif filled_order:
+                log(f"{pair}({direction}): 成行約定確認 (status={filled_order.get('status')}) → SL/TP1即時発注")
                 try:
                     _apply_and_notify_fill(bb, pair, pos, filled_order, cfg)
                 except Exception as fe:
-                    log(f"{pair}: TP1/SL即時発注失敗（buy_pendingで継続）: {fe}")
+                    log(f"{pair}: SL/TP1即時発注失敗（buy_pendingで継続、次回再試行）: {fe}")
             else:
                 log(f"{pair}({direction}): 成行約定待機タイムアウト({FILL_POLL_TIMEOUT_S}s) → buy_pendingで次回確認")
 
@@ -2065,6 +2287,16 @@ def lambda_handler(event, context):
         save_state(state)
         log("状態保存完了")
 
+    except StateLoadError as e:
+        # 空stateで続行すると本物のstateを上書きし、既存建玉が管理外になるため、この回は何もしない
+        log(f"state読み込み失敗 → 今回の処理を中止（stateは上書きしない）: {e}")
+        send_email(
+            "【Zer0-CryptoBot】⚠️ポジション状態を読めず今回の処理を中止",
+            f"SSMのポジション状態を読み込めなかったため、今回の実行を中止しました（stateは上書きしていません）。\n"
+            f"一時的なエラーなら次回（最大30分後）に自動で再開します。続く場合は手動で確認してください。\n\n"
+            f"エラー: {e}",
+        )
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
     except Exception as e:
         log(f"致命的エラー: {e}")
         send_email(

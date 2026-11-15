@@ -309,6 +309,9 @@ Resources:
       FunctionName: !Ref ExecutorFunction
       Qualifier: $LATEST
       MaximumRetryAttempts: 0
+      # 古いイベントで発注しない上限（既定は6時間）。スロットルで待たされたシグナルが
+      # 古い価格・ATRのまま実行されるのを防ぐ（2026-11-15、入金前監査の指摘10）
+      MaximumEventAgeInSeconds: 600
       DestinationConfig:
         OnFailure:
           Destination: !GetAtt FailureNotifierFunction.Arn

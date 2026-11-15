@@ -3,6 +3,7 @@ boto3クライアントはconftest.pyでモック済み。bitbank実APIには接
 """
 import json
 from unittest.mock import MagicMock
+import pytest
 
 
 # ── 純関数 ────────────────────────────────────────────────────────────────
@@ -870,3 +871,264 @@ def test_stats_url_falls_back_without_token(executor, monkeypatch):
     _capture_ses(executor, monkeypatch)
     executor._ssm.get_parameter.side_effect = Exception("AccessDenied")
     assert executor.stats_url() == executor.PORTFOLIO_STATS_URL
+
+
+# ── 2026-11-15 入金前監査（Fable）の指摘1〜10の修正 ──
+_CFG = {"amount_prec": 4, "price_prec": 0}
+
+
+def test_load_state_returns_empty_only_when_parameter_missing(executor, monkeypatch):
+    class ParameterNotFound(Exception):
+        pass
+    monkeypatch.setattr(executor, "get_ssm", MagicMock(side_effect=ParameterNotFound("x")))
+    assert executor.load_state() == {"positions": {}}
+
+
+def test_load_state_raises_on_transient_error_or_broken_json(executor, monkeypatch):
+    monkeypatch.setattr(executor, "get_ssm", MagicMock(side_effect=Exception("ThrottlingException")))
+    with pytest.raises(executor.StateLoadError):
+        executor.load_state()
+    monkeypatch.setattr(executor, "get_ssm", MagicMock(return_value="{broken"))
+    with pytest.raises(executor.StateLoadError):
+        executor.load_state()
+    monkeypatch.setattr(executor, "get_ssm", MagicMock(return_value='{"x": 1}'))
+    with pytest.raises(executor.StateLoadError):
+        executor.load_state()
+
+
+def test_handler_does_not_overwrite_state_when_load_fails(executor, monkeypatch):
+    _patch_lambda_handler_deps(executor, monkeypatch, "normal")
+    monkeypatch.setattr(executor, "reconcile_trade_records", MagicMock())
+    monkeypatch.setattr(executor, "load_state", MagicMock(side_effect=executor.StateLoadError("x")))
+    r = executor.lambda_handler({"signals": [{"pair": "btc_jpy"}]}, MagicMock())
+    assert r["statusCode"] == 500
+    assert not executor.save_state.called
+    assert not executor.place_new_orders.called
+    assert "中止" in executor.send_email.call_args.args[0]
+
+
+def _entry_env(executor, monkeypatch):
+    bb = MagicMock()
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    monkeypatch.setattr(executor, "get_available_margin", MagicMock(return_value=100000.0))
+    monkeypatch.setattr(executor, "get_margin_equity", MagicMock(return_value=60000.0))
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=10_000_000.0))
+    monkeypatch.setattr(executor, "save_state_now", MagicMock())
+    monkeypatch.setattr(executor, "record_trade", MagicMock(return_value={"pnl_source": "pending"}))
+    sig = [{"pair": "btc_jpy", "side": "short", "binance_price": 65000.0, "atr": 1000.0}]
+    return bb, sig
+
+
+def test_entry_is_saved_to_state_even_if_verify_fails(executor, monkeypatch):
+    """指摘1: 発注後の確認に失敗しても state に載せ、次回 Phase A に拾わせる"""
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.return_value = []
+    bb.create_market_order.return_value = {"order_id": 555}
+    bb.get_order.side_effect = Exception("timeout")
+    out = executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert out["positions"]["btc_jpy"]["status"] == "buy_pending"
+    assert out["positions"]["btc_jpy"]["buy_order_id"] == 555
+    assert executor.save_state_now.called
+
+
+def test_entry_exception_closes_position_that_was_actually_filled(executor, monkeypatch):
+    """指摘2: 発注が例外でも建玉が増えていたら、増えた分だけ成行で決済する（手動建玉は残す）"""
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.side_effect = [
+        [{"pair": "btc_jpy", "position_side": "short", "open_amount": "0.0010"}],   # 発注前（手動分）
+        [{"pair": "btc_jpy", "position_side": "short", "open_amount": "0.0046"}],   # 発注後
+    ]
+    bb.create_market_order.side_effect = [Exception("timed out"), {"order_id": 777}]
+    out = executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert bb.create_market_order.call_args_list[1].args == ("btc_jpy", "0.0036", "buy")
+    assert bb.create_market_order.call_args_list[1].kwargs == {"position_side": "short"}
+    assert executor.record_trade.call_args.kwargs["order_id"] == 777
+    assert "btc_jpy" not in out["positions"]
+
+
+def test_entry_exception_without_fill_does_not_close(executor, monkeypatch):
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.return_value = []
+    bb.create_market_order.side_effect = Exception("code=70009")
+    executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert bb.create_market_order.call_count == 1
+
+
+def test_entry_canceled_unfilled_is_removed_from_state(executor, monkeypatch):
+    """指摘8: 約定ゼロで取り消された成行は枠を塞がない"""
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.return_value = []
+    bb.create_market_order.return_value = {"order_id": 555}
+    bb.get_order.return_value = {"status": "CANCELED_UNFILLED", "average_price": "0", "executed_amount": "0"}
+    out = executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert out["positions"] == {}
+
+
+def test_entry_waits_for_full_fill_before_placing_sl(executor, monkeypatch):
+    """指摘7: PARTIALLY_FILLED の途中で確定せず、全量約定の数量で SL/TP1 を出す"""
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.return_value = []
+    bb.create_market_order.return_value = {"order_id": 555}
+    part = {"status": "PARTIALLY_FILLED", "average_price": "10000000", "executed_amount": "0.0010"}
+    full = {"status": "FULLY_FILLED", "average_price": "10000000", "executed_amount": "0.0036"}
+    bb.get_order.side_effect = [part, part, full] + [full] * 10
+    applied = MagicMock()
+    monkeypatch.setattr(executor, "_apply_and_notify_fill", applied)
+    executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert applied.call_args.args[3]["executed_amount"] == "0.0036"
+
+
+def _filled_pos():
+    return {"status": "buy_pending", "direction": "short", "position_id": "btc_jpy-1", "buy_order_id": 555,
+            "buy_timestamp": 0, "entry_price_signal": 65000.0, "atr_jpy": 1000.0,
+            "tp1_order_id": None, "sl_order_id": None}
+
+
+_FILL = {"status": "FULLY_FILLED", "average_price": "10000000", "executed_amount": "0.0036"}
+
+
+def test_sl_is_placed_before_tp1(executor, monkeypatch):
+    """指摘4: SLを先に出す。order_idはverifyの前にposへ書く（指摘6）"""
+    bb = MagicMock()
+    bb.create_order.side_effect = [{"order_id": 1}, {"order_id": 2}]
+    pos = _filled_pos()
+    executor._apply_entry_fill(bb, "btc_jpy", pos, _FILL, _CFG)
+    first = bb.create_order.call_args_list[0]
+    assert first.kwargs.get("trigger_price")             # 1件目がSL（逆指値）
+    assert pos["sl_order_id"] == 1 and pos["tp1_order_id"] == 2 and pos["status"] == "active"
+
+
+def test_sl_order_id_kept_when_verify_fails(executor, monkeypatch):
+    bb = MagicMock()
+    bb.create_order.return_value = {"order_id": 1}
+    bb.get_order.side_effect = Exception("timeout")
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    pos = _filled_pos()
+    with pytest.raises(executor.OrderVerificationError):
+        executor._apply_entry_fill(bb, "btc_jpy", pos, _FILL, _CFG)
+    assert pos["sl_order_id"] == 1                        # 次回SLを二重発注しない
+
+
+def test_sl_failure_alerts_and_rescues_after_repeated_failures(executor, monkeypatch):
+    """指摘4: SL発注失敗は即🚨メール。SL_FAIL_RESCUE_COUNT回続いたら成行で決済"""
+    bb = MagicMock()
+    bb.get_order.return_value = _FILL
+    bb.create_order.side_effect = Exception("code=70023")
+    rescue = MagicMock(return_value=True)
+    monkeypatch.setattr(executor, "rescue_close", rescue)
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    pos = _filled_pos()
+    state = {"positions": {"btc_jpy": pos}}
+    for i in range(executor.SL_FAIL_RESCUE_COUNT - 1):
+        executor.maintain_positions(bb, state, {})
+        assert not rescue.called
+    assert "🚨SL発注失敗" in mail.call_args.args[0]
+    assert all("メンテナンスエラー" not in c.args[0] for c in mail.call_args_list)
+    out = executor.maintain_positions(bb, state, {})
+    assert rescue.called and "btc_jpy" not in out["positions"]
+    assert bb.create_order.call_count == executor.SL_FAIL_RESCUE_COUNT   # TP1は一度も出していない
+
+
+def _trail_pos():
+    return {"status": "trailing", "direction": "long", "entry_price": 100.0, "atr_jpy": 10.0,
+            "position_id": "p", "trail_amount": 0.01, "trail_sl_order_id": 9, "trail_sl_price": 100.0,
+            "highest_price": 110.0}
+
+
+def test_replace_trail_sl_falls_back_to_old_price(executor, monkeypatch):
+    """指摘5: 新価格で出せなければ同じ回のうちに旧価格で出し直す"""
+    bb = MagicMock()
+    bb.create_order.side_effect = [Exception("70023"), {"order_id": 42}]
+    pos = _trail_pos()
+    assert executor._replace_trail_sl(bb, "eth_jpy", pos, _CFG, 105.0) is False
+    assert pos["trail_sl_order_id"] == 42 and pos["trail_sl_price"] == 100.0
+    assert bb.create_order.call_args.kwargs["trigger_price"] == "100"
+
+
+def test_replace_trail_sl_alerts_when_both_fail(executor, monkeypatch):
+    bb = MagicMock()
+    bb.create_order.side_effect = Exception("70023")
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    pos = _trail_pos()
+    pos["trail_sl_order_id"] = None
+    assert executor._replace_trail_sl(bb, "eth_jpy", pos, _CFG, 105.0) is False
+    assert pos["trail_sl_order_id"] is None and "🚨SL不在" in mail.call_args.args[0]
+
+
+def test_trailing_update_uses_fallback_in_maintain_positions(executor, monkeypatch):
+    bb = MagicMock()
+    bb.get_order.return_value = {"status": "INACTIVE"}
+    bb.create_order.side_effect = [Exception("70023"), {"order_id": 42}]
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=130.0))
+    monkeypatch.setattr(executor, "record_partial_fill_after_cancel", MagicMock())
+    state = {"positions": {"eth_jpy": _trail_pos()}}
+    out = executor.maintain_positions(bb, state, {})
+    p = out["positions"]["eth_jpy"]
+    assert p["trail_sl_order_id"] == 42 and p["trail_sl_price"] == 100.0 and p["highest_price"] == 110.0
+
+
+def test_tp1_to_trailing_transient_failure_alerts_immediately(executor, monkeypatch):
+    """旧SL取消後にトレーリングSLを出せない一時エラーは、1回再試行して🚨メール（activeのまま次回再試行）"""
+    pos = {"status": "active", "direction": "long", "position_id": "eth_jpy-1", "entry_price": 429501.0,
+           "atr_jpy": 6595.2, "tp1_order_id": 11, "sl_order_id": 22, "tp1_price": 437745.0,
+           "tp1_amount": 0.0047, "trail_amount": 0.011, "sl_price": 413013.0, "total_amount": 0.0157}
+    bb = MagicMock()
+    bb.get_order.side_effect = lambda pair, oid: {11: {"status": "FULLY_FILLED", "average_price": "437745",
+                                                        "executed_amount": "0.0047"}}.get(oid, {"status": "CANCELED_UNFILLED"})
+    bb.create_order.side_effect = Exception("code=70023")
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    monkeypatch.setattr(executor, "record_partial_fill_after_cancel", MagicMock())
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    out = executor.maintain_positions(bb, {"positions": {"eth_jpy": pos}}, {})
+    assert bb.create_order.call_count == 2
+    assert "🚨SL不在" in mail.call_args.args[0]
+    assert out["positions"]["eth_jpy"]["status"] == "active"
+
+
+def test_trailing_order_id_kept_when_verify_fails_after_tp1(executor, monkeypatch):
+    """指摘6: TP1後のトレーリングSLは verify 失敗でも order_id を state に残し、TP1も記録する"""
+    pos = {"status": "active", "direction": "long", "position_id": "eth_jpy-1", "entry_price": 429501.0,
+           "atr_jpy": 6595.2, "tp1_order_id": 11, "sl_order_id": 22, "tp1_price": 437745.0,
+           "tp1_amount": 0.0047, "trail_amount": 0.011, "sl_price": 413013.0, "total_amount": 0.0157}
+    bb = MagicMock()
+    def get_order(pair, oid):
+        if oid == 11:
+            return {"status": "FULLY_FILLED", "average_price": "437745", "executed_amount": "0.0047"}
+        if oid == 33:
+            raise Exception("timeout")
+        return {"status": "CANCELED_UNFILLED"}
+    bb.get_order.side_effect = get_order
+    bb.create_order.return_value = {"order_id": 33}
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    monkeypatch.setattr(executor, "record_partial_fill_after_cancel", MagicMock())
+    rec = MagicMock(return_value={"pnl_source": "pending"})
+    monkeypatch.setattr(executor, "record_trade", rec)
+    out = executor.maintain_positions(bb, {"positions": {"eth_jpy": pos}}, {})
+    assert out["positions"]["eth_jpy"]["trail_sl_order_id"] == 33
+    assert out["positions"]["eth_jpy"]["status"] == "trailing"
+    assert rec.call_args.args[2] == "TP1部分利確"
+
+
+def test_emergency_close_also_closes_positions_missing_from_state(executor, monkeypatch):
+    """指摘3: 緊急決済は state に無い実建玉も決済する"""
+    bb = MagicMock()
+    bb.get_margin_positions.return_value = [{"pair": "sol_jpy", "position_side": "short", "open_amount": "0.5000"}]
+    failed = executor._emergency_close_all(bb, {"positions": {}})
+    bb.create_market_order.assert_called_once_with("sol_jpy", "0.5000", "buy", position_side="short")
+    assert failed == []
+
+
+def test_reconcile_orphan_real_position_is_urgent(executor, mock_bb):
+    mock_bb.get_margin_positions.return_value = [{"pair": "btc_jpy", "position_side": "short", "open_amount": "0.001"}]
+    executor.reconcile_positions(mock_bb, {"positions": {}})
+    assert "🚨" in executor.send_email.call_args.args[0]
+
+
+def test_phase_a_drops_canceled_unfilled_entry(executor, monkeypatch):
+    bb = MagicMock()
+    bb.get_order.return_value = {"status": "CANCELED_UNFILLED", "average_price": "0", "executed_amount": "0"}
+    out = executor.maintain_positions(bb, {"positions": {"btc_jpy": _filled_pos()}}, {})
+    assert out["positions"] == {}
