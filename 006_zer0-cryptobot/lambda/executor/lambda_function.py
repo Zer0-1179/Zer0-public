@@ -1100,6 +1100,10 @@ def _apply_entry_fill(bb: "BitbankClient", pair: str, pos: dict, order: dict, cf
                                    trigger_price=sl_trigger_str)
         except Exception as se:
             pos["sl_fail_count"] = pos.get("sl_fail_count", 0) + 1
+            if "60018" in str(se):
+                # 価格がすでにSL水準を越えている（即時トリガーする価格は指定不可）。再試行しても通らないので
+                # 待たずに成行救済の対象にする（レビュー指摘4）
+                pos["sl_fail_count"] = max(pos["sl_fail_count"], SL_FAIL_RESCUE_COUNT)
             send_email(
                 f"【Zer0-CryptoBot】🚨SL発注失敗 - {pair.upper()}",
                 f"エントリーは約定しましたが、損切り（SL）注文の発注に失敗しました。今は損切りなしの状態です。\n"
@@ -1262,9 +1266,15 @@ def _emergency_close_all(bb: BitbankClient, state: dict) -> list[str]:
             continue
         cfg = PAIRS.get(pair, {"price_prec": 0, "amount_prec": 4})
         try:
-            bb.create_market_order(pair, round_amount(amt, cfg["amount_prec"]),
-                                   "sell" if side == "long" else "buy", position_side=side)
+            mkt = bb.create_market_order(pair, round_amount(amt, cfg["amount_prec"]),
+                                         "sell" if side == "long" else "buy", position_side=side)
             log(f"{pair}: 緊急成行決済（stateに無い建玉） {side} {amt}")
+            try:
+                est = get_bitbank_price(pair)
+                record_trade(pair, side, "緊急決済（stateに無い建玉）", est, est, amt, f"{pair}-{int(time.time())}",
+                             estimated=True, bb=bb, order_id=(mkt or {}).get("order_id"))
+            except Exception as re_:
+                log(f"{pair}: 緊急決済記録失敗: {re_}")
         except Exception as e:
             log(f"{pair}: 緊急成行決済失敗（stateに無い建玉）: {e}")
             failed_pairs.append(pair)
@@ -1319,6 +1329,7 @@ def reconcile_positions(bb: BitbankClient, state: dict):
 
     for pair, pos in state.get("positions", {}).items():
         if pos.get("status") == "buy_pending":
+            actual_by_pair.pop(pair, None)   # 約定済みで SL/TP1 待ちの建玉を「孤児建玉」と誤判定しない
             continue
         direction = pos.get("direction")
         real = actual_by_pair.pop(pair, None)
@@ -1487,10 +1498,23 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                             continue
                         raise
 
-                elif status.startswith("CANCELED") or status == "REJECTED":
+                elif status in ("CANCELED_UNFILLED", "REJECTED"):
                     # 約定ゼロで終わったエントリー。建玉はないので枠を塞がず即 state から外す（監査の指摘8）
                     log(f"{pair}({direction}): エントリー注文が約定せず終了 (status={status}) → state から削除")
                     to_delete.append(pair)
+
+                elif status.startswith("CANCELED"):
+                    # 一部約定後に取り消されたのに約定情報が欠けている。建玉は実在し得るので消さずに残し、
+                    # 1回だけ知らせる（レビュー指摘: 以前の修正案では「約定ゼロ」と誤認して消していた）
+                    log(f"{pair}({direction}): {status} だが約定情報が欠落 → buy_pendingのまま次回再確認")
+                    if not pos.get("fill_info_alerted"):
+                        pos["fill_info_alerted"] = True
+                        send_email(
+                            f"【Zer0-CryptoBot】🚨エントリーの約定情報が不明 - {pair.upper()}",
+                            f"エントリー注文が{status}ですが、約定価格・数量が取得できません。建玉があれば損切りなしの"
+                            f"状態です。至急bitbank管理画面で確認してください。\n\n方向：{direction}\n"
+                            f"注文ID：{pos.get('buy_order_id')}",
+                        )
 
                 elif time.time() - pos["buy_timestamp"] > CANCEL_AFTER_S:
                     log(f"{pair}({direction}): 24時間未約定 → キャンセル")
@@ -2060,9 +2084,13 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                         break
                     if status == "PARTIALLY_FILLED" and order_fill(o):
                         partial_order = o
-                    elif status.startswith("CANCELED") or status == "REJECTED":
+                    elif status in ("CANCELED_UNFILLED", "REJECTED"):
                         log(f"{pair}: 成行注文が約定せず終了 (status={status})")
                         canceled_unfilled = True
+                        break
+                    elif status.startswith("CANCELED"):
+                        # 一部約定後の取消なのに約定情報が欠けている → 消さずに buy_pending のまま Phase A に任せる
+                        log(f"{pair}: {status} だが約定情報が欠落 → buy_pendingで次回確認")
                         break
                 except Exception as pe:
                     log(f"{pair}: 約定ポーリングエラー: {pe}")
@@ -2085,6 +2113,12 @@ def place_new_orders(bb: BitbankClient, state: dict, signals: list, event: dict 
                     _apply_and_notify_fill(bb, pair, pos, filled_order, cfg)
                 except Exception as fe:
                     log(f"{pair}: SL/TP1即時発注失敗（buy_pendingで継続、次回再試行）: {fe}")
+                    if pos.get("sl_order_id") is None and pos.get("sl_fail_count", 0) >= SL_FAIL_RESCUE_COUNT:
+                        # 60018 等、再試行しても通らないSL失敗 → 損切りなしで持たずに今すぐ成行で決済
+                        if rescue_close(bb, pair, pos, f"SLを発注できない: {fe}", cfg):
+                            state["positions"].pop(pair, None)
+                # SL/TP1 の order_id をすぐ保存（この後でLambdaが落ちても次回に二重発注しない。レビュー指摘7）
+                save_state_now(state)
             else:
                 log(f"{pair}({direction}): 成行約定待機タイムアウト({FILL_POLL_TIMEOUT_S}s) → buy_pendingで次回確認")
 
