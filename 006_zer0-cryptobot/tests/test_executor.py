@@ -1132,3 +1132,115 @@ def test_phase_a_drops_canceled_unfilled_entry(executor, monkeypatch):
     bb.get_order.return_value = {"status": "CANCELED_UNFILLED", "average_price": "0", "executed_amount": "0"}
     out = executor.maintain_positions(bb, {"positions": {"btc_jpy": _filled_pos()}}, {})
     assert out["positions"] == {}
+
+
+# ── 2026-11-15 修正後のFableレビュー指摘の修正 ──
+def test_phase_a_keeps_canceled_partial_without_fill_info(executor, monkeypatch):
+    """レビュー指摘1: 約定情報が欠けた CANCELED_PARTIALLY_FILLED は消さずに残し、1回だけ🚨"""
+    bb = MagicMock()
+    bb.get_order.return_value = {"status": "CANCELED_PARTIALLY_FILLED", "average_price": "0", "executed_amount": "0.0010"}
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    state = {"positions": {"btc_jpy": _filled_pos()}}
+    out = executor.maintain_positions(bb, state, {})
+    out = executor.maintain_positions(bb, out, {})
+    assert "btc_jpy" in out["positions"] and mail.call_count == 1
+
+
+def test_phase_b_keeps_canceled_partial_without_fill_info(executor, monkeypatch):
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.return_value = []
+    bb.create_market_order.return_value = {"order_id": 555}
+    bb.get_order.return_value = {"status": "CANCELED_PARTIALLY_FILLED", "average_price": "0", "executed_amount": "0.001"}
+    out = executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert out["positions"]["btc_jpy"]["status"] == "buy_pending"
+
+
+def test_reconcile_does_not_flag_buy_pending_real_position(executor, mock_bb):
+    """レビュー指摘2: SL/TP1待ちの buy_pending の建玉を孤児建玉と誤判定しない"""
+    mock_bb.get_margin_positions.return_value = [{"pair": "btc_jpy", "position_side": "short", "open_amount": "0.001"}]
+    executor.reconcile_positions(mock_bb, {"positions": {"btc_jpy": _filled_pos()}})
+    assert not executor.send_email.called
+
+
+def test_sl_60018_in_phase_b_rescues_immediately(executor, monkeypatch):
+    """レビュー指摘4: 60018（再試行しても通らない）のSL失敗は待たずに成行救済"""
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.return_value = []
+    bb.create_market_order.return_value = {"order_id": 555}
+    bb.get_order.return_value = _FILL
+    bb.create_order.side_effect = Exception("create_order失敗: code=60018")
+    rescue = MagicMock(return_value=True)
+    monkeypatch.setattr(executor, "rescue_close", rescue)
+    monkeypatch.setattr(executor, "get_available_margin", MagicMock(return_value=100000.0))
+    out = executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert rescue.called and "btc_jpy" not in out["positions"]
+
+
+def test_entry_uses_partial_fill_when_still_partial_at_timeout(executor, monkeypatch):
+    """待っても PARTIALLY_FILLED のままなら、その約定数量で SL/TP1 を出す（無防備にしない）"""
+    bb, sig = _entry_env(executor, monkeypatch)
+    bb.get_margin_positions.return_value = []
+    bb.create_market_order.return_value = {"order_id": 555}
+    bb.get_order.return_value = {"status": "PARTIALLY_FILLED", "average_price": "10000000", "executed_amount": "0.0010"}
+    clock = iter(range(0, 10000, 5))
+    monkeypatch.setattr(executor.time, "time", lambda: next(clock))
+    applied = MagicMock()
+    monkeypatch.setattr(executor, "_apply_and_notify_fill", applied)
+    executor.place_new_orders(bb, {"positions": {}}, sig, {})
+    assert applied.call_args.args[3]["executed_amount"] == "0.0010"
+
+
+def test_close_unknown_entry_alerts_when_position_unknown(executor, monkeypatch):
+    bb = MagicMock()
+    bb.get_margin_positions.side_effect = Exception("down")
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    executor._close_unknown_entry(bb, "btc_jpy", "short", None, _CFG, Exception("timeout"))
+    bb.create_market_order.assert_not_called()
+    assert "🚨発注結果が不明" in mail.call_args.args[0]
+
+
+def test_close_unknown_entry_alerts_when_close_fails(executor, monkeypatch):
+    bb = MagicMock()
+    bb.get_margin_positions.return_value = [{"pair": "btc_jpy", "position_side": "short", "open_amount": "0.0036"}]
+    bb.create_market_order.side_effect = Exception("70020")
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    mail = MagicMock()
+    monkeypatch.setattr(executor, "send_email", mail)
+    executor._close_unknown_entry(bb, "btc_jpy", "short", 0.0, _CFG, Exception("timeout"))
+    assert "🚨SLなしの建玉が残っています" in mail.call_args.args[0]
+
+
+def test_emergency_close_does_not_double_close_state_pairs(executor, monkeypatch):
+    bb = MagicMock()
+    bb.get_margin_positions.return_value = [{"pair": "eth_jpy", "position_side": "long", "open_amount": "0.0110"}]
+    monkeypatch.setattr(executor, "record_trade", MagicMock())
+    monkeypatch.setattr(executor, "record_partial_fill_after_cancel", MagicMock())
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=400000.0))
+    state = {"positions": {"eth_jpy": {"status": "trailing", "direction": "long", "trail_amount": 0.011,
+                                       "trail_sl_order_id": 9, "entry_price": 1.0, "position_id": "p"}}}
+    executor._emergency_close_all(bb, state)
+    assert bb.create_market_order.call_count == 1
+
+
+def test_real_rescue_close_on_buy_pending_after_sl_failures(executor, monkeypatch):
+    """本物の rescue_close を buy_pending（total_amount なし）に通しても実約定価格で記録して決済する"""
+    bb = MagicMock()
+    bb.get_order.return_value = _FILL
+    bb.create_order.side_effect = Exception("code=70023")
+    bb.get_margin_positions.side_effect = (
+        [[{"pair": "btc_jpy", "position_side": "short", "open_amount": "0.0036"}]]
+        + [[{"pair": "btc_jpy", "position_side": "short", "open_amount": "0"}]] * 10)
+    bb.create_market_order.return_value = {"order_id": 888}
+    monkeypatch.setattr(executor.time, "sleep", MagicMock())
+    monkeypatch.setattr(executor, "get_bitbank_price", MagicMock(return_value=10_100_000.0))
+    rec = MagicMock(return_value={"pnl_source": "pending"})
+    monkeypatch.setattr(executor, "record_trade", rec)
+    pos = _filled_pos()
+    pos["sl_fail_count"] = executor.SL_FAIL_RESCUE_COUNT - 1
+    out = executor.maintain_positions(bb, {"positions": {"btc_jpy": pos}}, {})
+    bb.create_market_order.assert_called_once_with("btc_jpy", "0.0036", "buy", position_side="short")
+    assert rec.call_args.args[3] == 10_000_000.0       # 建値は実約定価格
+    assert "btc_jpy" not in out["positions"]
