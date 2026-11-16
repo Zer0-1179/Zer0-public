@@ -851,6 +851,7 @@ def _capture_ses(executor, monkeypatch, token="tok/en+1"):
 
 def test_tp1_mail_has_single_admin_link(executor, monkeypatch):
     sent = _capture_ses(executor, monkeypatch)
+    monkeypatch.setattr(executor, "TRADE_MAIL_ENABLED", True)
     executor.notify_trail_started("eth_jpy", "long", 500000, 510000, 512000, 3000, None)
     text = sent[0]["Message"]["Body"]["Text"]["Data"]
     html = sent[0]["Message"]["Body"]["Html"]["Data"]
@@ -1244,3 +1245,15 @@ def test_real_rescue_close_on_buy_pending_after_sl_failures(executor, monkeypatc
     bb.create_market_order.assert_called_once_with("btc_jpy", "0.0036", "buy", position_side="short")
     assert rec.call_args.args[3] == 10_000_000.0       # 建値は実約定価格
     assert "btc_jpy" not in out["positions"]
+
+
+def test_trade_mails_are_suppressed_by_default(executor, monkeypatch):
+    """取引連絡メール（約定・TP1・決済）は既定で送らない（2026-11-16ユーザー判断）。異常通知は送る。"""
+    sent = _capture_ses(executor, monkeypatch)
+    assert executor.TRADE_MAIL_ENABLED is False
+    executor.notify_entry_fill("btc_jpy", "short", 12000000, 0.002, 12300000, 11800000, 50000)
+    executor.notify_trail_started("eth_jpy", "long", 500000, 510000, 512000, 3000, None)
+    executor.notify_close("sol_jpy", "long", "損切り", 20000, 21000, 1.0, 50000, None)
+    assert sent == []
+    executor.send_email("【CryptoBot】異常テスト", "本文", level="critical")
+    assert len(sent) == 1

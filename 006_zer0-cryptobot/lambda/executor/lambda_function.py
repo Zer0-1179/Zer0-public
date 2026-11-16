@@ -78,6 +78,11 @@ ACCOUNT_CHECK_KEY   = "cryptobot/account_check.json"  # 同じ差額で毎回メ
 PENDING_ALERT_HOURS = 6                  # これ以上確定しない仮記録はメールで知らせる
 # 004ポートフォリオの非公開トレード実績ページ（要admin Cookie。通知メール本文への案内用）
 PORTFOLIO_STATS_URL = "https://www.zer0-infra.com/ja/cryptobot-stats"
+# 毎回の取引連絡メール（エントリー約定・TP1約定/トレーリング開始・決済）を送るか。
+# 2026-11-16にユーザー判断で停止（見ても操作することがなく、気になって余計な判断を誘うため）。
+# 異常の通知（SL発注失敗・口座照合ずれ・保証金率警告等）と週次サマリーは従来どおり送る。
+# 止めている間も件名と本文はCloudWatch Logsに残す
+TRADE_MAIL_ENABLED = False
 # 管理者トークン（004のmiddlewareと同じSSM SecureString）。メールのリンクを ?admin=<トークン> 付きにし、
 # Cookieが無い端末でもタップ1回で実績ページを開けるようにする（保護ページへの直接アクセスはリダイレクトなしで描画される）
 SSM_STATS_AUTH = os.environ.get("SSM_STATS_AUTH_PARAM_NAME", "/portfolio/cryptobot-stats-auth")
@@ -819,6 +824,14 @@ def _coin(pair: str) -> str:
 
 
 
+def _send_trade_mail(subject: str, body: str):
+    """取引連絡メール。TRADE_MAIL_ENABLED=False の間は送らずログにだけ残す。"""
+    if not TRADE_MAIL_ENABLED:
+        log(f"取引連絡メールは停止中（ログのみ）: {subject}")
+        return
+    send_email(subject, body)
+
+
 def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
                       sl: float, tp1: float, remaining_margin: float):
     dir_str = "ロング" if direction == "long" else "ショート"
@@ -842,7 +855,7 @@ def notify_entry_fill(pair: str, direction: str, entry: float, amount: float,
         f"TP1　（30%）：{tp1:,.0f}円（{tp1_pct:+.1f}%）\n"
         f"TP1約定後 → 残り70%をトレーリングSL（ATR×{TRAIL_MULT}）で管理"
     )
-    send_email(subject, body)
+    _send_trade_mail(subject, body)
 
 
 def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: float,
@@ -872,7 +885,7 @@ def notify_trail_started(pair: str, direction: str, entry: float, tp1_price: flo
         f"最新の決済ライン・含み損益はいつでも実績ページで確認できます：\n"
         f"{stats_url()}"
     )
-    send_email(subject, body)
+    _send_trade_mail(subject, body)
 
 
 def notify_trail_updated(pair: str, direction: str, new_trail: float, current_price: float):
@@ -914,7 +927,7 @@ def notify_close(pair: str, direction: str, reason: str, price: float,
         f"{_net_pnl_lines(rec)}"
         f"残り証拠金：{remaining_margin/2:,.0f}円"
     )
-    send_email(subject, body)
+    _send_trade_mail(subject, body)
 
 
 # ── bitbank クライアント ───────────────────────────────────────────────────────
