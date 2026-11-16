@@ -188,9 +188,11 @@ const periodStats = CAPITAL_PERIODS.map((per, i) => {
 });
 const currentPeriod = periodStats[periodStats.length - 1];
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
-// 資金増額の判断基準（006 project_006_scale_up_plan: 累計20件で最低確認・30件で安心ライン）
-const SCALE_UP_MIN = 20;
-const SCALE_UP_SAFE = 30;
+// 次の見直し（増額するか）の判断基準。20件時点の判断で11/16に元本5万円へ増額済み。
+// 次は累計50件でユーザーと一緒に判断する（2026-11-16合意）。勝率だけでなくPF・最大DDも見る
+const NEXT_REVIEW_COUNT = 50;
+const REVIEW_PF_MIN = 1.3;
+const REVIEW_DD_MAX_PCT = 20; // 最大DDが今の元本の何%以内か
 
 // 最大ドローダウン（累積損益カーブのピークからの最大下落幅）。基準0円を起点に含める。
 let peak = 0;
@@ -399,14 +401,13 @@ const xLabels =
             </div>
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
-            <div class="text-xs text-slate-400 mb-1">増額判断までの進捗</div>
-            <div class="text-base sm:text-xl font-bold whitespace-nowrap text-white">{positionCount} / {SCALE_UP_MIN}件</div>
+            <div class="text-xs text-slate-400 mb-1">次の見直し（{NEXT_REVIEW_COUNT}件）まで</div>
+            <div class="text-base sm:text-xl font-bold whitespace-nowrap text-white">{positionCount} / {NEXT_REVIEW_COUNT}件</div>
             <div class="text-xs text-slate-500 mt-1">
-              {positionCount < SCALE_UP_MIN
-                ? `最低ラインまであと${SCALE_UP_MIN - positionCount}件（安心ライン${SCALE_UP_SAFE}件）`
-                : positionCount < SCALE_UP_SAFE
-                  ? `最低ライン到達。安心ラインまであと${SCALE_UP_SAFE - positionCount}件`
-                  : '安心ライン到達'}
+              {positionCount < NEXT_REVIEW_COUNT
+                ? `あと${NEXT_REVIEW_COUNT - positionCount}件`
+                : '到達。増額するか判断する'}
+              <br />目安: PF {REVIEW_PF_MIN}以上・最大DD 元本の{REVIEW_DD_MAX_PCT}%以内
             </div>
           </div>
         </div>
