@@ -1257,3 +1257,24 @@ def test_trade_mails_are_suppressed_by_default(executor, monkeypatch):
     assert sent == []
     executor.send_email("【CryptoBot】異常テスト", "本文", level="critical")
     assert len(sent) == 1
+
+
+def test_trade_mails_log_subject_only_when_suppressed(executor, monkeypatch):
+    """停止中は件名だけログに出す（本文の管理者トークン付きURLをログに残さない）。"""
+    _capture_ses(executor, monkeypatch)
+    logs = []
+    monkeypatch.setattr(executor, "log", lambda m: logs.append(m))
+    executor.notify_trail_started("eth_jpy", "long", 500000, 510000, 512000, 3000, None)
+    assert any("TP1約定・トレーリング開始" in m for m in logs)
+    assert not any("admin=" in m for m in logs)
+
+
+def test_trade_mails_sent_when_enabled(executor, monkeypatch):
+    """再開（TRADE_MAIL_ENABLED=True）時は約定・決済メールが従来どおり送られる。"""
+    sent = _capture_ses(executor, monkeypatch)
+    monkeypatch.setattr(executor, "TRADE_MAIL_ENABLED", True)
+    executor.notify_entry_fill("btc_jpy", "short", 12000000, 0.002, 12300000, 11800000, 50000)
+    executor.notify_close("sol_jpy", "long", "損切り", 20000, 21000, 1.0, 50000, None)
+    subjects = [m["Message"]["Subject"]["Data"] for m in sent]
+    assert len(subjects) == 2
+    assert "ショート約定 - BTC/JPY" in subjects[0] and "ロングクローズ - SOL/JPY" in subjects[1]

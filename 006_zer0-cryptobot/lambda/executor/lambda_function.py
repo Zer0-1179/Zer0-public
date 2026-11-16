@@ -81,7 +81,8 @@ PORTFOLIO_STATS_URL = "https://www.zer0-infra.com/ja/cryptobot-stats"
 # 毎回の取引連絡メール（エントリー約定・TP1約定/トレーリング開始・決済）を送るか。
 # 2026-11-16にユーザー判断で停止（見ても操作することがなく、気になって余計な判断を誘うため）。
 # 異常の通知（SL発注失敗・口座照合ずれ・保証金率警告等）と週次サマリーは従来どおり送る。
-# 止めている間も件名と本文はCloudWatch Logsに残す
+# 24時間未約定のキャンセル連絡（操作不要）も同じ扱い。止めている間は件名だけCloudWatch Logsに残す
+# （本文には管理者トークン付きURLが入ることがあるため出さない。損益はrecord_tradeのログに残る）
 TRADE_MAIL_ENABLED = False
 # 管理者トークン（004のmiddlewareと同じSSM SecureString）。メールのリンクを ?admin=<トークン> 付きにし、
 # Cookieが無い端末でもタップ1回で実績ページを開けるようにする（保護ページへの直接アクセスはリダイレクトなしで描画される）
@@ -1536,7 +1537,7 @@ def maintain_positions(bb: BitbankClient, state: dict, event: dict = {}) -> dict
                     except Exception as ce:
                         log(f"{pair}: キャンセル失敗: {ce}")
                     to_delete.append(pair)
-                    send_email(
+                    _send_trade_mail(
                         f"【Zer0-CryptoBot】注文キャンセル - {pair.upper()}",
                         f"コイン：{pair.upper()}\n方向：{direction}\n24時間未約定のため注文をキャンセルしました。",
                     )
