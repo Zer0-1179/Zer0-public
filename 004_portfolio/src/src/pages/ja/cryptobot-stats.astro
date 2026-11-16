@@ -167,7 +167,7 @@ const avgLoss = lossCount > 0 ? grossLoss / lossCount : null;
 
 // 元本（bitbank信用口座への入金額）。口座残高＝元本＋全約定の実現損益で一致することを
 // 2026-10-02に確認済み。入金・出金で元本が変わったらこの値を更新すること
-const INITIAL_CAPITAL_JPY = 10000;
+const INITIAL_CAPITAL_JPY = 50000; // 2026-11-16に4万円入金し1万→5万（006のACCOUNT_CAPITAL_JPYと同時に更新すること）
 // 資金増額の判断基準（006 project_006_scale_up_plan: 累計20件で最低確認・30件で安心ライン）
 const SCALE_UP_MIN = 20;
 const SCALE_UP_SAFE = 30;
