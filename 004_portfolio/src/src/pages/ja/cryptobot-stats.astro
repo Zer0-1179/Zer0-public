@@ -168,6 +168,26 @@ const avgLoss = lossCount > 0 ? grossLoss / lossCount : null;
 // 元本（bitbank信用口座への入金額）。口座残高＝元本＋全約定の実現損益で一致することを
 // 2026-10-02に確認済み。入金・出金で元本が変わったらこの値を更新すること
 const INITIAL_CAPITAL_JPY = 50000; // 2026-11-16に4万円入金し1万→5万（006のACCOUNT_CAPITAL_JPYと同時に更新すること）
+// 利益率は元本が変わった時点で期間を分けて出す（全期間の損益を今の元本で割ると、入金前の利益率が
+// 小さく見えるため。2026-11-15監査の指摘11）。入出金したら末尾に期間を足し、最後の期間の
+// capital を INITIAL_CAPITAL_JPY と一致させる。from は決済記録（points.ts）で振り分ける境目
+const CAPITAL_PERIODS: { from: string | null; capital: number; label: string }[] = [
+  { from: null, capital: 10000, label: '〜2026/11/16（元本1万円）' },
+  { from: '2026-11-16T13:45:00+09:00', capital: 50000, label: '2026/11/16〜（元本5万円）' },
+];
+const periodStats = CAPITAL_PERIODS.map((per, i) => {
+  const start = per.from ? Date.parse(per.from) : -Infinity;
+  const nextFrom = CAPITAL_PERIODS[i + 1]?.from;
+  const end = nextFrom ? Date.parse(nextFrom) : Infinity;
+  const pts = points.filter((p) => {
+    const t = Date.parse(p.ts);
+    return t >= start && t < end;
+  });
+  const pnl = pts.reduce((a, p) => a + p.pnl_jpy, 0);
+  return { ...per, pnl, pct: (pnl / per.capital) * 100, count: pts.length };
+});
+const currentPeriod = periodStats[periodStats.length - 1];
+const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
 // 資金増額の判断基準（006 project_006_scale_up_plan: 累計20件で最低確認・30件で安心ライン）
 const SCALE_UP_MIN = 20;
 const SCALE_UP_SAFE = 30;
@@ -355,11 +375,16 @@ const xLabels =
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
-            <div class="text-xs text-slate-400 mb-1">戦略の利益率（元本比）</div>
-            <div class={`text-base sm:text-xl font-bold whitespace-nowrap ${stats!.total_pnl_jpy >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {stats!.total_pnl_jpy >= 0 ? '+' : ''}{((stats!.total_pnl_jpy / INITIAL_CAPITAL_JPY) * 100).toFixed(2)}%
+            <div class="text-xs text-slate-400 mb-1">戦略の利益率（今の元本比）</div>
+            <div class={`text-base sm:text-xl font-bold whitespace-nowrap ${currentPeriod.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {fmtPct(currentPeriod.pct)}
             </div>
-            <div class="text-xs text-slate-500 mt-1">元本 {INITIAL_CAPITAL_JPY.toLocaleString()}円</div>
+            <div class="text-xs text-slate-500 mt-1">元本 {currentPeriod.capital.toLocaleString()}円・{fmtYen2(currentPeriod.pnl)}</div>
+            {periodStats.slice(0, -1).map((per) => (
+              <div class="text-xs text-slate-500 mt-1">
+                {per.label}: <span class={per.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>{fmtPct(per.pct)}</span>（{fmtYen2(per.pnl)}）
+              </div>
+            ))}
           </div>
           <div class="p-4 bg-navy-800/40 border border-navy-700 rounded-lg">
             <div class="text-xs text-slate-400 mb-1">PF（総利益÷総損失）</div>
