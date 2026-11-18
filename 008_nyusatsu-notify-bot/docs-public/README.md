@@ -290,3 +290,10 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 - 本番の各スタックがS3のバージョンID（`*CodeVersion`パラメータ）でコードを持つ形になったため、コード更新は関数が所属するスタックのパラメータを変える変更セットで行うことにした。
 - 旧方式のコード更新専用スタック`nyusatsu-lambda-code-deployment`は、使うと各スタックのパラメータと本番のコードがずれるため使わない（スタックは残している）。
 - `scripts/package_lambda_artifacts.sh`の案内表示を、渡す先のスタックとパラメータ名に合わせて直した。仕様書のデプロイ手順と再開手順も同じ内容に更新した。
+
+#### Fableレビューの指摘対応（本番とgitの一致作業）
+
+- `scripts/package_lambda_artifacts.sh`の進捗表示の番号を直し、mail-forwarderだけを更新する`--mail-forwarder-only`を加えた。
+- 旧方式のコード更新スタックのテンプレート`infra/cfn-lambda-code-deployment.yaml`に「使わない」旨とセクションコメントを書き、`infra/cfn-nyusatsu-ssm-access.yaml`にもセクションコメントを加えた（どちらもリソースを変えずに本番へ保存し直した）。
+- Stripe Webhookの再開計画（非公開資料）に残っていた旧方式のコード更新手順を、`zer0-nyusatsu-lp-backend`の`StripeWebhookCodeVersion`で更新する手順に直した。
+- 再開手順の「確認のみ実行の出力例」を今のスクリプトの表示に合わせ、READMEのLPの説明をv0.30のリデザイン内容に合わせた。

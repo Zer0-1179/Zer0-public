@@ -257,3 +257,9 @@ aws scheduler update-schedule --name Zer0-CryptoBot-Executor-Schedule \
 - そのうえでリソースに変更が出ない形で保存し直した（何も作らない`WaitConditionHandle`を一時的に追加して適用し、続けて削除して適用）。
 - `zer0-cryptobot`スタックのドリフト（`ExecutorRole`・`WeeklySummaryRole`に`cryptobot-ssm-access`側から付けている管理ポリシー）は、`cfn-cryptobot.yaml`の`ManagedPolicyArns`にも同じポリシーを書き足して解消した。
 - 適用はすでに付いているポリシーを付け直すだけで、外れる権限はない。適用後に両ロールのポリシーとドリフト`IN_SYNC`を確認した。
+
+#### スタックの依存関係を資料に明記（Fableレビュー対応）
+
+- 管理ポリシー2つを`cryptobot-ssm-access`と`zer0-cryptobot`の両方からロールに付けている状態で、片方から外すと取引が止まることをFableレビューで指摘された。
+- 本番の付け方を変えると一時的にポリシーが外れて取引が止まるおそれがあるため、本番は変えず、仕様書§10にスタック表・依存関係・変更時の注意・新環境での作成順を書いた。
+- `infra/cfn-cryptobot-ssm-access.yaml`に同じ注意をセクションコメントで書き、READMEのディレクトリ構成にこのファイルを加えた。コメントの変更はリソースを変えずに本番のテンプレートへ保存し直した。
