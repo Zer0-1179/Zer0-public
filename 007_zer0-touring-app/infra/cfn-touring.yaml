@@ -358,10 +358,11 @@ Resources:
           - GET
           - POST
           - OPTIONS
+        # API Gateway stores header names in lowercase; keep them lowercase to avoid drift.
         AllowHeaders:
-          - Content-Type
-          - X-Admin-Token
-          - X-Device-Id
+          - content-type
+          - x-admin-token
+          - x-device-id
         MaxAge: 86400
 
   # ── Lambda インテグレーション ──────────────────────────────────

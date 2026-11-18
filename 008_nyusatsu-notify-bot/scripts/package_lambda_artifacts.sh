@@ -90,27 +90,28 @@ upload_one() {
 
 if [[ -n "${SINGLE_TARGET}" ]]; then
   # 単一関数の修正では、無関係なartifact versionを増やさない。
+  # 2026-11-18から各関数のコードは所属スタックのパラメータで管理する（docs/operations/再開手順.md参照）。
   if [[ "${SINGLE_TARGET}" == "stripe_webhook" ]]; then
-    DEPLOYMENT_TARGET="zer0-nyusatsu-stripe-webhook"
-    DISPLAY_NAME="Stripe webhook"
+    TARGET_STACK="zer0-nyusatsu-lp-backend"
+    TARGET_PARAM="StripeWebhookCodeVersion"
   elif [[ "${SINGLE_TARGET}" == "collector" ]]; then
-    DEPLOYMENT_TARGET="zer0-nyusatsu-collector"
-    DISPLAY_NAME="collector"
+    TARGET_STACK="zer0-nyusatsu-notify-bot"
+    TARGET_PARAM="CollectorCodeVersion"
   elif [[ "${SINGLE_TARGET}" == "lp_waitlist" ]]; then
-    DEPLOYMENT_TARGET="zer0-nyusatsu-lp-waitlist"
-    DISPLAY_NAME="LP waitlist"
+    TARGET_STACK="zer0-nyusatsu-lp-backend"
+    TARGET_PARAM="WaitlistCodeVersion"
   else
-    DEPLOYMENT_TARGET="zer0-nyusatsu-bounce-handler"
-    DISPLAY_NAME="bounce handler"
+    TARGET_STACK="zer0-nyusatsu-notify-bot"
+    TARGET_PARAM="BounceHandlerCodeVersion"
   fi
 
-  echo "[1/1] Packaging and uploading the ${DISPLAY_NAME} artifact..."
+  echo "[1/1] Packaging and uploading the ${SINGLE_TARGET} artifact..."
   SINGLE_VERSION="$(upload_one "${SINGLE_TARGET}" "${SINGLE_TARGET}")"
   cat <<EOF
-[2/2] Upload complete. Use only this version in an independently reviewed Change Set:
-  cfn-lambda-code-deployment.yaml:
-    DeploymentTarget=${DEPLOYMENT_TARGET}
-    ArtifactVersion=${SINGLE_VERSION}
+[2/2] Upload complete. Use only this version in a reviewed Change Set
+(pass UsePreviousValue=true for every other parameter):
+  ${TARGET_STACK}:
+    ${TARGET_PARAM}=${SINGLE_VERSION}
 EOF
   exit 0
 fi
@@ -123,8 +124,8 @@ STRIPE_WEBHOOK_VERSION="$(upload_one stripe_webhook stripe_webhook)"
 MAIL_FORWARDER_VERSION="$(upload_one mail_forwarder mail_forwarder)"
 
 cat <<EOF
-[2/5] Upload complete. Retrieve LambdaArtifactBucket from the artifact stack without printing it,
-then use only these versions in independently reviewed Change Sets:
+[2/5] Upload complete. Use only these versions in reviewed Change Sets
+(pass UsePreviousValue=true for every other parameter):
   zer0-nyusatsu-notify-bot:
     BounceHandlerCodeVersion=${BOUNCE_HANDLER_VERSION}
     CollectorCodeVersion=${COLLECTOR_VERSION}

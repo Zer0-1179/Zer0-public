@@ -204,24 +204,10 @@ aws cloudfront create-invalidation --distribution-id E1Z92GZIT4IDGA --paths "/*"
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](../CHANGELOG.md) を参照。
 
-### 2026-10-29
+### 2026-11-18
+#### CORS設定のヘッダー名を小文字に統一（本番とのドリフト解消）
 
-#### Node.jsバージョン指定の更新
-
-- ローカル開発環境をUbuntu 26.04・Node.js v24.22.2へ更新したことに合わせ、`frontend/.nvmrc`を24.18.0から24.22.2に揃えた
-- Node.js v24.22.2で`npm ci`と`npm run build`が成功することを確認した
-- 本番のLambda実行環境とAWSリソースの変更はない（ローカルのビルド用バージョン指定のみ）
-
-#### ユニットテストのpytest 9対応
-
-- ローカル環境の更新でpytestが9.2になり、`backend/tests/test_lambda_function.py`の7件が失敗するようになった
-- pytest 9のmonkeypatchは、MagicMockの子属性を差し替えた後の復元で属性を削除するため、共有のBedrockモックで次のテストの`invoke_model`が見つからなくなっていた
-- `backend/tests/conftest.py`の`module`フィクスチャでBedrockクライアントのモックを毎回作り直すようにし、全69件の成功を確認した（本番コードの変更なし）
-
-#### 変更履歴の整理
-
-- 本ファイルで2026-09-05が「## 2026-09-05（2）」と2つの日付見出しに分かれていたため、1つの日付見出しの下にまとめた
-
-#### 変更履歴の長い箇条書きを分割
-
-- 200文字を超えていた箇条書きのうち、「。」で区切れるものを複数の箇条書きに分けた（文言の変更なし、機械的に内容の一致を確認。区切りのない1文だけの行はそのまま残した）
+- ドリフト検出で、`TouringApi`のCORS許可ヘッダーがテンプレート（`Content-Type`等）と本番（`content-type`等）で大文字小文字だけ違うと出ていた。API Gatewayがヘッダー名を小文字で保存するためで、動作は同じ。
+- `infra/cfn-touring.yaml`のヘッダー名を小文字に揃え、変更セット（変更は`TouringApi`のCORS設定のみ）で適用した。
+- 適用後、トップページの200応答とプリフライト（OPTIONS）の204応答、ドリフト`IN_SYNC`を確認した。
+- あわせてS3のフロントエンドとローカルの`frontend/dist`が全16ファイル一致することを確認した。

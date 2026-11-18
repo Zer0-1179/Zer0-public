@@ -1,0 +1,343 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Imports existing normalized Nyusatsu String parameters.",
+  "Parameters": {
+    "HmacSecretParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "KeywordsParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "LineChannelAccessTokenParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "LineChannelSecretParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "LineLiffIdParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "NotifyEmailParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "PaymentRequiredParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "SesSenderParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    },
+    "UnsubscribeBaseUrlParameterValue": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Existing parameter value; supplied in memory only during import."
+    }
+  },
+  "Resources": {
+    "HmacSecretParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/hmac-secret",
+        "Type": "String",
+        "Value": {
+          "Ref": "HmacSecretParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "hmac-secret"
+        },
+        "Description": "Nyusatsu HMAC secret for link signing"
+      }
+    },
+    "KeywordsParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/keywords",
+        "Type": "String",
+        "Value": {
+          "Ref": "KeywordsParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "keywords"
+        },
+        "Description": "Nyusatsu filter keywords"
+      }
+    },
+    "LineChannelAccessTokenParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/line-channel-access-token",
+        "Type": "String",
+        "Value": {
+          "Ref": "LineChannelAccessTokenParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "line-channel-access-token"
+        },
+        "Description": "Nyusatsu LINE Messaging API channel access token"
+      }
+    },
+    "LineChannelSecretParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/line-channel-secret",
+        "Type": "String",
+        "Value": {
+          "Ref": "LineChannelSecretParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "line-channel-secret"
+        },
+        "Description": "Nyusatsu LINE Messaging API channel secret"
+      }
+    },
+    "LineLiffIdParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/line-liff-id",
+        "Type": "String",
+        "Value": {
+          "Ref": "LineLiffIdParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "line-liff-id"
+        },
+        "Description": "Nyusatsu LINE LIFF app identifier"
+      }
+    },
+    "NotifyEmailParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/notify-email",
+        "Type": "String",
+        "Value": {
+          "Ref": "NotifyEmailParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "notify-email"
+        },
+        "Description": "Nyusatsu notification recipient email"
+      }
+    },
+    "PaymentRequiredParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/payment-required",
+        "Type": "String",
+        "Value": {
+          "Ref": "PaymentRequiredParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "payment-required"
+        },
+        "Description": "Nyusatsu notification payment requirement state"
+      }
+    },
+    "SesSenderParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/ses-sender",
+        "Type": "String",
+        "Value": {
+          "Ref": "SesSenderParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "ses-sender"
+        },
+        "Description": "Nyusatsu SES verified sender email"
+      }
+    },
+    "UnsubscribeBaseUrlParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "/nyusatsu/unsubscribe-base-url",
+        "Type": "String",
+        "Value": {
+          "Ref": "UnsubscribeBaseUrlParameterValue"
+        },
+        "Tier": "Standard",
+        "DataType": "text",
+        "Tags": {
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation",
+          "Component": "unsubscribe-base-url"
+        },
+        "Description": "Nyusatsu waitlist API base URL"
+      }
+    },
+    "SecureValidatorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/nyusatsu-ssm-secure-validator",
+        "RetentionInDays": 14
+      }
+    },
+    "SecureValidatorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "nyusatsu-ssm-secure-validator-role",
+        "Description": "Validates the Nyusatsu SecureString metadata without reading its value.",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "validate-nyusatsu-secure-parameter-metadata",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:DescribeParameters"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:ListTagsForResource"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nyusatsu/stripe-webhook-secret-secure"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecureValidatorLogGroup",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SecureValidatorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "nyusatsu-ssm-secure-validator",
+        "Description": "Validates Nyusatsu SecureString metadata without reading the value.",
+        "Runtime": "python3.14",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SecureValidatorRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 128,
+        "Code": {
+          "ZipFile": "import boto3\nimport json\nimport time\nimport urllib.request\n\ndef _physical_id(event):\n    return event.get(\"PhysicalResourceId\", f\"{event['StackId']}/{event['LogicalResourceId']}\")\n\ndef _respond(event, status, reason=None):\n    body = {\n        \"Status\": status,\n        \"PhysicalResourceId\": _physical_id(event),\n        \"StackId\": event[\"StackId\"],\n        \"RequestId\": event[\"RequestId\"],\n        \"LogicalResourceId\": event[\"LogicalResourceId\"],\n    }\n    if status == \"FAILED\":\n        body[\"Reason\"] = reason or \"ValidationFailed\"\n    encoded = json.dumps(body).encode(\"utf-8\")\n    request = urllib.request.Request(\n        event[\"ResponseURL\"], data=encoded, method=\"PUT\",\n        headers={\"content-type\": \"\", \"content-length\": str(len(encoded))},\n    )\n    for attempt in range(3):\n        try:\n            with urllib.request.urlopen(request, timeout=10):\n                return\n        except Exception:\n            if attempt == 2:\n                raise\n            time.sleep(1)\n\ndef lambda_handler(event, context):\n    try:\n        if event[\"RequestType\"] == \"Delete\":\n            _respond(event, \"SUCCESS\")\n            return\n        props = event[\"ResourceProperties\"]\n        name = props[\"ParameterName\"]\n        parameters = boto3.client(\"ssm\").describe_parameters(\n            ParameterFilters=[{\"Key\": \"Name\", \"Option\": \"Equals\", \"Values\": [name]}]\n        )[\"Parameters\"]\n        if len(parameters) != 1:\n            raise ValueError(\"ParameterMissing\")\n        parameter = parameters[0]\n        if parameter.get(\"Type\") != \"SecureString\":\n            raise ValueError(\"ParameterTypeMismatch\")\n        if parameter.get(\"Tier\") != \"Standard\" or parameter.get(\"DataType\", \"text\") != \"text\":\n            raise ValueError(\"ParameterMetadataMismatch\")\n        actual_tags = {\n            item[\"Key\"]: item[\"Value\"]\n            for item in boto3.client(\"ssm\").list_tags_for_resource(\n                ResourceType=\"Parameter\", ResourceId=name\n            )[\"TagList\"]\n        }\n        if actual_tags != props[\"RequiredTags\"]:\n            raise ValueError(\"ParameterTagsMismatch\")\n        _respond(event, \"SUCCESS\")\n    except Exception as error:\n        try:\n            _respond(event, \"FAILED\", type(error).__name__)\n        except Exception:\n            pass\n"
+        }
+      },
+      "DependsOn": [
+        "SecureValidatorLogGroup"
+      ]
+    },
+    "SecureParameterValidator": {
+      "Type": "Custom::NyusatsuSecureParameterValidator",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "SecureValidatorFunction",
+            "Arn"
+          ]
+        },
+        "ServiceTimeout": 120,
+        "ParameterName": "/nyusatsu/stripe-webhook-secret-secure",
+        "RequiredTags": {
+          "Component": "stripe-webhook",
+          "Project": "nyusatsu",
+          "ManagedBy": "cloudformation"
+        }
+      }
+    }
+  }
+}

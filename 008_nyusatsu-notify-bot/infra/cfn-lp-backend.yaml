@@ -178,8 +178,9 @@ Resources:
           - POST
           - GET
           - OPTIONS
+        # API Gateway stores header names in lowercase; keep them lowercase to avoid drift.
         AllowHeaders:
-          - Content-Type
+          - content-type
 
   WaitlistIntegration:
     Type: AWS::ApiGatewayV2::Integration

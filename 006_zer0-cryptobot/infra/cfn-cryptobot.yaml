@@ -79,6 +79,8 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        # Attached by the cryptobot-ssm-access stack; listed here too so drift detection matches the live role.
+        - !Sub arn:aws:iam::${AWS::AccountId}:policy/cryptobot-executor-normalized-ssm-policy
       Policies:
         - PolicyName: Zer0-CryptoBot-ExecutorPolicy
           PolicyDocument:
@@ -426,6 +428,8 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        # Attached by the cryptobot-ssm-access stack; listed here too so drift detection matches the live role.
+        - !Sub arn:aws:iam::${AWS::AccountId}:policy/cryptobot-weekly-summary-normalized-ssm-policy
       Policies:
         - PolicyName: Zer0-CryptoBot-WeeklySummaryPolicy
           PolicyDocument:

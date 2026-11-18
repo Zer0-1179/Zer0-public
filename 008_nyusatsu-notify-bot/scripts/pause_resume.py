@@ -11,10 +11,9 @@
     - zer0-nyusatsu-notify-bot  の DailyScheduleRule.State（ENABLED / DISABLED）
     - zer0-nyusatsu-lp-hosting  の LpDistribution.DistributionConfig.Enabled（true / false）
 
-テンプレートはローカルの次の2ファイルを使う（get-template はASCII以外を「??」で返すため、
-本番から取り出したものを当てると本番の日本語が「??」で上書きされる。2026-11-18に一度起きて復元済み）。
-    - infra/cfn-nyusatsu-notify-bot-production.yaml（本番に入っている2026-08-09版の写し。
-      隣の cfn-nyusatsu-notify-bot.yaml は本番未適用の新しい版なので使わない）
+テンプレートはローカルの次の2ファイルを使う（本番と同じ内容。get-template はASCII以外を「??」で
+返すため、本番から取り出したものを当てると本番の日本語が「??」で上書きされる。2026-11-18に一度起きて復元済み）。
+    - infra/cfn-nyusatsu-notify-bot.yaml
     - lp/infra/cfn-lp-hosting.yaml
 
 当てる前に、ローカルのファイルと本番のテンプレートが一致することを確かめる
@@ -39,7 +38,7 @@ RULE_NAME = "zer0-nyusatsu-daily-schedule"
 cfn = boto3.client("cloudformation", region_name=REGION)
 events = boto3.client("events", region_name=REGION)
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-NOTIFY_TEMPLATE = PROJECT_DIR / "infra" / "cfn-nyusatsu-notify-bot-production.yaml"
+NOTIFY_TEMPLATE = PROJECT_DIR / "infra" / "cfn-nyusatsu-notify-bot.yaml"
 LP_TEMPLATE = PROJECT_DIR / "lp" / "infra" / "cfn-lp-hosting.yaml"
 
 
