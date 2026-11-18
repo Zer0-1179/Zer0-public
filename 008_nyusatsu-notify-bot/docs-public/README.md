@@ -163,7 +163,6 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 | `zer0-nyusatsu-lp-cert`        | LP用ACM証明書（us-east-1）                   |
 | `zer0-nyusatsu-lp-hosting`     | LP配信（S3+CloudFront）                      |
 | `zer0-nyusatsu-lambda-artifacts` | Lambdaコード用のバージョン付きS3 artifact   |
-| `nyusatsu-lambda-code-deployment` | 旧方式のコード更新専用（2026-11-18以降は使わず、各スタックのパラメータで更新） |
 | `nyusatsu-ssm`                  | 正規`/nyusatsu/`設定値とSecureString検証のCloudFormation管理（テンプレートは`infra/cfn-nyusatsu-ssm.yaml`） |
 | `nyusatsu-ssm-access`           | 各Lambdaの`/nyusatsu/`読み取り用IAM管理ポリシー |
 
@@ -297,3 +296,9 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 - 旧方式のコード更新スタックのテンプレート`infra/cfn-lambda-code-deployment.yaml`に「使わない」旨とセクションコメントを書き、`infra/cfn-nyusatsu-ssm-access.yaml`にもセクションコメントを加えた（どちらもリソースを変えずに本番へ保存し直した）。
 - Stripe Webhookの再開計画（非公開資料）に残っていた旧方式のコード更新手順を、`zer0-nyusatsu-lp-backend`の`StripeWebhookCodeVersion`で更新する手順に直した。
 - 再開手順の「確認のみ実行の出力例」を今のスクリプトの表示に合わせ、READMEのLPの説明をv0.30のリデザイン内容に合わせた。
+
+### 旧方式のコード更新スタックの削除
+
+- 使わなくなった`nyusatsu-lambda-code-deployment`スタックを削除した（ユーザー判断）。消えたのは補助用のLambda`nyusatsu-code-deployment`とIAMロール`nyusatsu-code-deployment-role`だけ。
+- 削除時に業務用の関数へは何もしない作り（削除要求はそのまま成功を返す）であり、削除前後で残る7関数（業務用5関数と補助用2関数）のコードのハッシュが変わらないことを確認した。
+- 保持設定で残ったロググループ`/aws/lambda/nyusatsu-code-deployment`も削除し、テンプレート`infra/cfn-lambda-code-deployment.yaml`もgitから削除した（本番の資材＝gitにある物にそろえるため）。
