@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Grants Nyusatsu Lambdas access to the normalized SSM namespace.
 
+# -----------------------------------------------
+# Resources
+# Managed policies that let each Lambda read only its /nyusatsu/ SSM parameters (attached via Roles).
+# -----------------------------------------------
 Resources:
   CollectorSsmReadPolicy:
     Type: AWS::IAM::ManagedPolicy

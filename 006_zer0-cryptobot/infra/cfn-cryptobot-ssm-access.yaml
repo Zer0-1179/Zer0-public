@@ -1,6 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Grants CryptoBot permanent access to the normalized SSM namespace.
 
+# -----------------------------------------------
+# Resources
+# Managed policies for the Executor and WeeklySummary roles (stack cryptobot-ssm-access).
+# The same policies are also listed in ManagedPolicyArns of cfn-cryptobot.yaml.
+# Removing them from either template, or deleting this stack, detaches the policy
+# and stops trading. See docs/システム仕様書/04_ops_cost_and_notes.md section 10.
+# -----------------------------------------------
 Resources:
   ExecutorNormalizedSsmPolicy:
     Type: AWS::IAM::ManagedPolicy

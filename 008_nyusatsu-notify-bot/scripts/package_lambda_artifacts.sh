@@ -16,8 +16,10 @@ elif [[ "$#" -eq 1 && "$1" == "--bounce-handler-only" ]]; then
   SINGLE_TARGET="bounce_handler"
 elif [[ "$#" -eq 1 && "$1" == "--lp-waitlist-only" ]]; then
   SINGLE_TARGET="lp_waitlist"
+elif [[ "$#" -eq 1 && "$1" == "--mail-forwarder-only" ]]; then
+  SINGLE_TARGET="mail_forwarder"
 elif [[ "$#" -ne 0 ]]; then
-  echo "Usage: $0 [--stripe-webhook-only|--collector-only|--bounce-handler-only|--lp-waitlist-only]" >&2
+  echo "Usage: $0 [--stripe-webhook-only|--collector-only|--bounce-handler-only|--lp-waitlist-only|--mail-forwarder-only]" >&2
   exit 2
 fi
 
@@ -100,12 +102,15 @@ if [[ -n "${SINGLE_TARGET}" ]]; then
   elif [[ "${SINGLE_TARGET}" == "lp_waitlist" ]]; then
     TARGET_STACK="zer0-nyusatsu-lp-backend"
     TARGET_PARAM="WaitlistCodeVersion"
+  elif [[ "${SINGLE_TARGET}" == "mail_forwarder" ]]; then
+    TARGET_STACK="zer0-nyusatsu-mail-relay"
+    TARGET_PARAM="MailForwarderCodeVersion"
   else
     TARGET_STACK="zer0-nyusatsu-notify-bot"
     TARGET_PARAM="BounceHandlerCodeVersion"
   fi
 
-  echo "[1/1] Packaging and uploading the ${SINGLE_TARGET} artifact..."
+  echo "[1/2] Packaging and uploading the ${SINGLE_TARGET} artifact..."
   SINGLE_VERSION="$(upload_one "${SINGLE_TARGET}" "${SINGLE_TARGET}")"
   cat <<EOF
 [2/2] Upload complete. Use only this version in a reviewed Change Set
@@ -116,7 +121,7 @@ EOF
   exit 0
 fi
 
-echo "[1/5] Packaging and uploading Lambda artifacts..."
+echo "[1/2] Packaging and uploading all 5 Lambda artifacts..."
 BOUNCE_HANDLER_VERSION="$(upload_one bounce_handler bounce_handler)"
 COLLECTOR_VERSION="$(upload_one collector collector)"
 WAITLIST_VERSION="$(upload_one lp_waitlist lp_waitlist)"
@@ -124,7 +129,7 @@ STRIPE_WEBHOOK_VERSION="$(upload_one stripe_webhook stripe_webhook)"
 MAIL_FORWARDER_VERSION="$(upload_one mail_forwarder mail_forwarder)"
 
 cat <<EOF
-[2/5] Upload complete. Use only these versions in reviewed Change Sets
+[2/2] Upload complete. Use only these versions in reviewed Change Sets
 (pass UsePreviousValue=true for every other parameter):
   zer0-nyusatsu-notify-bot:
     BounceHandlerCodeVersion=${BOUNCE_HANDLER_VERSION}

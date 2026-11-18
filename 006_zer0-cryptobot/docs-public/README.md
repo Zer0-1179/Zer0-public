@@ -186,7 +186,8 @@ Executor が実行するたびに証拠金維持率を確認：
 │   ├── deploy.sh        # デプロイスクリプト
 │   └── test_invoke.sh   # テストシナリオ（10種）
 ├── infra/
-│   └── cfn-cryptobot.yaml
+│   ├── cfn-cryptobot.yaml             # 本体スタック zer0-cryptobot
+│   └── cfn-cryptobot-ssm-access.yaml  # SSM読み書き用の管理ポリシー（スタック cryptobot-ssm-access、削除しない）
 └── images/
     ├── 006_architecture_plugin.drawio        # 構成図（draw.ioで手動編集する一次情報源）
     └── 006_architecture_plugin_flowdot.svg   # 上記からエクスポートした画像（本ドキュメントで表示）

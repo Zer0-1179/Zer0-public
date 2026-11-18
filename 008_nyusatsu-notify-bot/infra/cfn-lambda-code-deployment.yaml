@@ -1,6 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Nyusatsu single Lambda code deployment custom resource
 
+# DEPRECATED (2026-11-18): Lambda code is now managed by the *CodeVersion parameters of
+# zer0-nyusatsu-notify-bot / zer0-nyusatsu-lp-backend / zer0-nyusatsu-mail-relay.
+# Do not use this stack; it would make the live code differ from those parameters.
+
+# -----------------------------------------------
+# Parameters
+# DeploymentTarget selects one Lambda; ArtifactVersion is the S3 version ID of its ZIP.
+# -----------------------------------------------
 Parameters:
   DeploymentTarget:
     Type: String
@@ -16,12 +24,20 @@ Parameters:
     MinLength: 1
     Description: Approved S3 object version for the selected Lambda artifact
 
+# -----------------------------------------------
+# Conditions
+# Boolean flags derived from DeploymentTarget, used with !If to pick the artifact key.
+# -----------------------------------------------
 Conditions:
   IsBounceHandler: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-bounce-handler]
   IsCollector: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-collector]
   IsWaitlist: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-lp-waitlist]
   IsStripeWebhook: !Equals [!Ref DeploymentTarget, zer0-nyusatsu-stripe-webhook]
 
+# -----------------------------------------------
+# Resources
+# Custom resource provider (Lambda + IAM role + log group) that swaps one function's code. Delete does nothing.
+# -----------------------------------------------
 Resources:
   CodeDeploymentLogGroup:
     Type: AWS::Logs::LogGroup

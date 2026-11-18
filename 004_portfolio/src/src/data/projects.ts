@@ -146,8 +146,8 @@ export const projects: Project[] = [
     number: '005',
     nameJa: 'Zenn中級記事自動生成Bot',
     nameEn: 'Zenn Mid-Level Article Bot',
-    descJa: 'AWS中級者向けに、複数サービスを組み合わせた構成を短時間で試せるハンズオン記事を毎月2回自動生成するシステム。24トピック対応。',
-    descEn: 'Auto-generates short hands-on articles on multi-service AWS architectures for intermediate users twice monthly. Covers 24 topics.',
+    descJa: 'AWS中級者向けに、複数サービスを組み合わせた構成を短時間で試せるハンズオン記事を毎月2回自動生成するシステム。24トピック対応。定期生成は2027年1月まで一時停止中。',
+    descEn: 'Auto-generates short hands-on articles on multi-service AWS architectures for intermediate users twice monthly. Covers 24 topics. Scheduled generation is paused until January 2027.',
     longDescJa: '複合アーキテクチャ系12種＋ユースケース別12種の24トピックから重複なく選択。Claude Sonnet 4.6 で、文章1,000文字程度＋3〜4ステップのハンズオン（動作確認・クリーンアップ付き）の記事を生成する。「長い記事は読まれない」という判断から、構成と流れ・ハンズオンに絞った短い形式にしている。',
     longDescEn: 'Selects from 24 non-repeating topics (12 composite architectures + 12 use cases). Uses Claude Sonnet 4.6 to generate articles with about 1,000 characters of prose plus a 3-4 step hands-on (with verification and cleanup). Because long articles tend not to be read, the format is kept short and focused on the architecture flow and the hands-on.',
     pointsJa: [

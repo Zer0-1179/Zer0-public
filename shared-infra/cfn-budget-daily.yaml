@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Account-wide daily cost budget. Sends an email when the previous full day's
+  total cost (all services, including linked accounts) exceeds the limit.
+
+# -----------------------------------------------
+# Metadata
+# Organizes the parameter input UI in the CloudFormation console.
+# ParameterGroups groups the inputs, ParameterLabels sets display names.
+# -----------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Budget settings
+        Parameters:
+          - DailyLimitUsd
+          - NotificationEmail
+    ParameterLabels:
+      DailyLimitUsd:
+        default: Daily limit (USD)
+      NotificationEmail:
+        default: Notification email
+
+# -----------------------------------------------
+# Parameters
+# DailyLimitUsd: daily threshold in USD (Default 2).
+# NotificationEmail: alert recipient, passed at deploy time (no default so the
+# address is never written into this file).
+# -----------------------------------------------
+Parameters:
+  DailyLimitUsd:
+    Type: Number
+    Description: Alert when the previous day's total cost exceeds this amount (USD).
+    Default: 2
+  NotificationEmail:
+    Type: String
+    Description: Email address that receives the daily budget alert.
+
+# -----------------------------------------------
+# Resources
+# Daily COST budget over all services. Daily budgets only support ACTUAL
+# alerts (no forecast) and are evaluated once a day against the prior full
+# day's cost. Monitoring-only budgets (no actions) are free of charge.
+# -----------------------------------------------
+Resources:
+  DailyCostBudget01:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: zer0-daily-cost-budget-01
+        BudgetType: COST
+        TimeUnit: DAILY
+        BudgetLimit:
+          Amount: !Ref DailyLimitUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+
+# -----------------------------------------------
+# Outputs
+# Budget name for reference (e.g. aws budgets describe-budget).
+# -----------------------------------------------
+Outputs:
+  DailyCostBudgetName:
+    Description: Name of the daily cost budget.
+    Value: !Ref DailyCostBudget01

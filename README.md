@@ -6,6 +6,9 @@
 ~/Zer0/
 ├── README.md                      # このファイル（公開リポジトリと共用）
 ├── sync_to_public.sh              # プライベート→公開リポジトリ同期スクリプト
+├── cfn-article-bucket.yaml        # 共用S3 zer0-dev-s3（スタックzer0-article-bucket、002・005の記事保存ほか）。公開リポジトリではshared-infra/に置く
+├── cfn-budget-daily.yaml          # 日次予算アラート（スタックzer0-budget-daily）。公開リポジトリではshared-infra/に置く
+├── cfn-cloudtrail.yaml            # CloudTrail（スタックzer0-cloudtrail）。公開リポジトリではshared-infra/に置く
 ├── 000_git-auto-sync/             # git自動同期の仕様書・ドキュメント
 ├── 001_x-poster_zer0-infra/       # AWSニュース自動投稿ボット（@Zer0_Infra）
 ├── 002_Zenn_Auto_Article_Bot/     # Zenn初級者向け技術記事自動生成ボット（毎月第1・第3木曜）

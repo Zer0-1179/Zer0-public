@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Shared S3 bucket for Zenn article storage (zer0-dev-s3).
+  Used by ZennArticleGenerator (002) and ZennMidArticleGenerator (005)
+  to store generated Markdown files and architecture diagram PNGs.
+
+Resources:
+  ArticleBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: zer0-dev-s3
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-zenn-articles
+            Status: Enabled
+            Prefix: zenn-articles/
+            ExpirationInDays: 90
+          - Id: expire-zenn-mid-articles
+            Status: Enabled
+            Prefix: zenn-mid-articles/
+            ExpirationInDays: 90
+          - Id: expire-cryptobot-trades
+            Status: Enabled
+            Prefix: cryptobot/
+            ExpirationInDays: 365
+          - Id: abort-incomplete-multipart
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+Outputs:
+  BucketName:
+    Description: Zenn article storage bucket name
+    Value: !Ref ArticleBucket
+    Export:
+      Name: ZennArticleBucketName
+  BucketArn:
+    Description: Zenn article storage bucket ARN
+    Value: !GetAtt ArticleBucket.Arn
+    Export:
+      Name: ZennArticleBucketArn
