@@ -117,7 +117,7 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        # 2026-11-18 一時停止に伴いLP非公開（ユーザー判断）。再開時はtrueに戻して再デプロイする
+        # 2026-11-18 一時停止に伴いLP非公開（ユーザー判断）。再開はscripts/pause_resume.pyで行う（docs/operations/再開手順.md参照）
         Enabled: false
         Comment: Zer0-nyusatsu-lp static site
         DefaultRootObject: index.html

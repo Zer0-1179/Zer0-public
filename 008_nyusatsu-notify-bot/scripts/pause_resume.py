@@ -58,6 +58,8 @@ def restore_garbled_descriptions(lines):
     """「??」に化けた説明文を、直前のリソース名に対応する実リソースの値で置き換える。"""
     current = None
     for i, line in enumerate(lines):
+        if re.match(r"  \S", line):  # 次のリソース（またはセクション）に入ったらリセット
+            current = None
         m = re.match(r"\s+(?:FunctionName|Name|AlarmName): (\S+)$", line)
         if m:
             current = m.group(1)
@@ -67,7 +69,8 @@ def restore_garbled_descriptions(lines):
             value = live_description(current)
             if value is None:
                 sys.exit(f"[error] {current} の実リソースの説明文を取得できない")
-            lines[i] = f'{m.group(1)}{m.group(2)}: "{value}"'
+            escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+            lines[i] = f'{m.group(1)}{m.group(2)}: "{escaped}"'
             current = None
     return lines
 
@@ -89,7 +92,7 @@ def deployed_template(stack):
     return cfn.get_template(StackName=stack, TemplateStage="Original")["TemplateBody"]
 
 
-def make_change_set(stack, body, name, expected_logical_id, expected_property):
+def make_change_set(stack, body, name, expected_logical_id, expected_path):
     params = [
         {"ParameterKey": p["ParameterKey"], "UsePreviousValue": True}
         for p in cfn.describe_stacks(StackName=stack)["Stacks"][0].get("Parameters", [])
@@ -111,24 +114,27 @@ def make_change_set(stack, body, name, expected_logical_id, expected_property):
         if "didn't contain changes" in cs.get("StatusReason", ""):
             print(f"[{stack}] 既に目的の状態（変更なし）")
             return False
-        sys.exit(f"[error] {stack} の変更セット作成に失敗: {cs.get('StatusReason')}")
-    changes = []
-    for c in cs["Changes"]:
-        rc = c["ResourceChange"]
+        raise RuntimeError(f"{stack} の変更セット作成に失敗: {cs.get('StatusReason')}")
+    # Add/Remove/ImportのようにDetailsが空の変更も見落とさないよう、ResourceChange単位で数える。
+    resource_changes = [c["ResourceChange"] for c in cs["Changes"]]
+    details = []
+    for rc in resource_changes:
+        print(f"[{stack}] {rc['LogicalResourceId']} {rc['Action']} Replacement={rc.get('Replacement')}")
         for d in rc.get("Details", []):
             t = d["Target"]
-            changes.append((rc["LogicalResourceId"], rc["Action"], rc.get("Replacement"),
-                            t.get("Name"), t.get("BeforeValue"), t.get("AfterValue")))
-    for ch in changes:
-        print(f"[{stack}] {ch}")
-    unexpected = [
-        ch for ch in changes
-        if not (ch[0] == expected_logical_id and ch[1] == "Modify" and ch[2] == "False"
-                and ch[3] == expected_property)
-    ]
-    if unexpected or not changes:
+            details.append((rc["LogicalResourceId"], t.get("Path")))
+            print(f"[{stack}]   {t.get('Path')}: {t.get('BeforeValue')} -> {t.get('AfterValue')}")
+    ok = (
+        len(resource_changes) == 1
+        and resource_changes[0]["LogicalResourceId"] == expected_logical_id
+        and resource_changes[0]["Action"] == "Modify"
+        and resource_changes[0].get("Replacement") == "False"
+        and details
+        and all(d == (expected_logical_id, expected_path) for d in details)
+    )
+    if not ok:
         cfn.delete_change_set(StackName=stack, ChangeSetName=name)
-        sys.exit(f"[error] {stack} に想定外の変更が含まれるため中止（変更セットは削除済み）")
+        raise RuntimeError(f"{stack} に想定外の変更が含まれるため中止（この変更セットは削除済み）")
     return True
 
 
@@ -172,20 +178,39 @@ def main():
     lp = set_in_block(lp, "LpDistribution", "Enabled", "true" if resume else "false")
 
     targets = []
-    name = f"{args.action}-schedule-{suffix}"
-    if make_change_set(NOTIFY_STACK, "\n".join(notify), name, "DailyScheduleRule", "State"):
-        targets.append((NOTIFY_STACK, name))
-    name = f"{args.action}-lp-{suffix}"
-    if make_change_set(LP_STACK, "\n".join(lp), name, "LpDistribution", "DistributionConfig"):
-        targets.append((LP_STACK, name))
+
+    def cleanup():
+        # 途中で止まったときに、作成済みで未実行の変更セットを残さない。
+        for stack, cs in targets:
+            try:
+                cfn.delete_change_set(StackName=stack, ChangeSetName=cs)
+            except Exception:
+                pass
+
+    try:
+        name = f"{args.action}-schedule-{suffix}"
+        if make_change_set(NOTIFY_STACK, "\n".join(notify), name, "DailyScheduleRule", "/Properties/State"):
+            targets.append((NOTIFY_STACK, name))
+        name = f"{args.action}-lp-{suffix}"
+        if make_change_set(LP_STACK, "\n".join(lp), name, "LpDistribution",
+                           "/Properties/DistributionConfig/Enabled"):
+            targets.append((LP_STACK, name))
+    except Exception as exc:
+        cleanup()
+        sys.exit(f"[error] {exc}")
 
     if not args.execute:
-        for stack, cs in targets:
-            cfn.delete_change_set(StackName=stack, ChangeSetName=cs)
+        cleanup()
         print("確認のみで終了（変更セットは削除済み）。実行するには --execute を付ける")
         return
-    for stack, cs in targets:
-        execute(stack, cs)
+    while targets:
+        stack, cs = targets[0]
+        try:
+            execute(stack, cs)
+        except Exception as exc:
+            cleanup()
+            sys.exit(f"[error] {stack} の実行で失敗: {exc}（未実行の変更セットは削除済み）")
+        targets.pop(0)
     status()
 
 

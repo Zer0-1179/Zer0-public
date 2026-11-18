@@ -35,5 +35,5 @@
 | `005_Zenn_Mid_Article_Bot`  | 毎月1日・15日21時にAWS中級者向けZenn技術記事（短いハンズオン）を自動生成・S3保存                 | 一時停止中（2027-02再開） |
 | `006_Zer0_CryptoBot`        | BTC/ETH/SOLをBinanceシグナル+bitbank信用取引で自動売買（4時間毎シグナル・30分毎ポジション管理） | 稼働中     |
 | `007_Zer0_TouringApp`       | 日帰りバイクツーリングコース提案PWA（touring.zer0-infra.com）                                   | 稼働中     |
-| `008_Nyusatsu_Notify_Bot`   | 横浜市の入札情報を収集しメール/LINEで自動通知するサブスクサービス（入札情報ウォッチ）           | パイロット運用中 |
+| `008_Nyusatsu_Notify_Bot`   | 横浜市の入札情報を収集しメール/LINEで自動通知するサブスクサービス（入札情報ウォッチ）           | 一時停止中（2026-11-18） |
 | `009_CloudNote`             | Notebook/Section/Page階層・タグ・検索・自動保存のノートアプリ（設計とローカルUI試作のみ、AWS未実装） | 中止（2026-11-08） |

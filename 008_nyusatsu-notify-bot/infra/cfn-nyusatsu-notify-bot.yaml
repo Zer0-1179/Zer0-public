@@ -402,7 +402,8 @@ Resources:
       Name: zer0-nyusatsu-daily-schedule
       Description: 毎日6時(JST)にNyusatsu Notify Bot収集Lambdaを起動する
       ScheduleExpression: cron(0 21 * * ? *)
-      # 2026-11-18 一時停止（ユーザー判断）。再開時はENABLEDに戻して再デプロイする
+      # 2026-11-18 一時停止（ユーザー判断）。再開はscripts/pause_resume.pyで行う。
+      # このファイルは本番スタックより新しい版で未適用のため、直接デプロイしない（docs/operations/再開手順.md参照）
       State: DISABLED
       Targets:
         - Id: CollectorFunctionTarget
