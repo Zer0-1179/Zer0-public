@@ -1317,3 +1317,27 @@ def test_margin_fetch_success_without_prior_failure_sends_nothing(executor):
     state = {"positions": {}}
     assert executor.check_margin_health(bb, state) is True
     assert not executor.send_email.called
+
+
+def test_margin_unexpected_payload_keeps_failure_without_recovery_mail(executor):
+    """取得できても中身が想定外(数値にできない)なら、復旧メールは送らず失敗のまま(Fableレビュー 中1)"""
+    bb = MagicMock()
+    state = {"positions": {}, executor.MARGIN_FETCH_FAILED_KEY: "11/18 06:15"}
+    bb.get_margin_status.return_value = {"status": "NORMAL", "total_margin_balance_percentage": "abc"}
+    assert executor.check_margin_health(bb, state) is True
+    assert state[executor.MARGIN_FETCH_FAILED_KEY] == "11/18 06:15"
+    subjects = [c[0][0] for c in executor.send_email.call_args_list]
+    assert not any("復旧" in s for s in subjects)
+    assert any("取得失敗" in s for s in subjects)
+
+
+def test_margin_recovery_with_ratio_and_saves_immediately(executor, monkeypatch):
+    saved = MagicMock()
+    monkeypatch.setattr(executor, "save_state_now", saved)
+    bb = MagicMock()
+    bb.get_margin_status.return_value = {"status": "NORMAL", "total_margin_balance_percentage": "250.0"}
+    state = {"positions": {}, executor.MARGIN_FETCH_FAILED_KEY: "11/18 06:15"}
+    assert executor.check_margin_health(bb, state) is True
+    assert executor.MARGIN_FETCH_FAILED_KEY not in state
+    assert saved.called
+    assert any("復旧" in c[0][0] for c in executor.send_email.call_args_list)

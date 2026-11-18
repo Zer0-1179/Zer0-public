@@ -1384,9 +1384,13 @@ MARGIN_FETCH_FAILED_KEY = "margin_fetch_failed_at"
 
 
 def _notify_margin_fetch_recovered(state: dict):
+    """取得と中身の読み取りの両方が成功した時だけ呼ぶ(Fableレビュー 中1: 取得できても中身が想定外の時に
+    「復旧」と「失敗」が交互に届かないように)。"""
     failed_at = state.pop(MARGIN_FETCH_FAILED_KEY, None)
     if not failed_at:
         return
+    # この後の処理が例外で止まっても、復旧メールが次の回にもう1通届かないよう、すぐ保存する(Fableレビュー 低2)
+    save_state_now(state)
     log(f"証拠金維持率の取得が復旧（{failed_at} に失敗）")
     send_email(
         "【Zer0-CryptoBot】✅証拠金維持率の取得が復旧",
@@ -1406,23 +1410,27 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     try:
         margin = bb.get_margin_status()
         log(f"margin/status raw: {json.dumps(margin, ensure_ascii=False)}")
-        _notify_margin_fetch_recovered(state)
 
         # status フィールドで危険状態を直接検出（percentage スケール不問）
         status = margin.get("status", "NORMAL")
         if status in ("CALL", "LOSSCUT", "DEBT"):
+            _notify_margin_fetch_recovered(state)
             log(f"証拠金ステータス異常: {status} → 緊急成行決済を実行")
             _notify_emergency_close_result(bb, state, f"証拠金ステータス: {status}")
             return False
 
         raw = margin.get("total_margin_balance_percentage")
         if raw is None:
+            _notify_margin_fetch_recovered(state)
             return True  # 建玉なし → スキップ
         ratio = float(raw)
     except Exception as e:
         log(f"証拠金維持率取得失敗 → スキップ: {e}")
         # 続けて失敗した時は、最初に失敗した時刻のまま残す(復旧メールにいつからかを書くため)
-        state.setdefault(MARGIN_FETCH_FAILED_KEY, datetime.now(JST).strftime("%m/%d %H:%M"))
+        if MARGIN_FETCH_FAILED_KEY not in state:
+            state[MARGIN_FETCH_FAILED_KEY] = datetime.now(JST).strftime("%m/%d %H:%M")
+            # この後の処理が例外で止まっても失敗の印が消えないよう、すぐ保存する(Fableレビュー 低2)
+            save_state_now(state)
         send_email(
             "【Zer0-CryptoBot】⚠️証拠金維持率取得失敗",
             f"証拠金維持率の取得に失敗しました。\nエラー: {e}",
@@ -1431,6 +1439,7 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
         )
         return True
 
+    _notify_margin_fetch_recovered(state)
     log(f"証拠金維持率: {ratio:.1f}%")
 
     if ratio <= MARGIN_EMRG_PCT:
