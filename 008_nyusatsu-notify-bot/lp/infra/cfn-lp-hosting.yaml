@@ -117,7 +117,8 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Enabled: true
+        # 2026-11-18 一時停止に伴いLP非公開（ユーザー判断）。再開時はtrueに戻して再デプロイする
+        Enabled: false
         Comment: Zer0-nyusatsu-lp static site
         DefaultRootObject: index.html
         HttpVersion: http2and3
