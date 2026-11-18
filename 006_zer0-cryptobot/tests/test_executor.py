@@ -1278,3 +1278,42 @@ def test_trade_mails_sent_when_enabled(executor, monkeypatch):
     subjects = [m["Message"]["Subject"]["Data"] for m in sent]
     assert len(subjects) == 2
     assert "ショート約定 - BTC/JPY" in subjects[0] and "ロングクローズ - SOL/JPY" in subjects[1]
+
+
+# ---- 証拠金維持率の取得失敗→復旧のメール(2026-11-18) ----
+def test_margin_fetch_failure_then_recovery_sends_recovery_mail(executor):
+    bb = MagicMock()
+    bb.get_margin_status.side_effect = Exception("<urlopen error [Errno 104] Connection reset by peer>")
+    state = {"positions": {}}
+    assert executor.check_margin_health(bb, state) is True
+    assert executor.MARGIN_FETCH_FAILED_KEY in state
+    first_failed_at = state[executor.MARGIN_FETCH_FAILED_KEY]
+    assert "取得失敗" in executor.send_email.call_args[0][0]
+    assert "復旧" in executor.send_email.call_args.kwargs["action"]
+
+    # 続けて失敗しても、最初に失敗した時刻のまま
+    assert executor.check_margin_health(bb, state) is True
+    assert state[executor.MARGIN_FETCH_FAILED_KEY] == first_failed_at
+
+    # 次の確認で取得できたら、復旧(対応不要)のメールを1通送ってフラグを消す
+    executor.send_email.reset_mock()
+    bb.get_margin_status.side_effect = None
+    bb.get_margin_status.return_value = {"status": "NORMAL", "total_margin_balance_percentage": None}
+    assert executor.check_margin_health(bb, state) is True
+    assert executor.MARGIN_FETCH_FAILED_KEY not in state
+    assert executor.send_email.call_count == 1
+    assert "復旧" in executor.send_email.call_args[0][0]
+    assert executor.send_email.call_args.kwargs["level"] == "info"
+
+    # その次の確認ではもう送らない
+    executor.send_email.reset_mock()
+    assert executor.check_margin_health(bb, state) is True
+    assert not executor.send_email.called
+
+
+def test_margin_fetch_success_without_prior_failure_sends_nothing(executor):
+    bb = MagicMock()
+    bb.get_margin_status.return_value = {"status": "NORMAL", "total_margin_balance_percentage": "250.0"}
+    state = {"positions": {}}
+    assert executor.check_margin_health(bb, state) is True
+    assert not executor.send_email.called

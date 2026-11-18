@@ -1377,6 +1377,26 @@ def reconcile_positions(bb: BitbankClient, state: dict):
         log("建玉リコンサイル: 一致確認OK")
 
 
+# 証拠金維持率の取得に失敗した時刻(JST)をstateに残すキー。次の確認で取得できたら「復旧（対応不要）」の
+# メールを送って消す(2026-11-18、ユーザー要望「一度エラーが出て次が問題なければそれもメールで送ってほしい。
+# 対応が必要なのかと思う」。11/18 6:15にbitbankの接続切れで1回だけ失敗し、次から正常だった)
+MARGIN_FETCH_FAILED_KEY = "margin_fetch_failed_at"
+
+
+def _notify_margin_fetch_recovered(state: dict):
+    failed_at = state.pop(MARGIN_FETCH_FAILED_KEY, None)
+    if not failed_at:
+        return
+    log(f"証拠金維持率の取得が復旧（{failed_at} に失敗）")
+    send_email(
+        "【Zer0-CryptoBot】✅証拠金維持率の取得が復旧",
+        f"{failed_at} に失敗した証拠金維持率の取得が、今回の確認で正常に戻りました。\n"
+        "一時的な通信エラーのため、対応は不要です。",
+        level="info",
+        action="対応は不要です。",
+    )
+
+
 def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     """証拠金維持率を確認する。
     - status が CALL/LOSSCUT: 緊急成行決済
@@ -1386,6 +1406,7 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
     try:
         margin = bb.get_margin_status()
         log(f"margin/status raw: {json.dumps(margin, ensure_ascii=False)}")
+        _notify_margin_fetch_recovered(state)
 
         # status フィールドで危険状態を直接検出（percentage スケール不問）
         status = margin.get("status", "NORMAL")
@@ -1400,9 +1421,13 @@ def check_margin_health(bb: BitbankClient, state: dict) -> bool:
         ratio = float(raw)
     except Exception as e:
         log(f"証拠金維持率取得失敗 → スキップ: {e}")
+        # 続けて失敗した時は、最初に失敗した時刻のまま残す(復旧メールにいつからかを書くため)
+        state.setdefault(MARGIN_FETCH_FAILED_KEY, datetime.now(JST).strftime("%m/%d %H:%M"))
         send_email(
             "【Zer0-CryptoBot】⚠️証拠金維持率取得失敗",
-            f"証拠金維持率の取得に失敗しました。手動で状況を確認してください。\nエラー: {e}",
+            f"証拠金維持率の取得に失敗しました。\nエラー: {e}",
+            action="今すぐの対応は不要です。約30分後の確認で取得できれば「復旧」のメールが届き、その場合は一時的なエラーです。"
+                   "復旧のメールが届かず、このメールが続けて届く場合は Executor のログ（CloudWatch Logs）で原因を確認してください。",
         )
         return True
 
