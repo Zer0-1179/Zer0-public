@@ -11,12 +11,15 @@
     - zer0-nyusatsu-notify-bot  の DailyScheduleRule.State（ENABLED / DISABLED）
     - zer0-nyusatsu-lp-hosting  の LpDistribution.DistributionConfig.Enabled（true / false）
 
-ローカルの infra/cfn-nyusatsu-notify-bot.yaml は本番スタックより新しい版（S3 artifact方式・
-SSMパス直書き）で、本番には未適用。ローカル版をそのまま当てると想定外の変更が混ざるため、
-このスクリプトは「本番に今入っているテンプレート」を取り出し、対象の1行だけを書き換えて当てる。
+テンプレートはローカルの次の2ファイルを使う（get-template はASCII以外を「??」で返すため、
+本番から取り出したものを当てると本番の日本語が「??」で上書きされる。2026-11-18に一度起きて復元済み）。
+    - infra/cfn-nyusatsu-notify-bot-production.yaml（本番に入っている2026-08-09版の写し。
+      隣の cfn-nyusatsu-notify-bot.yaml は本番未適用の新しい版なので使わない）
+    - lp/infra/cfn-lp-hosting.yaml
 
-本番から取り出したテンプレートは日本語が「??」に化けて返るため、Lambda・EventBridge・
-CloudWatch Alarmの説明文を実リソースの値で埋め戻してから変更セットを作る。
+当てる前に、ローカルのファイルと本番のテンプレートが一致することを確かめる
+（ASCII以外の文字は「?」に置き換え、コメント行・空行と切り替える行の値は比べない）。
+一致しなければ止まる。実行後は、切り替えた値をローカルのファイルにも書き戻す。
 変更セットに対象以外の変更が1つでも含まれていれば、実行せずに削除して止まる。
 """
 
@@ -24,6 +27,7 @@ import argparse
 import re
 import sys
 import time
+from pathlib import Path
 
 import boto3
 
@@ -33,46 +37,36 @@ LP_STACK = "zer0-nyusatsu-lp-hosting"
 RULE_NAME = "zer0-nyusatsu-daily-schedule"
 
 cfn = boto3.client("cloudformation", region_name=REGION)
-lam = boto3.client("lambda", region_name=REGION)
 events = boto3.client("events", region_name=REGION)
-cw = boto3.client("cloudwatch", region_name=REGION)
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+NOTIFY_TEMPLATE = PROJECT_DIR / "infra" / "cfn-nyusatsu-notify-bot-production.yaml"
+LP_TEMPLATE = PROJECT_DIR / "lp" / "infra" / "cfn-lp-hosting.yaml"
 
 
-def live_description(name):
-    """リソース名から実リソースの説明文を取得する。該当しなければNone。"""
-    try:
-        return lam.get_function_configuration(FunctionName=name).get("Description")
-    except lam.exceptions.ResourceNotFoundException:
-        pass
-    try:
-        return events.describe_rule(Name=name).get("Description")
-    except events.exceptions.ResourceNotFoundException:
-        pass
-    alarms = cw.describe_alarms(AlarmNames=[name])["MetricAlarms"]
-    if alarms:
-        return alarms[0].get("AlarmDescription")
-    return None
-
-
-def restore_garbled_descriptions(lines):
-    """「??」に化けた説明文を、直前のリソース名に対応する実リソースの値で置き換える。"""
-    current = None
-    for i, line in enumerate(lines):
-        if re.match(r"  \S", line):  # 次のリソース（またはセクション）に入ったらリセット
-            current = None
-        m = re.match(r"\s+(?:FunctionName|Name|AlarmName): (\S+)$", line)
-        if m:
-            current = m.group(1)
+def comparable(lines, block_name, key):
+    """比較用に、コメント行・空行を除き、ASCII以外を「?」にし、切り替える行の値を伏せる。"""
+    out = []
+    in_block = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        m = re.match(r"(\s+)(Description|AlarmDescription): (.*)$", line)
-        if m and current and "??" in m.group(3):
-            value = live_description(current)
-            if value is None:
-                sys.exit(f"[error] {current} の実リソースの説明文を取得できない")
-            escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-            lines[i] = f'{m.group(1)}{m.group(2)}: "{escaped}"'
-            current = None
-    return lines
+        if re.match(r"  \S", line):
+            in_block = line == f"  {block_name}:"
+        if in_block and re.match(rf"\s+{key}: \S+$", line):
+            line = re.sub(rf"({key}): \S+$", r"\1: <toggle>", line)
+        out.append("".join("?" if ord(c) > 127 else c for c in line.rstrip()))
+    return out
+
+
+def load_local_matching(stack, path, block_name, key):
+    """ローカルのテンプレートを読み、本番と一致することを確かめてから行のリストで返す。"""
+    local = path.read_text(encoding="utf-8").replace("\r", "").split("\n")
+    deployed = cfn.get_template(StackName=stack, TemplateStage="Original")["TemplateBody"]
+    deployed = deployed.replace("\r", "").split("\n")
+    if comparable(local, block_name, key) != comparable(deployed, block_name, key):
+        raise RuntimeError(f"{path} が本番 {stack} のテンプレートと一致しない。差分を確かめてから使うこと")
+    return local
 
 
 def set_in_block(lines, block_name, key, value):
@@ -86,10 +80,6 @@ def set_in_block(lines, block_name, key, value):
             lines[i] = f"{m.group(1)}{key}: {value}"
             return lines
     sys.exit(f"[error] {block_name} の {key} が見つからない")
-
-
-def deployed_template(stack):
-    return cfn.get_template(StackName=stack, TemplateStage="Original")["TemplateBody"]
 
 
 def make_change_set(stack, body, name, expected_logical_id, expected_path):
@@ -172,9 +162,12 @@ def main():
     resume = args.action == "resume"
     suffix = time.strftime("%Y%m%d%H%M%S")
 
-    notify = restore_garbled_descriptions(deployed_template(NOTIFY_STACK).split("\n"))
+    try:
+        notify = load_local_matching(NOTIFY_STACK, NOTIFY_TEMPLATE, "DailyScheduleRule", "State")
+        lp = load_local_matching(LP_STACK, LP_TEMPLATE, "LpDistribution", "Enabled")
+    except RuntimeError as exc:
+        sys.exit(f"[error] {exc}")
     notify = set_in_block(notify, "DailyScheduleRule", "State", "ENABLED" if resume else "DISABLED")
-    lp = deployed_template(LP_STACK).split("\n")
     lp = set_in_block(lp, "LpDistribution", "Enabled", "true" if resume else "false")
 
     targets = []
@@ -203,6 +196,7 @@ def main():
         cleanup()
         print("確認のみで終了（変更セットは削除済み）。実行するには --execute を付ける")
         return
+    local_files = {NOTIFY_STACK: (NOTIFY_TEMPLATE, notify), LP_STACK: (LP_TEMPLATE, lp)}
     while targets:
         stack, cs = targets[0]
         try:
@@ -210,6 +204,9 @@ def main():
         except Exception as exc:
             cleanup()
             sys.exit(f"[error] {stack} の実行で失敗: {exc}（未実行の変更セットは削除済み）")
+        # 本番に当てた内容をローカルにも書き戻し、次回の一致確認が通るようにする。
+        path, lines = local_files[stack]
+        path.write_text("\n".join(lines), encoding="utf-8")
         targets.pop(0)
     status()
 
