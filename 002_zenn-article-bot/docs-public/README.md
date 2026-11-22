@@ -5,7 +5,7 @@
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20Bedrock%20%7C%20S3-orange)](https://aws.amazon.com)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://python.org)
 [![Zenn](https://img.shields.io/badge/Zenn-zenn.dev%2Fzer0__infra-3EA8FF)](https://zenn.dev/zer0_infra)
-[![Cost](https://img.shields.io/badge/月額-~%240.02-green)](https://aws.amazon.com/pricing)
+[![Cost](https://img.shields.io/badge/月額-~%240.04-green)](https://aws.amazon.com/pricing)
 
 ## 概要
 
