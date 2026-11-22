@@ -49,3 +49,9 @@ aws ssm get-parameter --name /portfolio/cryptobot-stats-auth \
 ```
 
 認証ロジックは `src/src/middleware.ts` に集約（`Astro.locals.isAdmin`）。
+
+## プロジェクトの公開予約（`publishAt`、2026-11-22〜）
+
+- 決まった日時に公開したいプロジェクトは `src/src/data/projects-extra/NNN_xxx.ts` に1件1ファイルで書き、`publishAt: 'YYYY-MM-DDTHH:mm:ss+09:00'` を付ける。その日時までは管理者（`Astro.locals.isAdmin`）にだけ表示され、日時を過ぎると再デプロイなしで自動的に一般公開される（SSR・キャッシュ無効のため）。
+- プロジェクトを表示する場所は必ず `getVisibleProjects(isAdmin)`／`getProjectBySlug(slug, isAdmin)` を通す（`projects` を直接使うと予約中のものが一般に漏れる）。
+- ソースと画像が公開リポジトリに先に出ないよう、`/root/Zer0/sync_to_public.sh` の `EMBARGO_RULES` に同じ日時と除外パターンを登録する。構成図のファイル名には推測されにくい接尾辞を付ける（S3の `/images/` は誰でも取得できるため）。
