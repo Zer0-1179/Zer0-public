@@ -21,6 +21,14 @@ const architecture = project.architecture;
 const architectureSvg = project.architectureSvg;
 const githubUrl = project.githubUrl;
 const siteUrl = project.siteUrl;
+// 概要は「リード文」＋「【見出し】本文」（英語は「[Label] text」）の段落を空行区切りで持つ。
+// 見出し付きの段落は表形式で並べ、長い1段落にならないようにする
+const descBlocks = desc.split('\n\n').map((b) => {
+  const m = b.match(/^【(.+?)】\s*([\s\S]*)$/) || b.match(/^\[(.+?)\]\s*([\s\S]*)$/);
+  return m ? { label: m[1], text: m[2] } : { label: null, text: b };
+});
+const descLead = descBlocks.filter((b) => !b.label).map((b) => b.text);
+const descItems = descBlocks.filter((b) => b.label) as { label: string; text: string }[];
 const scheduledAt = formatPublishAt(project);
 if (scheduledAt) {
   // 管理者のプレビュー表示。検索エンジンに載らないようにする
@@ -57,7 +65,19 @@ if (scheduledAt) {
     <!-- 概要 -->
     <section class="mb-10">
       <h2 class="text-accent text-xs uppercase tracking-wider mb-4">概要</h2>
-      <p class="text-slate-300 leading-relaxed whitespace-pre-line text-base">{desc}</p>
+      {descLead.map((text) => (
+        <p class="text-slate-300 leading-relaxed text-base mb-5">{text}</p>
+      ))}
+      {descItems.length > 0 && (
+        <dl class="divide-y divide-navy-700/40 border border-navy-700/40 rounded-lg bg-navy-800/40">
+          {descItems.map(({ label, text }) => (
+            <div class="px-4 py-3 sm:grid sm:grid-cols-[10rem_1fr] sm:gap-4">
+              <dt class="text-accent text-sm font-semibold mb-1 sm:mb-0">{label}</dt>
+              <dd class="text-slate-300 text-sm leading-relaxed">{text}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </section>
 
     <!-- 全体構成図 -->
