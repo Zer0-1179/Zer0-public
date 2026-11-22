@@ -115,7 +115,7 @@ const baseCareer = [
     tags: ['Oracle 19c', 'RHEL 8.2', 'RAT'],
   },
 ];
-// 公開予約中の経歴（AIコンペ等）は projects-extra/ から読み、管理者以外には公開日時まで出さない
+// 公開予約中の経歴は projects-extra/ から読み、管理者以外には公開日時まで出さない
 const career = [...getExtraCareer('ja', Astro.locals.isAdmin), ...baseCareer];
 ---
 
