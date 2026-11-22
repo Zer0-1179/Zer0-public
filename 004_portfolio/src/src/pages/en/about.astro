@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { useTranslations } from '../../i18n/utils';
 import { socialLinks } from '../../data/links';
+import { getExtraCareer } from '../../data/projects';
 
 const t = useTranslations('en');
 
@@ -38,7 +39,7 @@ const otherCerts = [
   { name: 'HULFT Basic Engineer', year: '2025' },
 ];
 
-const career = [
+const baseCareer = [
   {
     period: '2026.03 — Present',
     title: 'Personal Projects (Serverless Automation Systems)',
@@ -114,6 +115,8 @@ const career = [
     tags: ['Oracle 19c', 'RHEL 8.2', 'RAT'],
   },
 ];
+// 公開予約中の経歴（AIコンペ等）は projects-extra/ から読み、管理者以外には公開日時まで出さない
+const career = [...getExtraCareer('en', Astro.locals.isAdmin), ...baseCareer];
 ---
 
 <BaseLayout title="About" ogImage="/images/profile.jpg">
@@ -215,10 +218,10 @@ const career = [
       <div class="relative">
         <div class="absolute left-4 top-0 bottom-0 w-px bg-navy-700/60"></div>
         <div class="space-y-8">
-          {career.map(({ period, title, desc, tags, link }, i) => (
+          {career.map(({ period, title, desc, tags, link, scheduledAt }, i) => (
             <div class="reveal-io relative pl-12" style={`--stagger-delay: ${(i * 0.08).toFixed(2)}s`}>
               <div class="absolute left-3 top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-navy-900 -translate-x-1/2"></div>
-              <div class="text-accent text-xs mb-1">{period}</div>
+              <div class="text-accent text-xs mb-1">{period}{scheduledAt && <span class="ml-2 px-2 py-0.5 bg-amber-500/15 text-amber-300 rounded border border-amber-500/30">Scheduled {scheduledAt}</span>}</div>
               <h3 class="text-white font-semibold mb-2">{title}</h3>
               <ul class="list-disc pl-5 space-y-1 text-slate-400 text-sm leading-relaxed mb-3 marker:text-accent/60">
                 {desc.map((line) => (

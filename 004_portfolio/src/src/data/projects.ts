@@ -270,7 +270,35 @@ const baseProjects: Project[] = [
 // 公開予約中のプロジェクトは projects-extra/ に1件1ファイルで置く。公開日時までは
 // sync_to_public.sh のEMBARGO_RULESで公開リポジトリから除外されるため、ファイルが
 // 無くてもビルドできるよう import.meta.glob で読み込む（無ければ空になる）。
-const extraModules = import.meta.glob<{ default: Project }>('./projects-extra/*.ts', { eager: true });
+const extraModules = import.meta.glob<{ default: Project; careerJa?: CareerItem; careerEn?: CareerItem }>(
+  './projects-extra/*.ts',
+  { eager: true },
+);
+
+// 自己紹介ページの職務経歴の1件。公開予約中のプロジェクトに付随する経歴も projects-extra/ に置く
+export type CareerItem = {
+  period: string;
+  title: string;
+  desc: string[];
+  tags: string[];
+  link?: { href: string; label: string };
+  publishAt?: string;
+};
+
+// projects-extra/ の経歴のうち、表示してよいもの（管理者は予約中も含む）を新しい順で返す
+export function getExtraCareer(lang: 'ja' | 'en', isAdmin: boolean): (CareerItem & { scheduledAt: string | null })[] {
+  return Object.values(extraModules)
+    .map((m) => (lang === 'ja' ? m.careerJa : m.careerEn))
+    .filter((c): c is CareerItem => !!c)
+    .filter((c) => isAdmin || !c.publishAt || Date.now() >= new Date(c.publishAt).getTime())
+    .sort((a, b) => b.period.localeCompare(a.period))
+    .map((c) => ({
+      ...c,
+      scheduledAt: c.publishAt && Date.now() < new Date(c.publishAt).getTime()
+        ? new Date(c.publishAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : null,
+    }));
+}
 
 // 並び順は番号の昇順（追加は末尾、途中挿入しない）
 export const projects: Project[] = [
