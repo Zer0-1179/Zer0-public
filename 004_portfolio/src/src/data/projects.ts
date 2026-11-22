@@ -18,9 +18,12 @@ export type Project = {
   emoji: string;
   featured: boolean;
   monthlyCost: string;
+  // 公開日時（ISO8601、タイムゾーン付き）。この日時より前は管理者（Astro.locals.isAdmin）にしか
+  // 表示しない。一覧・トップ・統計・サイトマップ・詳細ページのすべてがgetVisibleProjects()を通す。
+  publishAt?: string;
 };
 
-export const projects: Project[] = [
+const baseProjects: Project[] = [
   {
     slug: 'aws-x-poster',
     number: '001',
@@ -264,6 +267,40 @@ export const projects: Project[] = [
   },
 ];
 
-export function getProjectBySlug(slug: string) {
-  return projects.find((p) => p.slug === slug);
+// 公開予約中のプロジェクトは projects-extra/ に1件1ファイルで置く。公開日時までは
+// sync_to_public.sh のEMBARGO_RULESで公開リポジトリから除外されるため、ファイルが
+// 無くてもビルドできるよう import.meta.glob で読み込む（無ければ空になる）。
+const extraModules = import.meta.glob<{ default: Project }>('./projects-extra/*.ts', { eager: true });
+
+// 並び順は番号の昇順（追加は末尾、途中挿入しない）
+export const projects: Project[] = [
+  ...baseProjects,
+  ...Object.values(extraModules).map((m) => m.default),
+].sort((a, b) => a.number.localeCompare(b.number));
+
+export function isPublished(p: Project, now: Date = new Date()): boolean {
+  return !p.publishAt || now.getTime() >= new Date(p.publishAt).getTime();
+}
+
+// 管理者には公開予約中のものも含めて全件、それ以外には公開済みのものだけを返す
+export function getVisibleProjects(isAdmin: boolean): Project[] {
+  return isAdmin ? projects : projects.filter((p) => isPublished(p));
+}
+
+export function getProjectBySlug(slug: string, isAdmin = false) {
+  return getVisibleProjects(isAdmin).find((p) => p.slug === slug);
+}
+
+// '~$0.7'・'$0' などの表記から数値を足し合わせ、'~$2.1' の形で返す
+export function sumMonthlyCost(list: Project[]): string {
+  const total = list.reduce((acc, p) => acc + (parseFloat(p.monthlyCost.replace(/[^0-9.]/g, '')) || 0), 0);
+  return `~$${total.toFixed(1)}`;
+}
+
+// 管理者向けの「公開予約」表示（例: 2026/12/05 17:00）。日本時間で表示する
+export function formatPublishAt(p: Project): string | null {
+  if (!p.publishAt || isPublished(p)) return null;
+  return new Date(p.publishAt).toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
 }

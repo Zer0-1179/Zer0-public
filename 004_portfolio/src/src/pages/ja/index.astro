@@ -4,13 +4,13 @@ import Hero from '../../components/Hero.astro';
 import StatsBar from '../../components/StatsBar.astro';
 import ProjectCard from '../../components/ProjectCard.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
-import { projects } from '../../data/projects';
+import { getVisibleProjects } from '../../data/projects';
 import { getCategoriesWithTemplates, getTemplatesByCategory } from '../../data/templates';
 import { useTranslations } from '../../i18n/utils';
 import { excludedNoteSlugs } from '../../data/links';
 
 const t = useTranslations('ja');
-const featured = projects.filter((p) => p.featured);
+const featured = getVisibleProjects(Astro.locals.isAdmin).filter((p) => p.featured);
 
 // RSS fetch（リクエスト時に取得 → 動的）
 type Article = { title: string; link: string; date: string; source: 'zenn' | 'note' };

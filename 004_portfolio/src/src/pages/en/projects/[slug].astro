@@ -2,12 +2,13 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import TouringStatsChart from '../../../components/TouringStatsChart.astro';
 import ImageLightbox from '../../../components/ImageLightbox.astro';
-import { projects, getProjectBySlug } from '../../../data/projects';
+import { getProjectBySlug, formatPublishAt } from '../../../data/projects';
 import { useTranslations } from '../../../i18n/utils';
 
 const t = useTranslations('en');
 const { slug } = Astro.params;
-const project = getProjectBySlug(slug!);
+// 公開予約中のプロジェクトは管理者以外には存在しないものとして扱う（一覧へリダイレクト）
+const project = getProjectBySlug(slug!, Astro.locals.isAdmin);
 
 if (!project) return Astro.redirect('/en/projects/');
 
@@ -18,6 +19,11 @@ const architecture = project.architecture;
 const architectureSvg = project.architectureSvg;
 const githubUrl = project.githubUrl;
 const siteUrl = project.siteUrl;
+const scheduledAt = formatPublishAt(project);
+if (scheduledAt) {
+  // 管理者のプレビュー表示。検索エンジンに載らないようにする
+  Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+}
 ---
 
 <BaseLayout title={name} ogImage={architecture}>
@@ -27,6 +33,9 @@ const siteUrl = project.siteUrl;
       <span>›</span>
       <span class="text-slate-300">{name}</span>
     </nav>
+    {scheduledAt && (
+      <div class="mb-8 px-4 py-3 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">Scheduled (publishes at {scheduledAt} JST). Only admins can see this page now.</div>
+    )}
     <div class="mb-12">
       <div class="flex items-center gap-3 mb-4">
         <span class="text-4xl">{project.emoji}</span>

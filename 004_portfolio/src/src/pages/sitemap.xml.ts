@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { projects } from '../data/projects';
+import { getVisibleProjects } from '../data/projects';
 import { getCategoriesWithTemplates } from '../data/templates';
 
 export const GET: APIRoute = ({ site }) => {
@@ -7,7 +7,8 @@ export const GET: APIRoute = ({ site }) => {
   const langs = ['ja', 'en'];
 
   const staticPaths = ['', '/about', '/projects', '/articles', '/contact', '/templates'];
-  const projectPaths = projects.map((p) => `/projects/${p.slug}`);
+  // 公開予約中のプロジェクトはサイトマップに載せない
+  const projectPaths = getVisibleProjects(false).map((p) => `/projects/${p.slug}`);
   const categoryPaths = getCategoriesWithTemplates().map((c) => `/templates/${c.slug}`);
 
   const allPaths = [...staticPaths, ...projectPaths, ...categoryPaths];

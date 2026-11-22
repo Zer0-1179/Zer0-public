@@ -1,6 +1,6 @@
 ---
 import { getLangFromUrl, useTranslations } from '../i18n/utils';
-import type { Project } from '../data/projects';
+import { formatPublishAt, type Project } from '../data/projects';
 
 interface Props {
   project: Project;
@@ -37,6 +37,7 @@ const desc = lang === 'ja' ? project.descJa : project.descEn;
       {project.tags.slice(0, 2).map((tag) => (
         <span class="px-2 py-0.5 bg-accent/10 text-accent text-xs rounded border border-accent/20">{tag}</span>
       ))}
+      {formatPublishAt(project) && <span class="px-2 py-0.5 bg-amber-500/15 text-amber-300 text-xs rounded border border-amber-500/30">{lang === 'ja' ? '公開予約' : 'Scheduled'} {formatPublishAt(project)}</span>}
     </div>
 
     <h3 class="text-sm font-bold text-white mb-1.5 group-hover:text-accent transition-colors">{name}</h3>

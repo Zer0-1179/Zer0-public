@@ -1,10 +1,11 @@
 ---
 import { getLangFromUrl, useTranslations } from '../i18n/utils';
-import { projects } from '../data/projects';
+import { getVisibleProjects, sumMonthlyCost } from '../data/projects';
 import { templates } from '../data/templates';
 
 const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
+const projects = getVisibleProjects(Astro.locals.isAdmin);
 
 const startDate = new Date('2026-03-26');
 const today = new Date();
@@ -17,7 +18,7 @@ const stats = [
   { value: String(projects.length), label: t('stats.projects') },
   { value: String(templates.length), label: t('stats.templates') },
   { value: `${diffDays}+${t('stats.autopost.unit')}`, label: t('stats.autopost') },
-  { value: '~$2.1', label: t('stats.cost') },
+  { value: sumMonthlyCost(projects), label: t('stats.cost') },
 ];
 ---
 

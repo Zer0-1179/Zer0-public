@@ -1,9 +1,12 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
-import { projects } from '../../../data/projects';
+import { getVisibleProjects, sumMonthlyCost, formatPublishAt } from '../../../data/projects';
 import { useTranslations } from '../../../i18n/utils';
 
 const t = useTranslations('en');
+// 公開予約中のプロジェクトは管理者にだけ表示する（publishAt）
+const projects = getVisibleProjects(Astro.locals.isAdmin);
+const totalCost = sumMonthlyCost(projects);
 ---
 
 <BaseLayout title={t('projects.title')}>
@@ -17,7 +20,7 @@ const t = useTranslations('en');
     <!-- Monthly Operating Cost -->
     <div class="mb-14 bg-navy-800/40 border border-navy-700/50 rounded-xl p-6">
       <h2 class="text-lg font-semibold text-white mb-1">Monthly Operating Cost</h2>
-      <p class="text-slate-400 text-xs mb-5">This site runs within the AWS free tier at $0. Total across all featured projects is ~$2.1/month.</p>
+      <p class="text-slate-400 text-xs mb-5">This site runs within the AWS free tier at $0. Total across all featured projects is {totalCost}/month.</p>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -40,7 +43,7 @@ const t = useTranslations('en');
             ))}
             <tr class="border-t-2 border-navy-600">
               <td class="pt-3 pr-6 text-slate-300 font-semibold">Total</td>
-              <td class="pt-3 text-right font-mono font-bold text-white">~$2.1</td>
+              <td class="pt-3 text-right font-mono font-bold text-white">{totalCost}</td>
             </tr>
           </tbody>
         </table>
@@ -75,6 +78,7 @@ const t = useTranslations('en');
                 {p.tags.slice(0, 2).map((tag) => (
                   <span class="px-2 py-0.5 bg-accent/10 text-accent text-xs rounded border border-accent/20">{tag}</span>
                 ))}
+                {formatPublishAt(p) && <span class="px-2 py-0.5 bg-amber-500/15 text-amber-300 text-xs rounded border border-amber-500/30">Scheduled {formatPublishAt(p)}</span>}
               </div>
 
               <h2 class="text-base font-bold text-white mb-2 group-hover:text-accent transition-colors">{name}</h2>
