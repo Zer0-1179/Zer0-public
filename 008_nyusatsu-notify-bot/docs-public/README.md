@@ -217,88 +217,9 @@ Fableでの調査比較の結果、以下の理由で横浜市を選定した。
 
 直近1日分のみ表示。全履歴は [CHANGELOG.md](./CHANGELOG.md) を参照。
 
-### 2026-11-18
+### 2026-11-23
 
-#### プロジェクトの一時停止（ユーザー判断）
+#### READMEのキーワード数を実際の設定に合わせた
 
-- 毎朝6:00（JST）の収集ルール`zer0-nyusatsu-daily-schedule`を`State: DISABLED`にし、収集・通知を止めた。
-- LP（`nyusatsu.zer0-infra.com`）のCloudFrontディストリビューション`E3AGWQ5BBWC1VJ`を`Enabled: false`にして非公開にした。
-- Lambda・DynamoDB（事前登録者3件を含む）・SES・SSM・S3等のリソースは削除せず残しており、2か所を元に戻して再デプロイすれば再開できる。
-- 本番スタック`zer0-nyusatsu-notify-bot`はローカルの`infra/cfn-nyusatsu-notify-bot.yaml`より古い版（旧パラメータ`HmacSecret`・`Keywords`等を持つ版）のまま動いていた。
-- そのためローカル版はデプロイせず、本番のテンプレートを取得してスケジュールの1行だけを変え、変更セットで変更がこの1件だけであることを確認してから適用した。
-- 本番から取得したテンプレートでは日本語の説明文が「??」になっており、そのまま適用すると説明文5件が壊れるため、実リソースの説明文で埋め戻してから適用した。
-- `zer0-nyusatsu-lp-hosting`はローカル版と本番版の差分がコメントのみだったため、ローカルの`lp/infra/cfn-lp-hosting.yaml`を変更セットで適用した（変更は`LpDistribution`の1件のみ）。
-- 004ポートフォリオの008の説明を「一時停止中」に改め、使えなくなったLPへのリンクを外した。
-
-#### bounce-handlerを最新のコードに更新
-
-- 本番のLambdaとローカルの`lambda/`を中身で比べ、5関数のうち`zer0-nyusatsu-bounce-handler`だけが古いことを確認した。
-- 反映していなかったのは、SESから届いた想定外の文字列をCloudWatch Logsに残さない修正（分類値を`KNOWN_BOUNCE_SUBTYPES`に限定）である。
-- pytest 87件が通ることを確認した。
-- `scripts/package_lambda_artifacts.sh --bounce-handler-only`でZIPをS3に置き、`nyusatsu-lambda-code-deployment`スタックの変更セット（差分は対象関数・キー・バージョンのみ）で更新した。
-- 更新後、本番のコードがローカルと一致すること、空のイベントで起動して200が返ることを確認した。
-- `zer0-nyusatsu-activate-ruleset`は本番とローカルの参照用コピーの差がコメントのみであることを確認した。
-
-#### 再開の準備
-
-- 停止と再開を1コマンドで切り替える`scripts/pause_resume.py`を追加した（`status`・`pause`・`resume`、`--execute`を付けたときだけ実行）。
-- このスクリプトは本番に入っているテンプレートを取り出して対象の1行だけを書き換え、変更セットに対象以外の変更があれば実行せずに止まる。
-- 確認のみのモードで、再開時の変更がスケジュールの`State`とCloudFrontの`Enabled`の2件だけになることを確かめた。
-- 再開手順と、戻す必要がある資料の一覧を非公開の`docs/operations/再開手順.md`にまとめた。
-- 004ポートフォリオの自己紹介ページ（日英）の稼働数を「6件が稼働中、2件が一時停止中」に直した。
-
-#### Fableレビューの指摘対応
-
-- `scripts/pause_resume.py`の変更セット判定を厳しくし、変更がちょうど1件で、項目の場所（`/Properties/State`・`/Properties/DistributionConfig/Enabled`）まで一致する場合だけ実行するようにした。
-- 途中で失敗したときに、作成済みで未実行の変更セットを残さず削除するようにした。
-- 説明文を埋め戻すときに`"`や`\`を正しく書き込むようにし、リソースの境目で対象名をリセットするようにした。
-- `get-template`はASCII以外の文字を「??」にして返すため、本日の停止の適用で、本番スタックに保存されたMetadataのラベル・Parameterの説明文・`Keywords`のDefaultが「??」になったことが分かった。
-- 動作への影響はない（パラメータは前回値を引き継ぎ、キーワードはSSMの`/nyusatsu/keywords`から読む）。この注意点を再開手順に記載した。
-- 再開手順に、停止中も動いているAPI・問合せ転送、再開した日に停止中の公告がまとめて届く挙動、戻す資料（ワークスペースのREADME・Codex引き継ぎ資料・004のCHANGELOG）を追記した。
-- ローカルのテンプレート2本の停止コメントを「再開は`scripts/pause_resume.py`で行い、notify-botのテンプレートは直接デプロイしない」という内容に直した。
-
-#### 本番スタックの日本語の復元
-
-- `get-template`はASCII以外の文字を「??」にして返すため、本日の停止の適用で、本番`zer0-nyusatsu-notify-bot`に保存されたMetadataのラベル・Parameterの説明文・`Keywords`のDefaultが「??」になっていた。
-- 公開リポジトリの履歴から、本番と一致する2026-08-09版（コミット`e1454cf`、ASCII以外を除いて行単位で一致）を取り出し、`infra/cfn-nyusatsu-notify-bot-production.yaml`として置いた。
-- Metadata等だけの変更は変更セットで「変更なし」と扱われるため、何も作らない`AWS::CloudFormation::WaitConditionHandle`を一時的に追加して適用し、続けて削除して適用することでテンプレートを保存し直した（スケジュールは`DISABLED`のまま）。
-- `scripts/pause_resume.py`を、本番から取り出したテンプレートではなくローカルの写しを元にするよう改め、本番と一致しない場合は止まり、実行後は値を写しに書き戻すようにした。
-- 写しをわざと1行変えて、一致確認で止まることを確かめた。
-
-#### 本番の全スタックをローカル（git）の内容に一致
-
-- 停止中で影響が出ない時期のため、2026-08-27の移行以降ローカルより古い版のまま動いていた`zer0-nyusatsu-notify-bot`・`zer0-nyusatsu-lp-backend`・`zer0-nyusatsu-mail-relay`に、ローカルのテンプレートを変更セットで適用した。
-- 適用前に、Lambdaのコード（S3の最新版と稼働中のコードのSHA256が一致）、環境変数、IAM権限が実質同じであることを確認した。違いは参照先SSMのパスが旧`/zer0/008-nyusatsu/`から現行の`/nyusatsu/`に変わる点だけだった。
-- 削除扱いになった旧SSMパラメータ10件は、2026-08-27にすでに削除済みで存在しないことを確認した。DynamoDBの3テーブルは`UpdateReplacePolicy`の設定だけが変わり、データには触れていない。
-- 適用後、全Lambdaが`Active`、収集スケジュールが`DISABLED`のまま、事前登録者3件がそのままであることを確認した。IAMポリシーシミュレーターで、collector等がSSM・DynamoDBを読み書きできることも確認した。
-- lp-backendのCORS許可ヘッダーは007と同じく小文字に揃えた。適用後のAPIはプリフライト204、署名なしWebhookと配信停止は400を返し、以前と同じ応答だった。
-- `nyusatsu-ssm-access`・`zer0-nyusatsu-ses-domain`・`zer0-nyusatsu-lp-cert`は文言だけの差だったため、リソースを変えずにテンプレートだけ保存し直した。
-- ローカルになかった`nyusatsu-ssm`スタックのテンプレートを`infra/cfn-nyusatsu-ssm.yaml`として保存した（値はNoEchoのパラメータで、テンプレートには含まれない）。
-- これで本番と一致させるために置いていた写し`infra/cfn-nyusatsu-notify-bot-production.yaml`は不要になったため削除し、`scripts/pause_resume.py`は`infra/cfn-nyusatsu-notify-bot.yaml`を使うように戻した。
-- 全スタックのドリフトが`IN_SYNC`になったことを確認した。
-
-#### LPのリデザイン版をS3に反映
-
-- 2026-07-15にローカルで作った`lp/src/index.html`の全面リデザイン（v0.30、白基調＋濃紺）が、S3に上がらないまま残っていたことが分かった。
-- ユーザー判断でリデザイン版に合わせることにし、`lp/deploy.sh`でS3へ反映した（CSPのスクリプトハッシュは変更不要だった）。
-- LPは非公開中のため今は見えず、再開時にこのデザインで公開される。再開前に見た目を確認する手順を再開手順に加えた。
-- 反映後、S3の全14ファイルがローカル（デプロイ時に差し込む値を含む）と一致することを確認した。
-
-#### Lambdaのコード更新手順の変更
-
-- 本番の各スタックがS3のバージョンID（`*CodeVersion`パラメータ）でコードを持つ形になったため、コード更新は関数が所属するスタックのパラメータを変える変更セットで行うことにした。
-- 旧方式のコード更新専用スタック`nyusatsu-lambda-code-deployment`は、使うと各スタックのパラメータと本番のコードがずれるため使わないことにした（スタックは同日中に削除した。下の「旧方式のコード更新スタックの削除」参照）。
-- `scripts/package_lambda_artifacts.sh`の案内表示を、渡す先のスタックとパラメータ名に合わせて直した。仕様書のデプロイ手順と再開手順も同じ内容に更新した。
-
-#### Fableレビューの指摘対応（本番とgitの一致作業）
-
-- `scripts/package_lambda_artifacts.sh`の進捗表示の番号を直し、mail-forwarderだけを更新する`--mail-forwarder-only`を加えた。
-- 旧方式のコード更新スタックのテンプレート`infra/cfn-lambda-code-deployment.yaml`に「使わない」旨とセクションコメントを書き、`infra/cfn-nyusatsu-ssm-access.yaml`にもセクションコメントを加えた（どちらもリソースを変えずに本番へ保存し直した）。
-- Stripe Webhookの再開計画（非公開資料）に残っていた旧方式のコード更新手順を、`zer0-nyusatsu-lp-backend`の`StripeWebhookCodeVersion`で更新する手順に直した。
-- 再開手順の「確認のみ実行の出力例」を今のスクリプトの表示に合わせ、READMEのLPの説明をv0.30のリデザイン内容に合わせた。
-
-#### 旧方式のコード更新スタックの削除
-
-- 使わなくなった`nyusatsu-lambda-code-deployment`スタックを削除した（ユーザー判断）。消えたのは補助用のLambda`nyusatsu-code-deployment`とIAMロール`nyusatsu-code-deployment-role`だけ。
-- 削除時に業務用の関数へは何もしない作り（削除要求はそのまま成功を返す）であり、削除前後で残る7関数（業務用5関数と補助用2関数）のコードのハッシュが変わらないことを確認した。
-- 保持設定で残ったロググループ`/aws/lambda/nyusatsu-code-deployment`も削除し、テンプレート`infra/cfn-lambda-code-deployment.yaml`もgitから削除した（本番の資材＝gitにある物にそろえるため）。
+- READMEの処理の流れと今後の方針に「キーワード10語」とあったが、本番のSSMパラメータ`/nyusatsu/keywords`は11語（清掃・美化・害虫防除・ねずみ防除・消防用設備点検・造園・緑地・街路樹・除草・設備保守点検・建物管理）だったため、11語に直した。
+- ポートフォリオの数字を見直した際に見つけた（設定・コードは変えていない）。
