@@ -42,7 +42,7 @@ def load():
                      l=df["low"].values.astype(float), c=df["close"].values.astype(float),
                      minute=t.minute.values, hour=t.hour.values, idx={ts: i for i, ts in enumerate(df["open_time"])})
         # 5分足の抜け（取引所の停止等）を確認用に数える
-        gaps = int((np.diff(t.asi8) != 300 * 10**9).sum())
+        gaps = int((df["open_time"].diff().dropna() != pd.Timedelta(minutes=5)).sum())
         print(f"{c}: 5分足 {len(t)}本 {t[0]} 〜 {t[-1]}  抜け{gaps}箇所", flush=True)
     return d4, h5
 
