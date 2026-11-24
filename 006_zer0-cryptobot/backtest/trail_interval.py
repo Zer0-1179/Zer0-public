@@ -8,6 +8,7 @@
       （その時点で建値を割っていれば60018で置けない → 成行決済。それまでは旧SLが70%を守る）
   - トレーリング中は見回りのたびに「その時の価格」（5分足の始値）が極値を更新したら
       新ライン=max(価格-ATR×0.75, 建値) に引き上げる（本番と同じく足の高値は使わない）
+  - どの案でも4h境界の:00は見回る（Analyzerが毎回Executorを呼ぶため。2026-11-24 Fableレビュー）
   - トレーリングSLは逆指値 → 5分足の安値・高値で即約定（窓開けは始値で約定）
 手数料・滑り・金利・ポートフォリオ（同時2件・1件=資金×0.6・複利）は entry_1h.py と同じ
 python3 -I trail_interval.py <backtest_dir> <data_dir>
@@ -39,7 +40,7 @@ def load():
         t = pd.DatetimeIndex(df["open_time"])
         h5[c] = dict(t=t, o=df["open"].values.astype(float), h=df["high"].values.astype(float),
                      l=df["low"].values.astype(float), c=df["close"].values.astype(float),
-                     minute=t.minute.values, idx={ts: i for i, ts in enumerate(df["open_time"])})
+                     minute=t.minute.values, hour=t.hour.values, idx={ts: i for i, ts in enumerate(df["open_time"])})
         # 5分足の抜け（取引所の停止等）を確認用に数える
         gaps = int((np.diff(t.asi8) != 300 * 10**9).sum())
         print(f"{c}: 5分足 {len(t)}本 {t[0]} 〜 {t[-1]}  抜け{gaps}箇所", flush=True)
@@ -68,7 +69,9 @@ def manage(sig, h, fill, anchor=None):
     for i in range(i0, n):
         o, hi, lo = h["o"][i], h["h"][i], h["l"][i]
         # ── 見回り（足の始値の時点。エントリーした足では何もしない）──
-        if i > i0 and h["minute"][i] in CHECKS:
+        # 本番はAnalyzerが4h足の確定(:00)ごとにExecutorを呼び、新規建ての前に既存建玉を管理する
+        # （analyzer:383-389・executor:2340-2347、Fableレビュー）ため、どの案でも4h境界の:00は見回る
+        if i > i0 and (h["minute"][i] in CHECKS or (h["minute"][i] == 0 and h["hour"][i] % 4 == 0)):
             if phase == "sl_wait":       # SL約定後、残り30%を成行で決済
                 px = o * (1 - sgn * SLIP_MKT)
                 r += 0.3 * (pnl(px) - TAKER[coin]) - interest(i, 0.3)
@@ -114,7 +117,7 @@ def manage(sig, h, fill, anchor=None):
             return r, i, "TRAIL"
     px = h["c"][-1]
     rem = 0.3 if phase == "sl_wait" else (1.0 if phase == "active" else 0.7)
-    return r + rem * pnl(px), n - 1, "EOD"
+    return r + rem * (pnl(px) - TAKER[coin]) - interest(n - 1, rem), n - 1, "EOD"
 
 
 e1.manage = manage   # e1.simulate がこの manage を使う
@@ -144,6 +147,7 @@ VARIANTS = [
     ("--参考-- 15分(:05/:20/:35/:50)", {5, 20, 35, 50}),
     ("--参考-- 10分(:00/:10/…/:50)", {0, 10, 20, 30, 40, 50}),
     ("--参考-- 60分(:15)", {15}),
+    ("--参考-- 4h境界のみ", set()),
 ]
 
 
